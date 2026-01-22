@@ -1,6 +1,6 @@
 {
   "name": "postboi",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && npm run prepack",
@@ -28,11 +28,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "svelte": "./dist/index.js"
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./zepto": {
       "types": "./dist/zepto.d.ts",
-      "svelte": "./dist/zepto.js"
+      "svelte": "./dist/zepto.js",
+      "default": "./dist/zepto.js"
     }
   },
   "peerDependencies": {
