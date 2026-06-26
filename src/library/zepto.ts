@@ -1,4 +1,4 @@
-import type { SendOptions, CommonProviderOptions } from "./index.js"
+import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the ZeptoMail provider constructor. */
@@ -27,20 +27,6 @@ export interface SendParams {
 	subject: string
 	htmlbody: string
 	textbody?: string
-}
-
-interface SendError {
-	error: {
-		code: string
-		details: Array<{
-			code: string
-			message: string
-			inner_error?: { code: string; message: string }
-			target?: string
-		}>
-		message: string
-		request_id?: string
-	}
 }
 
 type SendResponse = {
@@ -73,8 +59,8 @@ type SendResponse = {
  * ```
  */
 export default class Postboi extends ProviderBase<SendResponse> {
+	protected readonly provider = "zeptomail"
 	#token: string
-	#defaults: { from?: string; to?: string }
 
 	/**
 	 * Create a ZeptoMail client.
@@ -82,80 +68,57 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	 * @param default_from Optional default sender address used when `from` is omitted
 	 * @param default_to Optional default recipient address used when `to` is omitted
 	 */
-	constructor({ token, default_from, default_to }: Options) {
-		super()
+	constructor({ token, ...options }: Options) {
+		super(options)
 		this.#token = token
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	/**
-	 * Send an email via ZeptoMail.
-	 * - Supports string or FormData body.
-	 * - Handles grouped fields using `fieldset→field` in FormData keys.
-	 */
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
+		const address = (a: { address: string; name?: string }): EmailAddress =>
+			a.name ? { address: a.address, name: a.name } : { address: a.address }
 
-		const zepto_params: SendParams = {
-			to: this.parse_addresses(options.to).map((a) => ({ email_address: a })),
-			from: this.parse_email_address(options.from),
-			reply_to: options.reply_to ? this.parse_addresses(options.reply_to) : undefined,
-			bcc: options.bcc
-				? this.parse_addresses(options.bcc).map((a) => ({ email_address: a }))
+		const params: SendParams = {
+			to: this.parse_addresses(message.to).map((a) => ({ email_address: address(a) })),
+			from: address(this.parse_email_address(message.from)),
+			reply_to: message.reply_to ? this.parse_addresses(message.reply_to).map(address) : undefined,
+			bcc: message.bcc
+				? this.parse_addresses(message.bcc).map((a) => ({ email_address: address(a) }))
 				: undefined,
-			cc: options.cc
-				? this.parse_addresses(options.cc).map((a) => ({ email_address: a }))
+			cc: message.cc
+				? this.parse_addresses(message.cc).map((a) => ({ email_address: address(a) }))
 				: undefined,
-			subject: options.subject || "Mail sent from website",
-			htmlbody: typeof options.body === "string" ? options.body : "",
-			textbody: options.text,
-			attachments: options.attachments
-				? await this.parse_attachments(options.attachments)
+			subject: message.subject,
+			htmlbody: message.html ?? "",
+			textbody: message.text,
+			attachments: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
+						name: a.name,
+						content: a.content,
+						mime_type: a.mime_type,
+					}))
 				: undefined,
 		}
 
-		const response = await fetch("https://api.zeptomail.com/v1.1/email", {
-			method: "POST",
+		return {
+			url: "https://api.zeptomail.com/v1.1/email",
 			headers: {
 				Authorization: this.#token,
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify(zepto_params),
-		})
-
-		const data = await response.json()
-
-		// throw if response contains an error (matching Zeptomail SDK behavior)
-		if (this.is_error(data)) throw data
-		else return data
+			body: JSON.stringify(params),
+		}
 	}
 
-	/**
-	 * Type guard to check if an error is a ZeptoMail error.
-	 * @example
-	 * try { await mail.send({ to: 'a@b.com', body: 'hi' }) } catch (e) {
-	 *   if (mail.is_error(e)) console.error(e.error.message)
-	 * }
-	 */
-	is_error(error: unknown): error is SendError {
-		type Inner = { code: string; message: string; request_id?: string; details: unknown[] }
+	protected parse_response(_response: Response, data: unknown): SendResponse {
+		return data as SendResponse
+	}
 
-		const has_shape = (e: unknown): e is { error: Inner } => {
-			if (e === null || typeof e !== "object") return false
-			const outer = e as Record<string, unknown>
-			if (!("error" in outer)) return false
-			const inner = outer.error
-			if (inner === null || typeof inner !== "object") return false
-			const i = inner as Record<string, unknown>
-
-			return (
-				typeof i.code === "string" &&
-				typeof i.message === "string" &&
-				(i.request_id === undefined || typeof i.request_id === "string") &&
-				Array.isArray(i.details)
-			)
-		}
-
-		return has_shape(error)
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object" || !("error" in data)) return undefined
+		const inner = (data as { error: unknown }).error
+		if (inner === null || typeof inner !== "object") return undefined
+		const e = inner as Record<string, unknown>
+		if (typeof e.message !== "string" || !Array.isArray(e.details)) return undefined
+		return { message: e.message, code: typeof e.code === "string" ? e.code : undefined }
 	}
 }

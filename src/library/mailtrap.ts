@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Mailtrap provider constructor. */
@@ -33,11 +33,6 @@ export interface SendParams {
 	attachments?: Array<Attachment>
 }
 
-interface SendError {
-	success: false
-	errors: Array<string>
-}
-
 type SendResponse = { success: boolean; message_ids: Array<string> }
 
 /**
@@ -55,12 +50,12 @@ type SendResponse = { success: boolean; message_ids: Array<string> }
  * ```
  */
 export default class Mailtrap extends ProviderBase<SendResponse> {
+	protected readonly provider = "mailtrap"
 	#api_key: string
 	#url: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, sandbox, inbox_id, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, sandbox, inbox_id, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
 		if (sandbox) {
 			if (!inbox_id) throw new Error("Mailtrap sandbox mode requires an inbox_id")
@@ -68,23 +63,20 @@ export default class Mailtrap extends ProviderBase<SendResponse> {
 		} else {
 			this.#url = "https://send.api.mailtrap.io/api/send"
 		}
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		const params: SendParams = {
-			from: this.email_name(this.parse_email_address(options.from)),
-			to: this.email_name_list(options.to),
-			cc: options.cc ? this.email_name_list(options.cc) : undefined,
-			bcc: options.bcc ? this.email_name_list(options.bcc) : undefined,
-			reply_to: options.reply_to ? this.email_name_list(options.reply_to)[0] : undefined,
-			subject: options.subject || "Mail sent from website",
-			html: typeof options.body === "string" ? options.body : undefined,
-			text: options.text,
-			attachments: options.attachments
-				? (await this.parse_attachments(options.attachments)).map((a) => ({
+			from: this.email_name(this.parse_email_address(message.from)),
+			to: this.email_name_list(message.to),
+			cc: message.cc ? this.email_name_list(message.cc) : undefined,
+			bcc: message.bcc ? this.email_name_list(message.bcc) : undefined,
+			reply_to: message.reply_to ? this.email_name_list(message.reply_to)[0] : undefined,
+			subject: message.subject,
+			html: message.html,
+			text: message.text,
+			attachments: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,
 						filename: a.name,
 						type: a.mime_type,
@@ -92,26 +84,26 @@ export default class Mailtrap extends ProviderBase<SendResponse> {
 				: undefined,
 		}
 
-		const response = await fetch(this.#url, {
-			method: "POST",
+		return {
+			url: this.#url,
 			headers: {
 				Authorization: `Bearer ${this.#api_key}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(params),
-		})
-
-		const data = await this.read_json(response)
-		if (!response.ok || this.is_error(data)) {
-			throw this.is_error(data) ? data : new Error(`Mailtrap request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Mailtrap error response. */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return e.success === false && Array.isArray(e.errors)
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (e.success === false && Array.isArray(e.errors)) {
+			return { message: e.errors.join(", ") || "Mailtrap request failed" }
+		}
+		return undefined
 	}
 }

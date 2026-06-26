@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Mandrill (Mailchimp Transactional) provider constructor. */
@@ -30,13 +30,6 @@ export interface SendParams {
 	}
 }
 
-interface SendError {
-	status: "error"
-	code: number
-	name: string
-	message: string
-}
-
 type SendResult = {
 	email: string
 	status: "sent" | "queued" | "scheduled" | "rejected" | "invalid"
@@ -59,29 +52,26 @@ type SendResponse = Array<SendResult>
  * ```
  */
 export default class Mandrill extends ProviderBase<SendResponse> {
+	protected readonly provider = "mandrill"
 	#api_key: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
-		const from = this.parse_email_address(options.from)
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
+		const from = this.parse_email_address(message.from)
 		const recipients: Array<Recipient> = [
-			...this.parse_addresses(options.to).map((a) => ({
+			...this.parse_addresses(message.to).map((a) => ({
 				...this.email_name(a),
 				type: "to" as const,
 			})),
-			...(options.cc ? this.parse_addresses(options.cc) : []).map((a) => ({
+			...(message.cc ? this.parse_addresses(message.cc) : []).map((a) => ({
 				...this.email_name(a),
 				type: "cc" as const,
 			})),
-			...(options.bcc ? this.parse_addresses(options.bcc) : []).map((a) => ({
+			...(message.bcc ? this.parse_addresses(message.bcc) : []).map((a) => ({
 				...this.email_name(a),
 				type: "bcc" as const,
 			})),
@@ -92,15 +82,15 @@ export default class Mandrill extends ProviderBase<SendResponse> {
 			message: {
 				from_email: from.address,
 				from_name: from.name,
-				subject: options.subject || "Mail sent from website",
-				html: typeof options.body === "string" ? options.body : undefined,
-				text: options.text,
+				subject: message.subject,
+				html: message.html,
+				text: message.text,
 				to: recipients,
-				headers: options.reply_to
-					? { "Reply-To": this.stringify_addresses(options.reply_to) }
+				headers: message.reply_to
+					? { "Reply-To": this.stringify_addresses(message.reply_to) }
 					: undefined,
-				attachments: options.attachments
-					? (await this.parse_attachments(options.attachments)).map((a) => ({
+				attachments: message.attachments
+					? (await this.parse_attachments(message.attachments)).map((a) => ({
 							type: a.mime_type,
 							name: a.name,
 							content: a.content,
@@ -109,23 +99,24 @@ export default class Mandrill extends ProviderBase<SendResponse> {
 			},
 		}
 
-		const response = await fetch("https://mandrillapp.com/api/1.0/messages/send", {
-			method: "POST",
+		return {
+			url: "https://mandrillapp.com/api/1.0/messages/send",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(params),
-		})
-
-		const data = await this.read_json(response)
-		if (!response.ok || this.is_error(data)) {
-			throw this.is_error(data) ? data : new Error(`Mandrill request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Mandrill call-level error (a single object, not the success array). */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object" || Array.isArray(error)) return false
-		const e = error as Record<string, unknown>
-		return e.status === "error" && typeof e.message === "string"
+	// Success is an array; a call-level error is a single object with status: "error".
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object" || Array.isArray(data)) return undefined
+		const e = data as Record<string, unknown>
+		if (e.status === "error" && typeof e.message === "string") {
+			return { message: e.message, code: typeof e.code === "number" ? e.code : undefined }
+		}
+		return undefined
 	}
 }

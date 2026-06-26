@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the SendGrid provider constructor. */
@@ -32,10 +32,6 @@ export interface SendParams {
 	attachments?: Array<Attachment>
 }
 
-interface SendError {
-	errors: Array<{ message: string; field?: string; help?: string }>
-}
-
 type SendResponse = { message_id?: string }
 
 /**
@@ -50,38 +46,35 @@ type SendResponse = { message_id?: string }
  * ```
  */
 export default class SendGrid extends ProviderBase<SendResponse> {
+	protected readonly provider = "sendgrid"
 	#api_key: string
 	#host: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, region, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, region, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
 		this.#host = region === "eu" ? "https://api.eu.sendgrid.com" : "https://api.sendgrid.com"
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		const content: SendParams["content"] = []
-		if (options.text) content.push({ type: "text/plain", value: options.text })
-		if (typeof options.body === "string") content.push({ type: "text/html", value: options.body })
+		if (message.text) content.push({ type: "text/plain", value: message.text })
+		if (message.html) content.push({ type: "text/html", value: message.html })
 
 		const params: SendParams = {
 			personalizations: [
 				{
-					to: this.email_name_list(options.to),
-					cc: options.cc ? this.email_name_list(options.cc) : undefined,
-					bcc: options.bcc ? this.email_name_list(options.bcc) : undefined,
+					to: this.email_name_list(message.to),
+					cc: message.cc ? this.email_name_list(message.cc) : undefined,
+					bcc: message.bcc ? this.email_name_list(message.bcc) : undefined,
 				},
 			],
-			from: this.email_name(this.parse_email_address(options.from)),
-			reply_to: options.reply_to ? this.email_name_list(options.reply_to)[0] : undefined,
-			subject: options.subject || "Mail sent from website",
+			from: this.email_name(this.parse_email_address(message.from)),
+			reply_to: message.reply_to ? this.email_name_list(message.reply_to)[0] : undefined,
+			subject: message.subject,
 			content,
-			attachments: options.attachments
-				? (await this.parse_attachments(options.attachments)).map((a) => ({
+			attachments: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,
 						type: a.mime_type,
 						filename: a.name,
@@ -90,27 +83,26 @@ export default class SendGrid extends ProviderBase<SendResponse> {
 				: undefined,
 		}
 
-		const response = await fetch(`${this.#host}/v3/mail/send`, {
-			method: "POST",
+		return {
+			url: `${this.#host}/v3/mail/send`,
 			headers: {
 				Authorization: `Bearer ${this.#api_key}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(params),
-		})
-
-		if (!response.ok) {
-			const data = await this.read_json(response)
-			throw this.is_error(data) ? data : new Error(`SendGrid request failed (${response.status})`)
 		}
-		// 202 Accepted with an empty body; the id is returned in a response header.
+	}
+
+	// 202 Accepted with an empty body; the id is returned in a response header.
+	protected parse_response(response: Response, _data: unknown): SendResponse {
 		return { message_id: response.headers.get("x-message-id") ?? undefined }
 	}
 
-	/** Type guard for a SendGrid error response. */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return Array.isArray(e.errors)
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (!Array.isArray(e.errors)) return undefined
+		const first = e.errors[0] as { message?: string } | undefined
+		return { message: first?.message ?? "SendGrid request failed" }
 	}
 }

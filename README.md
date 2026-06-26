@@ -274,8 +274,8 @@ const mail = new Postboi({
 // send email
 await mail.send(options: SendOptions): Promise<SendResponse>
 
-// check if error is a ZeptoMail error
-mail.is_error(error: unknown): error is SendError
+// check if a caught value is a normalized Postboi error
+mail.is_error(error: unknown): error is PostboiError
 ```
 
 ### `SendOptions`
@@ -299,8 +299,28 @@ interface SendOptions {
 		| null
 		| false // set to null/false to disable formatting
 	attachments?: File | File[] // file attachments
+	idempotency_key?: string // forwarded to providers that support it (e.g. Resend)
 }
 ```
+
+### Common constructor options
+
+Every provider also accepts these, on top of its own credentials:
+
+```typescript
+{
+	default_from?: string // sender used when `from` is omitted
+	default_to?: string // recipient used when `to` is omitted
+	timeout?: number // per-request timeout in ms (default 30000)
+	retries?: number // retries on 429/5xx and network errors (default 0)
+	retry_delay?: number // base backoff in ms, doubles each attempt (default 500)
+	auto_text?: boolean // derive a plain-text body from the HTML (default false)
+}
+```
+
+> **Retries are off by default on purpose.** Retrying a send that already reached the
+> provider can deliver a duplicate email, so enable `retries` only alongside an
+> `idempotency_key` (where the provider supports it).
 
 ### `Email` Type
 
@@ -312,20 +332,45 @@ type Email =
 
 ### Error Handling
 
+Every provider throws the **same** normalized `PostboiError` on failure (HTTP errors,
+provider error envelopes, timeouts and network failures), so error handling is identical
+no matter which provider you use. The original provider payload is kept on `.raw`.
+
 ```typescript
+import { PostboiError } from "postboi"
+
 try {
 	await mail.send({ to: "bad@email", body: "test" })
 } catch (error) {
 	if (mail.is_error(error)) {
-		// ZeptoMail error with structure
-		console.error(error.error.code) // error code
-		console.error(error.error.message) // error message
-		console.error(error.error.request_id) // request ID for support
+		// error is a PostboiError
+		console.error(error.provider) // e.g. "resend"
+		console.error(error.status) // HTTP status, when applicable
+		console.error(error.code) // provider-specific code, when available
+		console.error(error.message) // normalized message
+		console.error(error.raw) // the original provider payload
 	} else {
-		// generic error
 		console.error(error)
 	}
 }
+```
+
+### Failover
+
+Wrap several providers and Postboi will try them in order, returning the first success:
+
+```typescript
+import Failover from "postboi/failover"
+import Resend from "postboi/resend"
+import Postmark from "postboi/postmark"
+
+const mail = new Failover([
+	new Resend({ api_key: RESEND_API_KEY, default_from: "no-reply@example.com" }),
+	new Postmark({ api_key: POSTMARK_TOKEN, default_from: "no-reply@example.com" }),
+])
+
+// falls through to Postmark if Resend fails
+await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
 ## Development

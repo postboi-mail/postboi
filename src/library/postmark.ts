@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Postmark provider constructor. */
@@ -26,11 +26,6 @@ export interface SendParams {
 	Attachments?: Array<Attachment>
 }
 
-interface SendError {
-	ErrorCode: number
-	Message: string
-}
-
 type SendResponse = {
 	To: string
 	SubmittedAt: string
@@ -51,32 +46,29 @@ type SendResponse = {
  * ```
  */
 export default class Postmark extends ProviderBase<SendResponse> {
+	protected readonly provider = "postmark"
 	#api_key: string
 	#message_stream: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, message_stream, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, message_stream, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
 		this.#message_stream = message_stream ?? "outbound"
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		const params: SendParams = {
-			From: this.stringify_address(this.parse_email_address(options.from)),
-			To: this.stringify_addresses(options.to),
-			Cc: options.cc ? this.stringify_addresses(options.cc) : undefined,
-			Bcc: options.bcc ? this.stringify_addresses(options.bcc) : undefined,
-			ReplyTo: options.reply_to ? this.stringify_addresses(options.reply_to) : undefined,
-			Subject: options.subject || "Mail sent from website",
-			HtmlBody: typeof options.body === "string" ? options.body : undefined,
-			TextBody: options.text,
+			From: this.stringify_address(this.parse_email_address(message.from)),
+			To: this.stringify_addresses(message.to),
+			Cc: message.cc ? this.stringify_addresses(message.cc) : undefined,
+			Bcc: message.bcc ? this.stringify_addresses(message.bcc) : undefined,
+			ReplyTo: message.reply_to ? this.stringify_addresses(message.reply_to) : undefined,
+			Subject: message.subject,
+			HtmlBody: message.html,
+			TextBody: message.text,
 			MessageStream: this.#message_stream,
-			Attachments: options.attachments
-				? (await this.parse_attachments(options.attachments)).map((a) => ({
+			Attachments: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						Name: a.name,
 						Content: a.content,
 						ContentType: a.mime_type,
@@ -84,28 +76,28 @@ export default class Postmark extends ProviderBase<SendResponse> {
 				: undefined,
 		}
 
-		const response = await fetch("https://api.postmarkapp.com/email", {
-			method: "POST",
+		return {
+			url: "https://api.postmarkapp.com/email",
 			headers: {
 				"X-Postmark-Server-Token": this.#api_key,
 				"Content-Type": "application/json",
 				Accept: "application/json",
 			},
 			body: JSON.stringify(params),
-		})
-
-		const data = await this.read_json(response)
-		// Postmark signals application errors with ErrorCode !== 0, often on HTTP 200.
-		if (!response.ok || this.is_error(data)) {
-			throw this.is_error(data) ? data : new Error(`Postmark request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Postmark error response (ErrorCode is non-zero). */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return typeof e.ErrorCode === "number" && e.ErrorCode !== 0 && typeof e.Message === "string"
+	// Postmark signals application errors with ErrorCode !== 0, often on HTTP 200.
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (typeof e.ErrorCode === "number" && e.ErrorCode !== 0 && typeof e.Message === "string") {
+			return { message: e.Message, code: e.ErrorCode }
+		}
+		return undefined
 	}
 }

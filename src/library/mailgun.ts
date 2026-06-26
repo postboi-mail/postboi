@@ -1,4 +1,4 @@
-import type { SendOptions, CommonProviderOptions } from "./index.js"
+import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Mailgun provider constructor. */
@@ -9,10 +9,6 @@ type Options = CommonProviderOptions & {
 	domain: string
 	/** API region. Defaults to "us"; set "eu" for EU-provisioned domains. */
 	region?: "us" | "eu"
-}
-
-interface SendError {
-	message: string
 }
 
 type SendResponse = { id: string; message: string }
@@ -32,55 +28,50 @@ type SendResponse = { id: string; message: string }
  * ```
  */
 export default class Mailgun extends ProviderBase<SendResponse> {
+	protected readonly provider = "mailgun"
 	#api_key: string
 	#domain: string
 	#host: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, domain, region, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, domain, region, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
 		this.#domain = domain
 		this.#host = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net"
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
+	protected build_request(message: PreparedMessage): RequestSpec {
 		const form = new FormData()
-		form.append("from", this.stringify_address(this.parse_email_address(options.from)))
-		form.append("to", this.stringify_addresses(options.to))
-		if (options.cc) form.append("cc", this.stringify_addresses(options.cc))
-		if (options.bcc) form.append("bcc", this.stringify_addresses(options.bcc))
-		if (options.reply_to) form.append("h:Reply-To", this.stringify_addresses(options.reply_to))
-		form.append("subject", options.subject || "Mail sent from website")
-		if (typeof options.body === "string") form.append("html", options.body)
-		if (options.text) form.append("text", options.text)
+		form.append("from", this.stringify_address(this.parse_email_address(message.from)))
+		form.append("to", this.stringify_addresses(message.to))
+		if (message.cc) form.append("cc", this.stringify_addresses(message.cc))
+		if (message.bcc) form.append("bcc", this.stringify_addresses(message.bcc))
+		if (message.reply_to) form.append("h:Reply-To", this.stringify_addresses(message.reply_to))
+		form.append("subject", message.subject)
+		if (message.html) form.append("html", message.html)
+		if (message.text) form.append("text", message.text)
 
-		if (options.attachments) {
-			const files = Array.isArray(options.attachments) ? options.attachments : [options.attachments]
+		if (message.attachments) {
+			const files = Array.isArray(message.attachments) ? message.attachments : [message.attachments]
 			for (const file of files) form.append("attachment", file, file.name)
 		}
 
 		const auth = Buffer.from(`api:${this.#api_key}`).toString("base64")
-		const response = await fetch(`${this.#host}/v3/${this.#domain}/messages`, {
-			method: "POST",
+		return {
+			url: `${this.#host}/v3/${this.#domain}/messages`,
 			headers: { Authorization: `Basic ${auth}` },
 			body: form,
-		})
-
-		const data = await this.read_json(response)
-		if (!response.ok) {
-			throw this.is_error(data) ? data : new Error(`Mailgun request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Mailgun error response. */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return typeof e.message === "string" && !("id" in e)
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (typeof e.message === "string" && !("id" in e)) return { message: e.message }
+		return undefined
 	}
 }

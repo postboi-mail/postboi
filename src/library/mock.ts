@@ -1,5 +1,11 @@
-import type { SendOptions, CommonProviderOptions, MailAddress, MailAttachment } from "./index.js"
-import { ProviderBase } from "./index.js"
+import type {
+	SendOptions,
+	CommonProviderOptions,
+	MailAddress,
+	MailAttachment,
+	RequestSpec,
+} from "./index.js"
+import { ProviderBase, PostboiError } from "./index.js"
 
 /** A normalized snapshot of an email captured by the mock provider. */
 export interface SentMessage {
@@ -16,12 +22,8 @@ export interface SentMessage {
 
 /** Options for the mock provider constructor. */
 type Options = CommonProviderOptions & {
-	/** When true, every `send` rejects with a simulated provider error. */
+	/** When true, every `send` rejects with a simulated {@link PostboiError}. */
 	fail?: boolean
-}
-
-interface SendError {
-	error: string
 }
 
 type SendResponse = { id: string; message: SentMessage }
@@ -43,16 +45,15 @@ type SendResponse = { id: string; message: SentMessage }
  * ```
  */
 export default class Mock extends ProviderBase<SendResponse> {
-	#defaults: { from?: string; to?: string }
+	protected readonly provider = "mock"
 	#fail: boolean
 	#counter = 0
 
 	/** Every message captured by this instance, in send order. */
 	readonly sent: Array<SentMessage> = []
 
-	constructor({ default_from, default_to, fail }: Options = {}) {
-		super()
-		this.#defaults = { from: default_from, to: default_to }
+	constructor({ fail, ...options }: Options = {}) {
+		super(options)
 		this.#fail = fail ?? false
 	}
 
@@ -66,34 +67,35 @@ export default class Mock extends ProviderBase<SendResponse> {
 		this.sent.length = 0
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
+	async send(options: SendOptions): Promise<SendResponse> {
+		const message = await this.prepare_send(options)
 
 		if (this.#fail) {
-			const error: SendError = { error: "Simulated failure from mock provider" }
-			throw error
+			throw new PostboiError({ provider: "mock", message: "Simulated failure from mock provider" })
 		}
 
-		const message: SentMessage = {
-			to: this.parse_addresses(options.to),
-			from: this.parse_email_address(options.from),
-			cc: options.cc ? this.parse_addresses(options.cc) : undefined,
-			bcc: options.bcc ? this.parse_addresses(options.bcc) : undefined,
-			reply_to: options.reply_to ? this.parse_addresses(options.reply_to) : undefined,
-			subject: options.subject || "Mail sent from website",
-			html: typeof options.body === "string" ? options.body : undefined,
-			text: options.text,
-			attachments: options.attachments ? await this.parse_attachments(options.attachments) : [],
+		const captured: SentMessage = {
+			to: this.parse_addresses(message.to),
+			from: this.parse_email_address(message.from),
+			cc: message.cc ? this.parse_addresses(message.cc) : undefined,
+			bcc: message.bcc ? this.parse_addresses(message.bcc) : undefined,
+			reply_to: message.reply_to ? this.parse_addresses(message.reply_to) : undefined,
+			subject: message.subject,
+			html: message.html,
+			text: message.text,
+			attachments: message.attachments ? await this.parse_attachments(message.attachments) : [],
 		}
 
-		this.sent.push(message)
-		return { id: `mock-${++this.#counter}`, message }
+		this.sent.push(captured)
+		return { id: `mock-${++this.#counter}`, message: captured }
 	}
 
-	/** Type guard for a mock error response. */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return typeof e.error === "string"
+	// The mock never performs HTTP, so the request hooks are unused.
+	protected build_request(): RequestSpec {
+		throw new Error("mock provider does not build HTTP requests")
+	}
+
+	protected parse_response(): SendResponse {
+		throw new Error("mock provider does not parse responses")
 	}
 }

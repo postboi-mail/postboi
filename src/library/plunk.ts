@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Plunk provider constructor. */
@@ -18,12 +18,6 @@ export interface SendParams {
 	name?: string
 	reply?: string
 	attachments?: Array<Attachment>
-}
-
-interface SendError {
-	code?: number
-	error?: string
-	message: string
 }
 
 type SendResponse = {
@@ -46,28 +40,26 @@ type SendResponse = {
  * ```
  */
 export default class Plunk extends ProviderBase<SendResponse> {
+	protected readonly provider = "plunk"
 	#api_key: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-		const from = this.parse_email_address(options.from)
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
+		const from = this.parse_email_address(message.from)
 
 		const params: SendParams = {
-			to: this.parse_addresses(options.to).map((a) => a.address),
-			subject: options.subject || "Mail sent from website",
-			body: typeof options.body === "string" ? options.body : "",
+			to: this.parse_addresses(message.to).map((a) => a.address),
+			subject: message.subject,
+			body: message.html ?? "",
 			from: from.address,
 			name: from.name,
-			reply: options.reply_to ? this.parse_addresses(options.reply_to)[0].address : undefined,
-			attachments: options.attachments
-				? (await this.parse_attachments(options.attachments)).map((a) => ({
+			reply: message.reply_to ? this.parse_addresses(message.reply_to)[0].address : undefined,
+			attachments: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						filename: a.name,
 						content: a.content,
 						contentType: a.mime_type,
@@ -75,26 +67,26 @@ export default class Plunk extends ProviderBase<SendResponse> {
 				: undefined,
 		}
 
-		const response = await fetch("https://api.useplunk.com/v1/send", {
-			method: "POST",
+		return {
+			url: "https://api.useplunk.com/v1/send",
 			headers: {
 				Authorization: `Bearer ${this.#api_key}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(params),
-		})
-
-		const data = await this.read_json(response)
-		if (!response.ok || this.is_error(data)) {
-			throw this.is_error(data) ? data : new Error(`Plunk request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Plunk error response. */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return e.success !== true && typeof e.message === "string"
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (e.success !== true && typeof e.message === "string") {
+			return { message: e.message, code: typeof e.code === "number" ? e.code : undefined }
+		}
+		return undefined
 	}
 }

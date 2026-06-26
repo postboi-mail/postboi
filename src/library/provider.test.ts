@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { ProviderBase, type SendOptions, type MailAttachment } from "$library/index.js"
+import {
+	ProviderBase,
+	type SendOptions,
+	type MailAttachment,
+	type RequestSpec,
+} from "$library/index.js"
 
 /**
  * Minimal concrete provider that exposes the protected helpers of ProviderBase
@@ -7,8 +12,13 @@ import { ProviderBase, type SendOptions, type MailAttachment } from "$library/in
  * going through a specific provider's HTTP layer.
  */
 class TestProvider extends ProviderBase {
-	async send() {
-		return { ok: true }
+	protected readonly provider = "test"
+
+	protected build_request(): RequestSpec {
+		throw new Error("not used in these tests")
+	}
+	protected parse_response() {
+		throw new Error("not used in these tests")
 	}
 
 	email(email: Parameters<TestProvider["parse_email_address"]>[0]) {
@@ -26,8 +36,8 @@ class TestProvider extends ProviderBase {
 	attachments(files: File | Array<File>) {
 		return this.parse_attachments(files)
 	}
-	prepare(options: SendOptions, defaults: { from?: string; to?: string }) {
-		return this.prepare_send(options, defaults)
+	prepare(options: SendOptions) {
+		return this.prepare_send(options)
 	}
 }
 
@@ -247,48 +257,63 @@ describe("ProviderBase", () => {
 	})
 
 	describe("prepare_send", () => {
+		const with_defaults = new TestProvider({
+			default_from: "default-from@test.com",
+			default_to: "default-to@test.com",
+		})
+
 		it("applies default to/from when omitted", async () => {
-			const result = await provider.prepare(
-				{ body: "hi" },
-				{ from: "default-from@test.com", to: "default-to@test.com" }
-			)
+			const result = await with_defaults.prepare({ body: "hi" })
 			expect(result.to).toBe("default-to@test.com")
 			expect(result.from).toBe("default-from@test.com")
 		})
 
 		it("prefers explicit to/from over defaults", async () => {
-			const result = await provider.prepare(
-				{ to: "explicit-to@test.com", from: "explicit-from@test.com", body: "hi" },
-				{ from: "default-from@test.com", to: "default-to@test.com" }
-			)
+			const result = await with_defaults.prepare({
+				to: "explicit-to@test.com",
+				from: "explicit-from@test.com",
+				body: "hi",
+			})
 			expect(result.to).toBe("explicit-to@test.com")
 			expect(result.from).toBe("explicit-from@test.com")
 		})
 
-		it("merges extracted FormData fields and attachments", async () => {
+		it("splits the html body out of `body`", async () => {
+			const result = await provider.prepare({
+				to: "to@test.com",
+				from: "from@test.com",
+				body: "<p>Hello</p>",
+			})
+			expect(result.html).toBe("<p>Hello</p>")
+		})
+
+		it("defaults the subject", async () => {
+			const result = await provider.prepare({ to: "to@test.com", from: "from@test.com", body: "x" })
+			expect(result.subject).toBe("Mail sent from website")
+		})
+
+		it("merges extracted FormData fields, rendering the html body and attachments", async () => {
 			const form = new FormData()
 			form.append("_to", "form-to@test.com")
 			form.append("_from", "form-from@test.com")
 			form.append("message", "Hello")
 			form.append("file", new File(["x"], "x.txt", { type: "text/plain" }))
 
-			const result = await provider.prepare({ body: form }, {})
+			const result = await provider.prepare({ body: form })
 			expect(result.to).toBe("form-to@test.com")
 			expect(result.from).toBe("form-from@test.com")
-			expect(typeof result.body).toBe("string")
+			expect(typeof result.html).toBe("string")
 			expect(result.attachments).toBeDefined()
 		})
 
 		it("throws when no recipient is available", async () => {
-			await expect(provider.prepare({ from: "from@test.com", body: "hi" }, {})).rejects.toThrow(
+			await expect(provider.prepare({ from: "from@test.com", body: "hi" })).rejects.toThrow(
 				/recipient/
 			)
 		})
 
 		it("throws when no sender is available", async () => {
-			await expect(provider.prepare({ to: "to@test.com", body: "hi" }, {})).rejects.toThrow(
-				/sender/
-			)
+			await expect(provider.prepare({ to: "to@test.com", body: "hi" })).rejects.toThrow(/sender/)
 		})
 	})
 })

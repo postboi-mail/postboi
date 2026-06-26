@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Resend provider constructor. */
@@ -22,12 +22,6 @@ export interface SendParams {
 	attachments?: Array<Attachment>
 }
 
-interface SendError {
-	statusCode: number
-	name: string
-	message: string
-}
-
 type SendResponse = { id: string }
 
 /**
@@ -42,35 +36,32 @@ type SendResponse = { id: string }
  * ```
  */
 export default class Resend extends ProviderBase<SendResponse> {
+	protected readonly provider = "resend"
 	#api_key: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		const params: SendParams = {
-			from: this.stringify_address(this.parse_email_address(options.from)),
-			to: this.parse_addresses(options.to).map((a) => this.stringify_address(a)),
-			cc: options.cc
-				? this.parse_addresses(options.cc).map((a) => this.stringify_address(a))
+			from: this.stringify_address(this.parse_email_address(message.from)),
+			to: this.parse_addresses(message.to).map((a) => this.stringify_address(a)),
+			cc: message.cc
+				? this.parse_addresses(message.cc).map((a) => this.stringify_address(a))
 				: undefined,
-			bcc: options.bcc
-				? this.parse_addresses(options.bcc).map((a) => this.stringify_address(a))
+			bcc: message.bcc
+				? this.parse_addresses(message.bcc).map((a) => this.stringify_address(a))
 				: undefined,
-			reply_to: options.reply_to
-				? this.parse_addresses(options.reply_to).map((a) => this.stringify_address(a))
+			reply_to: message.reply_to
+				? this.parse_addresses(message.reply_to).map((a) => this.stringify_address(a))
 				: undefined,
-			subject: options.subject || "Mail sent from website",
-			html: typeof options.body === "string" ? options.body : undefined,
-			text: options.text,
-			attachments: options.attachments
-				? (await this.parse_attachments(options.attachments)).map((a) => ({
+			subject: message.subject,
+			html: message.html,
+			text: message.text,
+			attachments: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						filename: a.name,
 						content: a.content,
 						content_type: a.mime_type,
@@ -78,26 +69,27 @@ export default class Resend extends ProviderBase<SendResponse> {
 				: undefined,
 		}
 
-		const response = await fetch("https://api.resend.com/emails", {
-			method: "POST",
+		return {
+			url: "https://api.resend.com/emails",
 			headers: {
 				Authorization: `Bearer ${this.#api_key}`,
 				"Content-Type": "application/json",
+				...(message.idempotency_key ? { "Idempotency-Key": message.idempotency_key } : {}),
 			},
 			body: JSON.stringify(params),
-		})
-
-		const data = await this.read_json(response)
-		if (!response.ok) {
-			throw this.is_error(data) ? data : new Error(`Resend request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Resend error response. */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return typeof e.message === "string" && typeof e.name === "string"
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (typeof e.message === "string" && typeof e.name === "string") {
+			return { message: e.message, code: e.name }
+		}
+		return undefined
 	}
 }

@@ -1,4 +1,4 @@
-import { title } from "./utils.js"
+import { title, html_to_text } from "./utils.js"
 
 /**
  * A concrete email address used by providers.
@@ -45,6 +45,7 @@ export interface SendOptions {
 	/**
 	 * Optional plain-text alternative body. When provided alongside `body`, providers
 	 * that support multipart emails will send both the HTML and plain-text versions.
+	 * If omitted and the provider is constructed with `auto_text`, one is derived from the HTML.
 	 */
 	text?: string
 	formatter?:
@@ -59,11 +60,36 @@ export interface SendOptions {
 		| false
 	/** Attachments to include. Accepts a single File or an array of File objects. */
 	attachments?: File | Array<File>
+	/**
+	 * Idempotency key forwarded to providers that support it (e.g. Resend), so a retried
+	 * request does not send a duplicate email.
+	 */
+	idempotency_key?: string
 }
 
-type SendOptionsWithEmails = Omit<SendOptions, "to" | "from"> & {
-	to: NonNullable<SendOptions["to"]>
-	from: NonNullable<SendOptions["from"]>
+/**
+ * A fully-resolved message handed to a provider's `build_request`. Defaults have been
+ * applied, FormData has been rendered, and the HTML/text bodies are split out.
+ */
+export interface PreparedMessage {
+	to: Array<Email> | Email
+	from: Email
+	reply_to?: Array<Email> | Email
+	cc?: Array<Email> | Email
+	bcc?: Array<Email> | Email
+	subject: string
+	html?: string
+	text?: string
+	attachments?: File | Array<File>
+	idempotency_key?: string
+}
+
+/** A provider-agnostic description of the HTTP request to send. */
+export type RequestSpec = {
+	url: string
+	method?: string
+	headers: Record<string, string>
+	body: BodyInit
 }
 
 /** Common options shared by all provider constructors. */
@@ -72,6 +98,18 @@ export type CommonProviderOptions = {
 	default_from?: string
 	/** Optional default recipient address used when `to` is omitted */
 	default_to?: string
+	/** Per-request timeout in milliseconds. Defaults to 30000. */
+	timeout?: number
+	/**
+	 * Number of retries on network errors and 429/5xx responses. Defaults to 0.
+	 * Retries are opt-in because retrying a send that already reached the provider can
+	 * deliver a duplicate email — pair this with `idempotency_key` where supported.
+	 */
+	retries?: number
+	/** Base backoff delay in milliseconds between retries (doubles each attempt). Defaults to 500. */
+	retry_delay?: number
+	/** Derive a plain-text body from the HTML body when `text` is omitted. Defaults to false. */
+	auto_text?: boolean
 }
 
 /** Options shared by providers that authenticate with a single API key/token. */
@@ -80,14 +118,161 @@ export type ApiKeyOptions = CommonProviderOptions & {
 	api_key: string
 }
 
+/** Normalized error fields a provider extracts from a failed response body. */
+export type ProviderError = { message: string; code?: string | number }
+
 /**
- * Base class for all providers. Implements shared helpers and defines the contract.
+ * A normalized error thrown by every provider, so error handling is the same no matter
+ * which provider you use. The original provider payload is preserved on `raw`.
+ */
+export class PostboiError extends Error {
+	/** The provider that produced the error, e.g. "resend". */
+	readonly provider: string
+	/** HTTP status code, when the failure came from a response. */
+	readonly status?: number
+	/** Provider-specific error code, when available. */
+	readonly code?: string | number
+	/** The original provider error payload (parsed body or thrown cause). */
+	readonly raw: unknown
+
+	constructor(args: {
+		provider: string
+		message: string
+		status?: number
+		code?: string | number
+		raw?: unknown
+	}) {
+		super(args.message)
+		this.name = "PostboiError"
+		this.provider = args.provider
+		this.status = args.status
+		this.code = args.code
+		this.raw = args.raw
+	}
+}
+
+/**
+ * Base class for all providers.
+ *
+ * Subclasses implement three small hooks — `build_request` (map a message to an HTTP
+ * request), `parse_response` (read the success payload) and optionally `parse_error`
+ * (recognise a provider error body). The base owns everything else: default/FormData
+ * handling, timeouts, opt-in retries and normalized error throwing.
  */
 export abstract class ProviderBase<TResponse = unknown> {
-	abstract send(
-		options: SendOptions,
-		defaults: { default_from?: string; default_to?: string }
-	): Promise<TResponse>
+	/** Stable provider identifier used in thrown errors. */
+	protected abstract readonly provider: string
+
+	protected defaults: { from?: string; to?: string }
+	#timeout: number
+	#retries: number
+	#retry_delay: number
+	#auto_text: boolean
+
+	constructor(options: CommonProviderOptions = {}) {
+		this.defaults = { from: options.default_from, to: options.default_to }
+		this.#timeout = options.timeout ?? 30000
+		this.#retries = options.retries ?? 0
+		this.#retry_delay = options.retry_delay ?? 500
+		this.#auto_text = options.auto_text ?? false
+	}
+
+	/** Map a prepared message into the provider's HTTP request. */
+	protected abstract build_request(message: PreparedMessage): RequestSpec | Promise<RequestSpec>
+
+	/** Read the provider's success payload from the response. */
+	protected abstract parse_response(response: Response, data: unknown): TResponse
+
+	/**
+	 * Recognise a provider error in the response body and return normalized fields.
+	 * Return undefined to fall back to HTTP status handling. Override per provider.
+	 */
+	protected parse_error(_response: Response, _data: unknown): ProviderError | undefined {
+		return undefined
+	}
+
+	/** Send an email. Throws a {@link PostboiError} on any failure. */
+	async send(options: SendOptions): Promise<TResponse> {
+		const message = await this.prepare_send(options)
+		const spec = await this.build_request(message)
+		const response = await this.request(spec)
+		const data = await this.read_json(response)
+
+		const error = this.parse_error(response, data)
+		if (error) {
+			throw new PostboiError({
+				provider: this.provider,
+				status: response.status,
+				message: error.message,
+				code: error.code,
+				raw: data,
+			})
+		}
+		if (!response.ok) {
+			throw new PostboiError({
+				provider: this.provider,
+				status: response.status,
+				message: `${this.provider} request failed with status ${response.status}`,
+				raw: data,
+			})
+		}
+
+		return this.parse_response(response, data)
+	}
+
+	/** Type guard: is this a normalized Postboi error? */
+	is_error(error: unknown): error is PostboiError {
+		return error instanceof PostboiError
+	}
+
+	/** Perform the HTTP request with a timeout and opt-in retry/backoff. */
+	protected async request(spec: RequestSpec): Promise<Response> {
+		const init: RequestInit = {
+			method: spec.method ?? "POST",
+			headers: spec.headers,
+			body: spec.body,
+		}
+
+		for (let attempt = 0; ; attempt++) {
+			const controller = new AbortController()
+			const timer = setTimeout(() => controller.abort(), this.#timeout)
+			try {
+				const response = await fetch(spec.url, { ...init, signal: controller.signal })
+				if (this.#should_retry(response.status) && attempt < this.#retries) {
+					await this.#sleep(this.#backoff(attempt + 1, response))
+					continue
+				}
+				return response
+			} catch (cause) {
+				if (attempt < this.#retries) {
+					await this.#sleep(this.#backoff(attempt + 1))
+					continue
+				}
+				const reason = cause instanceof Error ? cause.message : String(cause)
+				throw new PostboiError({
+					provider: this.provider,
+					message: `${this.provider} request failed: ${reason}`,
+					raw: cause,
+				})
+			} finally {
+				clearTimeout(timer)
+			}
+		}
+	}
+
+	#should_retry(status: number): boolean {
+		return status === 429 || status >= 500
+	}
+
+	#backoff(attempt: number, response?: Response): number {
+		const retry_after = response ? Number(response.headers.get("retry-after")) : NaN
+		if (!Number.isNaN(retry_after) && retry_after > 0) return retry_after * 1000
+		return this.#retry_delay * 2 ** (attempt - 1)
+	}
+
+	#sleep(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms))
+	}
 
 	/** Convert a File into a base64 string. */
 	protected async file_to_base64(file: File): Promise<string> {
@@ -298,23 +483,42 @@ export abstract class ProviderBase<TResponse = unknown> {
 		return { options, attachments }
 	}
 
-	protected async prepare_send(
-		options: SendOptions,
-		defaults: { from?: string; to?: string }
-	): Promise<SendOptionsWithEmails> {
-		// FormData → extract headers/body/attachments
+	/**
+	 * Apply defaults, render FormData, split out the HTML/text bodies and validate that a
+	 * sender and recipient are present. Returns a {@link PreparedMessage} for `build_request`.
+	 */
+	protected async prepare_send(options: SendOptions): Promise<PreparedMessage> {
+		// FormData → extract headers/body/attachments (honouring any formatter)
 		if (options.body instanceof FormData) {
-			const { options: extracted, attachments } = await this.parse_form_data(options.body)
+			const { options: extracted, attachments } = await this.parse_form_data(
+				options.body,
+				options.formatter
+			)
 			options = { ...options, ...extracted }
 			if (attachments.length > 0) options.attachments = attachments
 		}
 
-		options.to ??= defaults.to
-		options.from ??= defaults.from
+		const to = options.to ?? this.defaults.to
+		const from = options.from ?? this.defaults.from
 
-		if (!options.to) throw new Error("No recipient address provided (to or default_to)")
-		if (!options.from) throw new Error("No sender address provided (from or default_from)")
+		if (!to) throw new Error("No recipient address provided (to or default_to)")
+		if (!from) throw new Error("No sender address provided (from or default_from)")
 
-		return options as SendOptionsWithEmails
+		const html = typeof options.body === "string" ? options.body : undefined
+		let text = options.text
+		if (text === undefined && this.#auto_text && html) text = html_to_text(html)
+
+		return {
+			to,
+			from,
+			reply_to: options.reply_to,
+			cc: options.cc,
+			bcc: options.bcc,
+			subject: options.subject || "Mail sent from website",
+			html,
+			text,
+			attachments: options.attachments,
+			idempotency_key: options.idempotency_key,
+		}
 	}
 }

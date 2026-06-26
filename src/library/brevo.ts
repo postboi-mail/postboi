@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Brevo provider constructor. */
@@ -26,11 +26,6 @@ export interface SendParams {
 	attachment?: Array<Attachment>
 }
 
-interface SendError {
-	code: string
-	message: string
-}
-
 type SendResponse = { messageId: string }
 
 /**
@@ -46,56 +41,53 @@ type SendResponse = { messageId: string }
  * ```
  */
 export default class Brevo extends ProviderBase<SendResponse> {
+	protected readonly provider = "brevo"
 	#api_key: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		const params: SendParams = {
-			sender: this.email_name(this.parse_email_address(options.from)),
-			to: this.email_name_list(options.to),
-			cc: options.cc ? this.email_name_list(options.cc) : undefined,
-			bcc: options.bcc ? this.email_name_list(options.bcc) : undefined,
-			replyTo: options.reply_to ? this.email_name_list(options.reply_to)[0] : undefined,
-			subject: options.subject || "Mail sent from website",
-			htmlContent: typeof options.body === "string" ? options.body : undefined,
-			textContent: options.text,
-			attachment: options.attachments
-				? (await this.parse_attachments(options.attachments)).map((a) => ({
+			sender: this.email_name(this.parse_email_address(message.from)),
+			to: this.email_name_list(message.to),
+			cc: message.cc ? this.email_name_list(message.cc) : undefined,
+			bcc: message.bcc ? this.email_name_list(message.bcc) : undefined,
+			replyTo: message.reply_to ? this.email_name_list(message.reply_to)[0] : undefined,
+			subject: message.subject,
+			htmlContent: message.html,
+			textContent: message.text,
+			attachment: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,
 						name: a.name,
 					}))
 				: undefined,
 		}
 
-		const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-			method: "POST",
+		return {
+			url: "https://api.brevo.com/v3/smtp/email",
 			headers: {
 				"api-key": this.#api_key,
 				"Content-Type": "application/json",
 				Accept: "application/json",
 			},
 			body: JSON.stringify(params),
-		})
-
-		const data = await this.read_json(response)
-		if (!response.ok) {
-			throw this.is_error(data) ? data : new Error(`Brevo request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Brevo error response. */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return typeof e.code === "string" && typeof e.message === "string"
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (typeof e.code === "string" && typeof e.message === "string") {
+			return { message: e.message, code: e.code }
+		}
+		return undefined
 	}
 }

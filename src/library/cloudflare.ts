@@ -1,4 +1,4 @@
-import type { SendOptions, ApiKeyOptions } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Cloudflare Email Service provider constructor. */
@@ -36,13 +36,6 @@ interface CloudflareError {
 	message: string
 }
 
-interface SendError {
-	success: false
-	errors: Array<CloudflareError>
-	messages: Array<unknown>
-	result: null
-}
-
 type SendResponse = {
 	success: boolean
 	errors: Array<CloudflareError>
@@ -70,31 +63,28 @@ type SendResponse = {
  * ```
  */
 export default class Cloudflare extends ProviderBase<SendResponse> {
+	protected readonly provider = "cloudflare"
 	#api_key: string
 	#url: string
-	#defaults: { from?: string; to?: string }
 
-	constructor({ api_key, account_id, default_from, default_to }: Options) {
-		super()
+	constructor({ api_key, account_id, ...options }: Options) {
+		super(options)
 		this.#api_key = api_key
 		this.#url = `https://api.cloudflare.com/client/v4/accounts/${account_id}/email/sending/send`
-		this.#defaults = { from: default_from, to: default_to }
 	}
 
-	async send(_options: SendOptions): Promise<SendResponse> {
-		const options = await this.prepare_send(_options, this.#defaults)
-
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		const params: SendParams = {
-			from: this.email_name(this.parse_email_address(options.from)),
-			to: this.email_name_list(options.to),
-			cc: options.cc ? this.email_name_list(options.cc) : undefined,
-			bcc: options.bcc ? this.email_name_list(options.bcc) : undefined,
-			replyTo: options.reply_to ? this.email_name_list(options.reply_to)[0] : undefined,
-			subject: options.subject || "Mail sent from website",
-			html: typeof options.body === "string" ? options.body : undefined,
-			text: options.text,
-			attachments: options.attachments
-				? (await this.parse_attachments(options.attachments)).map((a) => ({
+			from: this.email_name(this.parse_email_address(message.from)),
+			to: this.email_name_list(message.to),
+			cc: message.cc ? this.email_name_list(message.cc) : undefined,
+			bcc: message.bcc ? this.email_name_list(message.bcc) : undefined,
+			replyTo: message.reply_to ? this.email_name_list(message.reply_to)[0] : undefined,
+			subject: message.subject,
+			html: message.html,
+			text: message.text,
+			attachments: message.attachments
+				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,
 						filename: a.name,
 						type: a.mime_type,
@@ -103,26 +93,26 @@ export default class Cloudflare extends ProviderBase<SendResponse> {
 				: undefined,
 		}
 
-		const response = await fetch(this.#url, {
-			method: "POST",
+		return {
+			url: this.#url,
 			headers: {
 				Authorization: `Bearer ${this.#api_key}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(params),
-		})
-
-		const data = await this.read_json(response)
-		if (!response.ok || this.is_error(data)) {
-			throw this.is_error(data) ? data : new Error(`Cloudflare request failed (${response.status})`)
 		}
+	}
+
+	protected parse_response(_response: Response, data: unknown): SendResponse {
 		return data as SendResponse
 	}
 
-	/** Type guard for a Cloudflare error response (`success: false`). */
-	is_error(error: unknown): error is SendError {
-		if (error === null || typeof error !== "object") return false
-		const e = error as Record<string, unknown>
-		return e.success === false && Array.isArray(e.errors)
+	// Cloudflare wraps responses in { success, errors, ... } and may return success:false on 200.
+	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		if (data === null || typeof data !== "object") return undefined
+		const e = data as Record<string, unknown>
+		if (e.success !== false || !Array.isArray(e.errors)) return undefined
+		const first = e.errors[0] as { message?: string; code?: number } | undefined
+		return { message: first?.message ?? "Cloudflare request failed", code: first?.code }
 	}
 }

@@ -19,8 +19,8 @@ export const actions = {
 			return { success: true }
 		} catch (e) {
 			if (mail.is_error(e)) {
-				console.dir(e.error, { depth: null })
-				return fail(400, { error: e.error.message })
+				console.dir(e.raw, { depth: null })
+				return fail(400, { error: e.message })
 			} else return fail(400, { error: String(e) })
 		}
 	},

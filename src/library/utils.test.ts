@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { capitalize, title } from "$library/utils.js"
+import { capitalize, title, html_to_text } from "$library/utils.js"
 
 describe("capitalize", () => {
 	it("capitalises the first letter and lower-cases the rest", () => {
@@ -69,5 +69,32 @@ describe("title", () => {
 		expect(title("")).toBe("")
 		expect(title(null)).toBe("")
 		expect(title(undefined)).toBe("")
+	})
+})
+
+describe("html_to_text", () => {
+	it("turns block-level tags into line breaks", () => {
+		expect(html_to_text("<p>Hello</p><p>World</p>")).toBe("Hello\nWorld")
+	})
+
+	it("converts <br> to newlines", () => {
+		expect(html_to_text("Line one<br>Line two")).toBe("Line one\nLine two")
+	})
+
+	it("strips inline tags and keeps the text", () => {
+		expect(html_to_text("<strong>Bold</strong> and <em>italic</em>")).toBe("Bold and italic")
+	})
+
+	it("drops style and script blocks entirely", () => {
+		expect(html_to_text("<style>p{color:red}</style><p>Hi</p>")).toBe("Hi")
+		expect(html_to_text("<script>alert(1)</script><p>Hi</p>")).toBe("Hi")
+	})
+
+	it("decodes common HTML entities", () => {
+		expect(html_to_text("<p>Tom &amp; Jerry &lt;3</p>")).toBe("Tom & Jerry <3")
+	})
+
+	it("collapses excess whitespace and blank lines", () => {
+		expect(html_to_text("<p>One</p><p></p><p>Two</p>")).toBe("One\n\nTwo")
 	})
 })

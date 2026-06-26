@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
+import { PostboiError } from "$library/index.js"
 import Resend from "$library/resend.js"
 import Postmark from "$library/postmark.js"
 import SendGrid from "$library/sendgrid.js"
@@ -13,6 +14,7 @@ import Plunk from "$library/plunk.js"
 import Mailtrap from "$library/mailtrap.js"
 import MailPace from "$library/mailpace.js"
 import Scaleway from "$library/scaleway.js"
+import Failover from "$library/failover.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -53,11 +55,22 @@ function sent_url() {
 	return fetch.mock.calls.at(-1)![0] as string
 }
 
+/** Await a send expected to fail and return the thrown PostboiError. */
+async function caught(promise: Promise<unknown>): Promise<PostboiError> {
+	const error = await promise.catch((e) => e)
+	expect(error).toBeInstanceOf(PostboiError)
+	return error as PostboiError
+}
+
 const b64 = (s: string) => Buffer.from(s).toString("base64")
 const attachment = () => new File(["filedata"], "doc.pdf", { type: "application/pdf" })
 
-beforeEach(() => fetch.mockReset())
-afterEach(() => vi.clearAllMocks())
+beforeEach(() => {
+	fetch.mockReset()
+})
+afterEach(() => {
+	vi.clearAllMocks()
+})
 
 describe("Resend", () => {
 	const mail = () => new Resend({ api_key: "re_key", default_from: "from@test.com" })
@@ -91,14 +104,17 @@ describe("Resend", () => {
 		expect(result).toEqual({ id: "abc" })
 	})
 
-	it("throws and detects errors", async () => {
-		const error = { statusCode: 422, name: "validation_error", message: "bad" }
-		fetch.mockResolvedValue(respond({ ok: false, status: 422, json: error }))
-		const thrown = await mail()
-			.send({ to: "to@test.com", body: "x" })
-			.catch((e) => e)
-		expect(thrown).toEqual(error)
+	it("throws a normalized PostboiError", async () => {
+		const raw = { statusCode: 422, name: "validation_error", message: "bad" }
+		fetch.mockResolvedValue(respond({ ok: false, status: 422, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("resend")
+		expect(error.message).toBe("bad")
+		expect(error.code).toBe("validation_error")
+		expect(error.status).toBe(422)
+		expect(error.raw).toEqual(raw)
 		expect(mail().is_error(error)).toBe(true)
+		expect(mail().is_error(raw)).toBe(false)
 	})
 })
 
@@ -128,14 +144,12 @@ describe("Postmark", () => {
 	})
 
 	it("treats ErrorCode != 0 as an error even on HTTP 200", async () => {
-		const error = { ErrorCode: 300, Message: "Invalid 'From'" }
-		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: error }))
-		const thrown = await mail()
-			.send({ to: "to@test.com", body: "x" })
-			.catch((e) => e)
-		expect(thrown).toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
-		expect(mail().is_error({ ErrorCode: 0, Message: "OK" })).toBe(false)
+		const raw = { ErrorCode: 300, Message: "Invalid 'From'" }
+		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("postmark")
+		expect(error.message).toBe("Invalid 'From'")
+		expect(error.code).toBe(300)
 	})
 })
 
@@ -175,13 +189,11 @@ describe("SendGrid", () => {
 	})
 
 	it("throws on non-202 with an errors array", async () => {
-		const error = { errors: [{ message: "bad", field: "from" }] }
-		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: error }))
-		const thrown = await mail()
-			.send({ to: "to@test.com", body: "x" })
-			.catch((e) => e)
-		expect(thrown).toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
+		const raw = { errors: [{ message: "bad", field: "from" }] }
+		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("sendgrid")
+		expect(error.message).toBe("bad")
 	})
 })
 
@@ -222,11 +234,11 @@ describe("Mailgun", () => {
 	})
 
 	it("detects errors", async () => {
-		const error = { message: "Forbidden" }
-		fetch.mockResolvedValue(respond({ ok: false, status: 401, json: error }))
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
-		expect(mail().is_error({ id: "x", message: "ok" })).toBe(false)
+		const raw = { message: "Forbidden" }
+		fetch.mockResolvedValue(respond({ ok: false, status: 401, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("mailgun")
+		expect(error.message).toBe("Forbidden")
 	})
 })
 
@@ -253,10 +265,12 @@ describe("Brevo", () => {
 	})
 
 	it("detects errors", async () => {
-		const error = { code: "invalid_parameter", message: "bad" }
-		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: error }))
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
+		const raw = { code: "invalid_parameter", message: "bad" }
+		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("brevo")
+		expect(error.message).toBe("bad")
+		expect(error.code).toBe("invalid_parameter")
 	})
 })
 
@@ -308,19 +322,17 @@ describe("Cloudflare", () => {
 	})
 
 	it("treats success:false as an error even on HTTP 200", async () => {
-		const error = {
+		const raw = {
 			success: false,
 			errors: [{ code: 10001, message: "email.sending.error.invalid_request_schema" }],
 			messages: [],
 			result: null,
 		}
-		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: error }))
-		const thrown = await mail()
-			.send({ to: "to@test.com", body: "x" })
-			.catch((e) => e)
-		expect(thrown).toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
-		expect(mail().is_error({ success: true, errors: [] })).toBe(false)
+		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("cloudflare")
+		expect(error.message).toBe("email.sending.error.invalid_request_schema")
+		expect(error.code).toBe(10001)
 	})
 })
 
@@ -350,10 +362,11 @@ describe("MailerSend", () => {
 	})
 
 	it("detects errors", async () => {
-		const error = { message: "The given data was invalid.", errors: { "to.0.email": ["invalid"] } }
-		fetch.mockResolvedValue(respond({ ok: false, status: 422, json: error }))
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
+		const raw = { message: "The given data was invalid.", errors: { "to.0.email": ["invalid"] } }
+		fetch.mockResolvedValue(respond({ ok: false, status: 422, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("mailersend")
+		expect(error.message).toBe("The given data was invalid.")
 	})
 })
 
@@ -391,10 +404,12 @@ describe("SparkPost", () => {
 	})
 
 	it("detects errors", async () => {
-		const error = { errors: [{ message: "bad", code: "1902" }] }
-		fetch.mockResolvedValue(respond({ ok: false, status: 422, json: error }))
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
+		const raw = { errors: [{ message: "bad", code: "1902" }] }
+		fetch.mockResolvedValue(respond({ ok: false, status: 422, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("sparkpost")
+		expect(error.message).toBe("bad")
+		expect(error.code).toBe("1902")
 	})
 })
 
@@ -431,14 +446,12 @@ describe("Mandrill", () => {
 	})
 
 	it("detects a call-level error object (not the success array)", async () => {
-		const error = { status: "error", code: 12, name: "Invalid_Key", message: "bad key" }
-		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: error }))
-		const thrown = await mail()
-			.send({ to: "to@test.com", body: "x" })
-			.catch((e) => e)
-		expect(thrown).toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
-		expect(mail().is_error([{ email: "x", status: "sent" }])).toBe(false)
+		const raw = { status: "error", code: 12, name: "Invalid_Key", message: "bad key" }
+		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("mandrill")
+		expect(error.message).toBe("bad key")
+		expect(error.code).toBe(12)
 	})
 })
 
@@ -464,11 +477,12 @@ describe("Plunk", () => {
 	})
 
 	it("detects errors", async () => {
-		const error = { code: 401, error: "Unauthorized", message: "bad key", time: 1 }
-		fetch.mockResolvedValue(respond({ ok: false, status: 401, json: error }))
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
-		expect(mail().is_error({ success: true })).toBe(false)
+		const raw = { code: 401, error: "Unauthorized", message: "bad key", time: 1 }
+		fetch.mockResolvedValue(respond({ ok: false, status: 401, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("plunk")
+		expect(error.message).toBe("bad key")
+		expect(error.code).toBe(401)
 	})
 })
 
@@ -514,10 +528,11 @@ describe("Mailtrap", () => {
 	})
 
 	it("detects errors", async () => {
-		const error = { success: false, errors: ["'to' is invalid"] }
-		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: error }))
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
+		const raw = { success: false, errors: ["'to' is invalid"] }
+		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("mailtrap")
+		expect(error.message).toContain("'to' is invalid")
 	})
 })
 
@@ -545,13 +560,17 @@ describe("MailPace", () => {
 		])
 	})
 
-	it("detects both error shapes", async () => {
+	it("normalizes both error shapes", async () => {
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 422, json: { errors: { to: ["invalid"] } } })
 		)
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toBeDefined()
-		expect(mail().is_error({ error: "unauthorized" })).toBe(true)
-		expect(mail().is_error({ errors: { to: ["x"] } })).toBe(true)
+		let error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("mailpace")
+		expect(error.message).toContain("invalid")
+
+		fetch.mockResolvedValue(respond({ ok: false, status: 401, json: { error: "unauthorized" } }))
+		error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.message).toBe("unauthorized")
 	})
 })
 
@@ -589,10 +608,89 @@ describe("Scaleway", () => {
 	})
 
 	it("detects errors", async () => {
-		const error = { message: "denied" }
-		fetch.mockResolvedValue(respond({ ok: false, status: 403, json: error }))
-		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
-		expect(mail().is_error(error)).toBe(true)
-		expect(mail().is_error({ emails: [] })).toBe(false)
+		const raw = { message: "denied" }
+		fetch.mockResolvedValue(respond({ ok: false, status: 403, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("scaleway")
+		expect(error.message).toBe("denied")
+	})
+})
+
+describe("resilience (shared base)", () => {
+	const make = (opts = {}) =>
+		new Resend({ api_key: "k", default_from: "from@test.com", retry_delay: 0, ...opts })
+
+	it("retries on 5xx then succeeds", async () => {
+		fetch
+			.mockResolvedValueOnce(respond({ ok: false, status: 503 }))
+			.mockResolvedValueOnce(respond({ json: { id: "ok" } }))
+		const result = await make({ retries: 1 }).send({ to: "to@test.com", body: "x" })
+		expect(result).toEqual({ id: "ok" })
+		expect(fetch).toHaveBeenCalledTimes(2)
+	})
+
+	it("gives up after exhausting retries", async () => {
+		fetch.mockResolvedValue(
+			respond({ ok: false, status: 503, json: { message: "down", name: "x" } })
+		)
+		const error = await caught(make({ retries: 2 }).send({ to: "to@test.com", body: "x" }))
+		expect(error.status).toBe(503)
+		expect(fetch).toHaveBeenCalledTimes(3)
+	})
+
+	it("does not retry on 4xx", async () => {
+		fetch.mockResolvedValue(
+			respond({ ok: false, status: 400, json: { message: "bad", name: "x" } })
+		)
+		await caught(make({ retries: 3 }).send({ to: "to@test.com", body: "x" }))
+		expect(fetch).toHaveBeenCalledTimes(1)
+	})
+
+	it("wraps network failures in a PostboiError", async () => {
+		fetch.mockImplementation(async () => {
+			throw new Error("ECONNRESET")
+		})
+		await expect(make().send({ to: "to@test.com", body: "x" })).rejects.toMatchObject({
+			name: "PostboiError",
+			provider: "resend",
+			message: expect.stringContaining("ECONNRESET"),
+		})
+	})
+
+	it("forwards an idempotency key header", async () => {
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+		await make().send({ to: "to@test.com", body: "x", idempotency_key: "abc" })
+		expect(sent_init().headers).toMatchObject({ "Idempotency-Key": "abc" })
+	})
+})
+
+describe("Failover", () => {
+	it("returns the first provider that succeeds", async () => {
+		fetch
+			.mockResolvedValueOnce(
+				respond({ ok: false, status: 500, json: { message: "down", name: "x" } })
+			)
+			.mockResolvedValueOnce(respond({ json: { MessageID: "id", ErrorCode: 0, Message: "OK" } }))
+		const mail = new Failover([
+			new Resend({ api_key: "k", default_from: "f@test.com" }),
+			new Postmark({ api_key: "k", default_from: "f@test.com" }),
+		])
+		const result = (await mail.send({ to: "to@test.com", body: "x" })) as { MessageID: string }
+		expect(result.MessageID).toBe("id")
+		expect(fetch).toHaveBeenCalledTimes(2)
+	})
+
+	it("throws an aggregate error when all providers fail", async () => {
+		fetch.mockResolvedValue(
+			respond({ ok: false, status: 500, json: { message: "down", name: "x" } })
+		)
+		const mail = new Failover([
+			new Resend({ api_key: "k", default_from: "f@test.com" }),
+			new Postmark({ api_key: "k", default_from: "f@test.com" }),
+		])
+		const error = await caught(mail.send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("failover")
+		expect(Array.isArray(error.raw)).toBe(true)
+		expect((error.raw as unknown[]).length).toBe(2)
 	})
 })
