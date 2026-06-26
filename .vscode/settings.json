@@ -1,0 +1,9 @@
+{
+	"files.eol": "\n",
+	"oxc.fmt.configPath": ".oxfmtrc.json",
+	"editor.defaultFormatter": "oxc.oxc-vscode",
+	"editor.formatOnSave": true,
+	"[svelte]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	}
+}

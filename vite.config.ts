@@ -1,9 +1,21 @@
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vitest/config"
 import { sveltekit } from "@sveltejs/kit/vite"
+import adapter from "@sveltejs/adapter-auto"
+import { vitePreprocess } from "@sveltejs/vite-plugin-svelte"
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [
+		tailwindcss(),
+		sveltekit({
+			preprocess: vitePreprocess(),
+			adapter: adapter(),
+			alias: {
+				$components: "src/components",
+				$library: "src/library",
+			},
+		}),
+	],
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
