@@ -169,7 +169,7 @@ describe("ProviderBase", () => {
 
 			const { options } = await provider.form(form)
 			expect(options.body).toContain("<table")
-			// radashi _.title turns "first_name" into "First Name"
+			// the built-in `title` helper turns "first_name" into "First Name"
 			expect(options.body).toContain("First Name")
 			expect(options.body).toContain("Darby")
 		})

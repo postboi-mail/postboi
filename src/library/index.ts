@@ -1,4 +1,4 @@
-import * as _ from "radashi"
+import { title } from "./utils.js"
 
 /**
  * A concrete email address used by providers.
@@ -49,7 +49,7 @@ export interface SendOptions {
 				/** Optional formatter for field labels when rendering FormData. Set to null/false to disable. */
 				name?: ((label: string) => string) | null | false
 		  }
-		/** If null/false, disables all formatting. If undefined, defaults to radashi _.title. */
+		/** If null/false, disables all formatting. If undefined, defaults to the built-in `title` helper. */
 		| null
 		| false
 	/** Attachments to include. Accepts a single File or an array of File objects. */
@@ -165,8 +165,8 @@ export abstract class ProviderBase<TResponse = unknown> {
 		} else {
 			const fset = formatter?.fieldset
 			const fname = formatter?.name
-			format_fieldset = fset === undefined ? _.title : fset ? fset : identity
-			format_name = fname === undefined ? _.title : fname ? fname : identity
+			format_fieldset = fset === undefined ? title : fset ? fset : identity
+			format_name = fname === undefined ? title : fname ? fname : identity
 		}
 
 		for (const [key, value] of form_data.entries()) {
