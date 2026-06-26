@@ -36,6 +36,7 @@ ever bundle the provider you actually import — nothing else comes along for th
 | SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
 | Mailgun        | `postboi/mailgun`    | `api_key`, `domain`, `region?`       |
 | Brevo          | `postboi/brevo`      | `api_key`                            |
+| Cloudflare     | `postboi/cloudflare` | `api_key`, `account_id`              |
 | MailerSend     | `postboi/mailersend` | `api_key`                            |
 | SparkPost      | `postboi/sparkpost`  | `api_key`, `region?`                 |
 | Mandrill       | `postboi/mandrill`   | `api_key`                            |

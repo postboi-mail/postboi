@@ -5,6 +5,7 @@ import Postmark from "$library/postmark.js"
 import SendGrid from "$library/sendgrid.js"
 import Mailgun from "$library/mailgun.js"
 import Brevo from "$library/brevo.js"
+import Cloudflare from "$library/cloudflare.js"
 import MailerSend from "$library/mailersend.js"
 import SparkPost from "$library/sparkpost.js"
 import Mandrill from "$library/mandrill.js"
@@ -256,6 +257,70 @@ describe("Brevo", () => {
 		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: error }))
 		await expect(mail().send({ to: "to@test.com", body: "x" })).rejects.toEqual(error)
 		expect(mail().is_error(error)).toBe(true)
+	})
+})
+
+describe("Cloudflare", () => {
+	const mail = () =>
+		new Cloudflare({ api_key: "cf_token", account_id: "acc-123", default_from: "from@test.com" })
+
+	it("posts to the account send endpoint with a bearer token", async () => {
+		fetch.mockResolvedValue(
+			respond({
+				json: {
+					success: true,
+					errors: [],
+					messages: [],
+					result: { delivered: ["to@test.com"], permanent_bounces: [], queued: [] },
+				},
+			})
+		)
+		const result = await mail().send({
+			to: { address: "to@test.com", name: "To" },
+			cc: "cc@test.com",
+			reply_to: "reply@test.com",
+			subject: "Hi",
+			body: "<p>x</p>",
+			text: "x",
+			attachments: attachment(),
+		})
+
+		expect(sent_url()).toBe(
+			"https://api.cloudflare.com/client/v4/accounts/acc-123/email/sending/send"
+		)
+		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer cf_token" })
+		const body = sent_json()
+		expect(body.from).toEqual({ email: "from@test.com" })
+		expect(body.to).toEqual([{ email: "to@test.com", name: "To" }])
+		expect(body.cc).toEqual([{ email: "cc@test.com" }])
+		expect(body.replyTo).toEqual({ email: "reply@test.com" })
+		expect(body.html).toBe("<p>x</p>")
+		expect(body.text).toBe("x")
+		expect(body.attachments).toEqual([
+			{
+				content: b64("filedata"),
+				filename: "doc.pdf",
+				type: "application/pdf",
+				disposition: "attachment",
+			},
+		])
+		expect(result.success).toBe(true)
+	})
+
+	it("treats success:false as an error even on HTTP 200", async () => {
+		const error = {
+			success: false,
+			errors: [{ code: 10001, message: "email.sending.error.invalid_request_schema" }],
+			messages: [],
+			result: null,
+		}
+		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: error }))
+		const thrown = await mail()
+			.send({ to: "to@test.com", body: "x" })
+			.catch((e) => e)
+		expect(thrown).toEqual(error)
+		expect(mail().is_error(error)).toBe(true)
+		expect(mail().is_error({ success: true, errors: [] })).toBe(false)
 	})
 })
 

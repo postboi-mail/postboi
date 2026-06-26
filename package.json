@@ -56,6 +56,10 @@
       "types": "./dist/brevo.d.ts",
       "default": "./dist/brevo.js"
     },
+    "./cloudflare": {
+      "types": "./dist/cloudflare.d.ts",
+      "default": "./dist/cloudflare.js"
+    },
     "./mailersend": {
       "types": "./dist/mailersend.d.ts",
       "default": "./dist/mailersend.js"
