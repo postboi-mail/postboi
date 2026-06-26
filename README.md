@@ -25,12 +25,60 @@ The core email sending functionality is framework-agnostic and works in Node.js,
 
 ## Providers
 
-Currently supported:
+One API, a whole bunch of providers. Each one is its own entry point, so you only
+ever bundle the provider you actually import — nothing else comes along for the ride.
 
-- ✅ **ZeptoMail** — fully implemented and tested
-- ... oh, yeah, that's it 😅
+| Provider       | Import               | Constructor options                  |
+| -------------- | -------------------- | ------------------------------------ |
+| ZeptoMail      | `postboi/zepto`      | `token`                              |
+| Resend         | `postboi/resend`     | `api_key`                            |
+| Postmark       | `postboi/postmark`   | `api_key`, `message_stream?`         |
+| SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
+| Mailgun        | `postboi/mailgun`    | `api_key`, `domain`, `region?`       |
+| Brevo          | `postboi/brevo`      | `api_key`                            |
+| MailerSend     | `postboi/mailersend` | `api_key`                            |
+| SparkPost      | `postboi/sparkpost`  | `api_key`, `region?`                 |
+| Mandrill       | `postboi/mandrill`   | `api_key`                            |
+| Plunk          | `postboi/plunk`      | `api_key`                            |
+| Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
+| MailPace       | `postboi/mailpace`   | `api_key`                            |
+| Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
+| Mock (testing) | `postboi/mock`       | _none_                               |
 
-Want to add another provider? Quit being a baby and open a PR.
+Every provider takes the optional `default_from` / `default_to` too, and exposes the
+same `send()` and `is_error()` methods. Swapping providers is a one-line import change.
+
+```typescript
+import Resend from "postboi/resend"
+
+const mail = new Resend({ api_key: RESEND_API_KEY, default_from: "no-reply@example.com" })
+await mail.send({ to: "someone@example.com", subject: "hello", body: "<p>hello world</p>" })
+```
+
+### Tree-shaking
+
+Providers live behind separate entry points (`postboi/resend`, `postboi/mailgun`, …) and
+each one only imports the shared core — never another provider. Import `postboi/resend`
+and your bundle contains Resend and the core, full stop. None of the other providers are
+reachable, so there's nothing for the bundler to even shake out.
+
+### Testing with the mock provider
+
+`postboi/mock` records messages in-memory instead of sending them — handy for asserting
+what your app would send without hitting a real API. It runs the exact same
+normalisation (defaults, FormData parsing, address parsing, attachments) as a real provider.
+
+```typescript
+import Mock from "postboi/mock"
+
+const mail = new Mock({ default_from: "no-reply@example.com" })
+await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+
+expect(mail.sent).toHaveLength(1)
+expect(mail.last?.to[0].address).toBe("contact@example.com")
+```
+
+Want another provider? Quit being a baby and open a PR.
 
 ## Installation
 
@@ -239,7 +287,8 @@ interface SendOptions {
 	cc?: Email | Email[] // cc recipient(s)
 	bcc?: Email | Email[] // bcc recipient(s)
 	subject?: string // email subject (default: "Mail sent from website")
-	body: string | FormData // email body or formdata to parse
+	body: string | FormData // email body (HTML) or formdata to parse
+	text?: string // optional plain-text alternative body
 	formatter?:
 		| {
 				// customize label formatting

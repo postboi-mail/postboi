@@ -42,6 +42,11 @@ export interface SendOptions {
 	 * - Remaining fields are rendered into a compact HTML table with group headers
 	 */
 	body: string | FormData
+	/**
+	 * Optional plain-text alternative body. When provided alongside `body`, providers
+	 * that support multipart emails will send both the HTML and plain-text versions.
+	 */
+	text?: string
 	formatter?:
 		| {
 				/** Optional formatter for group (fieldset) labels when rendering FormData. Set to null/false to disable. */
@@ -67,6 +72,12 @@ export type CommonProviderOptions = {
 	default_from?: string
 	/** Optional default recipient address used when `to` is omitted */
 	default_to?: string
+}
+
+/** Options shared by providers that authenticate with a single API key/token. */
+export type ApiKeyOptions = CommonProviderOptions & {
+	/** The provider API key / token used to authenticate requests. */
+	api_key: string
 }
 
 /**
@@ -126,6 +137,43 @@ export abstract class ProviderBase<TResponse = unknown> {
 				.filter((s) => s.length > 0)
 				.map((a) => this.parse_email_address(a))
 		return [this.parse_email_address(addresses)]
+	}
+
+	/** Format a normalized address as an RFC 5322 string: `Name <address>` or `address`. */
+	protected stringify_address(address: MailAddress): string {
+		return address.name ? `${address.name} <${address.address}>` : address.address
+	}
+
+	/** Format a flexible Email value (single/array/comma-separated) into a comma-separated string. */
+	protected stringify_addresses(addresses: Array<Email> | Email): string {
+		return this.parse_addresses(addresses)
+			.map((a) => this.stringify_address(a))
+			.join(", ")
+	}
+
+	/** Convert a normalized address into the `{ email, name? }` shape most JSON APIs expect. */
+	protected email_name(address: MailAddress): { email: string; name?: string } {
+		return address.name
+			? { email: address.address, name: address.name }
+			: { email: address.address }
+	}
+
+	/** Map a flexible Email value into an array of `{ email, name? }` objects. */
+	protected email_name_list(
+		addresses: Array<Email> | Email
+	): Array<{ email: string; name?: string }> {
+		return this.parse_addresses(addresses).map((a) => this.email_name(a))
+	}
+
+	/** Read a Response body as JSON, tolerating empty bodies (e.g. 202 responses). */
+	protected async read_json(response: Response): Promise<unknown> {
+		const text = await response.text()
+		if (!text) return undefined
+		try {
+			return JSON.parse(text)
+		} catch {
+			return text
+		}
 	}
 
 	/** Decode a base64 string if it looks like base64, otherwise return the original. */

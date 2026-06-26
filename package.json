@@ -35,6 +35,58 @@
       "types": "./dist/zepto.d.ts",
       "svelte": "./dist/zepto.js",
       "default": "./dist/zepto.js"
+    },
+    "./resend": {
+      "types": "./dist/resend.d.ts",
+      "default": "./dist/resend.js"
+    },
+    "./postmark": {
+      "types": "./dist/postmark.d.ts",
+      "default": "./dist/postmark.js"
+    },
+    "./sendgrid": {
+      "types": "./dist/sendgrid.d.ts",
+      "default": "./dist/sendgrid.js"
+    },
+    "./mailgun": {
+      "types": "./dist/mailgun.d.ts",
+      "default": "./dist/mailgun.js"
+    },
+    "./brevo": {
+      "types": "./dist/brevo.d.ts",
+      "default": "./dist/brevo.js"
+    },
+    "./mailersend": {
+      "types": "./dist/mailersend.d.ts",
+      "default": "./dist/mailersend.js"
+    },
+    "./sparkpost": {
+      "types": "./dist/sparkpost.d.ts",
+      "default": "./dist/sparkpost.js"
+    },
+    "./mandrill": {
+      "types": "./dist/mandrill.d.ts",
+      "default": "./dist/mandrill.js"
+    },
+    "./plunk": {
+      "types": "./dist/plunk.d.ts",
+      "default": "./dist/plunk.js"
+    },
+    "./mailtrap": {
+      "types": "./dist/mailtrap.d.ts",
+      "default": "./dist/mailtrap.js"
+    },
+    "./mailpace": {
+      "types": "./dist/mailpace.d.ts",
+      "default": "./dist/mailpace.js"
+    },
+    "./scaleway": {
+      "types": "./dist/scaleway.d.ts",
+      "default": "./dist/scaleway.js"
+    },
+    "./mock": {
+      "types": "./dist/mock.d.ts",
+      "default": "./dist/mock.js"
     }
   },
   "peerDependencies": {

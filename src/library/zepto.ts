@@ -26,6 +26,7 @@ export interface SendParams {
 	attachments?: Array<Attachment>
 	subject: string
 	htmlbody: string
+	textbody?: string
 }
 
 interface SendError {
@@ -107,6 +108,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 				: undefined,
 			subject: options.subject || "Mail sent from website",
 			htmlbody: typeof options.body === "string" ? options.body : "",
+			textbody: options.text,
 			attachments: options.attachments
 				? await this.parse_attachments(options.attachments)
 				: undefined,
