@@ -29,6 +29,8 @@ export interface SendParams {
 	reply_to?: EmailName
 	subject: string
 	content: Array<{ type: string; value: string }>
+	headers?: Record<string, string>
+	categories?: Array<string>
 	attachments?: Array<Attachment>
 }
 
@@ -73,6 +75,8 @@ export default class SendGrid extends ProviderBase<SendResponse> {
 			reply_to: message.reply_to ? this.email_name_list(message.reply_to)[0] : undefined,
 			subject: message.subject,
 			content,
+			headers: message.headers,
+			categories: message.tags,
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,

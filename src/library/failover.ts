@@ -1,5 +1,6 @@
-import type { SendOptions } from "./index.js"
+import type { SendOptions, BatchResult } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
+import { pooled_map } from "./utils.js"
 
 /**
  * Composite provider that tries each underlying provider in order and returns the
@@ -44,6 +45,28 @@ export default class Failover {
 			provider: "failover",
 			message: `All ${this.#providers.length} providers failed`,
 			raw: errors,
+		})
+	}
+
+	/** Bulk send with bounded concurrency; never rejects, one {@link BatchResult} per message. */
+	async send_many(
+		messages: Array<SendOptions>,
+		options: { concurrency?: number } = {}
+	): Promise<Array<BatchResult<unknown>>> {
+		return pooled_map(messages, options.concurrency ?? 5, async (message, index) => {
+			try {
+				return { ok: true, index, response: await this.send(message) }
+			} catch (error) {
+				const normalized =
+					error instanceof PostboiError
+						? error
+						: new PostboiError({
+								provider: "failover",
+								message: error instanceof Error ? error.message : String(error),
+								raw: error,
+							})
+				return { ok: false, index, error: normalized }
+			}
 		})
 	}
 

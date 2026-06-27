@@ -26,6 +26,7 @@ export interface SendParams {
 		text?: string
 		to: Array<Recipient>
 		headers?: Record<string, string>
+		tags?: Array<string>
 		attachments?: Array<Attachment>
 	}
 }
@@ -77,6 +78,11 @@ export default class Mandrill extends ProviderBase<SendResponse> {
 			})),
 		]
 
+		const headers = {
+			...(message.reply_to ? { "Reply-To": this.stringify_addresses(message.reply_to) } : {}),
+			...message.headers,
+		}
+
 		const params: SendParams = {
 			key: this.#api_key,
 			message: {
@@ -86,9 +92,8 @@ export default class Mandrill extends ProviderBase<SendResponse> {
 				html: message.html,
 				text: message.text,
 				to: recipients,
-				headers: message.reply_to
-					? { "Reply-To": this.stringify_addresses(message.reply_to) }
-					: undefined,
+				headers: Object.keys(headers).length ? headers : undefined,
+				tags: message.tags,
 				attachments: message.attachments
 					? (await this.parse_attachments(message.attachments)).map((a) => ({
 							type: a.mime_type,

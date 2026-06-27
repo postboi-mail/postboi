@@ -68,6 +68,15 @@ export default class Scaleway extends ProviderBase<SendResponse> {
 	}
 
 	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
+		// Scaleway has no dedicated reply_to field — express reply-to and any custom
+		// headers as additional_headers.
+		const additional_headers = [
+			...(message.reply_to
+				? [{ key: "Reply-To", value: this.stringify_addresses(message.reply_to) }]
+				: []),
+			...Object.entries(message.headers ?? {}).map(([key, value]) => ({ key, value })),
+		]
+
 		const params: SendParams = {
 			from: this.email_name(this.parse_email_address(message.from)),
 			to: this.email_name_list(message.to),
@@ -77,10 +86,7 @@ export default class Scaleway extends ProviderBase<SendResponse> {
 			html: message.html,
 			text: message.text,
 			project_id: this.#project_id,
-			// Scaleway has no dedicated reply_to field — express it as an additional header.
-			additional_headers: message.reply_to
-				? [{ key: "Reply-To", value: this.stringify_addresses(message.reply_to) }]
-				: undefined,
+			additional_headers: additional_headers.length ? additional_headers : undefined,
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						name: a.name,

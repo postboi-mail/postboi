@@ -40,6 +40,32 @@ export function title(str: string | null | undefined): string {
 }
 
 /**
+ * Run an async mapper over items with a bounded concurrency pool, preserving input order.
+ *
+ * @example
+ * await pooled_map([1, 2, 3], 2, async (n) => n * 2) // => [2, 4, 6], at most 2 in flight
+ */
+export async function pooled_map<T, R>(
+	items: ReadonlyArray<T>,
+	concurrency: number,
+	mapper: (item: T, index: number) => Promise<R>
+): Promise<Array<R>> {
+	const limit = Math.max(1, Math.min(concurrency, items.length))
+	const results = new Array<R>(items.length)
+	let cursor = 0
+
+	async function worker() {
+		while (cursor < items.length) {
+			const index = cursor++
+			results[index] = await mapper(items[index], index)
+		}
+	}
+
+	await Promise.all(Array.from({ length: limit }, worker))
+	return results
+}
+
+/**
  * Derive a readable plain-text body from an HTML string. Drops `<style>`/`<script>`
  * blocks, turns block-level tags and `<br>` into line breaks, strips remaining tags,
  * decodes the common HTML entities and collapses excess whitespace.

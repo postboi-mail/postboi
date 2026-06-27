@@ -1,4 +1,4 @@
-import { title, html_to_text } from "./utils.js"
+import { title, html_to_text, pooled_map } from "./utils.js"
 
 /**
  * A concrete email address used by providers.
@@ -65,6 +65,18 @@ export interface SendOptions {
 	 * request does not send a duplicate email.
 	 */
 	idempotency_key?: string
+	/**
+	 * Custom email headers, forwarded to providers that support arbitrary headers
+	 * (Resend, Postmark, SendGrid, Mailgun, Brevo, SparkPost, Mandrill, Plunk, Mailtrap,
+	 * Scaleway, Cloudflare). Ignored by providers without a headers slot.
+	 */
+	headers?: Record<string, string>
+	/**
+	 * Tags / categories for analytics and filtering, forwarded to providers that support
+	 * tagging. Each provider maps them to its native concept (categories, tags, or a single
+	 * category — see the README). Ignored by providers without a tagging concept.
+	 */
+	tags?: Array<string>
 }
 
 /**
@@ -82,6 +94,8 @@ export interface PreparedMessage {
 	text?: string
 	attachments?: File | Array<File>
 	idempotency_key?: string
+	headers?: Record<string, string>
+	tags?: Array<string>
 }
 
 /** A provider-agnostic description of the HTTP request to send. */
@@ -91,6 +105,11 @@ export type RequestSpec = {
 	headers: Record<string, string>
 	body: BodyInit
 }
+
+/** The per-message outcome of a {@link ProviderBase.send_many} bulk send. */
+export type BatchResult<TResponse> =
+	| { ok: true; index: number; response: TResponse }
+	| { ok: false; index: number; error: PostboiError }
 
 /** Common options shared by all provider constructors. */
 export type CommonProviderOptions = {
@@ -501,8 +520,18 @@ export abstract class ProviderBase<TResponse = unknown> {
 		const to = options.to ?? this.defaults.to
 		const from = options.from ?? this.defaults.from
 
-		if (!to) throw new Error("No recipient address provided (to or default_to)")
-		if (!from) throw new Error("No sender address provided (from or default_from)")
+		if (!to) {
+			throw new PostboiError({
+				provider: this.provider,
+				message: "No recipient address provided (to or default_to)",
+			})
+		}
+		if (!from) {
+			throw new PostboiError({
+				provider: this.provider,
+				message: "No sender address provided (from or default_from)",
+			})
+		}
 
 		const html = typeof options.body === "string" ? options.body : undefined
 		let text = options.text
@@ -519,6 +548,37 @@ export abstract class ProviderBase<TResponse = unknown> {
 			text,
 			attachments: options.attachments,
 			idempotency_key: options.idempotency_key,
+			headers: options.headers,
+			tags: options.tags,
 		}
+	}
+
+	/**
+	 * Send many emails as individual requests with bounded concurrency. Never rejects —
+	 * each message yields its own {@link BatchResult}, so one failure does not lose the rest.
+	 *
+	 * @example
+	 * const results = await mail.send_many([msg1, msg2], { concurrency: 10 })
+	 * const failed = results.filter((r) => !r.ok)
+	 */
+	async send_many(
+		messages: Array<SendOptions>,
+		options: { concurrency?: number } = {}
+	): Promise<Array<BatchResult<TResponse>>> {
+		return pooled_map(messages, options.concurrency ?? 5, async (message, index) => {
+			try {
+				return { ok: true, index, response: await this.send(message) }
+			} catch (error) {
+				const normalized =
+					error instanceof PostboiError
+						? error
+						: new PostboiError({
+								provider: this.provider,
+								message: error instanceof Error ? error.message : String(error),
+								raw: error,
+							})
+				return { ok: false, index, error: normalized }
+			}
+		})
 	}
 }

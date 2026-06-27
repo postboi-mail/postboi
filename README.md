@@ -300,7 +300,41 @@ interface SendOptions {
 		| false // set to null/false to disable formatting
 	attachments?: File | File[] // file attachments
 	idempotency_key?: string // forwarded to providers that support it (e.g. Resend)
+	headers?: Record<string, string> // custom email headers (provider support varies)
+	tags?: string[] // tags / categories for analytics (provider support varies)
 }
+```
+
+### Custom headers & tags
+
+`headers` and `tags` are forwarded to each provider's native concept, and quietly
+ignored by providers that don't have one:
+
+- **headers** → Resend, Postmark, SendGrid, Mailgun (`h:`), Brevo, SparkPost, Mandrill,
+  Plunk, Mailtrap, Scaleway, Cloudflare.
+- **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill,
+  MailPace, Resend (`{name,value}` pairs). Postmark and Mailtrap take a single value, so
+  the **first** tag is used.
+
+```typescript
+await mail.send({
+	to: "contact@example.com",
+	body: "<p>Hello</p>",
+	headers: { "X-Campaign": "spring-2026" },
+	tags: ["welcome", "vip"],
+})
+```
+
+### Bulk sending
+
+`send_many` sends each message as its own request with bounded concurrency. It never
+throws — you get one result per message, so a single failure doesn't lose the rest:
+
+```typescript
+const results = await mail.send_many(messages, { concurrency: 10 }) // default 5
+
+const failed = results.filter((r) => !r.ok)
+for (const r of failed) console.error(r.index, r.error.message)
 ```
 
 ### Common constructor options

@@ -24,6 +24,7 @@ export interface SendParams {
 	subject: string
 	html?: string
 	text?: string
+	tags?: Array<string>
 	attachments?: Array<Attachment>
 }
 
@@ -59,6 +60,7 @@ export default class MailerSend extends ProviderBase<SendResponse> {
 			subject: message.subject,
 			html: message.html,
 			text: message.text,
+			tags: message.tags,
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,

@@ -17,6 +17,7 @@ export interface SendParams {
 	from?: string
 	name?: string
 	reply?: string
+	headers?: Record<string, string>
 	attachments?: Array<Attachment>
 }
 
@@ -58,6 +59,7 @@ export default class Plunk extends ProviderBase<SendResponse> {
 			from: from.address,
 			name: from.name,
 			reply: message.reply_to ? this.parse_addresses(message.reply_to)[0].address : undefined,
+			headers: message.headers,
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						filename: a.name,

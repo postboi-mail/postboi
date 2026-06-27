@@ -69,6 +69,12 @@ export default class SparkPost extends ProviderBase<SendResponse> {
 			...bcc.map((a) => ({ address: { email: a.address, header_to } })),
 		]
 
+		// Only cc is exposed via the CC header (bcc stays blind); merge any custom headers.
+		const headers = {
+			...(cc.length ? { CC: cc.map((a) => this.stringify_address(a)).join(", ") } : {}),
+			...message.headers,
+		}
+
 		const params: SendParams = {
 			content: {
 				from: this.email_name(this.parse_email_address(message.from)),
@@ -76,10 +82,7 @@ export default class SparkPost extends ProviderBase<SendResponse> {
 				html: message.html,
 				text: message.text,
 				reply_to: message.reply_to ? this.stringify_addresses(message.reply_to) : undefined,
-				// Only cc is exposed via the CC header; bcc is omitted so it stays blind.
-				headers: cc.length
-					? { CC: cc.map((a) => this.stringify_address(a)).join(", ") }
-					: undefined,
+				headers: Object.keys(headers).length ? headers : undefined,
 				attachments: message.attachments
 					? (await this.parse_attachments(message.attachments)).map((a) => ({
 							name: a.name,

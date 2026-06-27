@@ -19,6 +19,7 @@ export interface SendParams {
 	subject: string
 	htmlbody?: string
 	textbody?: string
+	tags?: Array<string>
 	attachments?: Array<Attachment>
 }
 
@@ -54,6 +55,7 @@ export default class MailPace extends ProviderBase<SendResponse> {
 			subject: message.subject,
 			htmlbody: message.html,
 			textbody: message.text,
+			tags: message.tags,
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						name: a.name,

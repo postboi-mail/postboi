@@ -23,6 +23,8 @@ export interface SendParams {
 	subject: string
 	htmlContent?: string
 	textContent?: string
+	headers?: Record<string, string>
+	tags?: Array<string>
 	attachment?: Array<Attachment>
 }
 
@@ -59,6 +61,8 @@ export default class Brevo extends ProviderBase<SendResponse> {
 			subject: message.subject,
 			htmlContent: message.html,
 			textContent: message.text,
+			headers: message.headers,
+			tags: message.tags,
 			attachment: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,

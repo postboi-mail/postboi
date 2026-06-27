@@ -50,6 +50,12 @@ export default class Mailgun extends ProviderBase<SendResponse> {
 		form.append("subject", message.subject)
 		if (message.html) form.append("html", message.html)
 		if (message.text) form.append("text", message.text)
+		if (message.headers) {
+			for (const [name, value] of Object.entries(message.headers)) form.append(`h:${name}`, value)
+		}
+		if (message.tags) {
+			for (const tag of message.tags) form.append("o:tag", tag)
+		}
 
 		if (message.attachments) {
 			const files = Array.isArray(message.attachments) ? message.attachments : [message.attachments]

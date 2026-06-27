@@ -30,6 +30,8 @@ export interface SendParams {
 	subject: string
 	html?: string
 	text?: string
+	headers?: Record<string, string>
+	category?: string
 	attachments?: Array<Attachment>
 }
 
@@ -75,6 +77,9 @@ export default class Mailtrap extends ProviderBase<SendResponse> {
 			subject: message.subject,
 			html: message.html,
 			text: message.text,
+			headers: message.headers,
+			// Mailtrap supports a single category; use the first tag if several are provided.
+			category: message.tags?.[0],
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						content: a.content,
