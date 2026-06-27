@@ -106,7 +106,7 @@ export type RequestSpec = {
 	body: BodyInit
 }
 
-/** The per-message outcome of a {@link ProviderBase.send_many} bulk send. */
+/** The per-message outcome of a bulk `send(messages)` call. */
 export type BatchResult<TResponse> =
 	| { ok: true; index: number; response: TResponse }
 	| { ok: false; index: number; error: PostboiError }
@@ -210,8 +210,23 @@ export abstract class ProviderBase<TResponse = unknown> {
 		return undefined
 	}
 
-	/** Send an email. Throws a {@link PostboiError} on any failure. */
-	async send(options: SendOptions): Promise<TResponse> {
+	/** Send a single email. Throws a {@link PostboiError} on any failure. */
+	async send(options: SendOptions): Promise<TResponse>
+	/**
+	 * Send many emails as individual requests with bounded concurrency (default 5).
+	 * Never rejects — each message yields its own {@link BatchResult}, so one failure
+	 * does not lose the rest.
+	 */
+	async send(
+		options: Array<SendOptions>,
+		batch?: { concurrency?: number }
+	): Promise<Array<BatchResult<TResponse>>>
+	async send(
+		options: SendOptions | Array<SendOptions>,
+		batch: { concurrency?: number } = {}
+	): Promise<TResponse | Array<BatchResult<TResponse>>> {
+		if (Array.isArray(options)) return this.send_batch(options, batch)
+
 		const message = await this.prepare_send(options)
 		const spec = await this.build_request(message)
 		const response = await this.request(spec)
@@ -242,6 +257,28 @@ export abstract class ProviderBase<TResponse = unknown> {
 	/** Type guard: is this a normalized Postboi error? */
 	is_error(error: unknown): error is PostboiError {
 		return error instanceof PostboiError
+	}
+
+	/** Shared bulk-send dispatch used by the array overload of `send`. */
+	protected async send_batch(
+		messages: Array<SendOptions>,
+		batch: { concurrency?: number } = {}
+	): Promise<Array<BatchResult<TResponse>>> {
+		return pooled_map(messages, batch.concurrency ?? 5, async (message, index) => {
+			try {
+				return { ok: true, index, response: await this.send(message) }
+			} catch (error) {
+				const normalized =
+					error instanceof PostboiError
+						? error
+						: new PostboiError({
+								provider: this.provider,
+								message: error instanceof Error ? error.message : String(error),
+								raw: error,
+							})
+				return { ok: false, index, error: normalized }
+			}
+		})
 	}
 
 	/** Perform the HTTP request with a timeout and opt-in retry/backoff. */
@@ -551,34 +588,5 @@ export abstract class ProviderBase<TResponse = unknown> {
 			headers: options.headers,
 			tags: options.tags,
 		}
-	}
-
-	/**
-	 * Send many emails as individual requests with bounded concurrency. Never rejects —
-	 * each message yields its own {@link BatchResult}, so one failure does not lose the rest.
-	 *
-	 * @example
-	 * const results = await mail.send_many([msg1, msg2], { concurrency: 10 })
-	 * const failed = results.filter((r) => !r.ok)
-	 */
-	async send_many(
-		messages: Array<SendOptions>,
-		options: { concurrency?: number } = {}
-	): Promise<Array<BatchResult<TResponse>>> {
-		return pooled_map(messages, options.concurrency ?? 5, async (message, index) => {
-			try {
-				return { ok: true, index, response: await this.send(message) }
-			} catch (error) {
-				const normalized =
-					error instanceof PostboiError
-						? error
-						: new PostboiError({
-								provider: this.provider,
-								message: error instanceof Error ? error.message : String(error),
-								raw: error,
-							})
-				return { ok: false, index, error: normalized }
-			}
-		})
 	}
 }

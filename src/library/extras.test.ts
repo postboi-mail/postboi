@@ -10,7 +10,6 @@ import Mandrill from "$library/mandrill.js"
 import Mailtrap from "$library/mailtrap.js"
 import Scaleway from "$library/scaleway.js"
 import MailPace from "$library/mailpace.js"
-import Failover from "$library/failover.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -143,7 +142,7 @@ describe("custom headers + tags", () => {
 	})
 })
 
-describe("send_many", () => {
+describe("send(array) — bulk", () => {
 	it("returns a result per message and never rejects", async () => {
 		const mail = new Resend({ api_key: "k", default_from: "f@test.com" })
 		fetch.mockReset()
@@ -154,7 +153,7 @@ describe("send_many", () => {
 			)
 			.mockResolvedValueOnce(respond({ json: { id: "3" } }))
 
-		const results = await mail.send_many(
+		const results = await mail.send(
 			[
 				{ to: "a@test.com", body: "x" },
 				{ to: "b@test.com", body: "x" },
@@ -177,7 +176,7 @@ describe("send_many", () => {
 	it("captures validation errors without sending", async () => {
 		fetch.mockReset()
 		const mail = new Resend({ api_key: "k" })
-		const results = await mail.send_many([{ to: "a@test.com", body: "x" }])
+		const results = await mail.send([{ to: "a@test.com", body: "x" }])
 		expect(results[0].ok).toBe(false)
 		if (!results[0].ok) expect(results[0].error.message).toMatch(/sender/)
 		expect(fetch).not.toHaveBeenCalled()
@@ -196,16 +195,15 @@ describe("send_many", () => {
 		})
 		const mail = new Resend({ api_key: "k", default_from: "f@test.com" })
 		const messages = Array.from({ length: 6 }, (_, i) => ({ to: `u${i}@test.com`, body: "x" }))
-		await mail.send_many(messages, { concurrency: 2 })
+		await mail.send(messages, { concurrency: 2 })
 		expect(peak).toBeLessThanOrEqual(2)
 	})
 
-	it("works through Failover too", async () => {
-		const mail = new Failover([new Resend({ api_key: "k", default_from: "f@test.com" })])
-		const results = await mail.send_many([
-			{ to: "a@test.com", body: "x" },
-			{ to: "b@test.com", body: "x" },
-		])
-		expect(results.every((r) => r.ok)).toBe(true)
+	it("a single send still returns the response directly", async () => {
+		fetch.mockReset()
+		fetch.mockResolvedValue(respond({ json: { id: "single" } }))
+		const mail = new Resend({ api_key: "k", default_from: "f@test.com" })
+		const result = await mail.send({ to: "a@test.com", body: "x" })
+		expect(result).toEqual({ id: "single" })
 	})
 })

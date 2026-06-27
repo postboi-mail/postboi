@@ -14,7 +14,6 @@ import Plunk from "$library/plunk.js"
 import Mailtrap from "$library/mailtrap.js"
 import MailPace from "$library/mailpace.js"
 import Scaleway from "$library/scaleway.js"
-import Failover from "$library/failover.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -661,36 +660,5 @@ describe("resilience (shared base)", () => {
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
 		await make().send({ to: "to@test.com", body: "x", idempotency_key: "abc" })
 		expect(sent_init().headers).toMatchObject({ "Idempotency-Key": "abc" })
-	})
-})
-
-describe("Failover", () => {
-	it("returns the first provider that succeeds", async () => {
-		fetch
-			.mockResolvedValueOnce(
-				respond({ ok: false, status: 500, json: { message: "down", name: "x" } })
-			)
-			.mockResolvedValueOnce(respond({ json: { MessageID: "id", ErrorCode: 0, Message: "OK" } }))
-		const mail = new Failover([
-			new Resend({ api_key: "k", default_from: "f@test.com" }),
-			new Postmark({ api_key: "k", default_from: "f@test.com" }),
-		])
-		const result = (await mail.send({ to: "to@test.com", body: "x" })) as { MessageID: string }
-		expect(result.MessageID).toBe("id")
-		expect(fetch).toHaveBeenCalledTimes(2)
-	})
-
-	it("throws an aggregate error when all providers fail", async () => {
-		fetch.mockResolvedValue(
-			respond({ ok: false, status: 500, json: { message: "down", name: "x" } })
-		)
-		const mail = new Failover([
-			new Resend({ api_key: "k", default_from: "f@test.com" }),
-			new Postmark({ api_key: "k", default_from: "f@test.com" }),
-		])
-		const error = await caught(mail.send({ to: "to@test.com", body: "x" }))
-		expect(error.provider).toBe("failover")
-		expect(Array.isArray(error.raw)).toBe(true)
-		expect((error.raw as unknown[]).length).toBe(2)
 	})
 })

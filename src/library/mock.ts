@@ -4,6 +4,7 @@ import type {
 	MailAddress,
 	MailAttachment,
 	RequestSpec,
+	BatchResult,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 
@@ -67,7 +68,17 @@ export default class Mock extends ProviderBase<SendResponse> {
 		this.sent.length = 0
 	}
 
-	async send(options: SendOptions): Promise<SendResponse> {
+	async send(options: SendOptions): Promise<SendResponse>
+	async send(
+		options: Array<SendOptions>,
+		batch?: { concurrency?: number }
+	): Promise<Array<BatchResult<SendResponse>>>
+	async send(
+		options: SendOptions | Array<SendOptions>,
+		batch: { concurrency?: number } = {}
+	): Promise<SendResponse | Array<BatchResult<SendResponse>>> {
+		if (Array.isArray(options)) return this.send_batch(options, batch)
+
 		const message = await this.prepare_send(options)
 
 		if (this.#fail) {

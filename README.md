@@ -141,7 +141,7 @@ export const actions = {
 			return { success: true }
 		} catch (error) {
 			if (mail.is_error(error)) {
-				return fail(400, { error: error.error.message })
+				return fail(400, { error: error.message })
 			}
 			return fail(400, { error: String(error) })
 		}
@@ -327,11 +327,12 @@ await mail.send({
 
 ### Bulk sending
 
-`send_many` sends each message as its own request with bounded concurrency. It never
-throws — you get one result per message, so a single failure doesn't lose the rest:
+Pass `send` an **array** and it sends each message as its own request with bounded
+concurrency. It never throws — you get one result per message, so a single failure
+doesn't lose the rest:
 
 ```typescript
-const results = await mail.send_many(messages, { concurrency: 10 }) // default 5
+const results = await mail.send(messages, { concurrency: 10 }) // default 5
 
 const failed = results.filter((r) => !r.ok)
 for (const r of failed) console.error(r.index, r.error.message)
@@ -371,8 +372,6 @@ provider error envelopes, timeouts and network failures), so error handling is i
 no matter which provider you use. The original provider payload is kept on `.raw`.
 
 ```typescript
-import { PostboiError } from "postboi"
-
 try {
 	await mail.send({ to: "bad@email", body: "test" })
 } catch (error) {
@@ -387,24 +386,6 @@ try {
 		console.error(error)
 	}
 }
-```
-
-### Failover
-
-Wrap several providers and Postboi will try them in order, returning the first success:
-
-```typescript
-import Failover from "postboi/failover"
-import Resend from "postboi/resend"
-import Postmark from "postboi/postmark"
-
-const mail = new Failover([
-	new Resend({ api_key: RESEND_API_KEY, default_from: "no-reply@example.com" }),
-	new Postmark({ api_key: POSTMARK_TOKEN, default_from: "no-reply@example.com" }),
-])
-
-// falls through to Postmark if Resend fails
-await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
 ## Development

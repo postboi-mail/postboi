@@ -60,10 +60,6 @@
       "types": "./dist/cloudflare.d.ts",
       "default": "./dist/cloudflare.js"
     },
-    "./failover": {
-      "types": "./dist/failover.d.ts",
-      "default": "./dist/failover.js"
-    },
     "./mailersend": {
       "types": "./dist/mailersend.d.ts",
       "default": "./dist/mailersend.js"
