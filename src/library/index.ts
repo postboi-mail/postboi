@@ -129,6 +129,8 @@ export type CommonProviderOptions = {
 	retry_delay?: number
 	/** Derive a plain-text body from the HTML body when `text` is omitted. Defaults to false. */
 	auto_text?: boolean
+	/** Lifecycle hooks run around every send (see {@link Hooks}). */
+	hooks?: Hooks
 }
 
 /** Options shared by providers that authenticate with a single API key/token. */
@@ -171,6 +173,58 @@ export class PostboiError extends Error {
 }
 
 /**
+ * Thrown from a `before_send` hook to cancel a send (e.g. a suppressed/unsubscribed
+ * recipient). It is a {@link PostboiError} with `code: "skipped"`, so it flows through
+ * `is_error` and bulk `BatchResult`s; catch it with `instanceof SkipSendError`. Skips do
+ * **not** trigger the `on_error` hook.
+ */
+export class SkipSendError extends PostboiError {
+	constructor(message = "Email send was skipped by a before_send hook") {
+		super({ provider: "skip", message, code: "skipped" })
+		this.name = "SkipSendError"
+	}
+}
+
+/**
+ * Awaitable lifecycle hooks, run around every send. `before_send` can observe, replace
+ * or cancel a message; the rest are best-effort observers (errors they throw are
+ * swallowed so logging/telemetry can't break a send).
+ */
+export type Hooks = {
+	/**
+	 * Runs after normalization, before the request. Return a modified {@link PreparedMessage}
+	 * to replace it (e.g. redirect recipients in staging), or throw to abort — throw
+	 * {@link SkipSendError} for an intentional skip.
+	 */
+	before_send?: (ctx: {
+		provider: string
+		message: PreparedMessage
+	}) => void | PreparedMessage | Promise<void | PreparedMessage>
+	/** Runs after a successful send. */
+	after_send?: (ctx: {
+		provider: string
+		message: PreparedMessage
+		response: unknown
+		duration_ms: number
+	}) => void | Promise<void>
+	/** Runs on any send failure — e.g. report to Sentry. */
+	on_error?: (ctx: {
+		provider: string
+		message?: PreparedMessage
+		error: PostboiError
+		duration_ms: number
+	}) => void | Promise<void>
+	/** Runs before each retry attempt. */
+	on_retry?: (ctx: {
+		provider: string
+		attempt: number
+		status?: number
+		reason?: unknown
+		delay_ms: number
+	}) => void | Promise<void>
+}
+
+/**
  * Base class for all providers.
  *
  * Subclasses implement three small hooks — `build_request` (map a message to an HTTP
@@ -187,6 +241,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 	#retries: number
 	#retry_delay: number
 	#auto_text: boolean
+	#hooks: Hooks
 
 	constructor(options: CommonProviderOptions = {}) {
 		this.defaults = { from: options.default_from, to: options.default_to }
@@ -194,6 +249,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 		this.#retries = options.retries ?? 0
 		this.#retry_delay = options.retry_delay ?? 500
 		this.#auto_text = options.auto_text ?? false
+		this.#hooks = options.hooks ?? {}
 	}
 
 	/** Map a prepared message into the provider's HTTP request. */
@@ -227,31 +283,109 @@ export abstract class ProviderBase<TResponse = unknown> {
 	): Promise<TResponse | Array<BatchResult<TResponse>>> {
 		if (Array.isArray(options)) return this.send_batch(options, batch)
 
-		const message = await this.prepare_send(options)
-		const spec = await this.build_request(message)
-		const response = await this.request(spec)
-		const data = await this.read_json(response)
+		return this.with_hooks(options, async (message) => {
+			const spec = await this.build_request(message)
+			const response = await this.request(spec)
+			const data = await this.read_json(response)
 
-		const error = this.parse_error(response, data)
-		if (error) {
-			throw new PostboiError({
-				provider: this.provider,
-				status: response.status,
-				message: error.message,
-				code: error.code,
-				raw: data,
-			})
-		}
-		if (!response.ok) {
-			throw new PostboiError({
-				provider: this.provider,
-				status: response.status,
-				message: `${this.provider} request failed with status ${response.status}`,
-				raw: data,
-			})
+			const error = this.parse_error(response, data)
+			if (error) {
+				throw new PostboiError({
+					provider: this.provider,
+					status: response.status,
+					message: error.message,
+					code: error.code,
+					raw: data,
+				})
+			}
+			if (!response.ok) {
+				throw new PostboiError({
+					provider: this.provider,
+					status: response.status,
+					message: `${this.provider} request failed with status ${response.status}`,
+					raw: data,
+				})
+			}
+
+			return this.parse_response(response, data)
+		})
+	}
+
+	/**
+	 * Run the lifecycle hooks around a single send, delegating the actual delivery to `core`.
+	 * Shared by the real providers and the mock so hooks behave identically everywhere.
+	 */
+	protected async with_hooks(
+		options: SendOptions,
+		core: (message: PreparedMessage) => Promise<TResponse>
+	): Promise<TResponse> {
+		const start = performance.now()
+
+		let message: PreparedMessage
+		try {
+			message = await this.prepare_send(options)
+		} catch (error) {
+			throw await this.#emit_error(error, undefined, start)
 		}
 
-		return this.parse_response(response, data)
+		// before_send may observe, replace the message, or throw to cancel (no on_error).
+		if (this.#hooks.before_send) {
+			const replaced = await this.#hooks.before_send({ provider: this.provider, message })
+			if (replaced) message = replaced
+		}
+
+		try {
+			const response = await core(message)
+			await this.#observe(() =>
+				this.#hooks.after_send?.({
+					provider: this.provider,
+					message,
+					response,
+					duration_ms: this.#since(start),
+				})
+			)
+			return response
+		} catch (error) {
+			throw await this.#emit_error(error, message, start)
+		}
+	}
+
+	/** Normalize a thrown value, fire the on_error hook (best-effort) and return the error. */
+	async #emit_error(
+		error: unknown,
+		message: PreparedMessage | undefined,
+		start: number
+	): Promise<PostboiError> {
+		const e =
+			error instanceof PostboiError
+				? error
+				: new PostboiError({
+						provider: this.provider,
+						message: error instanceof Error ? error.message : String(error),
+						raw: error,
+					})
+		await this.#observe(() =>
+			this.#hooks.on_error?.({
+				provider: this.provider,
+				message,
+				error: e,
+				duration_ms: this.#since(start),
+			})
+		)
+		return e
+	}
+
+	/** Run an observability hook, swallowing any error it throws (hooks are best-effort). */
+	async #observe(run: () => unknown): Promise<void> {
+		try {
+			await run()
+		} catch {
+			// observability hooks must never break a send
+		}
+	}
+
+	#since(start: number): number {
+		return Math.round(performance.now() - start)
 	}
 
 	/** Type guard: is this a normalized Postboi error? */
@@ -295,13 +429,31 @@ export abstract class ProviderBase<TResponse = unknown> {
 			try {
 				const response = await fetch(spec.url, { ...init, signal: controller.signal })
 				if (this.#should_retry(response.status) && attempt < this.#retries) {
-					await this.#sleep(this.#backoff(attempt + 1, response))
+					const delay = this.#backoff(attempt + 1, response)
+					await this.#observe(() =>
+						this.#hooks.on_retry?.({
+							provider: this.provider,
+							attempt: attempt + 1,
+							status: response.status,
+							delay_ms: delay,
+						})
+					)
+					await this.#sleep(delay)
 					continue
 				}
 				return response
 			} catch (cause) {
 				if (attempt < this.#retries) {
-					await this.#sleep(this.#backoff(attempt + 1))
+					const delay = this.#backoff(attempt + 1)
+					await this.#observe(() =>
+						this.#hooks.on_retry?.({
+							provider: this.provider,
+							attempt: attempt + 1,
+							reason: cause,
+							delay_ms: delay,
+						})
+					)
+					await this.#sleep(delay)
 					continue
 				}
 				const reason = cause instanceof Error ? cause.message : String(cause)

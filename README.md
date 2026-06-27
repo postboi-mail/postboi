@@ -388,6 +388,56 @@ try {
 }
 ```
 
+### Hooks
+
+Pass `hooks` to any provider to run awaitable callbacks around every send. `before_send`
+can observe, rewrite or cancel a message; the rest are best-effort observers (an error
+they throw is swallowed, so logging/telemetry can never break a send). In a bulk
+`send(array)`, hooks run once per message.
+
+```typescript
+const mail = new Resend({
+	api_key: RESEND_API_KEY,
+	default_from: "no-reply@example.com",
+	hooks: {
+		// observe, mutate, or throw to cancel — runs before the request
+		before_send: ({ message }) => {
+			if (process.env.NODE_ENV !== "production") return { ...message, to: "qa@example.com" }
+		},
+		// success — analytics / audit
+		after_send: ({ provider, message, duration_ms }) =>
+			track("email.sent", { provider, to: message.to, duration_ms }),
+		// any failure — report it
+		on_error: ({ error, message }) =>
+			Sentry.captureException(error, {
+				tags: { provider: error.provider },
+				extra: { to: message?.to },
+			}),
+		// each retry — observe provider flakiness
+		on_retry: ({ provider, attempt, status }) =>
+			console.warn(`${provider} retry ${attempt} (${status})`),
+	},
+})
+```
+
+Cancel a send from `before_send` by throwing `SkipSendError` (e.g. a suppressed or
+unsubscribed recipient). It's a `PostboiError` with `code: "skipped"`, and it does **not**
+trigger `on_error`:
+
+```typescript
+import Resend from "postboi/resend"
+import { SkipSendError } from "postboi"
+
+const mail = new Resend({
+	api_key: RESEND_API_KEY,
+	hooks: {
+		before_send: async ({ message }) => {
+			if (await isSuppressed(message.to)) throw new SkipSendError(`suppressed: ${message.to}`)
+		},
+	},
+})
+```
+
 ## Development
 
 ```bash

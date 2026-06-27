@@ -79,26 +79,29 @@ export default class Mock extends ProviderBase<SendResponse> {
 	): Promise<SendResponse | Array<BatchResult<SendResponse>>> {
 		if (Array.isArray(options)) return this.send_batch(options, batch)
 
-		const message = await this.prepare_send(options)
+		return this.with_hooks(options, async (message) => {
+			if (this.#fail) {
+				throw new PostboiError({
+					provider: "mock",
+					message: "Simulated failure from mock provider",
+				})
+			}
 
-		if (this.#fail) {
-			throw new PostboiError({ provider: "mock", message: "Simulated failure from mock provider" })
-		}
+			const captured: SentMessage = {
+				to: this.parse_addresses(message.to),
+				from: this.parse_email_address(message.from),
+				cc: message.cc ? this.parse_addresses(message.cc) : undefined,
+				bcc: message.bcc ? this.parse_addresses(message.bcc) : undefined,
+				reply_to: message.reply_to ? this.parse_addresses(message.reply_to) : undefined,
+				subject: message.subject,
+				html: message.html,
+				text: message.text,
+				attachments: message.attachments ? await this.parse_attachments(message.attachments) : [],
+			}
 
-		const captured: SentMessage = {
-			to: this.parse_addresses(message.to),
-			from: this.parse_email_address(message.from),
-			cc: message.cc ? this.parse_addresses(message.cc) : undefined,
-			bcc: message.bcc ? this.parse_addresses(message.bcc) : undefined,
-			reply_to: message.reply_to ? this.parse_addresses(message.reply_to) : undefined,
-			subject: message.subject,
-			html: message.html,
-			text: message.text,
-			attachments: message.attachments ? await this.parse_attachments(message.attachments) : [],
-		}
-
-		this.sent.push(captured)
-		return { id: `mock-${++this.#counter}`, message: captured }
+			this.sent.push(captured)
+			return { id: `mock-${++this.#counter}`, message: captured }
+		})
 	}
 
 	// The mock never performs HTTP, so the request hooks are unused.
