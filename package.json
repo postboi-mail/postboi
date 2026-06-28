@@ -22,14 +22,14 @@
   "sideEffects": [
     "**/*.css"
   ],
-  "svelte": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "svelte": "./dist/cloud.js",
+  "types": "./dist/cloud.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "svelte": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/cloud.d.ts",
+      "svelte": "./dist/cloud.js",
+      "default": "./dist/cloud.js"
     },
     "./zepto": {
       "types": "./dist/zepto.d.ts",

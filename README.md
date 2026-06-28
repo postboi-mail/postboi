@@ -81,6 +81,26 @@ expect(mail.last?.to[0].address).toBe("contact@example.com")
 
 Want another provider? Quit being a baby and open a PR.
 
+### Postboi Cloud (zero-config)
+
+The package's **default** export is the Postboi Cloud client — no provider, no key wrangling.
+Run `bunx postboi init` (coming soon) to authenticate and have `POSTBOI_TOKEN` written to your
+environment, then just:
+
+```typescript
+import Postboi from "postboi"
+
+const mail = new Postboi() // reads POSTBOI_TOKEN automatically
+await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+```
+
+The token resolves from `POSTBOI_TOKEN` (Node, Bun, Deno, Vercel/Netlify functions). Runtimes
+that pass env via bindings rather than the ambient environment (e.g. Cloudflare Workers) should
+pass it explicitly: `new Postboi({ token })`. `POSTBOI_API_URL` / `base_url` override the endpoint.
+
+All the named exports (`PostboiError`, `SkipSendError`, types, …) are still available from the
+package root.
+
 ## Installation
 
 ```bash
