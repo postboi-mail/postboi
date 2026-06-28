@@ -1,4 +1,9 @@
 import { title, html_to_text, pooled_map } from "./utils.js"
+import { get_settings } from "./settings.js"
+
+// Global configuration (`postboi.settings.ts` / the `postboi` package.json key) is part of the
+// public surface from the package root.
+export { configure, defineSettings, type PostboiConfig, type PostboiSettings } from "./settings.js"
 
 /**
  * A concrete email address used by providers.
@@ -259,12 +264,15 @@ export abstract class ProviderBase<TResponse = unknown> {
 	#hooks: Hooks
 
 	constructor(options: CommonProviderOptions = {}) {
-		this.defaults = options.default ?? {}
-		this.#timeout = options.timeout ?? 30000
-		this.#retries = options.retries ?? 0
-		this.#retry_delay = options.retry_delay ?? 500
-		this.#auto_text = options.auto_text ?? false
-		this.#hooks = options.hooks ?? {}
+		// Global settings (postboi.settings.ts / package.json) sit underneath per-instance
+		// options, so explicit constructor arguments always win.
+		const s = get_settings()
+		this.defaults = { ...s.default, ...options.default }
+		this.#timeout = options.timeout ?? s.timeout ?? 30000
+		this.#retries = options.retries ?? s.retries ?? 0
+		this.#retry_delay = options.retry_delay ?? s.retry_delay ?? 500
+		this.#auto_text = options.auto_text ?? s.auto_text ?? false
+		this.#hooks = { ...s.hooks, ...options.hooks }
 	}
 
 	/** Map a prepared message into the provider's HTTP request. */

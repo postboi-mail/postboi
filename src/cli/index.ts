@@ -8,6 +8,26 @@ import { detect_hosts, push_spec, manual_hint, HOST_LABEL, type Host } from "./d
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
 import { create_prompts, bold, dim, cyan, green, yellow, red } from "./prompts.js"
 
+const SETTINGS_FILES = [
+	"postboi.settings.ts",
+	"postboi.settings.mts",
+	"postboi.settings.js",
+	"postboi.settings.mjs",
+]
+
+const SETTINGS_TEMPLATE = `import { defineSettings } from "postboi"
+
+// Project-wide config, picked up automatically by send(). Hooks live here because
+// they're functions; JSON-only options can also go in the "postboi" package.json key.
+export default defineSettings({
+	hooks: {
+		// before_send: ({ message }) => { /* mutate the message, or throw to cancel */ },
+		// after_send: ({ response }) => { /* log a successful send */ },
+		// on_error: ({ error }) => { /* report to Sentry, etc. */ },
+	},
+})
+`
+
 function version(): string {
 	try {
 		const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
@@ -183,6 +203,18 @@ async function init(): Promise<void> {
 					else
 						console.log(`${red("✗")} ${result.reason} — run \`${cmd} ${args.join(" ")}\` yourself`)
 				}
+			}
+		}
+
+		// 7b. Offer a postboi.settings.ts for project-wide hooks (Sentry, redirects, …)
+		if (!SETTINGS_FILES.some((f) => existsSync(f))) {
+			if (
+				await prompts.confirm(
+					`\nAdd a ${bold("postboi.settings.ts")} for hooks (error tracking, etc.)?`
+				)
+			) {
+				writeFileSync("postboi.settings.ts", SETTINGS_TEMPLATE)
+				console.log(`${green("✓")} wrote ${bold("postboi.settings.ts")}`)
 			}
 		}
 

@@ -9,6 +9,7 @@ import type {
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 import { find_provider } from "./registry.js"
+import { load_settings } from "./settings.js"
 
 // Re-export the core so `import { PostboiError, SkipSendError, ... } from "postboi"` keeps working
 // from the package root.
@@ -67,15 +68,24 @@ function read_env(name: string): string | undefined {
 	}
 }
 
-/** Read the default field values shared by every provider from the environment. */
+/**
+ * Read the default field values shared by every provider from the environment. Only defined
+ * values are included, so an unset env var never clobbers a default from postboi.settings.ts.
+ */
 function env_defaults(): Defaults {
-	return {
-		from: read_env("POSTBOI_FROM"),
-		to: read_env("POSTBOI_TO"),
-		cc: read_env("POSTBOI_CC"),
-		bcc: read_env("POSTBOI_BCC"),
-		reply_to: read_env("POSTBOI_REPLY_TO"),
+	const env: Record<keyof Defaults, string> = {
+		from: "POSTBOI_FROM",
+		to: "POSTBOI_TO",
+		cc: "POSTBOI_CC",
+		bcc: "POSTBOI_BCC",
+		reply_to: "POSTBOI_REPLY_TO",
 	}
+	const out: Defaults = {}
+	for (const [key, name] of Object.entries(env) as Array<[keyof Defaults, string]>) {
+		const value = read_env(name)
+		if (value !== undefined) out[key] = value
+	}
+	return out
 }
 
 /**
@@ -191,13 +201,16 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 
 /** Construct the provider named by `POSTBOI_PROVIDER` from environment variables. */
 async function resolve_provider(): Promise<ProviderBase<unknown>> {
-	const key = read_env("POSTBOI_PROVIDER")
+	// Load global settings (postboi.settings.ts / package.json) first, so hooks and the
+	// `provider` fallback are available; ProviderBase merges the rest at construction.
+	const settings = await load_settings()
+	const key = read_env("POSTBOI_PROVIDER") ?? settings.provider
 	if (!key) {
 		throw new PostboiError({
 			provider: "postboi",
 			code: "no_provider",
 			message:
-				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), or import one directly, e.g. `import Resend from "postboi/resend"`.',
+				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), set `provider` in postboi.settings.ts or the "postboi" package.json key, or import one directly, e.g. `import Resend from "postboi/resend"`.',
 		})
 	}
 

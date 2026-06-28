@@ -25,15 +25,17 @@ The core email sending functionality is framework-agnostic and works in Node.js,
 
 ## Quick start
 
-The fast path works with **every** provider, the same way. Run the CLI:
+**This is the recommended way to use Postboi.** The fast path works with **every** provider,
+the same way. Run the CLI:
 
 ```bash
 bunx postboi init
 ```
 
 Pick your provider, paste your token, and it does the rest — writes the env vars
-(including which provider you chose), gitignores your secrets, and pushes to your
-host if it detects one. Then just send, anywhere in your app:
+(including which provider you chose), gitignores your secrets, pushes to your host if it
+detects one, and offers a [`postboi.settings.ts`](#global-settings) for hooks. Then just
+send, anywhere in your app:
 
 ```typescript
 import { send } from "postboi"
@@ -46,8 +48,21 @@ provider you configured (via `POSTBOI_PROVIDER`) and reads its credentials — p
 defaults like `POSTBOI_FROM` — from the environment on each call. Switch providers by
 re-running `bunx postboi init`; your `send()` calls don't change.
 
-Prefer to wire it up by hand, or need fine-grained control? Every provider is also its own
-import — see [Providers](#providers) below.
+**On SvelteKit?** A form action is a one-liner — see [SvelteKit form actions](#with-sveltekit-form-actions):
+
+```typescript
+// +page.server.ts
+import { send } from "postboi/kit"
+
+export const actions = { default: send }
+```
+
+Want shared hooks, defaults or retries across every send? Set them once in
+[`postboi.settings.ts`](#global-settings) (or a `"postboi"` key in `package.json`) — so the
+99% case stays just `send()`.
+
+Prefer to wire a provider up by hand, or need fine-grained control? Every provider is also its
+own import — see [Providers](#providers) below.
 
 ## Providers
 
@@ -523,6 +538,10 @@ can observe, rewrite or cancel a message; the rest are best-effort observers (an
 they throw is swallowed, so logging/telemetry can never break a send). In a bulk
 `send(array)`, hooks run once per message.
 
+> Setting the same hooks on every instance? Define them **once** in
+> [`postboi.settings.ts`](#global-settings) and they apply everywhere — including the
+> zero-config `send()`.
+
 ```typescript
 const mail = new Resend({
 	api_key: RESEND_API_KEY,
@@ -565,6 +584,58 @@ const mail = new Resend({
 	},
 })
 ```
+
+## Global settings
+
+Most apps want the same hooks, defaults and behaviour everywhere. Set them once and every
+send — `send()`, `postboi/kit`, and any provider instance — picks them up. This is what makes
+the 99% case _just_ `send()`.
+
+Drop a **`postboi.settings.ts`** at your project root (`bunx postboi init` offers to scaffold
+one). It's the only place hooks can live, since they're functions:
+
+```typescript
+// postboi.settings.ts
+import { defineSettings } from "postboi"
+
+export default defineSettings({
+	provider: "resend", // optional — POSTBOI_PROVIDER (from `postboi init`) wins if set
+	default: { from: "no-reply@example.com" },
+	retries: 2,
+	hooks: {
+		on_error: ({ error }) => Sentry.captureException(error),
+	},
+})
+```
+
+For the JSON-serialisable options (everything except hooks), you can skip the file entirely
+and use a **`"postboi"` key in `package.json`** instead:
+
+```json
+{
+	"postboi": {
+		"provider": "resend",
+		"retries": 2,
+		"auto_text": true,
+		"default": { "from": "no-reply@example.com" }
+	}
+}
+```
+
+Both are auto-loaded on the first `send()`. Precedence, lowest to highest:
+
+1. `package.json` `"postboi"` key
+2. `postboi.settings.ts`
+3. `POSTBOI_*` environment variables (e.g. `POSTBOI_PROVIDER`, `POSTBOI_FROM`)
+4. options you pass explicitly to a provider constructor or a `send()` call
+
+> **Edge runtimes** (Cloudflare Workers, etc.) don't expose the filesystem, so the auto-load
+> is a no-op there. Register settings imperatively at startup instead:
+>
+> ```typescript
+> import { configure } from "postboi"
+> configure({ hooks: { on_error: report } })
+> ```
 
 ## Development
 
