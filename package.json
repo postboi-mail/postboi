@@ -95,10 +95,21 @@
     "./mock": {
       "types": "./dist/mock.d.ts",
       "default": "./dist/mock.js"
+    },
+    "./kit": {
+      "types": "./dist/kit.d.ts",
+      "svelte": "./dist/kit.js",
+      "default": "./dist/kit.js"
     }
   },
   "peerDependencies": {
+    "@sveltejs/kit": "^2.0.0",
     "svelte": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@sveltejs/kit": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

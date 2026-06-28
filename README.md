@@ -209,6 +209,45 @@ await mail.send({
 
 ### With SvelteKit Form Actions
 
+`postboi/kit` collapses the whole `await request.formData()` / `try`/`catch` / `is_error`
+dance into a single form action. Zero-config — it uses the provider `bunx postboi init` set up:
+
+```typescript
+// +page.server.ts
+import { send } from "postboi/kit"
+
+export const actions = { default: send }
+```
+
+That's the entire server file. The action reads the FormData, sends it, and returns
+`{ success: true }` — or `fail(400, { error })` if sending throws.
+
+Got a configured provider instance (or working without ambient env vars)? Wrap it with
+`action()`:
+
+```typescript
+// +page.server.ts
+import Resend from "postboi/resend"
+import { action } from "postboi/kit"
+import { RESEND_API_KEY, EMAIL_FROM_ADDRESS } from "$env/static/private"
+
+const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: EMAIL_FROM_ADDRESS } })
+
+export const actions = { default: action(mail) }
+```
+
+`action(mailer, options)` takes an optional `{ status, fields }`: `status` sets the failure
+code (default `400`), and `fields` forces send options server-side — handy for locking the
+recipient so the form can't choose it:
+
+```typescript
+export const actions = {
+	default: action(mail, { status: 422, fields: { to: "team@example.com" } }),
+}
+```
+
+Prefer to keep the wiring explicit? The longhand still works:
+
 ```typescript
 // +page.server.ts
 import Postboi from "postboi/zepto"
