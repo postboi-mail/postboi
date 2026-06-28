@@ -8,9 +8,10 @@ import type {
 	BatchResult,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
+import { find_provider } from "./registry.js"
 
 // Re-export the core so `import { PostboiError, SkipSendError, ... } from "postboi"` keeps working
-// from the package root, which now defaults to this zero-config Postboi Cloud client.
+// from the package root.
 export * from "./index.js"
 
 /** Options for the Postboi Cloud provider. */
@@ -66,6 +67,17 @@ function read_env(name: string): string | undefined {
 	}
 }
 
+/** Read the default field values shared by every provider from the environment. */
+function env_defaults(): Defaults {
+	return {
+		from: read_env("POSTBOI_FROM"),
+		to: read_env("POSTBOI_TO"),
+		cc: read_env("POSTBOI_CC"),
+		bcc: read_env("POSTBOI_BCC"),
+		reply_to: read_env("POSTBOI_REPLY_TO"),
+	}
+}
+
 /**
  * Postboi Cloud — the zero-config provider, and the package's default export.
  *
@@ -89,16 +101,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	#url: string
 
 	constructor({ token, base_url, ...options }: CloudOptions = {}) {
-		// Defaults can come from the environment (POSTBOI_FROM, POSTBOI_TO, …); anything
-		// passed explicitly via `default` wins.
-		const env_defaults: Defaults = {
-			from: read_env("POSTBOI_FROM"),
-			to: read_env("POSTBOI_TO"),
-			cc: read_env("POSTBOI_CC"),
-			bcc: read_env("POSTBOI_BCC"),
-			reply_to: read_env("POSTBOI_REPLY_TO"),
-		}
-		super({ ...options, default: { ...env_defaults, ...options.default } })
+		// Defaults can come from the environment (POSTBOI_FROM, …); anything passed
+		// explicitly via `default` wins.
+		super({ ...options, default: { ...env_defaults(), ...options.default } })
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
 		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://api.postboi.dev"
 		this.#url = `${host.replace(/\/$/, "")}/v1/send`
@@ -158,10 +163,75 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	}
 }
 
+type ProviderConstructor = new (options: Record<string, unknown>) => ProviderBase<unknown>
+
 /**
- * Send through Postboi Cloud without constructing anything. Resolves the token (and default
- * sender) from the environment on each call (`POSTBOI_TOKEN`, optional `POSTBOI_FROM` /
- * `POSTBOI_TO`). Pass an array to send many.
+ * Lazy loaders for every configurable provider, keyed by `POSTBOI_PROVIDER`. Using explicit
+ * dynamic imports keeps each provider in its own chunk — `send()` only loads the one in use.
+ */
+const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
+	resend: () => import("./resend.js").then((m) => m.default as unknown as ProviderConstructor),
+	postmark: () => import("./postmark.js").then((m) => m.default as unknown as ProviderConstructor),
+	sendgrid: () => import("./sendgrid.js").then((m) => m.default as unknown as ProviderConstructor),
+	mailgun: () => import("./mailgun.js").then((m) => m.default as unknown as ProviderConstructor),
+	brevo: () => import("./brevo.js").then((m) => m.default as unknown as ProviderConstructor),
+	cloudflare: () =>
+		import("./cloudflare.js").then((m) => m.default as unknown as ProviderConstructor),
+	mailersend: () =>
+		import("./mailersend.js").then((m) => m.default as unknown as ProviderConstructor),
+	sparkpost: () =>
+		import("./sparkpost.js").then((m) => m.default as unknown as ProviderConstructor),
+	mandrill: () => import("./mandrill.js").then((m) => m.default as unknown as ProviderConstructor),
+	plunk: () => import("./plunk.js").then((m) => m.default as unknown as ProviderConstructor),
+	mailtrap: () => import("./mailtrap.js").then((m) => m.default as unknown as ProviderConstructor),
+	mailpace: () => import("./mailpace.js").then((m) => m.default as unknown as ProviderConstructor),
+	scaleway: () => import("./scaleway.js").then((m) => m.default as unknown as ProviderConstructor),
+	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
+}
+
+/** Construct the provider named by `POSTBOI_PROVIDER` from environment variables. */
+async function resolve_provider(): Promise<ProviderBase<unknown>> {
+	const key = read_env("POSTBOI_PROVIDER")
+	if (!key) {
+		throw new PostboiError({
+			provider: "postboi",
+			code: "no_provider",
+			message:
+				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), or import one directly, e.g. `import Resend from "postboi/resend"`.',
+		})
+	}
+
+	const meta = find_provider(key)
+	const load = LOADERS[key]
+	if (!meta || !load) {
+		throw new PostboiError({
+			provider: "postboi",
+			code: "unknown_provider",
+			message: `Unknown POSTBOI_PROVIDER "${key}".`,
+		})
+	}
+
+	const options: Record<string, unknown> = { default: env_defaults() }
+	for (const field of meta.fields) {
+		const value = read_env(field.env) ?? field.default
+		if (value === undefined) {
+			throw new PostboiError({
+				provider: key,
+				code: "missing_env",
+				message: `POSTBOI_PROVIDER is "${key}" but ${field.env} is not set. Run \`bunx postboi init\`.`,
+			})
+		}
+		options[field.arg] = value
+	}
+
+	const Provider = await load()
+	return new Provider(options)
+}
+
+/**
+ * Send without constructing anything. The provider is whichever `POSTBOI_PROVIDER` names
+ * (set by `bunx postboi init`); its credentials and the `POSTBOI_*` defaults are read from
+ * the environment on each call. Pass an array to send many.
  *
  * @example
  * ```ts
@@ -169,15 +239,15 @@ export default class Postboi extends ProviderBase<SendResponse> {
  * await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
  * ```
  */
-export function send(options: SendOptions): Promise<SendResponse>
+export function send(options: SendOptions): Promise<unknown>
 export function send(
 	options: Array<SendOptions>,
 	batch?: { concurrency?: number }
-): Promise<Array<BatchResult<SendResponse>>>
-export function send(
+): Promise<Array<BatchResult<unknown>>>
+export async function send(
 	options: SendOptions | Array<SendOptions>,
 	batch: { concurrency?: number } = {}
-): Promise<SendResponse | Array<BatchResult<SendResponse>>> {
-	const mail = new Postboi()
+): Promise<unknown> {
+	const mail = await resolve_provider()
 	return Array.isArray(options) ? mail.send(options, batch) : mail.send(options)
 }

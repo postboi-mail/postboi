@@ -65,9 +65,9 @@ async function init(): Promise<void> {
 			PROVIDERS.map((p) => ({ label: p.name, value: p }))
 		)
 
-		// 2. Collect credentials
+		// 2. Collect credentials (POSTBOI_PROVIDER lets the zero-config `send()` find it later)
 		console.log(`\n${dim("Get your credentials at")} ${cyan(provider.url)}\n`)
-		const values: Record<string, string> = {}
+		const values: Record<string, string> = { POSTBOI_PROVIDER: provider.key }
 		for (const field of provider.fields) {
 			values[field.env] = await prompts.ask(`${field.label} ${dim(`(${field.env})`)}`, {
 				required: field.default === undefined,
@@ -187,7 +187,12 @@ async function init(): Promise<void> {
 		}
 
 		// 8. Done — show how to use it
-		console.log(`\n${green(bold("Done!"))} Use it in your app:\n`)
+		console.log(`\n${green(bold("Done!"))} Now just send — no setup, no instance:\n`)
+		console.log(
+			dim('import { send } from "postboi"\n\nawait send({ to: "…", subject: "…", body: "…" })') +
+				"\n"
+		)
+		console.log(`${dim("…or construct the provider yourself:")}\n`)
 		console.log(dim(usage_snippet(provider, default_fields)) + "\n")
 	} finally {
 		prompts.close()

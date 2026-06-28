@@ -23,6 +23,32 @@ The core email sending functionality is framework-agnostic and works in Node.js,
 - 🛡️ **Type-safe** - full TypeScript support with proper error handling
 - ⚡ **zero bullshit** - no unnecessary abstractions, just works
 
+## Quick start
+
+The fast path works with **every** provider, the same way. Run the CLI:
+
+```bash
+bunx postboi init
+```
+
+Pick your provider, paste your token, and it does the rest — writes the env vars
+(including which provider you chose), gitignores your secrets, and pushes to your
+host if it detects one. Then just send, anywhere in your app:
+
+```typescript
+import { send } from "postboi"
+
+await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+```
+
+No instance, no keys in your code, no provider lock-in. `send()` dispatches to whatever
+provider you configured (via `POSTBOI_PROVIDER`) and reads its credentials — plus any
+defaults like `POSTBOI_FROM` — from the environment on each call. Switch providers by
+re-running `bunx postboi init`; your `send()` calls don't change.
+
+Prefer to wire it up by hand, or need fine-grained control? Every provider is also its own
+import — see [Providers](#providers) below.
+
 ## Providers
 
 One API, a whole bunch of providers. Each one is its own entry point, so you only
@@ -81,22 +107,11 @@ expect(mail.last?.to[0].address).toBe("contact@example.com")
 
 Want another provider? Quit being a baby and open a PR.
 
-### Postboi Cloud (zero-config)
+### Zero-config `send()`
 
-The package's **default** export is the Postboi Cloud client — no provider, no key wrangling.
-Run `bunx postboi init` (coming soon) to authenticate and have `POSTBOI_TOKEN` written to your
-environment, then just:
-
-```typescript
-import Postboi from "postboi"
-
-const mail = new Postboi() // reads POSTBOI_TOKEN automatically
-await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
-```
-
-Or skip the instance entirely with the top-level `send` — it reads the token (and optional
-defaults via `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO`)
-from the environment each call:
+The top-level `send()` is provider-agnostic. It looks at `POSTBOI_PROVIDER` (set for you by
+`bunx postboi init`), lazily loads just that provider, and reads its credentials plus any
+defaults from the environment on each call:
 
 ```typescript
 import { send } from "postboi"
@@ -104,12 +119,36 @@ import { send } from "postboi"
 await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
-The token resolves from `POSTBOI_TOKEN` (Node, Bun, Deno, Vercel/Netlify functions). Runtimes
-that pass env via bindings rather than the ambient environment (e.g. Cloudflare Workers) should
-pass it explicitly: `new Postboi({ token })`. `POSTBOI_API_URL` / `base_url` override the endpoint.
+The environment does all the work:
 
-All the named exports (`PostboiError`, `SkipSendError`, types, …) are still available from the
-package root.
+| Variable                                                                          | What it's for                                                      |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `POSTBOI_PROVIDER`                                                                | which provider to dispatch to (`resend`, `mailgun`, `postmark`, …) |
+| _provider creds_                                                                  | e.g. `RESEND_API_KEY`, or `MAILGUN_API_KEY` + `MAILGUN_DOMAIN`     |
+| `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO` | optional defaults applied to every send                            |
+
+Because each provider sits behind a dynamic import, `send()` only ever loads the one you
+configured — the rest never enter your bundle. Switch providers by re-running
+`bunx postboi init`; nothing in your code changes.
+
+Pass an array to send many at once:
+
+```typescript
+const results = await send([
+	{ to: "a@example.com", body: "…" },
+	{ to: "b@example.com", body: "…" },
+])
+```
+
+If `POSTBOI_PROVIDER` (or a required credential) is missing, `send()` throws a `PostboiError`
+telling you exactly what to set — run `bunx postboi init` to fix it.
+
+> Runtimes that pass env via bindings rather than the ambient environment (e.g. Cloudflare
+> Workers) don't expose `process.env`, so construct the provider directly there:
+> `new Resend({ api_key: env.RESEND_API_KEY })`.
+
+All the named exports (`PostboiError`, `SkipSendError`, `is_error`, types, …) are available from
+the package root too.
 
 ## Installation
 
@@ -145,7 +184,10 @@ bunx postboi init
 - **pushes to your host** if it detects one (Vercel, Cloudflare, Netlify) — or offers to anyway
 - **installs `postboi`** if it isn't already a dependency
 
-## Quick Start
+## Using a provider directly
+
+Prefer an explicit instance — or working in a runtime without ambient env vars? Import any
+provider and construct it yourself.
 
 ### Basic Usage with ZeptoMail
 

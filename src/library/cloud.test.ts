@@ -127,20 +127,38 @@ describe("Postboi Cloud (zero-config)", () => {
 	})
 })
 
-describe("top-level send()", () => {
-	it("sends with no instance, reading the env", async () => {
-		vi.stubEnv("POSTBOI_TOKEN", "pb_fn")
+describe("top-level send() — provider-agnostic dispatch", () => {
+	it("dispatches to whichever provider POSTBOI_PROVIDER names", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "resend")
+		vi.stubEnv("RESEND_API_KEY", "re_123")
 		vi.stubEnv("POSTBOI_FROM", "from@test.com")
-		fetch.mockResolvedValue(respond({ json: { id: "fn-1" } }))
+		fetch.mockResolvedValue(respond({ json: { id: "re-1" } }))
 
 		const result = await send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
 
-		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer pb_fn" })
-		expect(result).toEqual({ id: "fn-1" })
+		expect(sent_url()).toBe("https://api.resend.com/emails")
+		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer re_123" })
+		const body = sent_json()
+		expect(body.from).toBe("from@test.com")
+		expect(body.to).toEqual(["to@test.com"])
+		expect(result).toEqual({ id: "re-1" })
+	})
+
+	it("passes provider-specific fields (e.g. Mailgun domain) through", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "mailgun")
+		vi.stubEnv("MAILGUN_API_KEY", "key-abc")
+		vi.stubEnv("MAILGUN_DOMAIN", "mg.example.com")
+		vi.stubEnv("POSTBOI_FROM", "from@test.com")
+		fetch.mockResolvedValue(respond({ json: { id: "<mg-1>" } }))
+
+		await send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
+
+		expect(sent_url()).toContain("mg.example.com")
 	})
 
 	it("supports the array (bulk) form", async () => {
-		vi.stubEnv("POSTBOI_TOKEN", "pb_fn")
+		vi.stubEnv("POSTBOI_PROVIDER", "resend")
+		vi.stubEnv("RESEND_API_KEY", "re_123")
 		vi.stubEnv("POSTBOI_FROM", "from@test.com")
 		fetch.mockResolvedValue(respond({ json: { id: "x" } }))
 
@@ -150,6 +168,25 @@ describe("top-level send()", () => {
 		])
 		expect(results.every((r) => r.ok)).toBe(true)
 		expect(results).toHaveLength(2)
+	})
+
+	it("throws a friendly PostboiError when no provider is configured", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "")
+		const error = await send({ to: "to@test.com", body: "x" }).catch((e) => e)
+		expect(error).toBeInstanceOf(PostboiError)
+		expect(error.code).toBe("no_provider")
+		expect(error.message).toMatch(/postboi init/)
+		expect(fetch).not.toHaveBeenCalled()
+	})
+
+	it("throws when the provider's required env var is missing", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "resend")
+		vi.stubEnv("RESEND_API_KEY", "")
+		const error = await send({ to: "to@test.com", body: "x" }).catch((e) => e)
+		expect(error).toBeInstanceOf(PostboiError)
+		expect(error.code).toBe("missing_env")
+		expect(error.message).toMatch(/RESEND_API_KEY/)
+		expect(fetch).not.toHaveBeenCalled()
 	})
 
 	it("re-exports is_error from the root", () => {
