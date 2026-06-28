@@ -558,20 +558,8 @@ export default defineSettings({
 })
 ```
 
-For everything except hooks, a **`"postboi"` key in `package.json`** works too:
-
-```json
-{
-	"postboi": {
-		"provider": "resend",
-		"retries": 2,
-		"default": { "from": "no-reply@example.com" }
-	}
-}
-```
-
-Both auto-load on the first `send()`. Precedence, low to high: `package.json` →
-`postboi.settings.ts` → `POSTBOI_*` env vars → options passed explicitly.
+It auto-loads on the first `send()`. Precedence, low to high: `postboi.settings.ts` →
+`POSTBOI_*` env vars → options passed explicitly.
 
 > Edge runtimes (Cloudflare Workers, etc.) have no filesystem — register settings at startup
 > instead with `configure({ ... })`.

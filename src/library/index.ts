@@ -1,9 +1,8 @@
 import { title, html_to_text, pooled_map } from "./utils.js"
 import { get_settings } from "./settings.js"
 
-// Global configuration (`postboi.settings.ts` / the `postboi` package.json key) is part of the
-// public surface from the package root.
-export { configure, defineSettings, type PostboiConfig, type PostboiSettings } from "./settings.js"
+// Global configuration (`postboi.settings.ts`) is part of the public surface from the package root.
+export { configure, defineSettings, type PostboiSettings } from "./settings.js"
 
 /**
  * A concrete email address used by providers.

@@ -17,8 +17,7 @@ const SETTINGS_FILES = [
 
 const SETTINGS_TEMPLATE = `import { defineSettings } from "postboi"
 
-// Project-wide config, picked up automatically by send(). Hooks live here because
-// they're functions; JSON-only options can also go in the "postboi" package.json key.
+// Project-wide config, picked up automatically by send().
 export default defineSettings({
 	hooks: {
 		// before_send: ({ message }) => { /* mutate the message, or throw to cancel */ },

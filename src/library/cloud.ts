@@ -210,7 +210,7 @@ async function resolve_provider(): Promise<ProviderBase<unknown>> {
 			provider: "postboi",
 			code: "no_provider",
 			message:
-				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), set `provider` in postboi.settings.ts or the "postboi" package.json key, or import one directly, e.g. `import Resend from "postboi/resend"`.',
+				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), set `provider` in postboi.settings.ts, or import one directly, e.g. `import Resend from "postboi/resend"`.',
 		})
 	}
 

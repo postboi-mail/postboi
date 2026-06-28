@@ -79,24 +79,20 @@ describe("global settings", () => {
 		expect(fetch.mock.calls.at(-1)![0]).toBe("https://api.resend.com/emails")
 	})
 
-	it("auto-loads the package.json key and a postboi.settings file from disk", async () => {
+	it("auto-loads a postboi.settings file from disk", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "postboi-settings-"))
 		const original = process.cwd()
 		try {
 			writeFileSync(
-				join(dir, "package.json"),
-				JSON.stringify({ name: "tmp", postboi: { retries: 3, default: { from: "pkg@test.com" } } })
-			)
-			writeFileSync(
 				join(dir, "postboi.settings.mjs"),
-				`export default { auto_text: true, default: { from: "file@test.com" } }`
+				`export default { retries: 3, auto_text: true, default: { from: "file@test.com" } }`
 			)
 			process.chdir(dir)
 
 			const settings = await load_settings()
-			expect(settings.retries).toBe(3) // from package.json
-			expect(settings.auto_text).toBe(true) // from the settings file
-			expect(settings.default?.from).toBe("file@test.com") // file merges over package.json
+			expect(settings.retries).toBe(3)
+			expect(settings.auto_text).toBe(true)
+			expect(settings.default?.from).toBe("file@test.com")
 		} finally {
 			process.chdir(original)
 			rmSync(dir, { recursive: true, force: true })

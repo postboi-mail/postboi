@@ -2,34 +2,25 @@
  * Project-wide configuration. Set it once and every send — `send()`, `postboi/kit`, or any
  * provider instance — picks it up, so the 99% case is just calling `send()`.
  *
- * Two ways to provide it:
+ * Drop a `postboi.settings.ts` at your project root:
  *
- * 1. A `postboi.settings.ts` file at your project root (the only place hooks can live, since
- *    they're functions):
+ * ```ts
+ * import { defineSettings } from "postboi"
  *
- *    ```ts
- *    import { defineSettings } from "postboi"
+ * export default defineSettings({
+ * 	hooks: {
+ * 		on_error: (ctx) => Sentry.captureException(ctx.error),
+ * 	},
+ * })
+ * ```
  *
- *    export default defineSettings({
- *    	hooks: {
- *    		on_error: (ctx) => Sentry.captureException(ctx.error),
- *    	},
- *    })
- *    ```
- *
- * 2. A `"postboi"` key in `package.json`, for the JSON-serialisable options (no hooks):
- *
- *    ```json
- *    { "postboi": { "provider": "resend", "retries": 2, "auto_text": true } }
- *    ```
- *
- * Both are auto-loaded on the first `send()` (Node/Bun). In runtimes without filesystem
- * access (edge/Workers), call {@link configure} explicitly at startup instead.
+ * It's auto-loaded on the first `send()` (Node/Bun). In runtimes without filesystem access
+ * (edge/Workers), call {@link configure} explicitly at startup instead.
  */
 import type { Defaults, Hooks } from "./index.js"
 
-/** The JSON-serialisable options, valid in both a settings file and the `package.json` key. */
-export interface PostboiConfig {
+/** Everything you can configure globally via `postboi.settings.ts` or {@link configure}. */
+export interface PostboiSettings {
 	/** Provider key (`resend`, `mailgun`, …) for the zero-config `send()`. `POSTBOI_PROVIDER` wins. */
 	provider?: string
 	/** Default fields applied to every send. Merged under `POSTBOI_*` env vars, which win. */
@@ -42,10 +33,6 @@ export interface PostboiConfig {
 	retry_delay?: number
 	/** Derive a plain-text body from the HTML body when `text` is omitted. */
 	auto_text?: boolean
-}
-
-/** Everything you can configure globally. The settings file may add `hooks`; `package.json` can't. */
-export interface PostboiSettings extends PostboiConfig {
 	/** Lifecycle hooks run around every send (the main reason to use a settings file). */
 	hooks?: Hooks
 }
@@ -101,8 +88,8 @@ export function reset_settings(): void {
 }
 
 /**
- * Ensure on-disk config has been read (once), then return the effective settings. Called on the
- * `send()` path. Best-effort and Node/Bun-only — any failure falls back to whatever was set
+ * Ensure the settings file has been read (once), then return the effective settings. Called on
+ * the `send()` path. Best-effort and Node/Bun-only — any failure falls back to whatever was set
  * via {@link configure}.
  */
 export async function load_settings(): Promise<PostboiSettings> {
@@ -120,41 +107,29 @@ const SETTINGS_FILES = [
 	"postboi.settings.mjs",
 ]
 
-/** Read `package.json`'s `postboi` key and a `postboi.settings.*` file, if present. */
+/** Find and import a `postboi.settings.*` file, walking up from the cwd. */
 async function read_disk(): Promise<PostboiSettings> {
 	if (typeof process === "undefined" || !process.versions?.node) return {}
 	try {
-		const { readFileSync, existsSync } = await import("node:fs")
+		const { existsSync } = await import("node:fs")
 		const path = await import("node:path")
 		const { pathToFileURL } = await import("node:url")
 
-		// Walk up to the nearest package.json so it works from sub-directories.
-		let root = process.cwd()
-		while (!existsSync(path.join(root, "package.json"))) {
-			const parent = path.dirname(root)
-			if (parent === root) break
-			root = parent
-		}
-
-		let result: PostboiSettings = {}
-
-		const pkg_path = path.join(root, "package.json")
-		if (existsSync(pkg_path)) {
-			const pkg = JSON.parse(readFileSync(pkg_path, "utf8")) as { postboi?: PostboiConfig }
-			if (pkg.postboi && typeof pkg.postboi === "object") result = merge(result, pkg.postboi)
-		}
-
-		const file = SETTINGS_FILES.map((f) => path.join(root, f)).find((f) => existsSync(f))
-		if (file) {
-			const mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as {
-				default?: PostboiSettings
-				settings?: PostboiSettings
+		let dir = process.cwd()
+		for (;;) {
+			const file = SETTINGS_FILES.map((f) => path.join(dir, f)).find((f) => existsSync(f))
+			if (file) {
+				const mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as {
+					default?: PostboiSettings
+					settings?: PostboiSettings
+				}
+				const settings = mod.default ?? mod.settings
+				return settings && typeof settings === "object" ? settings : {}
 			}
-			const settings = mod.default ?? mod.settings
-			if (settings && typeof settings === "object") result = merge(result, settings)
+			const parent = path.dirname(dir)
+			if (parent === dir) return {}
+			dir = parent
 		}
-
-		return result
 	} catch {
 		// No fs, unreadable file, or a `.ts` file on a runtime that can't strip types — fall back.
 		return {}
