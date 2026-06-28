@@ -1,4 +1,11 @@
-import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec } from "./index.js"
+import type {
+	SendOptions,
+	PreparedMessage,
+	CommonProviderOptions,
+	ProviderError,
+	RequestSpec,
+	BatchResult,
+} from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 
 // Re-export the core so `import { PostboiError, SkipSendError, ... } from "postboi"` keeps working
@@ -81,7 +88,11 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	#url: string
 
 	constructor({ token, base_url, ...options }: CloudOptions = {}) {
-		super(options)
+		super({
+			...options,
+			default_from: options.default_from ?? read_env("POSTBOI_FROM"),
+			default_to: options.default_to ?? read_env("POSTBOI_TO"),
+		})
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
 		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://api.postboi.dev"
 		this.#url = `${host.replace(/\/$/, "")}/v1/send`
@@ -139,4 +150,28 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		}
 		return undefined
 	}
+}
+
+/**
+ * Send through Postboi Cloud without constructing anything. Resolves the token (and default
+ * sender) from the environment on each call (`POSTBOI_TOKEN`, optional `POSTBOI_FROM` /
+ * `POSTBOI_TO`). Pass an array to send many.
+ *
+ * @example
+ * ```ts
+ * import { send } from "postboi"
+ * await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+ * ```
+ */
+export function send(options: SendOptions): Promise<SendResponse>
+export function send(
+	options: Array<SendOptions>,
+	batch?: { concurrency?: number }
+): Promise<Array<BatchResult<SendResponse>>>
+export function send(
+	options: SendOptions | Array<SendOptions>,
+	batch: { concurrency?: number } = {}
+): Promise<SendResponse | Array<BatchResult<SendResponse>>> {
+	const mail = new Postboi()
+	return Array.isArray(options) ? mail.send(options, batch) : mail.send(options)
 }

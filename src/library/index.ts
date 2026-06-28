@@ -185,6 +185,11 @@ export class SkipSendError extends PostboiError {
 	}
 }
 
+/** Type guard: is a caught value a normalized {@link PostboiError}? */
+export function is_error(error: unknown): error is PostboiError {
+	return error instanceof PostboiError
+}
+
 /**
  * Awaitable lifecycle hooks, run around every send. `before_send` can observe, replace
  * or cancel a message; the rest are best-effort observers (errors they throw are

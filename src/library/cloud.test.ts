@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Postboi, { PostboiError } from "$library/cloud.js"
+import Postboi, { send, is_error, PostboiError } from "$library/cloud.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -112,5 +112,48 @@ describe("Postboi Cloud (zero-config)", () => {
 		expect(error.provider).toBe("postboi")
 		expect(error.message).toBe("bad token")
 		expect(error.code).toBe("unauthorized")
+	})
+
+	it("reads default_from / default_to from POSTBOI_FROM / POSTBOI_TO", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		vi.stubEnv("POSTBOI_FROM", "noreply@test.com")
+		vi.stubEnv("POSTBOI_TO", "ops@test.com")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ body: "<p>x</p>" })
+		const body = sent_json()
+		expect(body.from).toEqual({ email: "noreply@test.com" })
+		expect(body.to).toEqual([{ email: "ops@test.com" }])
+	})
+})
+
+describe("top-level send()", () => {
+	it("sends with no instance, reading the env", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "pb_fn")
+		vi.stubEnv("POSTBOI_FROM", "from@test.com")
+		fetch.mockResolvedValue(respond({ json: { id: "fn-1" } }))
+
+		const result = await send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
+
+		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer pb_fn" })
+		expect(result).toEqual({ id: "fn-1" })
+	})
+
+	it("supports the array (bulk) form", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "pb_fn")
+		vi.stubEnv("POSTBOI_FROM", "from@test.com")
+		fetch.mockResolvedValue(respond({ json: { id: "x" } }))
+
+		const results = await send([
+			{ to: "a@test.com", body: "x" },
+			{ to: "b@test.com", body: "x" },
+		])
+		expect(results.every((r) => r.ok)).toBe(true)
+		expect(results).toHaveLength(2)
+	})
+
+	it("re-exports is_error from the root", () => {
+		expect(is_error(new PostboiError({ provider: "postboi", message: "x" }))).toBe(true)
+		expect(is_error(new Error("nope"))).toBe(false)
 	})
 })

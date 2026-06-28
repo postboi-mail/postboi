@@ -94,6 +94,15 @@ const mail = new Postboi() // reads POSTBOI_TOKEN automatically
 await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
+Or skip the instance entirely with the top-level `send` — it reads the token (and an
+optional default sender via `POSTBOI_FROM` / `POSTBOI_TO`) from the environment each call:
+
+```typescript
+import { send } from "postboi"
+
+await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+```
+
 The token resolves from `POSTBOI_TOKEN` (Node, Bun, Deno, Vercel/Netlify functions). Runtimes
 that pass env via bindings rather than the ambient environment (e.g. Cloudflare Workers) should
 pass it explicitly: `new Postboi({ token })`. `POSTBOI_API_URL` / `base_url` override the endpoint.
