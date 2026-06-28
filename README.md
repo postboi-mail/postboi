@@ -25,17 +25,14 @@ The core email sending functionality is framework-agnostic and works in Node.js,
 
 ## Quick start
 
-**This is the recommended way to use Postboi.** The fast path works with **every** provider,
-the same way. Run the CLI:
+The recommended way to use Postboi. Run the CLI — it picks a provider, asks for your token,
+and writes the env vars:
 
 ```bash
 bunx postboi init
 ```
 
-Pick your provider, paste your token, and it does the rest — writes the env vars
-(including which provider you chose), gitignores your secrets, pushes to your host if it
-detects one, and offers a [`postboi.settings.ts`](#global-settings) for hooks. Then just
-send, anywhere in your app:
+Then send from anywhere:
 
 ```typescript
 import { send } from "postboi"
@@ -43,12 +40,7 @@ import { send } from "postboi"
 await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
-No instance, no keys in your code, no provider lock-in. `send()` dispatches to whatever
-provider you configured (via `POSTBOI_PROVIDER`) and reads its credentials — plus any
-defaults like `POSTBOI_FROM` — from the environment on each call. Switch providers by
-re-running `bunx postboi init`; your `send()` calls don't change.
-
-**On SvelteKit?** A form action is a one-liner — see [SvelteKit form actions](#with-sveltekit-form-actions):
+On SvelteKit, a form action is a one-liner ([more](#with-sveltekit-form-actions)):
 
 ```typescript
 // +page.server.ts
@@ -57,17 +49,13 @@ import { send } from "postboi/kit"
 export const actions = { default: send }
 ```
 
-Want shared hooks, defaults or retries across every send? Set them once in
-[`postboi.settings.ts`](#global-settings) (or a `"postboi"` key in `package.json`) — so the
-99% case stays just `send()`.
-
-Prefer to wire a provider up by hand, or need fine-grained control? Every provider is also its
-own import — see [Providers](#providers) below.
+For shared hooks, defaults or retries, see [Global settings](#global-settings). To construct a
+provider yourself, see [Providers](#providers).
 
 ## Providers
 
-One API, a whole bunch of providers. Each one is its own entry point, so you only
-ever bundle the provider you actually import — nothing else comes along for the ride.
+One API, a whole bunch of providers. Each is its own entry point, so you only bundle the one
+you import.
 
 | Provider       | Import               | Constructor options                  |
 | -------------- | -------------------- | ------------------------------------ |
@@ -97,18 +85,10 @@ const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: "no-reply@ex
 await mail.send({ to: "someone@example.com", subject: "hello", body: "<p>hello world</p>" })
 ```
 
-### Tree-shaking
-
-Providers live behind separate entry points (`postboi/resend`, `postboi/mailgun`, …) and
-each one only imports the shared core — never another provider. Import `postboi/resend`
-and your bundle contains Resend and the core, full stop. None of the other providers are
-reachable, so there's nothing for the bundler to even shake out.
-
 ### Testing with the mock provider
 
-`postboi/mock` records messages in-memory instead of sending them — handy for asserting
-what your app would send without hitting a real API. It runs the exact same
-normalisation (defaults, FormData parsing, address parsing, attachments) as a real provider.
+`postboi/mock` records messages in-memory instead of sending them, running the same
+normalisation as a real provider — handy for asserting what your app would send.
 
 ```typescript
 import Mock from "postboi/mock"
@@ -124,29 +104,15 @@ Want another provider? Quit being a baby and open a PR.
 
 ### Zero-config `send()`
 
-The top-level `send()` is provider-agnostic. It looks at `POSTBOI_PROVIDER` (set for you by
-`bunx postboi init`), lazily loads just that provider, and reads its credentials plus any
-defaults from the environment on each call:
+`bunx postboi init` writes these env vars; `send()` reads them on each call:
 
-```typescript
-import { send } from "postboi"
+| Variable                                                                          | For                                                            |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `POSTBOI_PROVIDER`                                                                | which provider to use (`resend`, `mailgun`, `postmark`, …)     |
+| _provider creds_                                                                  | e.g. `RESEND_API_KEY`, or `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` |
+| `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO` | optional defaults applied to every send                        |
 
-await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
-```
-
-The environment does all the work:
-
-| Variable                                                                          | What it's for                                                      |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `POSTBOI_PROVIDER`                                                                | which provider to dispatch to (`resend`, `mailgun`, `postmark`, …) |
-| _provider creds_                                                                  | e.g. `RESEND_API_KEY`, or `MAILGUN_API_KEY` + `MAILGUN_DOMAIN`     |
-| `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO` | optional defaults applied to every send                            |
-
-Because each provider sits behind a dynamic import, `send()` only ever loads the one you
-configured — the rest never enter your bundle. Switch providers by re-running
-`bunx postboi init`; nothing in your code changes.
-
-Pass an array to send many at once:
+Pass an array to send many:
 
 ```typescript
 const results = await send([
@@ -155,15 +121,8 @@ const results = await send([
 ])
 ```
 
-If `POSTBOI_PROVIDER` (or a required credential) is missing, `send()` throws a `PostboiError`
-telling you exactly what to set — run `bunx postboi init` to fix it.
-
-> Runtimes that pass env via bindings rather than the ambient environment (e.g. Cloudflare
-> Workers) don't expose `process.env`, so construct the provider directly there:
-> `new Resend({ api_key: env.RESEND_API_KEY })`.
-
-All the named exports (`PostboiError`, `SkipSendError`, `is_error`, types, …) are available from
-the package root too.
+> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider
+> directly: `new Resend({ api_key: env.RESEND_API_KEY })`.
 
 ## Installation
 
@@ -224,8 +183,8 @@ await mail.send({
 
 ### With SvelteKit Form Actions
 
-`postboi/kit` collapses the whole `await request.formData()` / `try`/`catch` / `is_error`
-dance into a single form action. Zero-config — it uses the provider `bunx postboi init` set up:
+`postboi/kit` turns a form action into one line. It reads the FormData, sends it, and returns
+`{ success: true }` — or `fail(400, { error })` if sending throws:
 
 ```typescript
 // +page.server.ts
@@ -234,11 +193,7 @@ import { send } from "postboi/kit"
 export const actions = { default: send }
 ```
 
-That's the entire server file. The action reads the FormData, sends it, and returns
-`{ success: true }` — or `fail(400, { error })` if sending throws.
-
-Got a configured provider instance (or working without ambient env vars)? Wrap it with
-`action()`:
+Got a configured provider instance (or no ambient env vars)? Wrap it with `action()`:
 
 ```typescript
 // +page.server.ts
@@ -251,9 +206,8 @@ const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: EMAIL_FROM_A
 export const actions = { default: action(mail) }
 ```
 
-`action(mailer, options)` takes an optional `{ status, fields }`: `status` sets the failure
-code (default `400`), and `fields` forces send options server-side — handy for locking the
-recipient so the form can't choose it:
+`action(mailer, { status, fields })` is optional: `status` sets the failure code (default
+`400`), `fields` forces send options server-side (e.g. lock the recipient):
 
 ```typescript
 export const actions = {
@@ -261,7 +215,7 @@ export const actions = {
 }
 ```
 
-Prefer to keep the wiring explicit? The longhand still works:
+The longhand still works if you'd rather be explicit:
 
 ```typescript
 // +page.server.ts
@@ -587,19 +541,15 @@ const mail = new Resend({
 
 ## Global settings
 
-Most apps want the same hooks, defaults and behaviour everywhere. Set them once and every
-send — `send()`, `postboi/kit`, and any provider instance — picks them up. This is what makes
-the 99% case _just_ `send()`.
-
-Drop a **`postboi.settings.ts`** at your project root (`bunx postboi init` offers to scaffold
-one). It's the only place hooks can live, since they're functions:
+Set hooks, defaults and behaviour once, applied to every send. Drop a **`postboi.settings.ts`**
+at your project root (`bunx postboi init` offers to scaffold one) — the only place hooks can
+live, since they're functions:
 
 ```typescript
 // postboi.settings.ts
 import { defineSettings } from "postboi"
 
 export default defineSettings({
-	provider: "resend", // optional — POSTBOI_PROVIDER (from `postboi init`) wins if set
 	default: { from: "no-reply@example.com" },
 	retries: 2,
 	hooks: {
@@ -608,34 +558,23 @@ export default defineSettings({
 })
 ```
 
-For the JSON-serialisable options (everything except hooks), you can skip the file entirely
-and use a **`"postboi"` key in `package.json`** instead:
+For everything except hooks, a **`"postboi"` key in `package.json`** works too:
 
 ```json
 {
 	"postboi": {
 		"provider": "resend",
 		"retries": 2,
-		"auto_text": true,
 		"default": { "from": "no-reply@example.com" }
 	}
 }
 ```
 
-Both are auto-loaded on the first `send()`. Precedence, lowest to highest:
+Both auto-load on the first `send()`. Precedence, low to high: `package.json` →
+`postboi.settings.ts` → `POSTBOI_*` env vars → options passed explicitly.
 
-1. `package.json` `"postboi"` key
-2. `postboi.settings.ts`
-3. `POSTBOI_*` environment variables (e.g. `POSTBOI_PROVIDER`, `POSTBOI_FROM`)
-4. options you pass explicitly to a provider constructor or a `send()` call
-
-> **Edge runtimes** (Cloudflare Workers, etc.) don't expose the filesystem, so the auto-load
-> is a no-op there. Register settings imperatively at startup instead:
->
-> ```typescript
-> import { configure } from "postboi"
-> configure({ hooks: { on_error: report } })
-> ```
+> Edge runtimes (Cloudflare Workers, etc.) have no filesystem — register settings at startup
+> instead with `configure({ ... })`.
 
 ## Development
 
