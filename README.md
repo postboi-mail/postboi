@@ -117,6 +117,22 @@ yarn add postboi
 npm install postboi
 ```
 
+### Or just run the CLI
+
+```bash
+bunx postboi init
+```
+
+`postboi init` walks you through setup:
+
+- **pick a provider** from the list
+- **paste your token** (it links you to the right dashboard, and asks for anything else the
+  provider needs — domain, account id, region, …)
+- **writes the env vars** to your project, detecting the right file (`.env`, `.env.local`,
+  `.envrc`, `.dev.vars`, varlock) and adding them to `.gitignore`
+- **pushes to your host** if it detects one (Vercel, Cloudflare, Netlify) — or offers to anyway
+- **installs `postboi`** if it isn't already a dependency
+
 ## Quick Start
 
 ### Basic Usage with ZeptoMail
