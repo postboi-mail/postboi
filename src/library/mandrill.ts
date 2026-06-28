@@ -48,7 +48,7 @@ type SendResponse = Array<SendResult>
  * ```ts
  * import Mandrill from "postboi/mandrill"
  *
- * const mail = new Mandrill({ api_key: MANDRILL_API_KEY, default_from: "no-reply@example.com" })
+ * const mail = new Mandrill({ api_key: MANDRILL_API_KEY, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

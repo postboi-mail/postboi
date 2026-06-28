@@ -38,7 +38,7 @@ type SendResponse = { messageId: string }
  * ```ts
  * import Brevo from "postboi/brevo"
  *
- * const mail = new Brevo({ api_key: BREVO_API_KEY, default_from: "no-reply@example.com" })
+ * const mail = new Brevo({ api_key: BREVO_API_KEY, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

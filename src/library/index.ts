@@ -111,12 +111,22 @@ export type BatchResult<TResponse> =
 	| { ok: true; index: number; response: TResponse }
 	| { ok: false; index: number; error: PostboiError }
 
+/**
+ * Default field values applied to every send when the corresponding option is omitted.
+ * `to`, `cc` and `bcc` accept a single value or an array, just like {@link SendOptions}.
+ */
+export type Defaults = {
+	to?: Array<Email> | Email
+	from?: Email
+	cc?: Array<Email> | Email
+	bcc?: Array<Email> | Email
+	reply_to?: Array<Email> | Email
+}
+
 /** Common options shared by all provider constructors. */
 export type CommonProviderOptions = {
-	/** Optional default sender address used when `from` is omitted */
-	default_from?: string
-	/** Optional default recipient address used when `to` is omitted */
-	default_to?: string
+	/** Default field values applied when a send omits them. */
+	default?: Defaults
 	/** Per-request timeout in milliseconds. Defaults to 30000. */
 	timeout?: number
 	/**
@@ -241,7 +251,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 	/** Stable provider identifier used in thrown errors. */
 	protected abstract readonly provider: string
 
-	protected defaults: { from?: string; to?: string }
+	protected defaults: Defaults
 	#timeout: number
 	#retries: number
 	#retry_delay: number
@@ -249,7 +259,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 	#hooks: Hooks
 
 	constructor(options: CommonProviderOptions = {}) {
-		this.defaults = { from: options.default_from, to: options.default_to }
+		this.defaults = options.default ?? {}
 		this.#timeout = options.timeout ?? 30000
 		this.#retries = options.retries ?? 0
 		this.#retry_delay = options.retry_delay ?? 500
@@ -717,13 +727,13 @@ export abstract class ProviderBase<TResponse = unknown> {
 		if (!to) {
 			throw new PostboiError({
 				provider: this.provider,
-				message: "No recipient address provided (to or default_to)",
+				message: "No recipient address provided (to or default.to)",
 			})
 		}
 		if (!from) {
 			throw new PostboiError({
 				provider: this.provider,
-				message: "No sender address provided (from or default_from)",
+				message: "No sender address provided (from or default.from)",
 			})
 		}
 
@@ -734,9 +744,9 @@ export abstract class ProviderBase<TResponse = unknown> {
 		return {
 			to,
 			from,
-			reply_to: options.reply_to,
-			cc: options.cc,
-			bcc: options.bcc,
+			reply_to: options.reply_to ?? this.defaults.reply_to,
+			cc: options.cc ?? this.defaults.cc,
+			bcc: options.bcc ?? this.defaults.bcc,
 			subject: options.subject || "Mail sent from website",
 			html,
 			text,

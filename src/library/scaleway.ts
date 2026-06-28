@@ -49,7 +49,7 @@ type SendResponse = { emails: Array<{ id: string }> }
  *   secret_key: SCW_SECRET_KEY,
  *   project_id: SCW_PROJECT_ID,
  *   region: "fr-par",
- *   default_from: "no-reply@example.com",
+ *   default: { from: "no-reply@example.com" },
  * })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```

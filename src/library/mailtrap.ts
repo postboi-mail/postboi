@@ -44,7 +44,7 @@ type SendResponse = { success: boolean; message_ids: Array<string> }
  * ```ts
  * import Mailtrap from "postboi/mailtrap"
  *
- * const mail = new Mailtrap({ api_key: MAILTRAP_TOKEN, default_from: "no-reply@example.com" })
+ * const mail = new Mailtrap({ api_key: MAILTRAP_TOKEN, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  *
  * // sandbox / testing

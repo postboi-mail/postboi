@@ -32,7 +32,7 @@ type SendResponse = { id: number; status: string }
  * ```ts
  * import MailPace from "postboi/mailpace"
  *
- * const mail = new MailPace({ api_key: MAILPACE_SERVER_TOKEN, default_from: "no-reply@example.com" })
+ * const mail = new MailPace({ api_key: MAILPACE_SERVER_TOKEN, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

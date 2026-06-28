@@ -38,7 +38,7 @@ type SendResponse = { id: string; message: SentMessage }
  * ```ts
  * import Mock from "postboi/mock"
  *
- * const mail = new Mock({ default_from: "no-reply@example.com" })
+ * const mail = new Mock({ default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
  *
  * expect(mail.sent).toHaveLength(1)

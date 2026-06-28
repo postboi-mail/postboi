@@ -47,7 +47,7 @@ type SendResponse = {
  * ```ts
  * import Postboi from 'postboi/zepto'
  *
- * const mail = new Postboi({ token: ZEPTO_TOKEN, default_from: 'no-reply@example.com' })
+ * const mail = new Postboi({ token: ZEPTO_TOKEN, default: { from: 'no-reply@example.com' } })
  * await mail.send({
  *   to: 'contact@example.com',
  *   subject: 'Hello',
@@ -65,8 +65,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	/**
 	 * Create a ZeptoMail client.
 	 * @param token ZeptoMail API token
-	 * @param default_from Optional default sender address used when `from` is omitted
-	 * @param default_to Optional default recipient address used when `to` is omitted
+	 * @param default Optional default field values (from/to/cc/bcc/reply_to) applied when omitted
 	 */
 	constructor({ token, ...options }: Options) {
 		super(options)

@@ -46,13 +46,13 @@ ever bundle the provider you actually import — nothing else comes along for th
 | Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
 | Mock (testing) | `postboi/mock`       | _none_                               |
 
-Every provider takes the optional `default_from` / `default_to` too, and exposes the
+Every provider takes an optional `default: { from, to, cc, bcc, reply_to }` too, and exposes the
 same `send()` and `is_error()` methods. Swapping providers is a one-line import change.
 
 ```typescript
 import Resend from "postboi/resend"
 
-const mail = new Resend({ api_key: RESEND_API_KEY, default_from: "no-reply@example.com" })
+const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: "no-reply@example.com" } })
 await mail.send({ to: "someone@example.com", subject: "hello", body: "<p>hello world</p>" })
 ```
 
@@ -72,7 +72,7 @@ normalisation (defaults, FormData parsing, address parsing, attachments) as a re
 ```typescript
 import Mock from "postboi/mock"
 
-const mail = new Mock({ default_from: "no-reply@example.com" })
+const mail = new Mock({ default: { from: "no-reply@example.com" } })
 await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 
 expect(mail.sent).toHaveLength(1)
@@ -94,8 +94,9 @@ const mail = new Postboi() // reads POSTBOI_TOKEN automatically
 await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
-Or skip the instance entirely with the top-level `send` — it reads the token (and an
-optional default sender via `POSTBOI_FROM` / `POSTBOI_TO`) from the environment each call:
+Or skip the instance entirely with the top-level `send` — it reads the token (and optional
+defaults via `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO`)
+from the environment each call:
 
 ```typescript
 import { send } from "postboi"
@@ -137,6 +138,8 @@ bunx postboi init
 - **pick a provider** from the list
 - **paste your token** (it links you to the right dashboard, and asks for anything else the
   provider needs — domain, account id, region, …)
+- **optionally set defaults** (from / to / reply-to / cc / bcc), stored as `POSTBOI_*` so the
+  top-level `send()` picks them up too
 - **writes the env vars** to your project, detecting the right file (`.env`, `.env.local`,
   `.envrc`, `.dev.vars`, varlock) and adding them to `.gitignore`
 - **pushes to your host** if it detects one (Vercel, Cloudflare, Netlify) — or offers to anyway
@@ -151,8 +154,7 @@ import Postboi from "postboi/zepto"
 
 const mail = new Postboi({
 	token: "your-zeptomail-api-token",
-	default_from: "no-reply@example.com",
-	default_to: "contact@example.com",
+	default: { from: "no-reply@example.com", to: "contact@example.com" },
 })
 
 // simple string body
@@ -173,8 +175,7 @@ import { fail } from "@sveltejs/kit"
 
 const mail = new Postboi({
 	token: ZEPTO_TOKEN,
-	default_from: EMAIL_FROM_ADDRESS,
-	default_to: EMAIL_TO_ADDRESS,
+	default: { from: EMAIL_FROM_ADDRESS, to: EMAIL_TO_ADDRESS },
 })
 
 export const actions = {
@@ -311,9 +312,10 @@ Postboi accepts multiple email formats because flexibility is good:
 import Postboi from 'postboi/zepto'
 
 const mail = new Postboi({
-  token: string                    // ZeptoMail API token (required)
-  default_from?: string            // default sender address
-  default_to?: string              // default recipient address
+  token: string              // ZeptoMail API token (required)
+  default?: {                // field defaults applied when a send omits them
+    from?, to?, cc?, bcc?, reply_to?
+  }
 })
 
 // send email
@@ -389,8 +391,8 @@ Every provider also accepts these, on top of its own credentials:
 
 ```typescript
 {
-	default_from?: string // sender used when `from` is omitted
-	default_to?: string // recipient used when `to` is omitted
+	// field defaults applied when a send omits them; to/cc/bcc accept a string or array
+	default?: { from?, to?, cc?, bcc?, reply_to? }
 	timeout?: number // per-request timeout in ms (default 30000)
 	retries?: number // retries on 429/5xx and network errors (default 0)
 	retry_delay?: number // base backoff in ms, doubles each attempt (default 500)
@@ -443,7 +445,7 @@ they throw is swallowed, so logging/telemetry can never break a send). In a bulk
 ```typescript
 const mail = new Resend({
 	api_key: RESEND_API_KEY,
-	default_from: "no-reply@example.com",
+	default: { from: "no-reply@example.com" },
 	hooks: {
 		// observe, mutate, or throw to cancel — runs before the request
 		before_send: ({ message }) => {

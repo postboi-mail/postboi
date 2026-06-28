@@ -43,7 +43,7 @@ type SendResponse = {
  * ```ts
  * import Postmark from "postboi/postmark"
  *
- * const mail = new Postmark({ api_key: POSTMARK_SERVER_TOKEN, default_from: "no-reply@example.com" })
+ * const mail = new Postmark({ api_key: POSTMARK_SERVER_TOKEN, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

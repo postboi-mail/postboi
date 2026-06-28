@@ -2,6 +2,7 @@ import type {
 	SendOptions,
 	PreparedMessage,
 	CommonProviderOptions,
+	Defaults,
 	ProviderError,
 	RequestSpec,
 	BatchResult,
@@ -88,11 +89,16 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	#url: string
 
 	constructor({ token, base_url, ...options }: CloudOptions = {}) {
-		super({
-			...options,
-			default_from: options.default_from ?? read_env("POSTBOI_FROM"),
-			default_to: options.default_to ?? read_env("POSTBOI_TO"),
-		})
+		// Defaults can come from the environment (POSTBOI_FROM, POSTBOI_TO, …); anything
+		// passed explicitly via `default` wins.
+		const env_defaults: Defaults = {
+			from: read_env("POSTBOI_FROM"),
+			to: read_env("POSTBOI_TO"),
+			cc: read_env("POSTBOI_CC"),
+			bcc: read_env("POSTBOI_BCC"),
+			reply_to: read_env("POSTBOI_REPLY_TO"),
+		}
+		super({ ...options, default: { ...env_defaults, ...options.default } })
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
 		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://api.postboi.dev"
 		this.#url = `${host.replace(/\/$/, "")}/v1/send`

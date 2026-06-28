@@ -23,7 +23,7 @@ describe("before_send", () => {
 	it("observes the normalized message", async () => {
 		const seen: Array<unknown> = []
 		const mail = new Mock({
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: {
 				before_send: (ctx) => void seen.push({ provider: ctx.provider, to: ctx.message.to }),
 			},
@@ -34,7 +34,7 @@ describe("before_send", () => {
 
 	it("can replace the message (staging redirect)", async () => {
 		const mail = new Mock({
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: { before_send: ({ message }) => ({ ...message, to: "redirect@test.com" }) },
 		})
 		await mail.send({ to: "real@test.com", body: "hi" })
@@ -44,7 +44,7 @@ describe("before_send", () => {
 	it("throwing SkipSendError cancels the send without on_error", async () => {
 		let on_error_called = false
 		const mail = new Mock({
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: {
 				before_send: () => {
 					throw new SkipSendError()
@@ -66,7 +66,7 @@ describe("after_send", () => {
 	it("fires on success with the response and a duration", async () => {
 		const calls: Array<{ provider: string; duration_ms: number; id: string }> = []
 		const mail = new Mock({
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: {
 				after_send: ({ provider, response, duration_ms }) =>
 					void calls.push({ provider, duration_ms, id: (response as { id: string }).id }),
@@ -85,7 +85,7 @@ describe("on_error", () => {
 		const errors: Array<PostboiError> = []
 		const mail = new Resend({
 			api_key: "k",
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: { on_error: ({ error }) => void errors.push(error) },
 		})
 		fetch.mockResolvedValue(
@@ -116,7 +116,7 @@ describe("on_error", () => {
 describe("hook error isolation", () => {
 	it("swallows a throwing after_send (send still succeeds)", async () => {
 		const mail = new Mock({
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: {
 				after_send: () => {
 					throw new Error("telemetry down")
@@ -130,7 +130,7 @@ describe("hook error isolation", () => {
 	it("swallows a throwing on_error (original error still propagates)", async () => {
 		const mail = new Mock({
 			fail: true,
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: {
 				on_error: () => {
 					throw new Error("sentry down")
@@ -150,7 +150,7 @@ describe("on_retry", () => {
 		const hooks: Hooks = { on_retry: (ctx) => void retries.push(ctx) }
 		const mail = new Resend({
 			api_key: "k",
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			retries: 1,
 			retry_delay: 0,
 			hooks,
@@ -168,7 +168,7 @@ describe("on_retry", () => {
 describe("hooks under bulk send", () => {
 	it("runs per message; a skip becomes a failed BatchResult", async () => {
 		const mail = new Mock({
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 			hooks: {
 				before_send: ({ message }) => {
 					if (message.to === "blocked@test.com") throw new SkipSendError()

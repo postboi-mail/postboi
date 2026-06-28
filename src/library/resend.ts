@@ -33,7 +33,7 @@ type SendResponse = { id: string }
  * ```ts
  * import Resend from "postboi/resend"
  *
- * const mail = new Resend({ api_key: RESEND_API_KEY, default_from: "no-reply@example.com" })
+ * const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

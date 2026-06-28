@@ -36,7 +36,7 @@ type SendResponse = {
  * ```ts
  * import Plunk from "postboi/plunk"
  *
- * const mail = new Plunk({ api_key: PLUNK_API_KEY, default_from: "no-reply@example.com" })
+ * const mail = new Plunk({ api_key: PLUNK_API_KEY, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

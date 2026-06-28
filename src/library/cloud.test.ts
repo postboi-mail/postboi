@@ -28,7 +28,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		vi.stubEnv("POSTBOI_TOKEN", "pb_live_123")
 		fetch.mockResolvedValue(respond({ json: { id: "abc" } }))
 
-		const mail = new Postboi({ default_from: "from@test.com" })
+		const mail = new Postboi({ default: { from: "from@test.com" } })
 		const result = await mail.send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
 
 		expect(sent_url()).toBe("https://api.postboi.dev/v1/send")
@@ -44,7 +44,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		vi.stubEnv("POSTBOI_TOKEN", "from_env")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
 
-		const mail = new Postboi({ token: "explicit", default_from: "from@test.com" })
+		const mail = new Postboi({ token: "explicit", default: { from: "from@test.com" } })
 		await mail.send({ to: "to@test.com", body: "x" })
 
 		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer explicit" })
@@ -52,7 +52,7 @@ describe("Postboi Cloud (zero-config)", () => {
 
 	it("throws a friendly PostboiError when no token is available", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "")
-		const mail = new Postboi({ default_from: "from@test.com" })
+		const mail = new Postboi({ default: { from: "from@test.com" } })
 
 		const error = await mail.send({ to: "to@test.com", body: "x" }).catch((e) => e)
 		expect(error).toBeInstanceOf(PostboiError)
@@ -66,7 +66,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		await new Postboi({
 			token: "t",
 			base_url: "https://staging.postboi.dev/",
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 		}).send({
 			to: "to@test.com",
 			body: "x",
@@ -74,7 +74,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		expect(sent_url()).toBe("https://staging.postboi.dev/v1/send")
 
 		vi.stubEnv("POSTBOI_API_URL", "http://localhost:8787")
-		await new Postboi({ token: "t", default_from: "f@test.com" }).send({
+		await new Postboi({ token: "t", default: { from: "f@test.com" } }).send({
 			to: "to@test.com",
 			body: "x",
 		})
@@ -83,7 +83,7 @@ describe("Postboi Cloud (zero-config)", () => {
 
 	it("forwards headers, tags and attachments", async () => {
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
-		await new Postboi({ token: "t", default_from: "f@test.com" }).send({
+		await new Postboi({ token: "t", default: { from: "f@test.com" } }).send({
 			to: "to@test.com",
 			body: "x",
 			headers: { "X-Campaign": "spring" },
@@ -106,7 +106,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 401, json: { message: "bad token", code: "unauthorized" } })
 		)
-		const mail = new Postboi({ token: "t", default_from: "f@test.com" })
+		const mail = new Postboi({ token: "t", default: { from: "f@test.com" } })
 		const error = await mail.send({ to: "to@test.com", body: "x" }).catch((e) => e)
 		expect(error).toBeInstanceOf(PostboiError)
 		expect(error.provider).toBe("postboi")
@@ -114,7 +114,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		expect(error.code).toBe("unauthorized")
 	})
 
-	it("reads default_from / default_to from POSTBOI_FROM / POSTBOI_TO", async () => {
+	it("reads default from/to from POSTBOI_FROM / POSTBOI_TO", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		vi.stubEnv("POSTBOI_FROM", "noreply@test.com")
 		vi.stubEnv("POSTBOI_TO", "ops@test.com")

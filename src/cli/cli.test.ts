@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { PROVIDERS, usage_snippet } from "./providers.js"
+import { PROVIDERS, DEFAULT_FIELDS, usage_snippet } from "./providers.js"
 import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./env.js"
 import { detect_hosts, push_spec, manual_hint } from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
@@ -31,6 +31,30 @@ describe("provider registry", () => {
 		expect(snippet).toContain('import Mailgun from "postboi/mailgun"')
 		expect(snippet).toContain("api_key: process.env.MAILGUN_API_KEY")
 		expect(snippet).toContain("domain: process.env.MAILGUN_DOMAIN")
+		expect(snippet).not.toContain("default:")
+	})
+
+	it("includes a default block when defaults are provided", () => {
+		const resend = PROVIDERS.find((p) => p.key === "resend")!
+		const snippet = usage_snippet(resend, [
+			{ arg: "from", env: "POSTBOI_FROM" },
+			{ arg: "to", env: "POSTBOI_TO" },
+		])
+		expect(snippet).toContain("default: {")
+		expect(snippet).toContain("from: process.env.POSTBOI_FROM")
+		expect(snippet).toContain("to: process.env.POSTBOI_TO")
+	})
+
+	it("maps default fields to POSTBOI_* env vars (no subject)", () => {
+		const envs = DEFAULT_FIELDS.map((f) => f.env)
+		expect(envs).toEqual([
+			"POSTBOI_FROM",
+			"POSTBOI_TO",
+			"POSTBOI_REPLY_TO",
+			"POSTBOI_CC",
+			"POSTBOI_BCC",
+		])
+		expect(DEFAULT_FIELDS.map((f) => f.arg)).not.toContain("subject")
 	})
 })
 

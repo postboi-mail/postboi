@@ -72,7 +72,7 @@ afterEach(() => {
 })
 
 describe("Resend", () => {
-	const mail = () => new Resend({ api_key: "re_key", default_from: "from@test.com" })
+	const mail = () => new Resend({ api_key: "re_key", default: { from: "from@test.com" } })
 
 	it("maps a send to the Resend API", async () => {
 		fetch.mockResolvedValue(respond({ json: { id: "abc" } }))
@@ -118,7 +118,7 @@ describe("Resend", () => {
 })
 
 describe("Postmark", () => {
-	const mail = () => new Postmark({ api_key: "pm_token", default_from: "from@test.com" })
+	const mail = () => new Postmark({ api_key: "pm_token", default: { from: "from@test.com" } })
 
 	it("maps recipients to comma-separated strings and PascalCase fields", async () => {
 		fetch.mockResolvedValue(respond({ json: { MessageID: "id", ErrorCode: 0, Message: "OK" } }))
@@ -153,7 +153,7 @@ describe("Postmark", () => {
 })
 
 describe("SendGrid", () => {
-	const mail = () => new SendGrid({ api_key: "sg_key", default_from: "from@test.com" })
+	const mail = () => new SendGrid({ api_key: "sg_key", default: { from: "from@test.com" } })
 
 	it("nests recipients in personalizations and content array", async () => {
 		fetch.mockResolvedValue(respond({ status: 202, headers: { "x-message-id": "sg-1" } }))
@@ -180,7 +180,7 @@ describe("SendGrid", () => {
 
 	it("uses the EU host when region is eu", async () => {
 		fetch.mockResolvedValue(respond({ status: 202 }))
-		await new SendGrid({ api_key: "k", region: "eu", default_from: "f@test.com" }).send({
+		await new SendGrid({ api_key: "k", region: "eu", default: { from: "f@test.com" } }).send({
 			to: "to@test.com",
 			body: "x",
 		})
@@ -198,7 +198,7 @@ describe("SendGrid", () => {
 
 describe("Mailgun", () => {
 	const mail = () =>
-		new Mailgun({ api_key: "mg_key", domain: "mg.test.com", default_from: "from@test.com" })
+		new Mailgun({ api_key: "mg_key", domain: "mg.test.com", default: { from: "from@test.com" } })
 
 	it("posts multipart form data with basic auth", async () => {
 		fetch.mockResolvedValue(respond({ json: { id: "<id>", message: "Queued" } }))
@@ -227,7 +227,7 @@ describe("Mailgun", () => {
 			api_key: "k",
 			domain: "d.com",
 			region: "eu",
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 		}).send({ to: "to@test.com", body: "x" })
 		expect(sent_url()).toBe("https://api.eu.mailgun.net/v3/d.com/messages")
 	})
@@ -242,7 +242,7 @@ describe("Mailgun", () => {
 })
 
 describe("Brevo", () => {
-	const mail = () => new Brevo({ api_key: "brevo_key", default_from: "from@test.com" })
+	const mail = () => new Brevo({ api_key: "brevo_key", default: { from: "from@test.com" } })
 
 	it("maps to sender/htmlContent and the api-key header", async () => {
 		fetch.mockResolvedValue(respond({ status: 201, json: { messageId: "m-1" } }))
@@ -275,7 +275,11 @@ describe("Brevo", () => {
 
 describe("Cloudflare", () => {
 	const mail = () =>
-		new Cloudflare({ api_key: "cf_token", account_id: "acc-123", default_from: "from@test.com" })
+		new Cloudflare({
+			api_key: "cf_token",
+			account_id: "acc-123",
+			default: { from: "from@test.com" },
+		})
 
 	it("posts to the account send endpoint with a bearer token", async () => {
 		fetch.mockResolvedValue(
@@ -336,7 +340,7 @@ describe("Cloudflare", () => {
 })
 
 describe("MailerSend", () => {
-	const mail = () => new MailerSend({ api_key: "ms_key", default_from: "from@test.com" })
+	const mail = () => new MailerSend({ api_key: "ms_key", default: { from: "from@test.com" } })
 
 	it("maps to from/html and reads the id header", async () => {
 		fetch.mockResolvedValue(respond({ status: 202, headers: { "x-message-id": "ms-1" } }))
@@ -370,7 +374,7 @@ describe("MailerSend", () => {
 })
 
 describe("SparkPost", () => {
-	const mail = () => new SparkPost({ api_key: "sp_key", default_from: "from@test.com" })
+	const mail = () => new SparkPost({ api_key: "sp_key", default: { from: "from@test.com" } })
 
 	it("splits content/recipients and routes cc via header_to + CC header", async () => {
 		fetch.mockResolvedValue(
@@ -413,7 +417,7 @@ describe("SparkPost", () => {
 })
 
 describe("Mandrill", () => {
-	const mail = () => new Mandrill({ api_key: "md_key", default_from: "from@test.com" })
+	const mail = () => new Mandrill({ api_key: "md_key", default: { from: "from@test.com" } })
 
 	it("puts the key in the body and tags recipients with type", async () => {
 		fetch.mockResolvedValue(
@@ -455,7 +459,7 @@ describe("Mandrill", () => {
 })
 
 describe("Plunk", () => {
-	const mail = () => new Plunk({ api_key: "pl_key", default_from: "from@test.com" })
+	const mail = () => new Plunk({ api_key: "pl_key", default: { from: "from@test.com" } })
 
 	it("sends html in body with to as a string array", async () => {
 		fetch.mockResolvedValue(respond({ json: { success: true, emails: [], timestamp: "t" } }))
@@ -486,7 +490,7 @@ describe("Plunk", () => {
 })
 
 describe("Mailtrap", () => {
-	const mail = () => new Mailtrap({ api_key: "mt_token", default_from: "from@test.com" })
+	const mail = () => new Mailtrap({ api_key: "mt_token", default: { from: "from@test.com" } })
 
 	it("maps to from/to objects and html", async () => {
 		fetch.mockResolvedValue(respond({ json: { success: true, message_ids: ["1"] } }))
@@ -514,7 +518,7 @@ describe("Mailtrap", () => {
 			api_key: "t",
 			sandbox: true,
 			inbox_id: "999",
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 		}).send({
 			to: "to@test.com",
 			body: "x",
@@ -536,7 +540,7 @@ describe("Mailtrap", () => {
 })
 
 describe("MailPace", () => {
-	const mail = () => new MailPace({ api_key: "mp_token", default_from: "from@test.com" })
+	const mail = () => new MailPace({ api_key: "mp_token", default: { from: "from@test.com" } })
 
 	it("maps to lowercase string fields", async () => {
 		fetch.mockResolvedValue(respond({ json: { id: 1, status: "queued" } }))
@@ -579,7 +583,7 @@ describe("Scaleway", () => {
 			secret_key: "scw_secret",
 			project_id: "proj-1",
 			region: "fr-par",
-			default_from: "from@test.com",
+			default: { from: "from@test.com" },
 		})
 
 	it("includes project_id, region path and reply-to header", async () => {
@@ -617,7 +621,7 @@ describe("Scaleway", () => {
 
 describe("resilience (shared base)", () => {
 	const make = (opts = {}) =>
-		new Resend({ api_key: "k", default_from: "from@test.com", retry_delay: 0, ...opts })
+		new Resend({ api_key: "k", default: { from: "from@test.com" }, retry_delay: 0, ...opts })
 
 	it("retries on 5xx then succeeds", async () => {
 		fetch

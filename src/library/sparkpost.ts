@@ -41,7 +41,7 @@ type SendResponse = {
  * ```ts
  * import SparkPost from "postboi/sparkpost"
  *
- * const mail = new SparkPost({ api_key: SPARKPOST_API_KEY, default_from: "no-reply@example.com" })
+ * const mail = new SparkPost({ api_key: SPARKPOST_API_KEY, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

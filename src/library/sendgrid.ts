@@ -43,7 +43,7 @@ type SendResponse = { message_id?: string }
  * ```ts
  * import SendGrid from "postboi/sendgrid"
  *
- * const mail = new SendGrid({ api_key: SENDGRID_API_KEY, default_from: "no-reply@example.com" })
+ * const mail = new SendGrid({ api_key: SENDGRID_API_KEY, default: { from: "no-reply@example.com" } })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```
  */

@@ -5,7 +5,7 @@ describe("Mock provider", () => {
 	let mail: Mock
 
 	beforeEach(() => {
-		mail = new Mock({ default_from: "default@test.com", default_to: "default-to@test.com" })
+		mail = new Mock({ default: { from: "default@test.com", to: "default-to@test.com" } })
 	})
 
 	it("records a sent message", async () => {
@@ -50,6 +50,31 @@ describe("Mock provider", () => {
 		expect(mail.last?.from).toEqual({ address: "sender@test.com", name: "Sender" })
 		expect(mail.last?.cc).toEqual([{ address: "c@test.com" }])
 		expect(mail.last?.reply_to).toEqual([{ address: "reply@test.com" }])
+	})
+
+	it("applies cc/bcc/reply_to from the default object", async () => {
+		const withDefaults = new Mock({
+			default: {
+				from: "from@test.com",
+				to: "to@test.com",
+				cc: "cc@test.com",
+				bcc: ["b1@test.com", "b2@test.com"],
+				reply_to: "reply@test.com",
+			},
+		})
+		await withDefaults.send({ body: "hi" })
+
+		expect(withDefaults.last?.from).toEqual({ address: "from@test.com" })
+		expect(withDefaults.last?.cc).toEqual([{ address: "cc@test.com" }])
+		expect(withDefaults.last?.bcc).toEqual([{ address: "b1@test.com" }, { address: "b2@test.com" }])
+		expect(withDefaults.last?.reply_to).toEqual([{ address: "reply@test.com" }])
+	})
+
+	it("lets an explicit field override its default", async () => {
+		const withDefaults = new Mock({ default: { from: "from@test.com", to: "default@test.com" } })
+		await withDefaults.send({ to: "override@test.com", body: "hi" })
+
+		expect(withDefaults.last?.to).toEqual([{ address: "override@test.com" }])
 	})
 
 	it("renders FormData into the recorded html body", async () => {

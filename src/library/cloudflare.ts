@@ -58,7 +58,7 @@ type SendResponse = {
  * const mail = new Cloudflare({
  *   account_id: CF_ACCOUNT_ID,
  *   api_key: CF_API_TOKEN,
- *   default_from: "welcome@example.com",
+ *   default: { from: "welcome@example.com" },
  * })
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hello world</p>" })
  * ```

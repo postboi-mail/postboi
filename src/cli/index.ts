@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import { argv, cwd, exit } from "node:process"
-import { PROVIDERS, usage_snippet, type CliProvider } from "./providers.js"
+import { PROVIDERS, DEFAULT_FIELDS, usage_snippet, type CliProvider } from "./providers.js"
 import { detect_env_targets, upsert_env, is_gitignored, type EnvTarget } from "./env.js"
 import { detect_hosts, push_spec, manual_hint, HOST_LABEL, type Host } from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
@@ -73,6 +73,18 @@ async function init(): Promise<void> {
 				required: field.default === undefined,
 				default: field.default,
 			})
+		}
+
+		// 2b. Optional default fields (stored as POSTBOI_* so `send()` picks them up too)
+		const default_fields: Array<{ arg: string; env: string }> = []
+		if (await prompts.confirm(`\nSet ${bold("default")} from / to / reply-to / cc / bcc?`)) {
+			for (const field of DEFAULT_FIELDS) {
+				const value = await prompts.ask(`${field.label} ${dim("(optional)")}`)
+				if (value) {
+					values[field.env] = value
+					default_fields.push({ arg: field.arg, env: field.env })
+				}
+			}
 		}
 
 		// 3. Pick env target(s)
@@ -176,7 +188,7 @@ async function init(): Promise<void> {
 
 		// 8. Done — show how to use it
 		console.log(`\n${green(bold("Done!"))} Use it in your app:\n`)
-		console.log(dim(usage_snippet(provider)) + "\n")
+		console.log(dim(usage_snippet(provider, default_fields)) + "\n")
 	} finally {
 		prompts.close()
 	}

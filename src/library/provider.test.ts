@@ -258,8 +258,7 @@ describe("ProviderBase", () => {
 
 	describe("prepare_send", () => {
 		const with_defaults = new TestProvider({
-			default_from: "default-from@test.com",
-			default_to: "default-to@test.com",
+			default: { from: "default-from@test.com", to: "default-to@test.com" },
 		})
 
 		it("applies default to/from when omitted", async () => {

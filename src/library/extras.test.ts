@@ -37,7 +37,7 @@ const base = { headers: { "X-Campaign": "spring" }, tags: ["welcome", "vip"] }
 
 describe("custom headers + tags", () => {
 	it("Resend: headers object and {name,value} tags", async () => {
-		await new Resend({ api_key: "k", default_from: "f@test.com" }).send({
+		await new Resend({ api_key: "k", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			body: "x",
 			...base,
@@ -51,7 +51,7 @@ describe("custom headers + tags", () => {
 	})
 
 	it("Postmark: Headers array and a single Tag", async () => {
-		await new Postmark({ api_key: "k", default_from: "f@test.com" }).send({
+		await new Postmark({ api_key: "k", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			body: "x",
 			...base,
@@ -62,7 +62,7 @@ describe("custom headers + tags", () => {
 	})
 
 	it("SendGrid: headers and categories", async () => {
-		await new SendGrid({ api_key: "k", default_from: "f@test.com" }).send({
+		await new SendGrid({ api_key: "k", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			body: "x",
 			...base,
@@ -73,7 +73,7 @@ describe("custom headers + tags", () => {
 	})
 
 	it("Mailgun: h: headers and repeated o:tag", async () => {
-		await new Mailgun({ api_key: "k", domain: "d.com", default_from: "f@test.com" }).send({
+		await new Mailgun({ api_key: "k", domain: "d.com", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			body: "x",
 			...base,
@@ -84,7 +84,7 @@ describe("custom headers + tags", () => {
 	})
 
 	it("SparkPost: merges custom headers with the CC header", async () => {
-		await new SparkPost({ api_key: "k", default_from: "f@test.com" }).send({
+		await new SparkPost({ api_key: "k", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			cc: "c@test.com",
 			body: "x",
@@ -94,7 +94,7 @@ describe("custom headers + tags", () => {
 	})
 
 	it("Mandrill: merges custom headers with Reply-To and sets tags", async () => {
-		await new Mandrill({ api_key: "k", default_from: "f@test.com" }).send({
+		await new Mandrill({ api_key: "k", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			reply_to: "r@test.com",
 			body: "x",
@@ -110,7 +110,7 @@ describe("custom headers + tags", () => {
 			secret_key: "k",
 			project_id: "p",
 			region: "fr-par",
-			default_from: "f@test.com",
+			default: { from: "f@test.com" },
 		}).send({
 			to: "a@test.com",
 			reply_to: "r@test.com",
@@ -124,7 +124,7 @@ describe("custom headers + tags", () => {
 	})
 
 	it("Mailtrap: first tag becomes the category", async () => {
-		await new Mailtrap({ api_key: "k", default_from: "f@test.com" }).send({
+		await new Mailtrap({ api_key: "k", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			body: "x",
 			...base,
@@ -133,7 +133,7 @@ describe("custom headers + tags", () => {
 	})
 
 	it("MailPace: tags array", async () => {
-		await new MailPace({ api_key: "k", default_from: "f@test.com" }).send({
+		await new MailPace({ api_key: "k", default: { from: "f@test.com" } }).send({
 			to: "a@test.com",
 			body: "x",
 			...base,
@@ -144,7 +144,7 @@ describe("custom headers + tags", () => {
 
 describe("send(array) — bulk", () => {
 	it("returns a result per message and never rejects", async () => {
-		const mail = new Resend({ api_key: "k", default_from: "f@test.com" })
+		const mail = new Resend({ api_key: "k", default: { from: "f@test.com" } })
 		fetch.mockReset()
 		fetch
 			.mockResolvedValueOnce(respond({ json: { id: "1" } }))
@@ -193,7 +193,7 @@ describe("send(array) — bulk", () => {
 			inflight--
 			return respond({ json: { id: "x" } })
 		})
-		const mail = new Resend({ api_key: "k", default_from: "f@test.com" })
+		const mail = new Resend({ api_key: "k", default: { from: "f@test.com" } })
 		const messages = Array.from({ length: 6 }, (_, i) => ({ to: `u${i}@test.com`, body: "x" }))
 		await mail.send(messages, { concurrency: 2 })
 		expect(peak).toBeLessThanOrEqual(2)
@@ -202,7 +202,7 @@ describe("send(array) — bulk", () => {
 	it("a single send still returns the response directly", async () => {
 		fetch.mockReset()
 		fetch.mockResolvedValue(respond({ json: { id: "single" } }))
-		const mail = new Resend({ api_key: "k", default_from: "f@test.com" })
+		const mail = new Resend({ api_key: "k", default: { from: "f@test.com" } })
 		const result = await mail.send({ to: "a@test.com", body: "x" })
 		expect(result).toEqual({ id: "single" })
 	})

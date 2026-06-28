@@ -35,8 +35,7 @@ describe("zepto", () => {
 
 			mail = new Postboi({
 				token: "test-token",
-				default_from: "default@test.com",
-				default_to: "default-to@test.com",
+				default: { from: "default@test.com", to: "default-to@test.com" },
 			})
 		})
 
@@ -186,7 +185,7 @@ describe("zepto", () => {
 
 		it("includes a plain-text body when auto_text is enabled", async () => {
 			fetch.mockResolvedValue(respond({ json: { data: [] } }))
-			const auto = new Postboi({ token: "t", default_from: "a@test.com", auto_text: true })
+			const auto = new Postboi({ token: "t", default: { from: "a@test.com" }, auto_text: true })
 
 			await auto.send({ to: "to@test.com", body: "<p>Hello</p><p>World</p>" })
 

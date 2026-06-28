@@ -4,8 +4,7 @@ import { fail } from "@sveltejs/kit"
 
 const mail = new Postboi({
 	token: ZEPTO_TOKEN,
-	default_from: EMAIL_FROM_ADDRESS,
-	default_to: EMAIL_TO_ADDRESS,
+	default: { from: EMAIL_FROM_ADDRESS, to: EMAIL_TO_ADDRESS },
 })
 
 export const actions = {
