@@ -1,8 +1,8 @@
-import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec } from "./index.js"
+import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the ZeptoMail provider constructor. */
-type Options = CommonProviderOptions & { token: string }
+type Options = ApiKeyOptions
 
 interface EmailAddress {
 	address: string
@@ -47,7 +47,7 @@ type SendResponse = {
  * ```ts
  * import Postboi from 'postboi/zepto'
  *
- * const mail = new Postboi({ token: ZEPTO_TOKEN, default: { from: 'no-reply@example.com' } })
+ * const mail = new Postboi({ api_key: ZEPTO_TOKEN, default: { from: 'no-reply@example.com' } })
  * await mail.send({
  *   to: 'contact@example.com',
  *   subject: 'Hello',
@@ -60,16 +60,16 @@ type SendResponse = {
  */
 export default class Postboi extends ProviderBase<SendResponse> {
 	protected readonly provider = "zeptomail"
-	#token: string
+	#api_key: string
 
 	/**
 	 * Create a ZeptoMail client.
-	 * @param token ZeptoMail API token
+	 * @param api_key ZeptoMail API token
 	 * @param default Optional default field values (from/to/cc/bcc/reply_to) applied when omitted
 	 */
-	constructor({ token, ...options }: Options) {
+	constructor({ api_key, ...options }: Options) {
 		super(options)
-		this.#token = token
+		this.#api_key = api_key
 	}
 
 	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
@@ -101,7 +101,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		return {
 			url: "https://api.zeptomail.com/v1.1/email",
 			headers: {
-				Authorization: this.#token,
+				Authorization: this.#api_key,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(params),

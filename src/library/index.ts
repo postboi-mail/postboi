@@ -1,8 +1,8 @@
 import { title, html_to_text, pooled_map } from "./utils.js"
-import { get_settings } from "./settings.js"
+import { get_settings, merge_hooks } from "./settings.js"
 
 // Global configuration (`postboi.settings.ts`) is part of the public surface from the package root.
-export { configure, defineSettings, type PostboiSettings } from "./settings.js"
+export { configure, config, type PostboiSettings } from "./settings.js"
 
 /**
  * A concrete email address used by providers.
@@ -187,13 +187,13 @@ export class PostboiError extends Error {
 }
 
 /**
- * Thrown from a `before_send` hook to cancel a send (e.g. a suppressed/unsubscribed
+ * Thrown from a `before.send` hook to cancel a send (e.g. a suppressed/unsubscribed
  * recipient). It is a {@link PostboiError} with `code: "skipped"`, so it flows through
  * `is_error` and bulk `BatchResult`s; catch it with `instanceof SkipSendError`. Skips do
- * **not** trigger the `on_error` hook.
+ * **not** trigger the `on.error` hook.
  */
 export class SkipSendError extends PostboiError {
-	constructor(message = "Email send was skipped by a before_send hook") {
+	constructor(message = "Email send was skipped by a before.send hook") {
 		super({ provider: "skip", message, code: "skipped" })
 		this.name = "SkipSendError"
 	}
@@ -205,42 +205,48 @@ export function is_error(error: unknown): error is PostboiError {
 }
 
 /**
- * Awaitable lifecycle hooks, run around every send. `before_send` can observe, replace
+ * Awaitable lifecycle hooks, run around every send. `before.send` can observe, replace
  * or cancel a message; the rest are best-effort observers (errors they throw are
  * swallowed so logging/telemetry can't break a send).
  */
 export type Hooks = {
-	/**
-	 * Runs after normalization, before the request. Return a modified {@link PreparedMessage}
-	 * to replace it (e.g. redirect recipients in staging), or throw to abort — throw
-	 * {@link SkipSendError} for an intentional skip.
-	 */
-	before_send?: (ctx: {
-		provider: string
-		message: PreparedMessage
-	}) => void | PreparedMessage | Promise<void | PreparedMessage>
-	/** Runs after a successful send. */
-	after_send?: (ctx: {
-		provider: string
-		message: PreparedMessage
-		response: unknown
-		duration_ms: number
-	}) => void | Promise<void>
-	/** Runs on any send failure — e.g. report to Sentry. */
-	on_error?: (ctx: {
-		provider: string
-		message?: PreparedMessage
-		error: PostboiError
-		duration_ms: number
-	}) => void | Promise<void>
-	/** Runs before each retry attempt. */
-	on_retry?: (ctx: {
-		provider: string
-		attempt: number
-		status?: number
-		reason?: unknown
-		delay_ms: number
-	}) => void | Promise<void>
+	before?: {
+		/**
+		 * Runs after normalization, before the request. Return a modified {@link PreparedMessage}
+		 * to replace it (e.g. redirect recipients in staging), or throw to abort — throw
+		 * {@link SkipSendError} for an intentional skip.
+		 */
+		send?: (ctx: {
+			provider: string
+			message: PreparedMessage
+		}) => void | PreparedMessage | Promise<void | PreparedMessage>
+	}
+	after?: {
+		/** Runs after a successful send. */
+		send?: (ctx: {
+			provider: string
+			message: PreparedMessage
+			response: unknown
+			duration_ms: number
+		}) => void | Promise<void>
+	}
+	on?: {
+		/** Runs on any send failure — e.g. report to Sentry. */
+		error?: (ctx: {
+			provider: string
+			message?: PreparedMessage
+			error: PostboiError
+			duration_ms: number
+		}) => void | Promise<void>
+		/** Runs before each retry attempt. */
+		retry?: (ctx: {
+			provider: string
+			attempt: number
+			status?: number
+			reason?: unknown
+			delay_ms: number
+		}) => void | Promise<void>
+	}
 }
 
 /**
@@ -271,7 +277,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 		this.#retries = options.retries ?? s.retries ?? 0
 		this.#retry_delay = options.retry_delay ?? s.retry_delay ?? 500
 		this.#auto_text = options.auto_text ?? s.auto_text ?? false
-		this.#hooks = { ...s.hooks, ...options.hooks }
+		this.#hooks = merge_hooks(s.hooks, options.hooks)
 	}
 
 	/** Map a prepared message into the provider's HTTP request. */
@@ -350,16 +356,16 @@ export abstract class ProviderBase<TResponse = unknown> {
 			throw await this.#emit_error(error, undefined, start)
 		}
 
-		// before_send may observe, replace the message, or throw to cancel (no on_error).
-		if (this.#hooks.before_send) {
-			const replaced = await this.#hooks.before_send({ provider: this.provider, message })
+		// before.send may observe, replace the message, or throw to cancel (no on.error).
+		if (this.#hooks.before?.send) {
+			const replaced = await this.#hooks.before.send({ provider: this.provider, message })
 			if (replaced) message = replaced
 		}
 
 		try {
 			const response = await core(message)
 			await this.#observe(() =>
-				this.#hooks.after_send?.({
+				this.#hooks.after?.send?.({
 					provider: this.provider,
 					message,
 					response,
@@ -372,7 +378,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 		}
 	}
 
-	/** Normalize a thrown value, fire the on_error hook (best-effort) and return the error. */
+	/** Normalize a thrown value, fire the on.error hook (best-effort) and return the error. */
 	async #emit_error(
 		error: unknown,
 		message: PreparedMessage | undefined,
@@ -387,7 +393,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 						raw: error,
 					})
 		await this.#observe(() =>
-			this.#hooks.on_error?.({
+			this.#hooks.on?.error?.({
 				provider: this.provider,
 				message,
 				error: e,
@@ -453,7 +459,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 				if (this.#should_retry(response.status) && attempt < this.#retries) {
 					const delay = this.#backoff(attempt + 1, response)
 					await this.#observe(() =>
-						this.#hooks.on_retry?.({
+						this.#hooks.on?.retry?.({
 							provider: this.provider,
 							attempt: attempt + 1,
 							status: response.status,
@@ -468,7 +474,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 				if (attempt < this.#retries) {
 					const delay = this.#backoff(attempt + 1)
 					await this.#observe(() =>
-						this.#hooks.on_retry?.({
+						this.#hooks.on?.retry?.({
 							provider: this.provider,
 							attempt: attempt + 1,
 							reason: cause,

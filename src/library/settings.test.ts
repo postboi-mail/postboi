@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
 	configure,
-	defineSettings,
+	config,
 	get_settings,
 	load_settings,
 	reset_settings,
@@ -28,15 +28,15 @@ describe("global settings", () => {
 		expect(get_settings()).toMatchObject({ retries: 2, default: { from: "a@test.com" } })
 	})
 
-	it("defineSettings() registers as a side effect and returns the value", () => {
-		const value = defineSettings({ auto_text: true })
+	it("config() registers as a side effect and returns the value", () => {
+		const value = config({ auto_text: true })
 		expect(value).toEqual({ auto_text: true })
 		expect(get_settings().auto_text).toBe(true)
 	})
 
 	it("applies global default + hooks to every provider instance", async () => {
 		const before = vi.fn()
-		configure({ default: { from: "global@test.com" }, hooks: { before_send: before } })
+		configure({ default: { from: "global@test.com" }, hooks: { before: { send: before } } })
 
 		const mail = new Mock()
 		await mail.send({ to: "to@test.com", body: "hi" })
@@ -55,13 +55,13 @@ describe("global settings", () => {
 	it("merges global hooks with instance hooks rather than replacing them", async () => {
 		const global_hook = vi.fn()
 		const instance_hook = vi.fn()
-		configure({ hooks: { before_send: global_hook, after_send: instance_hook } })
+		configure({ hooks: { before: { send: global_hook }, after: { send: instance_hook } } })
 
-		const mail = new Mock({ default: { from: "f@test.com" }, hooks: { after_send: instance_hook } })
+		const mail = new Mock({ default: { from: "f@test.com" }, hooks: { after: { send: instance_hook } } })
 		await mail.send({ to: "to@test.com", body: "hi" })
 
 		expect(global_hook).toHaveBeenCalledOnce() // kept from global
-		expect(instance_hook).toHaveBeenCalledOnce() // instance wins for after_send
+		expect(instance_hook).toHaveBeenCalledOnce() // instance wins for after.send
 	})
 
 	it("zero-config send() uses settings.provider when POSTBOI_PROVIDER is unset", async () => {

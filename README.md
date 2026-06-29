@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/darbymanning/postboi/refs/heads/main/static/logo.svg" alt="Postboi" width="250" />
 
-**Gotta emails son? This here ya boi**
+**I got ninety-nine problems, but mail ain't one**
 
 [![CI](https://github.com/darbymanning/postboi/actions/workflows/ci.yml/badge.svg)](https://github.com/darbymanning/postboi/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/postboi)](https://www.npmjs.com/package/postboi)
@@ -10,29 +10,25 @@
 
 ---
 
-Postboi is a dead simple email library that works anywhere you can run JavaScript/TypeScript, but it's optimized for SvelteKit. It's got a provider-based architecture so you can swap email providers whenever you fancy, plus some genuinely useful form handling that turns your FormData into tidy HTML emails without you having to write a single line of HTML yourself.
-
-The core email sending functionality is framework-agnostic and works in Node.js, Bun, Deno, or edge runtimes.
+Postboi is a framework-agnostic email library optimised for SvelteKit. Works with a variety of email providers and turns your FormData into tidy HTML emails, with **zero configuration**.
 
 ### Features
-
+- 👨‍💻 **Zero configuration** - works out of the box with minimal setup
 - 🔌 **Provider-based** - swap email providers without changing your code
 - 📝 **Smart FormData parsing** - automatically converts FormData to HTML tables
 - 🎯 **Grouped fields** - organize form fields with `fieldset→field` syntax
 - 📎 **Attachments** - attach files directly from form inputs or file objects
-- 🛡️ **Type-safe** - full TypeScript support with proper error handling
-- ⚡ **zero bullshit** - no unnecessary abstractions, just works
+- 🛡️ **Type-safe** - full TypeScript support with normalized error handling
 
 ## Quick start
 
-The recommended way to use Postboi. Run the CLI — it picks a provider, asks for your token,
-and writes the env vars:
+Run the CLI — it picks a provider, asks for credentials, optionally sets defaults, writes your env vars, and installs `postboi` if needed:
 
 ```bash
 bunx postboi init
 ```
 
-Then send from anywhere:
+Then send from anywhere — no provider import, no constructor, credentials come from env:
 
 ```typescript
 import { send } from "postboi"
@@ -40,7 +36,7 @@ import { send } from "postboi"
 await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
-On SvelteKit, a form action is a one-liner ([more](#with-sveltekit-form-actions)):
+On SvelteKit, a form action is a one-liner ([details](#sveltekit-form-actions)):
 
 ```typescript
 // +page.server.ts
@@ -49,17 +45,34 @@ import { send } from "postboi/kit"
 export const actions = { default: send }
 ```
 
-For shared hooks, defaults or retries, see [Global settings](#global-settings). To construct a
-provider yourself, see [Providers](#providers).
+`init` writes `POSTBOI_PROVIDER`, the provider's credential env vars, and optional `POSTBOI_*` defaults. `send()` reads them on every call:
+
+| Variable                                                                          | For                                                            |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `POSTBOI_PROVIDER`                                                                | which provider to use (`resend`, `mailgun`, `postmark`, …)     |
+| _provider creds_                                                                  | e.g. `RESEND_API_KEY`, or `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` |
+| `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO` | optional defaults applied to every send                        |
+
+Bulk send by passing an array — each message is its own request:
+
+```typescript
+const results = await send([
+	{ to: "a@example.com", body: "…" },
+	{ to: "b@example.com", body: "…" },
+])
+```
+
+For shared hooks, defaults or retries, see [Global settings](#global-settings). Prefer wiring things up yourself? See [Manual setup](#manual-setup).
+
+> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider directly — [Using a provider directly](#using-a-provider-directly).
 
 ## Providers
 
-One API, a whole bunch of providers. Each is its own entry point, so you only bundle the one
-you import.
+Each provider is its own entry point, so you only bundle the one you import. Every provider exposes the same `send()` and `is_error()` methods.
 
 | Provider       | Import               | Constructor options                  |
 | -------------- | -------------------- | ------------------------------------ |
-| ZeptoMail      | `postboi/zepto`      | `token`                              |
+| ZeptoMail      | `postboi/zepto`      | `api_key`                            |
 | Resend         | `postboi/resend`     | `api_key`                            |
 | Postmark       | `postboi/postmark`   | `api_key`, `message_stream?`         |
 | SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
@@ -75,20 +88,11 @@ you import.
 | Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
 | Mock (testing) | `postboi/mock`       | _none_                               |
 
-Every provider takes an optional `default: { from, to, cc, bcc, reply_to }` too, and exposes the
-same `send()` and `is_error()` methods. Swapping providers is a one-line import change.
+Want another provider? Quit being a baby and open a PR.
 
-```typescript
-import Resend from "postboi/resend"
+### Mock provider
 
-const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: "no-reply@example.com" } })
-await mail.send({ to: "someone@example.com", subject: "hello", body: "<p>hello world</p>" })
-```
-
-### Testing with the mock provider
-
-`postboi/mock` records messages in-memory instead of sending them, running the same
-normalisation as a real provider — handy for asserting what your app would send.
+`postboi/mock` records messages in-memory instead of sending them — same normalisation as a real provider:
 
 ```typescript
 import Mock from "postboi/mock"
@@ -97,94 +101,47 @@ const mail = new Mock({ default: { from: "no-reply@example.com" } })
 await mail.send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 
 expect(mail.sent).toHaveLength(1)
-expect(mail.last?.to[0].address).toBe("contact@example.com")
 ```
 
-Want another provider? Quit being a baby and open a PR.
+## Manual setup
 
-### Zero-config `send()`
+Skip the CLI and wire things up yourself.
 
-`bunx postboi init` writes these env vars; `send()` reads them on each call:
-
-| Variable                                                                          | For                                                            |
-| --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `POSTBOI_PROVIDER`                                                                | which provider to use (`resend`, `mailgun`, `postmark`, …)     |
-| _provider creds_                                                                  | e.g. `RESEND_API_KEY`, or `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` |
-| `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO` | optional defaults applied to every send                        |
-
-Pass an array to send many:
-
-```typescript
-const results = await send([
-	{ to: "a@example.com", body: "…" },
-	{ to: "b@example.com", body: "…" },
-])
-```
-
-> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider
-> directly: `new Resend({ api_key: env.RESEND_API_KEY })`.
-
-## Installation
+### Installation
 
 ```bash
-# if you're cool
-bun add postboi
-
-# or if you used to be cool
-pnpm add postboi
-
-# or if you're weird
-yarn add postboi
-
-# or if you smell like used knickers
-npm install postboi
+bun add postboi      # if you're cool
+pnpm add postboi     # if you used to be cool
+yarn add postboi     # if you're weird
+npm install postboi  # if you smell like used knickers
 ```
 
-### Or just run the CLI
+Set `POSTBOI_PROVIDER` and the provider credential env vars yourself (see [Providers](#providers)), or construct a provider instance directly.
 
-```bash
-bunx postboi init
-```
+### Using a provider directly
 
-`postboi init` walks you through setup:
-
-- **pick a provider** from the list
-- **paste your token** (it links you to the right dashboard, and asks for anything else the
-  provider needs — domain, account id, region, …)
-- **optionally set defaults** (from / to / reply-to / cc / bcc), stored as `POSTBOI_*` so the
-  top-level `send()` picks them up too
-- **writes the env vars** to your project, detecting the right file (`.env`, `.env.local`,
-  `.envrc`, `.dev.vars`, varlock) and adding them to `.gitignore`
-- **pushes to your host** if it detects one (Vercel, Cloudflare, Netlify) — or offers to anyway
-- **installs `postboi`** if it isn't already a dependency
-
-## Using a provider directly
-
-Prefer an explicit instance — or working in a runtime without ambient env vars? Import any
-provider and construct it yourself.
-
-### Basic Usage with ZeptoMail
+Useful when you want an explicit instance, or you're on a runtime without ambient env vars:
 
 ```typescript
-import Postboi from "postboi/zepto"
+import Resend from "postboi/resend"
 
-const mail = new Postboi({
-	token: "your-zeptomail-api-token",
-	default: { from: "no-reply@example.com", to: "contact@example.com" },
+const mail = new Resend({
+	api_key: process.env.RESEND_API_KEY!,
+	default: { from: "no-reply@example.com" },
 })
 
-// simple string body
 await mail.send({
 	to: "someone@example.com",
 	subject: "hello",
-	body: "hello world",
+	body: "<p>hello world</p>",
 })
 ```
 
-### With SvelteKit Form Actions
+Every provider also accepts `default`, `timeout`, `retries`, `retry_delay`, `auto_text`, and `hooks` — see [Common constructor options](#common-constructor-options).
 
-`postboi/kit` turns a form action into one line. It reads the FormData, sends it, and returns
-`{ success: true }` — or `fail(400, { error })` if sending throws:
+### SvelteKit form actions
+
+`postboi/kit` reads FormData, sends it, and returns `{ success: true }` — or `fail(400, { error })` on failure:
 
 ```typescript
 // +page.server.ts
@@ -196,52 +153,14 @@ export const actions = { default: send }
 Got a configured provider instance (or no ambient env vars)? Wrap it with `action()`:
 
 ```typescript
-// +page.server.ts
 import Resend from "postboi/resend"
 import { action } from "postboi/kit"
 import { RESEND_API_KEY, EMAIL_FROM_ADDRESS } from "$env/static/private"
 
 const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: EMAIL_FROM_ADDRESS } })
 
-export const actions = { default: action(mail) }
-```
-
-`action(mailer, { status, fields })` is optional: `status` sets the failure code (default
-`400`), `fields` forces send options server-side (e.g. lock the recipient):
-
-```typescript
 export const actions = {
 	default: action(mail, { status: 422, fields: { to: "team@example.com" } }),
-}
-```
-
-The longhand still works if you'd rather be explicit:
-
-```typescript
-// +page.server.ts
-import Postboi from "postboi/zepto"
-import { ZEPTO_TOKEN, EMAIL_FROM_ADDRESS, EMAIL_TO_ADDRESS } from "$env/static/private"
-import { fail } from "@sveltejs/kit"
-
-const mail = new Postboi({
-	token: ZEPTO_TOKEN,
-	default: { from: EMAIL_FROM_ADDRESS, to: EMAIL_TO_ADDRESS },
-})
-
-export const actions = {
-	async default({ request }) {
-		const form_data = await request.formData()
-
-		try {
-			await mail.send({ body: form_data })
-			return { success: true }
-		} catch (error) {
-			if (mail.is_error(error)) {
-				return fail(400, { error: error.message })
-			}
-			return fail(400, { error: String(error) })
-		}
-	},
 }
 ```
 
@@ -253,125 +172,64 @@ export const actions = {
 
 <form method="POST" use:enhance enctype="multipart/form-data">
 	<input type="hidden" name="_subject" value="Contact Form" />
-
 	<input name="contact→name" placeholder="Name" required />
 	<input name="contact→email" type="email" placeholder="Email" required />
 	<textarea name="details→message" placeholder="Message" />
-
 	<input type="file" name="details→attachments" multiple />
-
 	<button type="submit">Send</button>
 </form>
 ```
 
-That's it. The FormData automatically becomes a nice HTML table in the email.
+FormData becomes a tidy HTML table in the email. See [FormData](#formdata).
 
-## FormData Magic
+## FormData
 
-Postboi handles FormData intelligently. Here's what it does:
+### Special fields
 
-### Special Fields
+Extracted from the body and applied to the send options:
 
-These fields get extracted and don't appear in the email body:
+- `_to`, `_from`, `_subject`, `_reply_to`
+- `_cc`, `_bcc` — comma-separated or array
 
-- `_to` — recipient address (overrides default)
-- `_from` — sender address (overrides default)
-- `_subject` — email subject
-- `_reply_to` — reply-to address
-- `_cc` — cc addresses (comma-separated or array)
-- `_bcc` — bcc addresses (comma-separated or array)
+Values can be base64-encoded; they'll be decoded automatically.
 
-All special field values can be base64 encoded and will be automatically decoded.
-
-### Grouped Fields
+### Grouped fields
 
 Use `fieldset→field` syntax to group related fields:
 
 ```html
 <input name="contact→name" />
 <input name="contact→email" />
-<input name="contact→phone" />
-
 <input name="order→product" />
 <input name="order→quantity" />
 ```
 
-This creates sections with headers in the email:
+Creates sectioned tables in the email body. Attachments work from file inputs (`details→files`) or via `attachments: File | File[]` on `send()`.
 
-```
-Contact
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Name:     John Doe
-Email:    john@example.com
-Phone:    +44 1234 567890
-
-Order
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Product:  Widget Pro
-Quantity: 2
-```
-
-### Attachments
-
-Files are automatically detected and attached:
-
-```html
-<input type="file" name="details→files" multiple />
-```
-
-Or programmatically:
+## Email address formats
 
 ```typescript
-await mail.send({
-	to: "someone@example.com",
-	body: "check these out",
-	attachments: [file1, file2], // File objects or array
-})
+"user@example.com"
+{ address: "user@example.com", name: "User Name" }
+"User Name <user@example.com>"
+["user1@example.com", "user2@example.com"]
 ```
 
-## Email Address Formats
+## API reference
 
-Postboi accepts multiple email formats because flexibility is good:
+### Provider class
 
-```typescript
-// plain string
-'user@example.com'
-
-// object with display name
-{ address: 'user@example.com', name: 'User Name' }
-
-// Display-name format (RFC 5322)
-'User Name <user@example.com>'
-
-// arrays for multiple recipients
-['user1@example.com', 'user2@example.com']
-
-// mixed formats in arrays
-[
-  'user1@example.com',
-  { address: 'user2@example.com', name: 'User Two' },
-  'User Three <user3@example.com>'
-]
-```
-
-## API Reference
-
-### `Postboi` Class (ZeptoMail Provider)
+Every provider exposes the same surface:
 
 ```typescript
-import Postboi from 'postboi/zepto'
+import Resend from "postboi/resend"
 
-const mail = new Postboi({
-  token: string              // ZeptoMail API token (required)
-  default?: {                // field defaults applied when a send omits them
-    from?, to?, cc?, bcc?, reply_to?
-  }
+const mail = new Resend({
+	api_key: string // see Providers table for credential option names
+	default?: { from?, to?, cc?, bcc?, reply_to? }
 })
 
-// send email
 await mail.send(options: SendOptions): Promise<SendResponse>
-
-// check if a caught value is a normalized Postboi error
 mail.is_error(error: unknown): error is PostboiError
 ```
 
@@ -379,54 +237,38 @@ mail.is_error(error: unknown): error is PostboiError
 
 ```typescript
 interface SendOptions {
-	to?: Email | Email[] // recipient(s)
-	from?: Email // sender
-	reply_to?: Email | Email[] // reply-to address(es)
-	cc?: Email | Email[] // cc recipient(s)
-	bcc?: Email | Email[] // bcc recipient(s)
-	subject?: string // email subject (default: "Mail sent from website")
-	body: string | FormData // email body (HTML) or formdata to parse
-	text?: string // optional plain-text alternative body
+	to?: Email | Email[]
+	from?: Email
+	reply_to?: Email | Email[]
+	cc?: Email | Email[]
+	bcc?: Email | Email[]
+	subject?: string // default: "Mail sent from website"
+	body: string | FormData
+	text?: string
 	formatter?:
 		| {
-				// customize label formatting
 				fieldset?: ((label: string) => string) | null | false
 				name?: ((label: string) => string) | null | false
 		  }
 		| null
-		| false // set to null/false to disable formatting
-	attachments?: File | File[] // file attachments
-	idempotency_key?: string // forwarded to providers that support it (e.g. Resend)
-	headers?: Record<string, string> // custom email headers (provider support varies)
-	tags?: string[] // tags / categories for analytics (provider support varies)
+		| false
+	attachments?: File | File[]
+	idempotency_key?: string
+	headers?: Record<string, string>
+	tags?: string[]
 }
 ```
 
 ### Custom headers & tags
 
-`headers` and `tags` are forwarded to each provider's native concept, and quietly
-ignored by providers that don't have one:
+Forwarded to each provider's native concept; quietly ignored where unsupported.
 
-- **headers** → Resend, Postmark, SendGrid, Mailgun (`h:`), Brevo, SparkPost, Mandrill,
-  Plunk, Mailtrap, Scaleway, Cloudflare.
-- **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill,
-  MailPace, Resend (`{name,value}` pairs). Postmark and Mailtrap take a single value, so
-  the **first** tag is used.
-
-```typescript
-await mail.send({
-	to: "contact@example.com",
-	body: "<p>Hello</p>",
-	headers: { "X-Campaign": "spring-2026" },
-	tags: ["welcome", "vip"],
-})
-```
+- **headers** → Resend, Postmark, SendGrid, Mailgun (`h:`), Brevo, SparkPost, Mandrill, Plunk, Mailtrap, Scaleway, Cloudflare.
+- **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill, MailPace, Resend (`{name,value}` pairs). Postmark and Mailtrap use the **first** tag only.
 
 ### Bulk sending
 
-Pass `send` an **array** and it sends each message as its own request with bounded
-concurrency. It never throws — you get one result per message, so a single failure
-doesn't lose the rest:
+Pass an array to `send()` — bounded concurrency, never throws; you get one result per message:
 
 ```typescript
 const results = await mail.send(messages, { concurrency: 10 }) // default 5
@@ -487,7 +329,7 @@ try {
 
 ### Hooks
 
-Pass `hooks` to any provider to run awaitable callbacks around every send. `before_send`
+Pass `hooks` to any provider to run awaitable callbacks around every send. `before.send`
 can observe, rewrite or cancel a message; the rest are best-effort observers (an error
 they throw is swallowed, so logging/telemetry can never break a send). In a bulk
 `send(array)`, hooks run once per message.
@@ -502,28 +344,34 @@ const mail = new Resend({
 	default: { from: "no-reply@example.com" },
 	hooks: {
 		// observe, mutate, or throw to cancel — runs before the request
-		before_send: ({ message }) => {
-			if (process.env.NODE_ENV !== "production") return { ...message, to: "qa@example.com" }
+		before: {
+			send: ({ message }) => {
+				if (process.env.NODE_ENV !== "production") return { ...message, to: "qa@example.com" }
+			},
 		},
 		// success — analytics / audit
-		after_send: ({ provider, message, duration_ms }) =>
-			track("email.sent", { provider, to: message.to, duration_ms }),
+		after: {
+			send: ({ provider, message, duration_ms }) =>
+				track("email.sent", { provider, to: message.to, duration_ms }),
+		},
 		// any failure — report it
-		on_error: ({ error, message }) =>
-			Sentry.captureException(error, {
-				tags: { provider: error.provider },
-				extra: { to: message?.to },
-			}),
-		// each retry — observe provider flakiness
-		on_retry: ({ provider, attempt, status }) =>
-			console.warn(`${provider} retry ${attempt} (${status})`),
+		on: {
+			error: ({ error, message }) =>
+				Sentry.captureException(error, {
+					tags: { provider: error.provider },
+					extra: { to: message?.to },
+				}),
+			// each retry — observe provider flakiness
+			retry: ({ provider, attempt, status }) =>
+				console.warn(`${provider} retry ${attempt} (${status})`),
+		},
 	},
 })
 ```
 
-Cancel a send from `before_send` by throwing `SkipSendError` (e.g. a suppressed or
+Cancel a send from `before.send` by throwing `SkipSendError` (e.g. a suppressed or
 unsubscribed recipient). It's a `PostboiError` with `code: "skipped"`, and it does **not**
-trigger `on_error`:
+trigger `on.error`:
 
 ```typescript
 import Resend from "postboi/resend"
@@ -532,8 +380,10 @@ import { SkipSendError } from "postboi"
 const mail = new Resend({
 	api_key: RESEND_API_KEY,
 	hooks: {
-		before_send: async ({ message }) => {
-			if (await isSuppressed(message.to)) throw new SkipSendError(`suppressed: ${message.to}`)
+		before: {
+			send: async ({ message }) => {
+				if (await isSuppressed(message.to)) throw new SkipSendError(`suppressed: ${message.to}`)
+			},
 		},
 	},
 })
@@ -547,13 +397,15 @@ live, since they're functions:
 
 ```typescript
 // postboi.settings.ts
-import { defineSettings } from "postboi"
+import { config } from "postboi"
 
-export default defineSettings({
+export default config({
 	default: { from: "no-reply@example.com" },
 	retries: 2,
 	hooks: {
-		on_error: ({ error }) => Sentry.captureException(error),
+		on: {
+			error: ({ error }) => Sentry.captureException(error),
+		},
 	},
 })
 ```

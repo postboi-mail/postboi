@@ -151,7 +151,7 @@ export const PROVIDERS: Array<ProviderMeta> = [
 		import: "postboi/zepto",
 		class: "Postboi",
 		url: "https://www.zoho.com/zeptomail/",
-		fields: [{ env: "ZEPTO_TOKEN", arg: "token", label: "Send Mail token", secret: true }],
+		fields: [{ env: "ZEPTO_TOKEN", arg: "api_key", label: "Send Mail token", secret: true }],
 	},
 ]
 

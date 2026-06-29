@@ -25,14 +25,14 @@ const SETTINGS_FILES = [
 	"postboi.settings.mjs",
 ]
 
-const SETTINGS_TEMPLATE = `import { defineSettings } from "postboi"
+const SETTINGS_TEMPLATE = `import { config } from "postboi"
 
 // Project-wide config, picked up automatically by send().
-export default defineSettings({
+export default config({
 	hooks: {
-		// before_send: ({ message }) => { /* mutate the message, or throw to cancel */ },
-		// after_send: ({ response }) => { /* log a successful send */ },
-		// on_error: ({ error }) => { /* report to Sentry, etc. */ },
+		// before: { send: ({ message }) => { /* mutate the message, or throw to cancel */ } },
+		// after: { send: ({ response }) => { /* log a successful send */ } },
+		// on: { error: ({ error }) => { /* report to Sentry, etc. */ } },
 	},
 })
 `
@@ -84,7 +84,9 @@ function run_push(spec: ReturnType<typeof push_spec>): { ok: boolean; reason?: s
 
 async function init(): Promise<void> {
 	const prompts = create_prompts()
-	console.log(`\n${banner()}\n\n${dim("Let's get you sending.")}\n`)
+	console.log()
+	console.log(banner())
+	console.log()
 
 	const files = readdirSync(cwd())
 

@@ -37,8 +37,12 @@
         "vitest": "4.1.9",
       },
       "peerDependencies": {
+        "@sveltejs/kit": "^2.0.0",
         "svelte": "^5.0.0",
       },
+      "optionalPeers": [
+        "@sveltejs/kit",
+      ],
     },
   },
   "packages": {

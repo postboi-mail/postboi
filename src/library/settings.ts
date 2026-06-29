@@ -5,11 +5,13 @@
  * Drop a `postboi.settings.ts` at your project root:
  *
  * ```ts
- * import { defineSettings } from "postboi"
+ * import { config } from "postboi"
  *
- * export default defineSettings({
+ * export default config({
  * 	hooks: {
- * 		on_error: (ctx) => Sentry.captureException(ctx.error),
+ * 		on: {
+ * 			error: (ctx) => Sentry.captureException(ctx.error),
+ * 		},
  * 	},
  * })
  * ```
@@ -44,13 +46,22 @@ function defined<T extends object>(obj: T): Partial<T> {
 	return out as Partial<T>
 }
 
+/** Deep-merge hook groups so instance overrides don't clobber unrelated global hooks. */
+export function merge_hooks(base: Hooks = {}, override: Hooks = {}): Hooks {
+	return {
+		before: { ...base.before, ...defined(override.before ?? {}) },
+		after: { ...base.after, ...defined(override.after ?? {}) },
+		on: { ...base.on, ...defined(override.on ?? {}) },
+	}
+}
+
 /** Merge `override` over `base`, deep-merging the `default` and `hooks` objects. */
 function merge(base: PostboiSettings, override: PostboiSettings): PostboiSettings {
 	return {
 		...base,
 		...defined(override),
 		default: { ...base.default, ...defined(override.default ?? {}) },
-		hooks: { ...base.hooks, ...defined(override.hooks ?? {}) },
+		hooks: merge_hooks(base.hooks, override.hooks),
 	}
 }
 
@@ -67,10 +78,10 @@ export function configure(settings: PostboiSettings): void {
 }
 
 /**
- * Define settings in a `postboi.settings.ts` file. Registers them as a side effect (so merely
+ * Project settings helper for `postboi.settings.ts`. Registers them as a side effect (so merely
  * importing the file is enough) and returns them, so it works as a typed `export default`.
  */
-export function defineSettings(settings: PostboiSettings): PostboiSettings {
+export function config(settings: PostboiSettings): PostboiSettings {
 	configure(settings)
 	return settings
 }

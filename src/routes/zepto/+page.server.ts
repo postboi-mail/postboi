@@ -3,7 +3,7 @@ import { ZEPTO_TOKEN, EMAIL_FROM_ADDRESS, EMAIL_TO_ADDRESS } from "$env/static/p
 import { fail } from "@sveltejs/kit"
 
 const mail = new Postboi({
-	token: ZEPTO_TOKEN,
+	api_key: ZEPTO_TOKEN,
 	default: { from: EMAIL_FROM_ADDRESS, to: EMAIL_TO_ADDRESS },
 })
 

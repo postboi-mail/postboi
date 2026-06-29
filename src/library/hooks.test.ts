@@ -19,13 +19,15 @@ function respond(opts: { ok?: boolean; status?: number; json?: unknown } = {}) {
 
 beforeEach(() => fetch.mockReset())
 
-describe("before_send", () => {
+describe("before.send", () => {
 	it("observes the normalized message", async () => {
 		const seen: Array<unknown> = []
 		const mail = new Mock({
 			default: { from: "f@test.com" },
 			hooks: {
-				before_send: (ctx) => void seen.push({ provider: ctx.provider, to: ctx.message.to }),
+				before: {
+					send: (ctx) => void seen.push({ provider: ctx.provider, to: ctx.message.to }),
+				},
 			},
 		})
 		await mail.send({ to: "a@test.com", body: "<p>hi</p>" })
@@ -35,21 +37,23 @@ describe("before_send", () => {
 	it("can replace the message (staging redirect)", async () => {
 		const mail = new Mock({
 			default: { from: "f@test.com" },
-			hooks: { before_send: ({ message }) => ({ ...message, to: "redirect@test.com" }) },
+			hooks: { before: { send: ({ message }) => ({ ...message, to: "redirect@test.com" }) } },
 		})
 		await mail.send({ to: "real@test.com", body: "hi" })
 		expect(mail.last?.to).toEqual([{ address: "redirect@test.com" }])
 	})
 
-	it("throwing SkipSendError cancels the send without on_error", async () => {
+	it("throwing SkipSendError cancels the send without on.error", async () => {
 		let on_error_called = false
 		const mail = new Mock({
 			default: { from: "f@test.com" },
 			hooks: {
-				before_send: () => {
-					throw new SkipSendError()
+				before: {
+					send: () => {
+						throw new SkipSendError()
+					},
 				},
-				on_error: () => void (on_error_called = true),
+				on: { error: () => void (on_error_called = true) },
 			},
 		})
 
@@ -62,14 +66,16 @@ describe("before_send", () => {
 	})
 })
 
-describe("after_send", () => {
+describe("after.send", () => {
 	it("fires on success with the response and a duration", async () => {
 		const calls: Array<{ provider: string; duration_ms: number; id: string }> = []
 		const mail = new Mock({
 			default: { from: "f@test.com" },
 			hooks: {
-				after_send: ({ provider, response, duration_ms }) =>
-					void calls.push({ provider, duration_ms, id: (response as { id: string }).id }),
+				after: {
+					send: ({ provider, response, duration_ms }) =>
+						void calls.push({ provider, duration_ms, id: (response as { id: string }).id }),
+				},
 			},
 		})
 		await mail.send({ to: "a@test.com", body: "hi" })
@@ -80,13 +86,13 @@ describe("after_send", () => {
 	})
 })
 
-describe("on_error", () => {
+describe("on.error", () => {
 	it("fires on a provider failure with a PostboiError", async () => {
 		const errors: Array<PostboiError> = []
 		const mail = new Resend({
 			api_key: "k",
 			default: { from: "f@test.com" },
-			hooks: { on_error: ({ error }) => void errors.push(error) },
+			hooks: { on: { error: ({ error }) => void errors.push(error) } },
 		})
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 401, json: { message: "nope", name: "x" } })
@@ -103,7 +109,7 @@ describe("on_error", () => {
 		const seen: Array<{ message: unknown; error: string }> = []
 		const mail = new Mock({
 			hooks: {
-				on_error: ({ message, error }) => void seen.push({ message, error: error.message }),
+				on: { error: ({ message, error }) => void seen.push({ message, error: error.message }) },
 			},
 		})
 		await mail.send({ to: "a@test.com", body: "hi" }).catch(() => {})
@@ -114,12 +120,14 @@ describe("on_error", () => {
 })
 
 describe("hook error isolation", () => {
-	it("swallows a throwing after_send (send still succeeds)", async () => {
+	it("swallows a throwing after.send (send still succeeds)", async () => {
 		const mail = new Mock({
 			default: { from: "f@test.com" },
 			hooks: {
-				after_send: () => {
-					throw new Error("telemetry down")
+				after: {
+					send: () => {
+						throw new Error("telemetry down")
+					},
 				},
 			},
 		})
@@ -127,13 +135,15 @@ describe("hook error isolation", () => {
 		expect(result.id).toBe("mock-1")
 	})
 
-	it("swallows a throwing on_error (original error still propagates)", async () => {
+	it("swallows a throwing on.error (original error still propagates)", async () => {
 		const mail = new Mock({
 			fail: true,
 			default: { from: "f@test.com" },
 			hooks: {
-				on_error: () => {
-					throw new Error("sentry down")
+				on: {
+					error: () => {
+						throw new Error("sentry down")
+					},
 				},
 			},
 		})
@@ -143,11 +153,11 @@ describe("hook error isolation", () => {
 	})
 })
 
-describe("on_retry", () => {
+describe("on.retry", () => {
 	it("fires before each retry attempt", async () => {
 		const retries: Array<{ provider: string; attempt: number; status?: number; delay_ms: number }> =
 			[]
-		const hooks: Hooks = { on_retry: (ctx) => void retries.push(ctx) }
+		const hooks: Hooks = { on: { retry: (ctx) => void retries.push(ctx) } }
 		const mail = new Resend({
 			api_key: "k",
 			default: { from: "f@test.com" },
@@ -170,8 +180,10 @@ describe("hooks under bulk send", () => {
 		const mail = new Mock({
 			default: { from: "f@test.com" },
 			hooks: {
-				before_send: ({ message }) => {
-					if (message.to === "blocked@test.com") throw new SkipSendError()
+				before: {
+					send: ({ message }) => {
+						if (message.to === "blocked@test.com") throw new SkipSendError()
+					},
 				},
 			},
 		})
