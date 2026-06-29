@@ -175,7 +175,7 @@ export const sectionUiDefaults: SectionUiConfig = {
 export const contentUiDefaults: ContentUiConfig = {
 	...sectionUiDefaults,
 	packageManager: {
-		enabled: ["npm", "pnpm", "bun", "yarn"],
+		enabled: ["bun", "npm", "pnpm", "yarn"],
 		default: "bun",
 		storageKey: "docs-package-manager",
 	},
