@@ -15,9 +15,11 @@
 		pkg?: string
 		args?: string
 		isDev?: boolean
+		/** Render the one-off runner (`bunx`/`npx`/`pnpm dlx`/`yarn dlx`) instead of an install. */
+		exec?: boolean
 	}
 
-	let { pkg = siteConfig.package.name, args, isDev = false }: Props = $props()
+	let { pkg = siteConfig.package.name, args, isDev = false, exec = false }: Props = $props()
 	let tabList = $state<HTMLDivElement | null>(null)
 	let activeIndicatorLeft = $state(0)
 	let activeIndicatorWidth = $state(0)
@@ -26,19 +28,26 @@
 	const tabRefs = new SvelteMap<PackageManager, HTMLButtonElement>()
 
 	const commands: Record<PackageManager, string> = $derived(
-		isDev
+		exec
 			? {
-					npm: `npm install -D ${pkg} ${args ?? ""}`,
-					pnpm: `pnpm add -D ${pkg} ${args ?? ""}`,
-					bun: `bun add -D ${pkg} ${args ?? ""}`,
-					yarn: `yarn add -D ${pkg} ${args ?? ""}`,
+					npm: `npx ${pkg} ${args ?? ""}`.trim(),
+					pnpm: `pnpm dlx ${pkg} ${args ?? ""}`.trim(),
+					bun: `bunx ${pkg} ${args ?? ""}`.trim(),
+					yarn: `yarn dlx ${pkg} ${args ?? ""}`.trim(),
 				}
-			: {
-					npm: `npm install ${pkg} ${args ?? ""}`,
-					pnpm: `pnpm add ${pkg} ${args ?? ""}`,
-					bun: `bun add ${pkg} ${args ?? ""}`,
-					yarn: `yarn add ${pkg} ${args ?? ""}`,
-				}
+			: isDev
+				? {
+						npm: `npm install -D ${pkg} ${args ?? ""}`,
+						pnpm: `pnpm add -D ${pkg} ${args ?? ""}`,
+						bun: `bun add -D ${pkg} ${args ?? ""}`,
+						yarn: `yarn add -D ${pkg} ${args ?? ""}`,
+					}
+				: {
+						npm: `npm install ${pkg} ${args ?? ""}`,
+						pnpm: `pnpm add ${pkg} ${args ?? ""}`,
+						bun: `bun add ${pkg} ${args ?? ""}`,
+						yarn: `yarn add ${pkg} ${args ?? ""}`,
+					}
 	)
 
 	const activeCommand = $derived(commands[packageManagerStore.active])

@@ -5,12 +5,14 @@ description: postboi init picks a provider, collects credentials, writes your en
 category: Getting started
 ---
 
+<script lang="ts">
+	import { InstallationTabs } from "$lib"
+</script>
+
 One command, fully set up. The CLI picks a provider, asks for credentials, optionally sets
 defaults, writes your env vars, and installs `postboi` if it isn't already there.
 
-```bash
-bunx postboi init
-```
+<InstallationTabs exec args="init" />
 
 ## What it does
 
