@@ -22,6 +22,7 @@ export interface SendParams {
 	attachments?: Array<Attachment>
 	headers?: Record<string, string>
 	tags?: Array<{ name: string; value: string }>
+	scheduled_at?: string
 }
 
 type SendResponse = { id: string }
@@ -64,6 +65,7 @@ export default class Resend extends ProviderBase<SendResponse> {
 			text: message.text,
 			headers: message.headers,
 			tags: message.tags?.map((t) => ({ name: t, value: t })),
+			scheduled_at: message.scheduled_at?.toISOString(),
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						filename: a.name,

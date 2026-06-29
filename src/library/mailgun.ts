@@ -56,6 +56,7 @@ export default class Mailgun extends ProviderBase<SendResponse> {
 		if (message.tags) {
 			for (const tag of message.tags) form.append("o:tag", tag)
 		}
+		if (message.scheduled_at) form.append("o:deliverytime", message.scheduled_at.toUTCString())
 
 		if (message.attachments) {
 			const files = Array.isArray(message.attachments) ? message.attachments : [message.attachments]

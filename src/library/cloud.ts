@@ -46,6 +46,7 @@ export interface SendParams {
 	headers?: Record<string, string>
 	tags?: Array<string>
 	attachments?: Array<Attachment>
+	scheduled_at?: string
 }
 
 type SendResponse = { id: string }
@@ -199,6 +200,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 						type: a.mime_type,
 					}))
 				: undefined,
+			scheduled_at: message.scheduled_at?.toISOString(),
 		}
 
 		return {
@@ -248,6 +250,7 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 	mailtrap: () => import("./mailtrap.js").then((m) => m.default as unknown as ProviderConstructor),
 	mailpace: () => import("./mailpace.js").then((m) => m.default as unknown as ProviderConstructor),
 	scaleway: () => import("./scaleway.js").then((m) => m.default as unknown as ProviderConstructor),
+	ses: () => import("./ses.js").then((m) => m.default as unknown as ProviderConstructor),
 	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
 }
 

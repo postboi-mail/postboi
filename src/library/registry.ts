@@ -146,6 +146,23 @@ export const PROVIDERS: Array<ProviderMeta> = [
 		],
 	},
 	{
+		key: "ses",
+		name: "Amazon SES",
+		import: "postboi/ses",
+		class: "SES",
+		url: "https://console.aws.amazon.com/iam/home#/security_credentials",
+		fields: [
+			{ env: "AWS_ACCESS_KEY_ID", arg: "access_key_id", label: "Access key ID", secret: true },
+			{
+				env: "AWS_SECRET_ACCESS_KEY",
+				arg: "secret_access_key",
+				label: "Secret access key",
+				secret: true,
+			},
+			{ env: "AWS_REGION", arg: "region", label: "Region", default: "us-east-1" },
+		],
+	},
+	{
 		key: "zepto",
 		name: "ZeptoMail",
 		import: "postboi/zepto",

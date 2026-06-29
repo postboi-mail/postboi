@@ -25,6 +25,7 @@ calling code.
 | Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
 | MailPace       | `postboi/mailpace`   | `api_key`                            |
 | Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
+| Amazon SES     | `postboi/ses`        | `access_key_id`, `secret_access_key`, `region`, `session_token?` |
 | Mock (testing) | `postboi/mock`       | _none_                               |
 
 Want another provider? Quit being a baby and [open a PR](https://github.com/darbymanning/postboi).
@@ -73,6 +74,7 @@ expect(mail.sent).toHaveLength(1);
 native concept, and quietly ignored where unsupported:
 
 - **headers** → Resend, Postmark, SendGrid, Mailgun (`h:`), Brevo, SparkPost, Mandrill,
-  Plunk, Mailtrap, Scaleway, Cloudflare.
+  Plunk, Mailtrap, Scaleway, Cloudflare, SES.
 - **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill,
-  MailPace, Resend (`{name,value}` pairs). Postmark and Mailtrap use the **first** tag only.
+  MailPace, SES (`EmailTags`), Resend (`{name,value}` pairs). Postmark and Mailtrap use the
+  **first** tag only.

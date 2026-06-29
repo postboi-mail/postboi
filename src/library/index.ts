@@ -81,6 +81,12 @@ export interface SendOptions {
 	 * category — see the README). Ignored by providers without a tagging concept.
 	 */
 	tags?: Array<string>
+	/**
+	 * Schedule the message for future delivery. Accepts a `Date` or a date string. Forwarded
+	 * to providers with native scheduling (Resend, Brevo, SendGrid, Mailgun, Postboi Cloud);
+	 * ignored by providers without it, which send immediately.
+	 */
+	scheduled_at?: Date | string
 }
 
 /**
@@ -100,6 +106,8 @@ export interface PreparedMessage {
 	idempotency_key?: string
 	headers?: Record<string, string>
 	tags?: Array<string>
+	/** Normalized future delivery time; provider-format conversion happens in build_request. */
+	scheduled_at?: Date
 }
 
 /** A provider-agnostic description of the HTTP request to send. */
@@ -754,6 +762,18 @@ export abstract class ProviderBase<TResponse = unknown> {
 		let text = options.text
 		if (text === undefined && this.#auto_text && html) text = html_to_text(html)
 
+		let scheduled_at: Date | undefined
+		if (options.scheduled_at !== undefined) {
+			scheduled_at =
+				options.scheduled_at instanceof Date ? options.scheduled_at : new Date(options.scheduled_at)
+			if (Number.isNaN(scheduled_at.getTime())) {
+				throw new PostboiError({
+					provider: this.provider,
+					message: `Invalid scheduled_at value: ${String(options.scheduled_at)}`,
+				})
+			}
+		}
+
 		return {
 			to,
 			from,
@@ -767,6 +787,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 			idempotency_key: options.idempotency_key,
 			headers: options.headers,
 			tags: options.tags,
+			scheduled_at,
 		}
 	}
 }

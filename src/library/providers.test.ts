@@ -14,6 +14,7 @@ import Plunk from "$library/plunk.js"
 import Mailtrap from "$library/mailtrap.js"
 import MailPace from "$library/mailpace.js"
 import Scaleway from "$library/scaleway.js"
+import SES from "$library/ses.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -619,6 +620,73 @@ describe("Scaleway", () => {
 	})
 })
 
+describe("SES", () => {
+	const mail = () =>
+		new SES({
+			access_key_id: "AKIAEXAMPLE",
+			secret_access_key: "secret",
+			region: "eu-west-1",
+			default: { from: "from@test.com" },
+		})
+
+	it("maps to the v2 SendEmail shape and signs with SigV4", async () => {
+		fetch.mockResolvedValue(respond({ json: { MessageId: "ses-1" } }))
+		const result = await mail().send({
+			to: "to@test.com",
+			cc: "cc@test.com",
+			bcc: "bcc@test.com",
+			reply_to: "reply@test.com",
+			subject: "Hi",
+			body: "<p>x</p>",
+			text: "x",
+			headers: { "X-Custom": "1" },
+			attachments: attachment(),
+		})
+
+		expect(sent_url()).toBe("https://email.eu-west-1.amazonaws.com/v2/email/outbound-emails")
+		const headers = sent_init().headers
+		expect(headers.Authorization).toMatch(
+			/^AWS4-HMAC-SHA256 Credential=AKIAEXAMPLE\/\d{8}\/eu-west-1\/ses\/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=[a-f0-9]{64}$/
+		)
+		expect(headers["X-Amz-Date"]).toMatch(/^\d{8}T\d{6}Z$/)
+		const body = sent_json()
+		expect(body.FromEmailAddress).toBe("from@test.com")
+		expect(body.Destination).toEqual({
+			ToAddresses: ["to@test.com"],
+			CcAddresses: ["cc@test.com"],
+			BccAddresses: ["bcc@test.com"],
+		})
+		expect(body.ReplyToAddresses).toEqual(["reply@test.com"])
+		expect(body.Content.Simple.Subject).toEqual({ Data: "Hi" })
+		expect(body.Content.Simple.Body).toEqual({ Html: { Data: "<p>x</p>" }, Text: { Data: "x" } })
+		expect(body.Content.Simple.Headers).toEqual([{ Name: "X-Custom", Value: "1" }])
+		expect(body.Content.Simple.Attachments).toEqual([
+			{
+				RawContent: b64("filedata"),
+				FileName: "doc.pdf",
+				ContentType: "application/pdf",
+				ContentDisposition: "ATTACHMENT",
+			},
+		])
+		expect(result).toEqual({ MessageId: "ses-1" })
+	})
+
+	it("detects errors and reads the error type header", async () => {
+		fetch.mockResolvedValue(
+			respond({
+				ok: false,
+				status: 400,
+				json: { message: "Email address is not verified." },
+				headers: { "x-amzn-errortype": "MessageRejected:" },
+			})
+		)
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("ses")
+		expect(error.message).toBe("Email address is not verified.")
+		expect(error.code).toBe("MessageRejected")
+	})
+})
+
 describe("resilience (shared base)", () => {
 	const make = (opts = {}) =>
 		new Resend({ api_key: "k", default: { from: "from@test.com" }, retry_delay: 0, ...opts })
@@ -664,5 +732,52 @@ describe("resilience (shared base)", () => {
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
 		await make().send({ to: "to@test.com", body: "x", idempotency_key: "abc" })
 		expect(sent_init().headers).toMatchObject({ "Idempotency-Key": "abc" })
+	})
+
+	it("forwards scheduled_at as an ISO string", async () => {
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+		const when = new Date("2030-01-01T00:00:00.000Z")
+		await make().send({ to: "to@test.com", body: "x", scheduled_at: when })
+		expect(sent_json().scheduled_at).toBe(when.toISOString())
+	})
+
+	it("rejects an invalid scheduled_at", async () => {
+		const error = await caught(make().send({ to: "to@test.com", body: "x", scheduled_at: "nope" }))
+		expect(error.message).toContain("Invalid scheduled_at")
+	})
+})
+
+describe("scheduled_at provider formats", () => {
+	const when = new Date("2030-01-01T00:00:00.000Z")
+
+	it("SendGrid uses a unix-seconds send_at", async () => {
+		fetch.mockResolvedValue(respond({ status: 202 }))
+		await new SendGrid({ api_key: "k", default: { from: "from@test.com" } }).send({
+			to: "to@test.com",
+			body: "x",
+			scheduled_at: when,
+		})
+		expect(sent_json().send_at).toBe(Math.floor(when.getTime() / 1000))
+	})
+
+	it("Brevo uses an ISO scheduledAt", async () => {
+		fetch.mockResolvedValue(respond({ json: { messageId: "1" } }))
+		await new Brevo({ api_key: "k", default: { from: "from@test.com" } }).send({
+			to: "to@test.com",
+			body: "x",
+			scheduled_at: when,
+		})
+		expect(sent_json().scheduledAt).toBe(when.toISOString())
+	})
+
+	it("Mailgun uses an RFC 2822 o:deliverytime", async () => {
+		fetch.mockResolvedValue(respond({ json: { id: "1", message: "ok" } }))
+		await new Mailgun({
+			api_key: "k",
+			domain: "mg.test.com",
+			default: { from: "from@test.com" },
+		}).send({ to: "to@test.com", body: "x", scheduled_at: when })
+		const form = sent_init().body as FormData
+		expect(form.get("o:deliverytime")).toBe(when.toUTCString())
 	})
 })

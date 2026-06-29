@@ -26,6 +26,7 @@ export interface SendParams {
 	headers?: Record<string, string>
 	tags?: Array<string>
 	attachment?: Array<Attachment>
+	scheduledAt?: string
 }
 
 type SendResponse = { messageId: string }
@@ -69,6 +70,7 @@ export default class Brevo extends ProviderBase<SendResponse> {
 						name: a.name,
 					}))
 				: undefined,
+			scheduledAt: message.scheduled_at?.toISOString(),
 		}
 
 		return {

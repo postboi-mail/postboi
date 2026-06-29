@@ -32,6 +32,7 @@ export interface SendParams {
 	headers?: Record<string, string>
 	categories?: Array<string>
 	attachments?: Array<Attachment>
+	send_at?: number
 }
 
 type SendResponse = { message_id?: string }
@@ -85,6 +86,7 @@ export default class SendGrid extends ProviderBase<SendResponse> {
 						disposition: "attachment" as const,
 					}))
 				: undefined,
+			send_at: message.scheduled_at ? Math.floor(message.scheduled_at.getTime() / 1000) : undefined,
 		}
 
 		return {

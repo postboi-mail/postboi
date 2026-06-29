@@ -1,6 +1,6 @@
 {
   "name": "postboi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && npm run prepack",
@@ -91,6 +91,10 @@
     "./scaleway": {
       "types": "./dist/scaleway.d.ts",
       "default": "./dist/scaleway.js"
+    },
+    "./ses": {
+      "types": "./dist/ses.d.ts",
+      "default": "./dist/ses.js"
     },
     "./mock": {
       "types": "./dist/mock.d.ts",
