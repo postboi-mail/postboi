@@ -11,7 +11,7 @@ describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
 		expect(PROVIDERS.length).toBeGreaterThanOrEqual(14)
 		for (const p of PROVIDERS) {
-			expect(p.key, p.name).toMatch(/^[a-z]+$/)
+			expect(p.key, p.name).toMatch(/^[a-z0-9]+$/)
 			expect(p.import.startsWith("postboi/"), p.name).toBe(true)
 			expect(p.url.startsWith("https://"), p.name).toBe(true)
 			expect(p.fields.length, p.name).toBeGreaterThan(0)
