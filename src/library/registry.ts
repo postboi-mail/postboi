@@ -163,6 +163,18 @@ export const PROVIDERS = [
 		],
 	},
 	{
+		key: "microsoft365",
+		name: "Microsoft 365 (Graph)",
+		import: "postboi/microsoft365",
+		class: "Microsoft365",
+		url: "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
+		fields: [
+			{ env: "MS365_TENANT_ID", arg: "tenant_id", label: "Tenant ID" },
+			{ env: "MS365_CLIENT_ID", arg: "client_id", label: "Client ID" },
+			{ env: "MS365_CLIENT_SECRET", arg: "client_secret", label: "Client secret", secret: true },
+		],
+	},
+	{
 		key: "zepto",
 		name: "ZeptoMail",
 		import: "postboi/zepto",

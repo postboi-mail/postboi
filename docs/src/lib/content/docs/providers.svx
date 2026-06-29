@@ -19,6 +19,7 @@ calling code.
 | MailPace       | `postboi/mailpace`   | `api_key`                            |
 | Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
 | Mandrill       | `postboi/mandrill`   | `api_key`                            |
+| Microsoft 365  | `postboi/microsoft365` | `tenant_id`, `client_id`, `client_secret` |
 | Plunk          | `postboi/plunk`      | `api_key`                            |
 | Postmark       | `postboi/postmark`   | `api_key`, `message_stream?`         |
 | Resend         | `postboi/resend`     | `api_key`                            |

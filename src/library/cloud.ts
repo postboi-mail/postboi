@@ -251,6 +251,8 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 	mailpace: () => import("./mailpace.js").then((m) => m.default as unknown as ProviderConstructor),
 	scaleway: () => import("./scaleway.js").then((m) => m.default as unknown as ProviderConstructor),
 	ses: () => import("./ses.js").then((m) => m.default as unknown as ProviderConstructor),
+	microsoft365: () =>
+		import("./microsoft365.js").then((m) => m.default as unknown as ProviderConstructor),
 	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
 }
 

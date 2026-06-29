@@ -96,6 +96,10 @@
       "types": "./dist/ses.d.ts",
       "default": "./dist/ses.js"
     },
+    "./microsoft365": {
+      "types": "./dist/microsoft365.d.ts",
+      "default": "./dist/microsoft365.js"
+    },
     "./mock": {
       "types": "./dist/mock.d.ts",
       "default": "./dist/mock.js"

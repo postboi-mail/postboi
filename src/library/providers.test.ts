@@ -15,6 +15,7 @@ import Mailtrap from "$library/mailtrap.js"
 import MailPace from "$library/mailpace.js"
 import Scaleway from "$library/scaleway.js"
 import SES from "$library/ses.js"
+import Microsoft365 from "$library/microsoft365.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -684,6 +685,102 @@ describe("SES", () => {
 		expect(error.provider).toBe("ses")
 		expect(error.message).toBe("Email address is not verified.")
 		expect(error.code).toBe("MessageRejected")
+	})
+})
+
+describe("Microsoft 365", () => {
+	const mail = () =>
+		new Microsoft365({
+			tenant_id: "tenant",
+			client_id: "client",
+			client_secret: "secret",
+			default: { from: "from@test.com" },
+		})
+
+	/** Mock the token response, then the sendMail 202. */
+	const mock_token_then_send = () => {
+		fetch
+			.mockResolvedValueOnce(respond({ json: { access_token: "tok", expires_in: 3600 } }))
+			.mockResolvedValueOnce(respond({ status: 202 }))
+	}
+
+	it("fetches a token then posts the Graph message", async () => {
+		mock_token_then_send()
+		const result = await mail().send({
+			to: { address: "to@test.com", name: "To" },
+			cc: "cc@test.com",
+			bcc: "bcc@test.com",
+			reply_to: "reply@test.com",
+			subject: "Hi",
+			body: "<p>x</p>",
+			headers: { "X-Custom": "1" },
+			attachments: attachment(),
+		})
+
+		// First call is the OAuth token request.
+		const token_call = fetch.mock.calls[0]
+		expect(token_call[0]).toBe("https://login.microsoftonline.com/tenant/oauth2/v2.0/token")
+		expect((token_call[1]!.body as URLSearchParams).get("grant_type")).toBe("client_credentials")
+
+		// Second call is the sendMail, scoped to the from-address mailbox.
+		expect(sent_url()).toBe("https://graph.microsoft.com/v1.0/users/from%40test.com/sendMail")
+		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer tok" })
+		const body = sent_json()
+		expect(body.saveToSentItems).toBe(false)
+		expect(body.message.subject).toBe("Hi")
+		expect(body.message.body).toEqual({ contentType: "HTML", content: "<p>x</p>" })
+		expect(body.message.toRecipients).toEqual([
+			{ emailAddress: { address: "to@test.com", name: "To" } },
+		])
+		expect(body.message.ccRecipients).toEqual([{ emailAddress: { address: "cc@test.com" } }])
+		expect(body.message.bccRecipients).toEqual([{ emailAddress: { address: "bcc@test.com" } }])
+		expect(body.message.replyTo).toEqual([{ emailAddress: { address: "reply@test.com" } }])
+		expect(body.message.internetMessageHeaders).toEqual([{ name: "X-Custom", value: "1" }])
+		expect(body.message.attachments).toEqual([
+			{
+				"@odata.type": "#microsoft.graph.fileAttachment",
+				name: "doc.pdf",
+				contentType: "application/pdf",
+				contentBytes: b64("filedata"),
+			},
+		])
+		expect(result).toEqual({ accepted: true })
+	})
+
+	it("caches the token across sends", async () => {
+		mock_token_then_send()
+		fetch.mockResolvedValueOnce(respond({ status: 202 }))
+		const m = mail()
+		await m.send({ to: "to@test.com", body: "x" })
+		await m.send({ to: "to@test.com", body: "y" })
+		// 1 token + 2 sends — the second send reuses the cached token.
+		expect(fetch).toHaveBeenCalledTimes(3)
+	})
+
+	it("surfaces a token request failure", async () => {
+		fetch.mockResolvedValueOnce(
+			respond({ ok: false, status: 401, json: { error: "invalid_client", error_description: "bad secret" } })
+		)
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("microsoft365")
+		expect(error.message).toBe("bad secret")
+		expect(error.code).toBe("invalid_client")
+	})
+
+	it("detects a Graph send error", async () => {
+		fetch
+			.mockResolvedValueOnce(respond({ json: { access_token: "tok", expires_in: 3600 } }))
+			.mockResolvedValueOnce(
+				respond({
+					ok: false,
+					status: 400,
+					json: { error: { code: "ErrorInvalidRecipients", message: "bad recipient" } },
+				})
+			)
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("microsoft365")
+		expect(error.message).toBe("bad recipient")
+		expect(error.code).toBe("ErrorInvalidRecipients")
 	})
 })
 
