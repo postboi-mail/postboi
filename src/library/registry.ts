@@ -175,6 +175,25 @@ export const PROVIDERS = [
 		],
 	},
 	{
+		key: "smtp",
+		name: "SMTP (any server)",
+		import: "postboi/smtp",
+		class: "SMTP",
+		url: "https://postboi.uilo.co/providers",
+		fields: [
+			{ env: "SMTP_HOST", arg: "host", label: "Host (e.g. smtp.example.com)" },
+			{ env: "SMTP_PORT", arg: "port", label: "Port", default: "587" },
+			{ env: "SMTP_USER", arg: "user", label: "Username", default: "" },
+			{ env: "SMTP_PASS", arg: "pass", label: "Password", secret: true, default: "" },
+			{
+				env: "SMTP_SECURE",
+				arg: "secure",
+				label: "Implicit TLS (auto/true/false)",
+				default: "auto",
+			},
+		],
+	},
+	{
 		key: "zepto",
 		name: "ZeptoMail",
 		import: "postboi/zepto",

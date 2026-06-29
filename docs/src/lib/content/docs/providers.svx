@@ -25,6 +25,7 @@ calling code.
 | Resend         | `postboi/resend`     | `api_key`                            |
 | Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
 | SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
+| SMTP (any)     | `postboi/smtp`       | `host`, `port?`, `user?`, `pass?`, `secure?` |
 | SparkPost      | `postboi/sparkpost`  | `api_key`, `region?`                 |
 | ZeptoMail      | `postboi/zepto`      | `api_key`                            |
 | Mock (testing) | `postboi/mock`       | _none_                               |

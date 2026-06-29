@@ -253,6 +253,7 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 	ses: () => import("./ses.js").then((m) => m.default as unknown as ProviderConstructor),
 	microsoft365: () =>
 		import("./microsoft365.js").then((m) => m.default as unknown as ProviderConstructor),
+	smtp: () => import("./smtp.js").then((m) => m.default as unknown as ProviderConstructor),
 	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
 }
 
