@@ -11,21 +11,21 @@ calling code.
 
 | Provider       | Import               | Constructor options                  |
 | -------------- | -------------------- | ------------------------------------ |
-| ZeptoMail      | `postboi/zepto`      | `api_key`                            |
-| Resend         | `postboi/resend`     | `api_key`                            |
-| Postmark       | `postboi/postmark`   | `api_key`, `message_stream?`         |
-| SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
-| Mailgun        | `postboi/mailgun`    | `api_key`, `domain`, `region?`       |
+| Amazon SES     | `postboi/ses`        | `access_key_id`, `secret_access_key`, `region`, `session_token?` |
 | Brevo          | `postboi/brevo`      | `api_key`                            |
 | Cloudflare     | `postboi/cloudflare` | `api_key`, `account_id`              |
 | MailerSend     | `postboi/mailersend` | `api_key`                            |
-| SparkPost      | `postboi/sparkpost`  | `api_key`, `region?`                 |
+| Mailgun        | `postboi/mailgun`    | `api_key`, `domain`, `region?`       |
+| MailPace       | `postboi/mailpace`   | `api_key`                            |
+| Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
 | Mandrill       | `postboi/mandrill`   | `api_key`                            |
 | Plunk          | `postboi/plunk`      | `api_key`                            |
-| Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
-| MailPace       | `postboi/mailpace`   | `api_key`                            |
+| Postmark       | `postboi/postmark`   | `api_key`, `message_stream?`         |
+| Resend         | `postboi/resend`     | `api_key`                            |
 | Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
-| Amazon SES     | `postboi/ses`        | `access_key_id`, `secret_access_key`, `region`, `session_token?` |
+| SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
+| SparkPost      | `postboi/sparkpost`  | `api_key`, `region?`                 |
+| ZeptoMail      | `postboi/zepto`      | `api_key`                            |
 | Mock (testing) | `postboi/mock`       | _none_                               |
 
 Want another provider? Quit being a baby and [open a PR](https://github.com/darbymanning/postboi).
