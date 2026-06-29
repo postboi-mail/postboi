@@ -759,7 +759,11 @@ describe("Microsoft 365", () => {
 
 	it("surfaces a token request failure", async () => {
 		fetch.mockResolvedValueOnce(
-			respond({ ok: false, status: 401, json: { error: "invalid_client", error_description: "bad secret" } })
+			respond({
+				ok: false,
+				status: 401,
+				json: { error: "invalid_client", error_description: "bad secret" },
+			})
 		)
 		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
 		expect(error.provider).toBe("microsoft365")

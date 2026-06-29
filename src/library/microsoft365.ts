@@ -120,7 +120,11 @@ export default class Microsoft365 extends ProviderBase<SendResponse> {
 	}
 
 	#recipient(address: MailAddress): Recipient {
-		return { emailAddress: address.name ? { address: address.address, name: address.name } : { address: address.address } }
+		return {
+			emailAddress: address.name
+				? { address: address.address, name: address.name }
+				: { address: address.address },
+		}
 	}
 
 	#recipients(addresses: PreparedMessage["to"]): Array<Recipient> {
