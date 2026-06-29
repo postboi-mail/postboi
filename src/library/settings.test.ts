@@ -57,7 +57,10 @@ describe("global settings", () => {
 		const instance_hook = vi.fn()
 		configure({ hooks: { before: { send: global_hook }, after: { send: instance_hook } } })
 
-		const mail = new Mock({ default: { from: "f@test.com" }, hooks: { after: { send: instance_hook } } })
+		const mail = new Mock({
+			default: { from: "f@test.com" },
+			hooks: { after: { send: instance_hook } },
+		})
 		await mail.send({ to: "to@test.com", body: "hi" })
 
 		expect(global_hook).toHaveBeenCalledOnce() // kept from global

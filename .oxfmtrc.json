@@ -7,5 +7,5 @@
 	"printWidth": 100,
 	"semi": false,
 	"sortPackageJson": false,
-	"ignorePatterns": ["src/components/ui/**", "static/**", "package.json"]
+	"ignorePatterns": ["src/components/ui/**", "static/**", "package.json", "docs/**"]
 }
