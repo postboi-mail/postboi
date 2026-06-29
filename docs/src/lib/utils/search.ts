@@ -84,7 +84,8 @@ function parseContentIndex() {
 
 		const relativePath = contentPath.replace(new RegExp(`^/${section.id}`), "")
 		const cleanPath = relativePath.replace(/^\/+/, "")
-		const slug = cleanPath ? `/${section.id}/${cleanPath}` : `/${section.id}`
+		// Section mounts at root (see basePathFor in sections.ts), so URLs carry no /section prefix.
+		const slug = cleanPath ? `/${cleanPath}` : "/"
 
 		const title = meta.name ?? meta.title ?? (cleanPath || section.label)
 		const description = meta.description ?? ""
