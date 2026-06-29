@@ -16,6 +16,7 @@ import {
 	yellow,
 	red,
 } from "./prompts.js"
+import { banner } from "./banner.js"
 
 const SETTINGS_FILES = [
 	"postboi.settings.ts",
@@ -47,7 +48,7 @@ function version(): string {
 
 function help(): void {
 	console.log(`
-${bold("postboi")} ${dim(`v${version()}`)} — email for the rest of us
+${banner()} ${dim(`v${version()}`)}
 
 ${bold("Usage")}
   ${cyan("bunx postboi init")}     Configure a provider and write its env vars
@@ -82,7 +83,7 @@ function run_push(spec: ReturnType<typeof push_spec>): { ok: boolean; reason?: s
 
 async function init(): Promise<void> {
 	const prompts = create_prompts()
-	console.log(`\n${bold(cyan("◆ postboi init"))} ${dim("— let's get you sending")}\n`)
+	console.log(`\n${banner()}\n\n${dim("Let's get you sending.")}\n`)
 
 	const files = readdirSync(cwd())
 

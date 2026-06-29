@@ -5,6 +5,7 @@ import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./en
 import { detect_hosts, push_spec, manual_hint } from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
 import { create_prompts, PromptCancelledError } from "./prompts.js"
+import { banner } from "./banner.js"
 
 describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
@@ -166,6 +167,19 @@ describe("project detection", () => {
 		expect(install_command("bun", "postboi")).toEqual({ cmd: "bun", args: ["add", "postboi"] })
 		expect(install_command("pnpm", "postboi")).toEqual({ cmd: "pnpm", args: ["add", "postboi"] })
 		expect(install_command("npm", "postboi")).toEqual({ cmd: "npm", args: ["install", "postboi"] })
+	})
+})
+
+describe("banner", () => {
+	it("renders the mascot and wordmark", () => {
+		const out = banner()
+		expect(out).toContain("postboi") // wordmark
+		expect(out).toContain("( O )") // the kid's nose
+		expect(out).toContain("<3") // parcel heart
+	})
+
+	it("degrades to plain text when stdout isn't a TTY", () => {
+		expect(banner().includes("\x1b")).toBe(false) // no ANSI escape character
 	})
 })
 
