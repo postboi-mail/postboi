@@ -12,7 +12,7 @@
 
 Postboi is a framework-agnostic email library optimised for SvelteKit. Works with a variety of email providers and turns your FormData into tidy HTML emails, with **zero configuration**.
 
-📖 **Full documentation: [postboi.uiloco.workers.dev](https://postboi.uiloco.workers.dev)**
+📖 **Full documentation: [postboi.uilo.co](https://postboi.uilo.co)**
 
 ### Features
 
@@ -48,17 +48,17 @@ import { send } from "postboi/kit"
 export const actions = { default: send }
 ```
 
-| Topic                                      | Docs                                                                                       |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| Quick start — the CLI (`postboi init`)     | [postboi.uiloco.workers.dev/quick-start](https://postboi.uiloco.workers.dev/quick-start)   |
-| Manual setup (no CLI)                      | [postboi.uiloco.workers.dev/manual-setup](https://postboi.uiloco.workers.dev/manual-setup) |
-| SvelteKit form actions                     | [postboi.uiloco.workers.dev/sveltekit](https://postboi.uiloco.workers.dev/sveltekit)       |
-| FormData → HTML tables                     | [postboi.uiloco.workers.dev/formdata](https://postboi.uiloco.workers.dev/formdata)         |
-| All providers & their options              | [postboi.uiloco.workers.dev/providers](https://postboi.uiloco.workers.dev/providers)       |
-| Hooks, global settings, retries, bulk send | [postboi.uiloco.workers.dev/settings](https://postboi.uiloco.workers.dev/settings)         |
-| API reference                              | [postboi.uiloco.workers.dev/api](https://postboi.uiloco.workers.dev/api)                   |
+| Topic                                      | Docs                                                                 |
+| ------------------------------------------ | -------------------------------------------------------------------- |
+| Quick start — the CLI (`postboi init`)     | [postboi.uilo.co/quick-start](https://postboi.uilo.co/quick-start)   |
+| Manual setup (no CLI)                      | [postboi.uilo.co/manual-setup](https://postboi.uilo.co/manual-setup) |
+| SvelteKit form actions                     | [postboi.uilo.co/sveltekit](https://postboi.uilo.co/sveltekit)       |
+| FormData → HTML tables                     | [postboi.uilo.co/formdata](https://postboi.uilo.co/formdata)         |
+| All providers & their options              | [postboi.uilo.co/providers](https://postboi.uilo.co/providers)       |
+| Hooks, global settings, retries, bulk send | [postboi.uilo.co/settings](https://postboi.uilo.co/settings)         |
+| API reference                              | [postboi.uilo.co/api](https://postboi.uilo.co/api)                   |
 
-> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider directly — see [Providers](https://postboi.uiloco.workers.dev/providers#using-a-provider-directly).
+> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider directly — see [Providers](https://postboi.uilo.co/providers#using-a-provider-directly).
 
 ## Development
 

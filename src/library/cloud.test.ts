@@ -31,7 +31,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		const mail = new Postboi({ default: { from: "from@test.com" } })
 		const result = await mail.send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
 
-		expect(sent_url()).toBe("https://api.postboi.uiloco.workers.dev/v1/send")
+		expect(sent_url()).toBe("https://api.postboi.uilo.co/v1/send")
 		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer pb_live_123" })
 		const body = sent_json()
 		expect(body.from).toEqual({ email: "from@test.com" })
@@ -65,13 +65,13 @@ describe("Postboi Cloud (zero-config)", () => {
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
 		await new Postboi({
 			token: "t",
-			base_url: "https://staging.postboi.uiloco.workers.dev/",
+			base_url: "https://staging.postboi.uilo.co/",
 			default: { from: "f@test.com" },
 		}).send({
 			to: "to@test.com",
 			body: "x",
 		})
-		expect(sent_url()).toBe("https://staging.postboi.uiloco.workers.dev/v1/send")
+		expect(sent_url()).toBe("https://staging.postboi.uilo.co/v1/send")
 
 		vi.stubEnv("POSTBOI_API_URL", "http://localhost:8787")
 		await new Postboi({ token: "t", default: { from: "f@test.com" } }).send({
