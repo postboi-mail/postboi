@@ -1,0 +1,37 @@
+---
+title: Quick start
+name: Quick start
+description: postboi init picks a provider, collects credentials, writes your env vars, and installs Postboi.
+category: Getting started
+---
+
+One command, fully set up. The CLI picks a provider, asks for credentials, optionally sets
+defaults, writes your env vars, and installs `postboi` if it isn't already there.
+
+```bash
+bunx postboi init
+```
+
+## What it does
+
+- Prompts you to choose one of the [supported providers](/providers).
+- Collects that provider's credentials (e.g. an API key, plus a domain for Mailgun).
+- Optionally sets `POSTBOI_FROM` / `POSTBOI_TO` and other defaults applied to every send.
+- Writes `POSTBOI_PROVIDER`, the credentials, and any defaults to your env file.
+- Installs `postboi` if it isn't installed yet.
+- Optionally scaffolds a [`postboi.settings.ts`](/settings) for shared hooks and
+  behaviour.
+
+After it finishes, `send()` reads those env vars on every call — no further wiring needed.
+
+```typescript
+import { send } from 'postboi';
+
+await send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
+```
+
+## Prefer to do it yourself?
+
+Skip the CLI and set `POSTBOI_PROVIDER` plus the provider credential env vars by hand, or
+construct a provider instance directly. See [Manual setup](/manual-setup) and
+[Providers](/providers).

@@ -1,0 +1,49 @@
+---
+title: Global settings
+name: Global settings
+description: Set hooks, defaults, and behaviour once with postboi.settings.ts — applied to every send.
+category: Guides
+---
+
+Set hooks, defaults, and behaviour once and have them apply to every send. Drop a
+**`postboi.settings.ts`** at your project root (`bunx postboi init` offers to scaffold one).
+It's the only place [hooks](/hooks) can live, since they're functions.
+
+```typescript
+// postboi.settings.ts
+import { config } from 'postboi';
+
+export default config({
+	default: { from: 'no-reply@example.com' },
+	retries: 2,
+	hooks: {
+		on: {
+			error: ({ error }) => Sentry.captureException(error)
+		}
+	}
+});
+```
+
+It auto-loads on the first `send()`.
+
+## Precedence
+
+Lowest to highest — later sources win:
+
+1. `postboi.settings.ts`
+2. `POSTBOI_*` environment variables
+3. options passed explicitly to `send()`
+
+## Edge runtimes
+
+Edge runtimes (Cloudflare Workers, etc.) have no filesystem, so the settings file can't be
+auto-loaded. Register settings at startup instead with `configure({ ... })`.
+
+```typescript
+import { configure } from 'postboi';
+
+configure({
+	default: { from: 'no-reply@example.com' },
+	retries: 2
+});
+```

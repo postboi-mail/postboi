@@ -1,0 +1,35 @@
+---
+title: Bulk sending
+name: Bulk sending
+description: Pass an array to send() for bounded-concurrency bulk sends that never throw.
+category: Guides
+---
+
+Pass an array to `send()` and each message becomes its own request, sent with bounded
+concurrency. The call **never throws** — you get one result per message.
+
+```typescript
+const results = await send([
+	{ to: 'a@example.com', body: '…' },
+	{ to: 'b@example.com', body: '…' }
+]);
+```
+
+## Concurrency and results
+
+On a provider instance you can tune concurrency (default `5`). Each result tells you whether
+that message succeeded:
+
+```typescript
+const results = await mail.send(messages, { concurrency: 10 });
+
+const failed = results.filter((r) => !r.ok);
+for (const r of failed) console.error(r.index, r.error.message);
+```
+
+Because the call never throws, you handle failures by inspecting `results` rather than with
+`try`/`catch`. Each failed result carries the same normalised
+[`PostboiError`](/errors) on `.error`.
+
+[Hooks](/hooks) run once per message, so `before.send`, `after.send`, and `on.error`
+fire for each item in the array.

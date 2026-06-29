@@ -1,0 +1,72 @@
+---
+title: Manual setup
+name: Manual setup
+description: Skip the CLI and wire Postboi up by hand — install, set a provider, and send.
+category: Getting started
+---
+
+<script lang="ts">
+	import { InstallationTabs, Step, Steps } from '$lib';
+</script>
+
+The [Quick start](/quick-start) CLI does all of this for you. Prefer to wire it up by
+hand? It's three steps.
+
+<Steps>
+	<Step title="Install Postboi">
+		<InstallationTabs pkg="postboi" />
+	</Step>
+
+	<Step title="Set your provider and credentials">
+		Point Postboi at a provider and give it the credentials it needs. Each provider reads
+		its own env vars — see [Providers](/providers) for the full list.
+
+```bash
+# .env
+POSTBOI_PROVIDER=resend
+RESEND_API_KEY=re_xxxxxxxx
+POSTBOI_FROM=no-reply@example.com
+```
+
+	</Step>
+
+	<Step title="Send">
+		No provider import, no constructor — credentials come from the environment.
+
+```typescript
+import { send } from 'postboi';
+
+await send({
+	to: 'contact@example.com',
+	subject: 'Hi',
+	body: '<p>Hello</p>'
+});
+```
+
+	</Step>
+</Steps>
+
+## Environment variables
+
+`init` writes `POSTBOI_PROVIDER`, the provider's credential env vars, and optional
+`POSTBOI_*` defaults. `send()` reads them on every call.
+
+| Variable                                                                          | For                                                            |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `POSTBOI_PROVIDER`                                                                | which provider to use (`resend`, `mailgun`, `postmark`, …)     |
+| _provider creds_                                                                  | e.g. `RESEND_API_KEY`, or `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` |
+| `POSTBOI_FROM` / `POSTBOI_TO` / `POSTBOI_CC` / `POSTBOI_BCC` / `POSTBOI_REPLY_TO` | optional defaults applied to every send                        |
+
+## On SvelteKit
+
+A contact-form action is a one-liner. See [SvelteKit form actions](/sveltekit).
+
+```typescript
+// +page.server.ts
+import { send } from 'postboi/kit';
+
+export const actions = { default: send };
+```
+
+> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider
+> directly — see [Using a provider directly](/providers#using-a-provider-directly).

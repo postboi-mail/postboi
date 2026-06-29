@@ -1,0 +1,78 @@
+---
+title: Providers
+name: Providers
+description: Every supported email provider, its import path, and constructor options.
+category: Guides
+---
+
+Each provider is its own entry point, so you only bundle the one you import. Every provider
+exposes the same `send()` and `is_error()` methods — swap providers without changing your
+calling code.
+
+| Provider       | Import               | Constructor options                  |
+| -------------- | -------------------- | ------------------------------------ |
+| ZeptoMail      | `postboi/zepto`      | `api_key`                            |
+| Resend         | `postboi/resend`     | `api_key`                            |
+| Postmark       | `postboi/postmark`   | `api_key`, `message_stream?`         |
+| SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
+| Mailgun        | `postboi/mailgun`    | `api_key`, `domain`, `region?`       |
+| Brevo          | `postboi/brevo`      | `api_key`                            |
+| Cloudflare     | `postboi/cloudflare` | `api_key`, `account_id`              |
+| MailerSend     | `postboi/mailersend` | `api_key`                            |
+| SparkPost      | `postboi/sparkpost`  | `api_key`, `region?`                 |
+| Mandrill       | `postboi/mandrill`   | `api_key`                            |
+| Plunk          | `postboi/plunk`      | `api_key`                            |
+| Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
+| MailPace       | `postboi/mailpace`   | `api_key`                            |
+| Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
+| Mock (testing) | `postboi/mock`       | _none_                               |
+
+Want another provider? Quit being a baby and [open a PR](https://github.com/darbymanning/postboi).
+
+## Using a provider directly
+
+Useful when you want an explicit instance, or you're on a runtime without ambient env vars
+(e.g. Cloudflare Workers):
+
+```typescript
+import Resend from 'postboi/resend';
+
+const mail = new Resend({
+	api_key: process.env.RESEND_API_KEY!,
+	default: { from: 'no-reply@example.com' }
+});
+
+await mail.send({
+	to: 'someone@example.com',
+	subject: 'hello',
+	body: '<p>hello world</p>'
+});
+```
+
+Every provider also accepts `default`, `timeout`, `retries`, `retry_delay`, `auto_text`,
+and `hooks` on top of its own credentials — see
+[Common constructor options](/api#common-constructor-options).
+
+## Mock provider
+
+`postboi/mock` records messages in-memory instead of sending them — same normalisation as a
+real provider. Perfect for tests.
+
+```typescript
+import Mock from 'postboi/mock';
+
+const mail = new Mock({ default: { from: 'no-reply@example.com' } });
+await mail.send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
+
+expect(mail.sent).toHaveLength(1);
+```
+
+## Custom headers & tags
+
+`headers` and `tags` on [`send()`](/api#sendoptions) are forwarded to each provider's
+native concept, and quietly ignored where unsupported:
+
+- **headers** → Resend, Postmark, SendGrid, Mailgun (`h:`), Brevo, SparkPost, Mandrill,
+  Plunk, Mailtrap, Scaleway, Cloudflare.
+- **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill,
+  MailPace, Resend (`{name,value}` pairs). Postmark and Mailtrap use the **first** tag only.
