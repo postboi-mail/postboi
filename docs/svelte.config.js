@@ -4,24 +4,21 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte"
 import { escapeSvelte, mdsvex } from "mdsvex"
 import { createHighlighter } from "shiki"
 import rehypeSlug from "rehype-slug"
-import { type Config } from "@sveltejs/kit"
-import type { Root, Element, Text, ElementContent } from "hast"
-import type { Node } from "unist"
 
 const tableCellFormatter = () => {
-	return (tree: Root): void => {
-		const ancestors: Element[] = []
+	return (tree) => {
+		const ancestors = []
 
-		const visit = (node: Node, parent: Root | Element | null = null, index = 0): void => {
+		const visit = (node, parent = null, index = 0) => {
 			const isElement = node.type === "element"
 			const isRoot = node.type === "root"
 
 			if (isElement) {
-				ancestors.push(node as Element)
+				ancestors.push(node)
 			}
 
 			if (node.type === "text") {
-				const textNode = node as Text
+				const textNode = node
 				if (typeof textNode.value === "string" && textNode.value.includes("\\|")) {
 					const directParent = ancestors[ancestors.length - 1]
 					const grandParent = ancestors[ancestors.length - 2]
@@ -34,7 +31,7 @@ const tableCellFormatter = () => {
 			}
 
 			if (isElement) {
-				const el = node as Element
+				const el = node
 				if (
 					el.tagName === "code" &&
 					Array.isArray(el.children) &&
@@ -59,33 +56,31 @@ const tableCellFormatter = () => {
 					if (!isBlockCode && insideTableCell && raw.includes("|") && parent) {
 						const parentChildren = parent.children
 						if (Array.isArray(parentChildren)) {
-							const segments = raw.split("|").map((segment: string) => segment.trim())
+							const segments = raw.split("|").map((segment) => segment.trim())
 							if (segments.length > 1) {
-								const replacements: ElementContent[] = segments.flatMap(
-									(segment: string, segmentIndex: number) => {
-										const codeNode: Element = {
-											type: "element",
-											tagName: "code",
-											properties: el.properties,
-											children: [
-												{
-													type: "text",
-													value: segment,
-												},
-											],
-										}
-
-										if (segmentIndex === segments.length - 1) {
-											return [codeNode]
-										}
-
-										return [codeNode, { type: "text", value: " " }]
+								const replacements = segments.flatMap((segment, segmentIndex) => {
+									const codeNode = {
+										type: "element",
+										tagName: "code",
+										properties: el.properties,
+										children: [
+											{
+												type: "text",
+												value: segment,
+											},
+										],
 									}
-								)
+
+									if (segmentIndex === segments.length - 1) {
+										return [codeNode]
+									}
+
+									return [codeNode, { type: "text", value: " " }]
+								})
 
 								parentChildren.splice(index, 1, ...replacements)
 								ancestors.pop()
-								replacements.forEach((child: Node, childIndex: number) => {
+								replacements.forEach((child, childIndex) => {
 									visit(child, parent, index + childIndex)
 								})
 								return
@@ -95,9 +90,9 @@ const tableCellFormatter = () => {
 				}
 			}
 
-			const childNodes = isElement || isRoot ? (node as Root | Element).children : []
+			const childNodes = isElement || isRoot ? node.children : []
 			for (let i = 0; i < childNodes.length; i += 1) {
-				visit(childNodes[i], node as Root | Element, i)
+				visit(childNodes[i], node, i)
 			}
 
 			if (isElement) {
@@ -122,7 +117,8 @@ const markdownLayout = fileURLToPath(
 	new URL("./src/lib/components/docs/MarkdownLayout.svelte", import.meta.url)
 )
 
-const config: Config = {
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
 	extensions: [".svelte", ".svx"],
 	// Consult https://svelte.dev/docs/kit/integrations
 	// for more information about preprocessors
@@ -132,11 +128,9 @@ const config: Config = {
 			layout: {
 				_: markdownLayout,
 			},
-			// @ts-expect-error - plugin type is structurally compatible at runtime;
-			// typing it precisely would require changing unified/mdsvex generics.
 			rehypePlugins: [tableCellFormatter, rehypeSlug],
 			highlight: {
-				highlighter: (code: string, lang: string | null = "text") => {
+				highlighter: (code, lang = "text") => {
 					const safeLang = lang ?? "text"
 					const lightHtml = escapeSvelte(
 						highlighter.codeToHtml(code, {
@@ -163,23 +157,6 @@ const config: Config = {
 
 	kit: {
 		adapter: adapter(),
-		typescript: {
-			config: (config: Record<string, string[]>) => {
-				const include = config.include
-
-				if (include.length) {
-					const extraIncludes = ["../svelte.config.ts"]
-
-					for (const extraInclude of extraIncludes) {
-						if (!include.includes(extraInclude)) {
-							include.push(extraInclude)
-						}
-					}
-				}
-
-				return config
-			},
-		},
 	},
 }
 
