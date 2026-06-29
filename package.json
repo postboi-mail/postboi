@@ -16,7 +16,7 @@
     "test": "npm run test:unit -- --run"
   },
   "bin": {
-    "postboi": "./dist/cli.js"
+    "postboi": "dist/cli.js"
   },
   "files": [
     "dist",
