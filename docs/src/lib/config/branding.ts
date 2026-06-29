@@ -1,4 +1,4 @@
-import logo from "$lib/assets/postboi-logo.svg?raw"
+import logo from "$lib/assets/favicon.svg?raw"
 
 /**
  * Global visual identity used by shared UI elements.

@@ -58,8 +58,8 @@
 				document.documentElement.style.colorScheme = isDark ? "dark" : "light"
 
 				const packageManagerStorageKey = "docs-package-manager"
-				const packageManagerDefault = "npm"
-				const enabledPackageManagers = ["npm", "pnpm", "bun", "yarn"]
+				const packageManagerDefault = "bun"
+				const enabledPackageManagers = ["bun", "npm", "pnpm", "yarn"]
 				const storedPackageManager = localStorage.getItem(packageManagerStorageKey)
 				const activePackageManager = enabledPackageManagers.includes(storedPackageManager)
 					? storedPackageManager

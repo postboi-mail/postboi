@@ -40,4 +40,4 @@ export {
 	type ContentSectionId,
 } from "./content/sections"
 
-export { default as brandLogoRaw } from "./assets/postboi-logo.svg?raw"
+export { default as brandLogoRaw } from "./assets/favicon.svg?raw"
