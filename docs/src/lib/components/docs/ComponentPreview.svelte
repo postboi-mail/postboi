@@ -1,32 +1,32 @@
 <script module lang="ts">
-	let componentPreviewCounter = 0;
+	let componentPreviewCounter = 0
 </script>
 
 <script lang="ts">
-	import type { Snippet } from 'svelte';
-	import { SvelteMap } from 'svelte/reactivity';
-	import { cn } from '$lib/utils/cn';
-	import { getHighlighter } from '$lib/utils/highlighter';
-	import ScrollArea from '../ui/ScrollArea.svelte';
-	import ShikiCodeBlock from './ShikiCodeBlock.svelte';
-	import CopyCodeButton from './markdown/CopyCodeButton.svelte';
+	import type { Snippet } from "svelte"
+	import { SvelteMap } from "svelte/reactivity"
+	import { cn } from "$lib/utils/cn"
+	import { getHighlighter } from "$lib/utils/highlighter"
+	import ScrollArea from "../ui/ScrollArea.svelte"
+	import ShikiCodeBlock from "./ShikiCodeBlock.svelte"
+	import CopyCodeButton from "./markdown/CopyCodeButton.svelte"
 
 	type SourceTab = {
-		name: string;
-		code: string;
-		language?: string;
-	};
+		name: string
+		code: string
+		language?: string
+	}
 
 	type ComponentProps = {
-		code?: string;
-		language?: string;
-		label?: string;
-		children?: Snippet;
-		codeSlot?: Snippet;
-		sources?: SourceTab[];
-		class?: string;
-		[key: string]: unknown;
-	};
+		code?: string
+		language?: string
+		label?: string
+		children?: Snippet
+		codeSlot?: Snippet
+		sources?: SourceTab[]
+		class?: string
+		[key: string]: unknown
+	}
 
 	const {
 		children,
@@ -35,187 +35,186 @@
 		language: providedLanguage,
 		label: providedLabel,
 		sources: providedSources,
-		class: className = '',
+		class: className = "",
 		...restProps
-	}: ComponentProps = $props();
-	componentPreviewCounter += 1;
-	const tabsInstanceId = `component-preview-${componentPreviewCounter.toString()}`;
-	const panelId = `${tabsInstanceId}-panel`;
+	}: ComponentProps = $props()
+	componentPreviewCounter += 1
+	const tabsInstanceId = `component-preview-${componentPreviewCounter.toString()}`
+	const panelId = `${tabsInstanceId}-panel`
 
-	let previewKey = $state(0);
+	let previewKey = $state(0)
 
 	const tabs = $derived(
 		(() => {
-			const normalized =
-				providedSources?.filter((tab): tab is SourceTab => Boolean(tab.code)) ?? [];
+			const normalized = providedSources?.filter((tab): tab is SourceTab => Boolean(tab.code)) ?? []
 
 			if (normalized.length > 0) {
-				return normalized;
+				return normalized
 			}
 
 			if (providedCode) {
 				return [
 					{
-						name: providedLabel ?? 'Code',
+						name: providedLabel ?? "Code",
 						code: providedCode,
-						language: providedLanguage
-					}
-				];
+						language: providedLanguage,
+					},
+				]
 			}
 
-			return [];
+			return []
 		})()
-	);
+	)
 
-	let activeTab = $state(0);
-	let tabList = $state<HTMLDivElement | null>(null);
-	let activeIndicatorLeft = $state(0);
-	let activeIndicatorWidth = $state(0);
-	let pendingIndicatorFrame: number | null = null;
+	let activeTab = $state(0)
+	let tabList = $state<HTMLDivElement | null>(null)
+	let activeIndicatorLeft = $state(0)
+	let activeIndicatorWidth = $state(0)
+	let pendingIndicatorFrame: number | null = null
 
-	const tabRefs = new SvelteMap<number, HTMLButtonElement>();
+	const tabRefs = new SvelteMap<number, HTMLButtonElement>()
 
 	const selectedTab = $derived(
 		tabs.length === 0 ? 0 : Math.min(activeTab, Math.max(0, tabs.length - 1))
-	);
-	const activeSource = $derived(tabs.at(selectedTab) ?? null);
-	const activeTabId = $derived(`${tabsInstanceId}-tab-${selectedTab.toString()}`);
+	)
+	const activeSource = $derived(tabs.at(selectedTab) ?? null)
+	const activeTabId = $derived(`${tabsInstanceId}-tab-${selectedTab.toString()}`)
 
 	const highlightedSources = $derived.by(() => {
-		const highlighter = getHighlighter();
-		const highlightedSources: Record<string, { light: string; dark: string }> = {};
+		const highlighter = getHighlighter()
+		const highlightedSources: Record<string, { light: string; dark: string }> = {}
 
 		for (const tab of tabs) {
-			const lang = tab.language ?? 'typescript';
+			const lang = tab.language ?? "typescript"
 			highlightedSources[tab.name] = {
 				light: highlighter.codeToHtml(tab.code, {
 					lang,
-					theme: 'github-light'
+					theme: "github-light",
 				}),
 				dark: highlighter.codeToHtml(tab.code, {
 					lang,
-					theme: 'github-dark'
-				})
-			};
+					theme: "github-dark",
+				}),
+			}
 		}
 
-		return highlightedSources;
-	});
+		return highlightedSources
+	})
 
 	function setActiveTab(index: number) {
-		activeTab = index;
+		activeTab = index
 	}
 
 	function registerTab(node: HTMLElement, index: number) {
-		tabRefs.set(index, node as HTMLButtonElement);
+		tabRefs.set(index, node as HTMLButtonElement)
 
 		return {
 			update(nextIndex: number) {
-				if (nextIndex === index) return;
-				tabRefs.delete(index);
-				index = nextIndex;
-				tabRefs.set(index, node as HTMLButtonElement);
+				if (nextIndex === index) return
+				tabRefs.delete(index)
+				index = nextIndex
+				tabRefs.set(index, node as HTMLButtonElement)
 			},
 			destroy() {
-				tabRefs.delete(index);
-			}
-		};
+				tabRefs.delete(index)
+			},
+		}
 	}
 
 	function updateActiveIndicator() {
-		const activeTabElement = tabRefs.get(selectedTab);
+		const activeTabElement = tabRefs.get(selectedTab)
 
 		if (!tabList || !activeTabElement) {
-			activeIndicatorLeft = 0;
-			activeIndicatorWidth = 0;
-			return;
+			activeIndicatorLeft = 0
+			activeIndicatorWidth = 0
+			return
 		}
 
-		activeIndicatorLeft = activeTabElement.offsetLeft;
-		activeIndicatorWidth = activeTabElement.offsetWidth;
+		activeIndicatorLeft = activeTabElement.offsetLeft
+		activeIndicatorWidth = activeTabElement.offsetWidth
 	}
 
 	function scheduleActiveIndicatorUpdate() {
-		if (typeof window === 'undefined') {
-			updateActiveIndicator();
-			return;
+		if (typeof window === "undefined") {
+			updateActiveIndicator()
+			return
 		}
 
 		if (pendingIndicatorFrame !== null) {
-			window.cancelAnimationFrame(pendingIndicatorFrame);
+			window.cancelAnimationFrame(pendingIndicatorFrame)
 		}
 
 		pendingIndicatorFrame = window.requestAnimationFrame(() => {
-			pendingIndicatorFrame = null;
-			updateActiveIndicator();
-		});
+			pendingIndicatorFrame = null
+			updateActiveIndicator()
+		})
 	}
 
 	function focusTabByIndex(index: number) {
-		const tabElement = document.getElementById(`${tabsInstanceId}-tab-${index.toString()}`);
+		const tabElement = document.getElementById(`${tabsInstanceId}-tab-${index.toString()}`)
 		if (tabElement instanceof HTMLButtonElement) {
-			tabElement.focus();
+			tabElement.focus()
 		}
 	}
 
 	function handleTabKeydown(event: KeyboardEvent, index: number) {
-		if (!tabs.length) return;
-		const lastIndex = tabs.length - 1;
-		let nextIndex: number;
+		if (!tabs.length) return
+		const lastIndex = tabs.length - 1
+		let nextIndex: number
 
 		switch (event.key) {
-			case 'ArrowRight':
-			case 'ArrowDown':
-				event.preventDefault();
-				nextIndex = index === lastIndex ? 0 : index + 1;
-				break;
-			case 'ArrowLeft':
-			case 'ArrowUp':
-				event.preventDefault();
-				nextIndex = index === 0 ? lastIndex : index - 1;
-				break;
-			case 'Home':
-				event.preventDefault();
-				nextIndex = 0;
-				break;
-			case 'End':
-				event.preventDefault();
-				nextIndex = lastIndex;
-				break;
+			case "ArrowRight":
+			case "ArrowDown":
+				event.preventDefault()
+				nextIndex = index === lastIndex ? 0 : index + 1
+				break
+			case "ArrowLeft":
+			case "ArrowUp":
+				event.preventDefault()
+				nextIndex = index === 0 ? lastIndex : index - 1
+				break
+			case "Home":
+				event.preventDefault()
+				nextIndex = 0
+				break
+			case "End":
+				event.preventDefault()
+				nextIndex = lastIndex
+				break
 			default:
-				return;
+				return
 		}
 
-		setActiveTab(nextIndex);
-		focusTabByIndex(nextIndex);
+		setActiveTab(nextIndex)
+		focusTabByIndex(nextIndex)
 	}
 
 	$effect(() => {
-		const currentSelectedTab = selectedTab;
-		const currentTabList = tabList;
-		const currentTabsLength = tabs.length;
-		void currentSelectedTab;
-		void currentTabList;
-		void currentTabsLength;
+		const currentSelectedTab = selectedTab
+		const currentTabList = tabList
+		const currentTabsLength = tabs.length
+		void currentSelectedTab
+		void currentTabList
+		void currentTabsLength
 
-		scheduleActiveIndicatorUpdate();
+		scheduleActiveIndicatorUpdate()
 
-		if (typeof window === 'undefined') return;
+		if (typeof window === "undefined") return
 
-		window.addEventListener('resize', scheduleActiveIndicatorUpdate);
+		window.addEventListener("resize", scheduleActiveIndicatorUpdate)
 
 		return () => {
-			window.removeEventListener('resize', scheduleActiveIndicatorUpdate);
+			window.removeEventListener("resize", scheduleActiveIndicatorUpdate)
 			if (pendingIndicatorFrame !== null) {
-				window.cancelAnimationFrame(pendingIndicatorFrame);
-				pendingIndicatorFrame = null;
+				window.cancelAnimationFrame(pendingIndicatorFrame)
+				pendingIndicatorFrame = null
 			}
-		};
-	});
+		}
+	})
 </script>
 
 <section
-	class={cn('inset-shadow relative w-full rounded-lg bg-background-inset p-1.5')}
+	class={cn("inset-shadow relative w-full rounded-lg bg-background-inset p-1.5")}
 	{...restProps}
 >
 	<div class="flex h-full flex-col rounded-md">
@@ -228,7 +227,7 @@
 				<ScrollArea
 					mode="both"
 					id="component-preview-live"
-					class={cn('w-full flex-1', className)}
+					class={cn("w-full flex-1", className)}
 					viewportClass="min-h-full w-full flex flex-col"
 				>
 					<div class="flex w-full flex-1 flex-col items-center justify-center">
@@ -273,16 +272,16 @@
 								aria-controls={panelId}
 								tabindex={index === selectedTab ? 0 : -1}
 								class={cn(
-									'relative z-20 px-4 py-2.5 text-sm font-medium tracking-normal whitespace-nowrap transition-colors duration-150 ease-out outline-none select-none',
+									"relative z-20 px-4 py-2.5 text-sm font-medium tracking-normal whitespace-nowrap transition-colors duration-150 ease-out outline-none select-none",
 									index === selectedTab
-										? 'text-accent'
-										: 'text-foreground-muted hover:text-foreground'
+										? "text-accent"
+										: "text-foreground-muted hover:text-foreground"
 								)}
 								onclick={() => {
-									setActiveTab(index);
+									setActiveTab(index)
 								}}
 								onkeydown={(event) => {
-									handleTabKeydown(event, index);
+									handleTabKeydown(event, index)
 								}}
 								use:registerTab={index}
 							>

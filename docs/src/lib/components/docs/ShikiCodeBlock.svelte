@@ -1,16 +1,16 @@
 <script lang="ts">
-	import Pre from './markdown/Pre.svelte';
+	import Pre from "./markdown/Pre.svelte"
 
 	type Props = {
-		code: string;
-		htmlLight: string;
-		htmlDark?: string;
-		lang?: string;
-		class?: string;
-		unstyled?: boolean;
-	};
+		code: string
+		htmlLight: string
+		htmlDark?: string
+		lang?: string
+		class?: string
+		unstyled?: boolean
+	}
 
-	let { code, htmlLight, htmlDark, lang, class: className, unstyled = false }: Props = $props();
+	let { code, htmlLight, htmlDark, lang, class: className, unstyled = false }: Props = $props()
 </script>
 
 <Pre {code} class={className} data-language={lang} {unstyled}>

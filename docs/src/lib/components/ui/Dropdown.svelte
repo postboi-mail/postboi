@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-	import ChevronSort from 'carbon-icons-svelte/lib/ChevronSort.svelte';
-	import { resolve } from '$app/paths';
-	import { type Component } from 'svelte';
+	import { cn } from "$lib/utils/cn"
+	import ChevronSort from "carbon-icons-svelte/lib/ChevronSort.svelte"
+	import { resolve } from "$app/paths"
+	import { type Component } from "svelte"
 
 	export type DropdownItem<T = string> = {
-		label: string;
-		value: T;
-		active?: boolean;
-		href?: string;
-		icon?: Component<{ size?: number; class?: string }>;
-		description?: string;
-	};
+		label: string
+		value: T
+		active?: boolean
+		href?: string
+		icon?: Component<{ size?: number; class?: string }>
+		description?: string
+	}
 
 	let {
 		items = [],
@@ -19,147 +19,147 @@
 		class: className,
 		...restProps
 	}: {
-		items?: DropdownItem[];
-		onItemClick?: (value: string) => void;
-		class?: string;
-	} = $props();
+		items?: DropdownItem[]
+		onItemClick?: (value: string) => void
+		class?: string
+	} = $props()
 
-	let isOpen = $state(false);
-	let containerEl = $state<HTMLElement>();
-	let triggerEl = $state<HTMLElement>();
-	let focusedIndex = $state(0);
-	let itemRefEls: (HTMLElement | undefined)[] = $state([]);
-	let clickRatioX = $state(0.5);
+	let isOpen = $state(false)
+	let containerEl = $state<HTMLElement>()
+	let triggerEl = $state<HTMLElement>()
+	let focusedIndex = $state(0)
+	let itemRefEls: (HTMLElement | undefined)[] = $state([])
+	let clickRatioX = $state(0.5)
 
 	function open() {
-		isOpen = true;
-		const activeIdx = items.findIndex((item) => item.active);
-		focusedIndex = activeIdx >= 0 ? activeIdx : 0;
+		isOpen = true
+		const activeIdx = items.findIndex((item) => item.active)
+		focusedIndex = activeIdx >= 0 ? activeIdx : 0
 	}
 
 	function openFromEvent(e: MouseEvent | KeyboardEvent) {
 		if (e instanceof MouseEvent && triggerEl) {
-			const rect = triggerEl.getBoundingClientRect();
-			clickRatioX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+			const rect = triggerEl.getBoundingClientRect()
+			clickRatioX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
 		} else {
-			clickRatioX = 0.5;
+			clickRatioX = 0.5
 		}
-		open();
+		open()
 	}
 
 	function close() {
-		isOpen = false;
-		focusedIndex = 0;
-		triggerEl?.focus();
+		isOpen = false
+		focusedIndex = 0
+		triggerEl?.focus()
 	}
 
 	function toggle(e: MouseEvent) {
 		if (isOpen) {
-			close();
+			close()
 		} else {
-			openFromEvent(e);
+			openFromEvent(e)
 		}
 	}
 
 	function handleTriggerKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
-			e.preventDefault();
-			openFromEvent(e);
+		if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+			e.preventDefault()
+			openFromEvent(e)
 		}
 	}
 
 	function handleItemClick(value: string) {
-		onItemClick?.(value);
-		close();
-		return false;
+		onItemClick?.(value)
+		close()
+		return false
 	}
 
 	function onkeydown(e: KeyboardEvent) {
-		if (!isOpen) return;
+		if (!isOpen) return
 
 		switch (e.key) {
-			case 'Escape':
-				e.preventDefault();
-				close();
-				break;
-			case 'ArrowDown':
-				e.preventDefault();
-				focusedIndex = Math.min(focusedIndex + 1, items.length - 1);
-				itemRefEls[focusedIndex]?.focus();
-				break;
-			case 'ArrowUp':
-				e.preventDefault();
-				focusedIndex = Math.max(focusedIndex - 1, 0);
-				itemRefEls[focusedIndex]?.focus();
-				break;
-			case 'Enter':
-			case ' ': {
-				e.preventDefault();
-				itemRefEls[focusedIndex]?.click();
-				break;
+			case "Escape":
+				e.preventDefault()
+				close()
+				break
+			case "ArrowDown":
+				e.preventDefault()
+				focusedIndex = Math.min(focusedIndex + 1, items.length - 1)
+				itemRefEls[focusedIndex]?.focus()
+				break
+			case "ArrowUp":
+				e.preventDefault()
+				focusedIndex = Math.max(focusedIndex - 1, 0)
+				itemRefEls[focusedIndex]?.focus()
+				break
+			case "Enter":
+			case " ": {
+				e.preventDefault()
+				itemRefEls[focusedIndex]?.click()
+				break
 			}
-			case 'Tab':
-				close();
-				break;
+			case "Tab":
+				close()
+				break
 		}
 	}
 
 	$effect(() => {
-		if (!isOpen) return;
+		if (!isOpen) return
 
 		function handleClickOut(e: MouseEvent) {
 			if (containerEl && !containerEl.contains(e.target as Node) && e.target !== triggerEl) {
-				isOpen = false;
+				isOpen = false
 			}
 		}
 
 		requestAnimationFrame(() => {
-			document.addEventListener('click', handleClickOut);
-		});
+			document.addEventListener("click", handleClickOut)
+		})
 
 		return () => {
-			document.removeEventListener('click', handleClickOut);
-		};
-	});
+			document.removeEventListener("click", handleClickOut)
+		}
+	})
 
 	const activeSection = $derived.by(() => {
-		const active = items.find((item) => item.active);
-		if (active) return active;
-		if (items[0]) return items[0];
-		return undefined;
-	});
+		const active = items.find((item) => item.active)
+		if (active) return active
+		if (items[0]) return items[0]
+		return undefined
+	})
 
 	$effect(() => {
 		if (isOpen) {
 			requestAnimationFrame(() => {
-				itemRefEls[focusedIndex]?.focus();
-			});
+				itemRefEls[focusedIndex]?.focus()
+			})
 		}
-	});
+	})
 
 	function popTransition(_node: Element) {
-		const originX = String(clickRatioX * 100);
+		const originX = String(clickRatioX * 100)
 		return {
 			duration: 100,
 			css: (t: number) => {
-				const s = String(1 - (1 - 0.95) * (1 - t));
+				const s = String(1 - (1 - 0.95) * (1 - t))
 				return (
-					'opacity: ' +
+					"opacity: " +
 					String(t) +
-					'; transform: scale(' +
+					"; transform: scale(" +
 					s +
-					'); transform-origin: ' +
+					"); transform-origin: " +
 					originX +
-					'% top;'
-				);
-			}
-		};
+					"% top;"
+				)
+			},
+		}
 	}
 </script>
 
 <div
 	bind:this={containerEl}
-	class={cn('relative inline-block', className)}
+	class={cn("relative inline-block", className)}
 	{...restProps}
 	{onkeydown}
 >
@@ -190,10 +190,10 @@
 		>
 			{#each items as item, i (item.value)}
 				{@const itemClass = cn(
-					'flex w-full items-start gap-3 rounded-xs px-3 py-1.5 text-left text-sm transition-colors duration-150 ease-out',
+					"flex w-full items-start gap-3 rounded-xs px-3 py-1.5 text-left text-sm transition-colors duration-150 ease-out",
 					item.active
-						? 'bg-accent/10 text-accent'
-						: 'text-foreground-muted hover:bg-background-muted hover:text-foreground'
+						? "bg-accent/10 text-accent"
+						: "text-foreground-muted hover:bg-background-muted hover:text-foreground"
 				)}
 				{#if item.href}
 					<a
@@ -204,7 +204,7 @@
 						aria-selected={item.active}
 						tabindex={focusedIndex === i ? 0 : -1}
 						onclick={() => {
-							handleItemClick(item.value);
+							handleItemClick(item.value)
 						}}
 						class={itemClass}
 					>
@@ -219,7 +219,7 @@
 						aria-selected={item.active}
 						tabindex={focusedIndex === i ? 0 : -1}
 						onclick={() => {
-							handleItemClick(item.value);
+							handleItemClick(item.value)
 						}}
 						class={itemClass}
 					>

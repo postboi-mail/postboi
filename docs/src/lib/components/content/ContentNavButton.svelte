@@ -1,36 +1,30 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
-	import { cn } from '$lib/utils/cn';
+	import { resolve } from "$app/paths"
+	import { cn } from "$lib/utils/cn"
 
 	type ComponentProps = {
-		label: string;
-		title: string;
-		href: string;
-		align?: 'left' | 'right';
-		forceSecondColumn?: boolean;
-	};
+		label: string
+		title: string
+		href: string
+		align?: "left" | "right"
+		forceSecondColumn?: boolean
+	}
 
-	const {
-		label,
-		title,
-		href,
-		align = 'left',
-		forceSecondColumn = false
-	}: ComponentProps = $props();
+	const { label, title, href, align = "left", forceSecondColumn = false }: ComponentProps = $props()
 </script>
 
 <div
 	class={cn(
-		'group inset-shadow rounded-lg bg-background-inset p-1.5',
-		align === 'right' && 'sm:text-right',
-		forceSecondColumn && 'sm:col-start-2'
+		"group inset-shadow rounded-lg bg-background-inset p-1.5",
+		align === "right" && "sm:text-right",
+		forceSecondColumn && "sm:col-start-2"
 	)}
 >
 	<a
 		// @ts-expect-error arg cannot be cast as `resolve`s expected type
 		href={resolve(href)}
 		class={cn(
-			'group relative flex flex-col rounded-md bg-background px-4 py-3 card transition-[background-color] duration-150 ease-out hover:bg-background-muted'
+			"group relative flex flex-col rounded-md bg-background px-4 py-3 card transition-[background-color] duration-150 ease-out hover:bg-background-muted"
 		)}
 	>
 		<span class="text-xs font-normal tracking-wide text-foreground-muted/70 uppercase">

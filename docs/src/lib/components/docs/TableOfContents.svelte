@@ -1,663 +1,663 @@
 <script lang="ts">
-	import { fromAction } from 'svelte/attachments';
-	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { cn } from '$lib/utils/cn';
-	import { page } from '$app/state';
-	import TableOfContents from 'carbon-icons-svelte/lib/TableOfContents.svelte';
-	import type { ContentTocHeading } from '$lib/content/sections';
+	import { fromAction } from "svelte/attachments"
+	import { SvelteMap, SvelteSet } from "svelte/reactivity"
+	import { cn } from "$lib/utils/cn"
+	import { page } from "$app/state"
+	import TableOfContents from "carbon-icons-svelte/lib/TableOfContents.svelte"
+	import type { ContentTocHeading } from "$lib/content/sections"
 
 	type TocItem = ContentTocHeading & {
-		element: HTMLElement;
-	};
+		element: HTMLElement
+	}
 
 	type IndicatorRange = {
-		startId: string;
-		endId: string;
-	};
+		startId: string
+		endId: string
+	}
 
 	type PathPoint = {
-		x: number;
-		y: number;
-	};
+		x: number
+		y: number
+	}
 
 	type Props = {
-		selector?: string;
-		title?: string;
-		emptyLabel?: string;
-		minViewportWidth?: number;
-		scrollContainerId?: string;
-		headings?: ContentTocHeading[];
-	};
+		selector?: string
+		title?: string
+		emptyLabel?: string
+		minViewportWidth?: number
+		scrollContainerId?: string
+		headings?: ContentTocHeading[]
+	}
 
-	const props = $props();
+	const props = $props()
 	const selector = $derived(
-		(props as Props).selector ?? '[data-doc-content] h2, [data-doc-content] h3'
-	);
-	const title = $derived((props as Props).title ?? 'On this page');
-	const emptyLabel = $derived((props as Props).emptyLabel ?? 'No headings');
-	const minViewportWidth = $derived((props as Props).minViewportWidth ?? 1280);
-	const scrollContainerId = $derived((props as Props).scrollContainerId ?? null);
-	const initialHeadings = $derived(normalizeHeadings((props as Props).headings));
+		(props as Props).selector ?? "[data-doc-content] h2, [data-doc-content] h3"
+	)
+	const title = $derived((props as Props).title ?? "On this page")
+	const emptyLabel = $derived((props as Props).emptyLabel ?? "No headings")
+	const minViewportWidth = $derived((props as Props).minViewportWidth ?? 1280)
+	const scrollContainerId = $derived((props as Props).scrollContainerId ?? null)
+	const initialHeadings = $derived(normalizeHeadings((props as Props).headings))
 
-	let headings = $state<ContentTocHeading[]>([]);
-	const renderedHeadings = $derived(headings.length > 0 ? headings : initialHeadings);
-	let activeId = $state('');
-	let indicatorTop = $state(0);
-	let indicatorHeight = $state(0);
-	let indicatorBottom = $state(0);
-	let lineHeight = $state(0);
-	let svgPath = $state('');
-	let svgWidth = $state(40);
-	let indicatorRange = $state<IndicatorRange | null>(null);
-	let pendingIndicatorFrame: number | null = null;
-	let lastPulsedRangeKey = '';
-	let viewportWidth = $state(0);
-	const tocViewportActive = $derived(viewportWidth >= minViewportWidth);
-	let collectFrame: number | null = null;
-	let collectCleanup: (() => void) | undefined;
+	let headings = $state<ContentTocHeading[]>([])
+	const renderedHeadings = $derived(headings.length > 0 ? headings : initialHeadings)
+	let activeId = $state("")
+	let indicatorTop = $state(0)
+	let indicatorHeight = $state(0)
+	let indicatorBottom = $state(0)
+	let lineHeight = $state(0)
+	let svgPath = $state("")
+	let svgWidth = $state(40)
+	let indicatorRange = $state<IndicatorRange | null>(null)
+	let pendingIndicatorFrame: number | null = null
+	let lastPulsedRangeKey = ""
+	let viewportWidth = $state(0)
+	const tocViewportActive = $derived(viewportWidth >= minViewportWidth)
+	let collectFrame: number | null = null
+	let collectCleanup: (() => void) | undefined
 
-	const ACTIVE_OFFSET = 140;
-	const VISIBLE_BUFFER = 24;
-	const CORNER_RADIUS = 2;
-	const linkRefs = new SvelteMap<string, HTMLAnchorElement>();
-	const linkPositions = new SvelteMap<string, { top: number; height: number }>();
-	const headingOrder = new SvelteMap<string, number>();
-	const pulseTimers = new SvelteMap<string, number>();
-	const lastIndicatorIds = new SvelteSet<string>();
-	let pulsingDotIds = $state<string[]>([]);
-	const linksWrapperId = 'toc-links-wrapper';
+	const ACTIVE_OFFSET = 140
+	const VISIBLE_BUFFER = 24
+	const CORNER_RADIUS = 2
+	const linkRefs = new SvelteMap<string, HTMLAnchorElement>()
+	const linkPositions = new SvelteMap<string, { top: number; height: number }>()
+	const headingOrder = new SvelteMap<string, number>()
+	const pulseTimers = new SvelteMap<string, number>()
+	const lastIndicatorIds = new SvelteSet<string>()
+	let pulsingDotIds = $state<string[]>([])
+	const linksWrapperId = "toc-links-wrapper"
 
-	const currentPath = $derived(page.url.pathname);
+	const currentPath = $derived(page.url.pathname)
 
 	function getScrollContainer() {
-		if (typeof document === 'undefined') return window;
-		if (!scrollContainerId) return window;
-		const element = document.getElementById(scrollContainerId);
-		return element ?? window;
+		if (typeof document === "undefined") return window
+		if (!scrollContainerId) return window
+		const element = document.getElementById(scrollContainerId)
+		return element ?? window
 	}
 
 	const slugify = (value: string) =>
 		value
-			.normalize('NFD')
-			.replace(/[\u0300-\u036f]/g, '')
+			.normalize("NFD")
+			.replace(/[\u0300-\u036f]/g, "")
 			.toLowerCase()
 			.trim()
-			.replace(/[^a-z0-9]+/g, '-')
-			.replace(/^-+|-+$/g, '');
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "")
 
 	function normalizeHeadings(value?: ContentTocHeading[]) {
 		return Array.isArray(value)
 			? value.filter(
 					(heading): heading is ContentTocHeading =>
-						typeof heading.id === 'string' &&
+						typeof heading.id === "string" &&
 						heading.id.length > 0 &&
-						typeof heading.text === 'string' &&
+						typeof heading.text === "string" &&
 						heading.text.length > 0 &&
-						typeof heading.level === 'number'
+						typeof heading.level === "number"
 				)
-			: [];
+			: []
 	}
 
 	function syncHeadingOrder(nextHeadings: ContentTocHeading[]) {
-		headingOrder.clear();
+		headingOrder.clear()
 		nextHeadings.forEach(({ id }, index) => {
-			headingOrder.set(id, index);
-		});
+			headingOrder.set(id, index)
+		})
 	}
 
 	function applyHeadings(nextHeadings: ContentTocHeading[]) {
-		headings = nextHeadings;
-		syncHeadingOrder(nextHeadings);
-		activeId = nextHeadings[0]?.id ?? '';
-		lineHeight = 0;
-		indicatorTop = 0;
-		indicatorHeight = 0;
-		indicatorBottom = 0;
-		indicatorRange = null;
-		lastPulsedRangeKey = '';
-		lastIndicatorIds.clear();
+		headings = nextHeadings
+		syncHeadingOrder(nextHeadings)
+		activeId = nextHeadings[0]?.id ?? ""
+		lineHeight = 0
+		indicatorTop = 0
+		indicatorHeight = 0
+		indicatorBottom = 0
+		indicatorRange = null
+		lastPulsedRangeKey = ""
+		lastIndicatorIds.clear()
 	}
 
 	function resetTocState(options: { clearHeadings?: boolean } = {}) {
 		if (options.clearHeadings ?? true) {
-			headings = [];
-			headingOrder.clear();
+			headings = []
+			headingOrder.clear()
 		}
-		activeId = '';
-		lineHeight = 0;
-		indicatorTop = 0;
-		indicatorHeight = 0;
-		indicatorBottom = 0;
-		indicatorRange = null;
-		lastPulsedRangeKey = '';
-		lastIndicatorIds.clear();
-		pulsingDotIds = [];
-		if (typeof window !== 'undefined') {
+		activeId = ""
+		lineHeight = 0
+		indicatorTop = 0
+		indicatorHeight = 0
+		indicatorBottom = 0
+		indicatorRange = null
+		lastPulsedRangeKey = ""
+		lastIndicatorIds.clear()
+		pulsingDotIds = []
+		if (typeof window !== "undefined") {
 			pulseTimers.forEach((timer) => {
-				window.clearTimeout(timer);
-			});
+				window.clearTimeout(timer)
+			})
 		}
-		pulseTimers.clear();
-		if (typeof window !== 'undefined' && pendingIndicatorFrame !== null) {
-			window.cancelAnimationFrame(pendingIndicatorFrame);
-			pendingIndicatorFrame = null;
+		pulseTimers.clear()
+		if (typeof window !== "undefined" && pendingIndicatorFrame !== null) {
+			window.cancelAnimationFrame(pendingIndicatorFrame)
+			pendingIndicatorFrame = null
 		}
 	}
 
 	function syncInitialHeadings() {
-		applyHeadings(initialHeadings);
+		applyHeadings(initialHeadings)
 	}
 
 	function pulseDot(id: string) {
-		if (typeof window === 'undefined' || !id) return;
+		if (typeof window === "undefined" || !id) return
 
-		const existingTimer = pulseTimers.get(id);
+		const existingTimer = pulseTimers.get(id)
 		if (existingTimer) {
-			window.clearTimeout(existingTimer);
+			window.clearTimeout(existingTimer)
 		}
 
-		pulsingDotIds = pulsingDotIds.filter((item) => item !== id);
+		pulsingDotIds = pulsingDotIds.filter((item) => item !== id)
 		window.requestAnimationFrame(() => {
-			pulsingDotIds = [...pulsingDotIds, id];
+			pulsingDotIds = [...pulsingDotIds, id]
 			const timer = window.setTimeout(() => {
-				pulsingDotIds = pulsingDotIds.filter((item) => item !== id);
-				pulseTimers.delete(id);
-			}, 560);
-			pulseTimers.set(id, timer);
-		});
+				pulsingDotIds = pulsingDotIds.filter((item) => item !== id)
+				pulseTimers.delete(id)
+			}, 560)
+			pulseTimers.set(id, timer)
+		})
 	}
 
 	function pulseRange(range: IndicatorRange | null) {
-		if (!range) return;
-		const rangeKey = `${range.startId}:${range.endId}`;
-		if (rangeKey === lastPulsedRangeKey) return;
-		lastPulsedRangeKey = rangeKey;
+		if (!range) return
+		const rangeKey = `${range.startId}:${range.endId}`
+		if (rangeKey === lastPulsedRangeKey) return
+		lastPulsedRangeKey = rangeKey
 
-		const startIndex = headingOrder.get(range.startId);
-		const endIndex = headingOrder.get(range.endId);
-		if (startIndex === undefined || endIndex === undefined) return;
+		const startIndex = headingOrder.get(range.startId)
+		const endIndex = headingOrder.get(range.endId)
+		if (startIndex === undefined || endIndex === undefined) return
 
-		const min = Math.min(startIndex, endIndex);
-		const max = Math.max(startIndex, endIndex);
+		const min = Math.min(startIndex, endIndex)
+		const max = Math.max(startIndex, endIndex)
 
 		const nextIndicatorIds = headings
 			.filter((_heading, index) => index >= min && index <= max)
-			.map((heading) => heading.id);
+			.map((heading) => heading.id)
 
 		nextIndicatorIds.forEach((id) => {
 			if (!lastIndicatorIds.has(id)) {
-				pulseDot(id);
+				pulseDot(id)
 			}
-		});
+		})
 
-		lastIndicatorIds.clear();
+		lastIndicatorIds.clear()
 		nextIndicatorIds.forEach((id) => {
-			lastIndicatorIds.add(id);
-		});
+			lastIndicatorIds.add(id)
+		})
 	}
 
 	function clearCollectionWork() {
-		if (typeof window !== 'undefined' && collectFrame !== null) {
-			window.cancelAnimationFrame(collectFrame);
+		if (typeof window !== "undefined" && collectFrame !== null) {
+			window.cancelAnimationFrame(collectFrame)
 		}
-		collectFrame = null;
+		collectFrame = null
 
-		collectCleanup?.();
-		collectCleanup = undefined;
+		collectCleanup?.()
+		collectCleanup = undefined
 	}
 
 	function registerLink(node: HTMLElement, id?: string) {
-		let currentId = id ?? '';
+		let currentId = id ?? ""
 
 		const assign = () => {
-			if (!currentId) return;
-			linkRefs.set(currentId, node as HTMLAnchorElement);
-		};
+			if (!currentId) return
+			linkRefs.set(currentId, node as HTMLAnchorElement)
+		}
 
-		assign();
+		assign()
 
 		return {
 			update(newId?: string) {
-				if (newId === currentId) return;
+				if (newId === currentId) return
 				if (currentId) {
-					linkRefs.delete(currentId);
-					linkPositions.delete(currentId);
+					linkRefs.delete(currentId)
+					linkPositions.delete(currentId)
 				}
-				currentId = newId ?? '';
-				assign();
+				currentId = newId ?? ""
+				assign()
 			},
 			destroy() {
 				if (currentId) {
-					linkRefs.delete(currentId);
-					linkPositions.delete(currentId);
+					linkRefs.delete(currentId)
+					linkPositions.delete(currentId)
 				}
-			}
-		};
+			},
+		}
 	}
 
 	function buildRoundedPath(points: PathPoint[], radius: number) {
-		if (points.length === 0) return '';
+		if (points.length === 0) return ""
 		if (points.length === 1) {
-			const [point] = points;
-			return `M ${point.x.toString()} ${point.y.toString()}`;
+			const [point] = points
+			return `M ${point.x.toString()} ${point.y.toString()}`
 		}
 
-		const commands: string[] = [`M ${points[0].x.toString()} ${points[0].y.toString()}`];
+		const commands: string[] = [`M ${points[0].x.toString()} ${points[0].y.toString()}`]
 
 		for (let i = 1; i < points.length; i++) {
-			const point = points[i];
-			const prev = points[i - 1];
+			const point = points[i]
+			const prev = points[i - 1]
 
 			if (i === points.length - 1) {
-				commands.push(` L ${point.x.toString()} ${point.y.toString()}`);
-				continue;
+				commands.push(` L ${point.x.toString()} ${point.y.toString()}`)
+				continue
 			}
 
-			const next = points[i + 1];
-			const prevVecX = point.x - prev.x;
-			const prevVecY = point.y - prev.y;
-			const nextVecX = next.x - point.x;
-			const nextVecY = next.y - point.y;
-			const prevLen = Math.hypot(prevVecX, prevVecY);
-			const nextLen = Math.hypot(nextVecX, nextVecY);
+			const next = points[i + 1]
+			const prevVecX = point.x - prev.x
+			const prevVecY = point.y - prev.y
+			const nextVecX = next.x - point.x
+			const nextVecY = next.y - point.y
+			const prevLen = Math.hypot(prevVecX, prevVecY)
+			const nextLen = Math.hypot(nextVecX, nextVecY)
 
 			if (prevLen === 0 || nextLen === 0) {
-				commands.push(` L ${point.x.toString()} ${point.y.toString()}`);
-				continue;
+				commands.push(` L ${point.x.toString()} ${point.y.toString()}`)
+				continue
 			}
 
-			const prevDirX = prevVecX / prevLen;
-			const prevDirY = prevVecY / prevLen;
-			const nextDirX = nextVecX / nextLen;
-			const nextDirY = nextVecY / nextLen;
-			const dot = prevDirX * nextDirX + prevDirY * nextDirY;
+			const prevDirX = prevVecX / prevLen
+			const prevDirY = prevVecY / prevLen
+			const nextDirX = nextVecX / nextLen
+			const nextDirY = nextVecY / nextLen
+			const dot = prevDirX * nextDirX + prevDirY * nextDirY
 
 			if (Math.abs(dot) > 0.999) {
-				commands.push(` L ${point.x.toString()} ${point.y.toString()}`);
-				continue;
+				commands.push(` L ${point.x.toString()} ${point.y.toString()}`)
+				continue
 			}
 
-			const cornerRadius = Math.min(radius, prevLen / 2, nextLen / 2);
-			const entryX = point.x - prevDirX * cornerRadius;
-			const entryY = point.y - prevDirY * cornerRadius;
-			const exitX = point.x + nextDirX * cornerRadius;
-			const exitY = point.y + nextDirY * cornerRadius;
+			const cornerRadius = Math.min(radius, prevLen / 2, nextLen / 2)
+			const entryX = point.x - prevDirX * cornerRadius
+			const entryY = point.y - prevDirY * cornerRadius
+			const exitX = point.x + nextDirX * cornerRadius
+			const exitY = point.y + nextDirY * cornerRadius
 
-			commands.push(` L ${entryX.toString()} ${entryY.toString()}`);
+			commands.push(` L ${entryX.toString()} ${entryY.toString()}`)
 			commands.push(
 				` Q ${point.x.toString()} ${point.y.toString()} ${exitX.toString()} ${exitY.toString()}`
-			);
+			)
 		}
 
-		return commands.join('');
+		return commands.join("")
 	}
 
 	function getLinksWrapperElement() {
-		if (typeof document === 'undefined') return null;
-		const node = document.getElementById(linksWrapperId);
-		return node instanceof HTMLOListElement ? node : null;
+		if (typeof document === "undefined") return null
+		const node = document.getElementById(linksWrapperId)
+		return node instanceof HTMLOListElement ? node : null
 	}
 
 	function updateLayout() {
-		const linksWrapper = getLinksWrapperElement();
+		const linksWrapper = getLinksWrapperElement()
 		if (!linksWrapper || headings.length === 0) {
-			lineHeight = 0;
-			return;
+			lineHeight = 0
+			return
 		}
 
-		linkPositions.clear();
-		const polyline: PathPoint[] = [];
-		let maxW = 0;
-		const indentStep = 12;
-		const strokeWidth = 1;
-		const halfStroke = strokeWidth / 2;
+		linkPositions.clear()
+		const polyline: PathPoint[] = []
+		let maxW = 0
+		const indentStep = 12
+		const strokeWidth = 1
+		const halfStroke = strokeWidth / 2
 
 		headings.forEach((heading) => {
-			const node = linkRefs.get(heading.id);
-			if (!node) return;
+			const node = linkRefs.get(heading.id)
+			if (!node) return
 
-			const style = window.getComputedStyle(node);
-			const paddingTop = parseFloat(style.paddingTop) || 0;
-			const paddingBottom = parseFloat(style.paddingBottom) || 0;
-			const positionTop = node.offsetTop + paddingTop;
-			const positionBottom = node.offsetTop + node.offsetHeight - paddingBottom;
-			const positionHeight = Math.max(0, positionBottom - positionTop);
+			const style = window.getComputedStyle(node)
+			const paddingTop = parseFloat(style.paddingTop) || 0
+			const paddingBottom = parseFloat(style.paddingBottom) || 0
+			const positionTop = node.offsetTop + paddingTop
+			const positionBottom = node.offsetTop + node.offsetHeight - paddingBottom
+			const positionHeight = Math.max(0, positionBottom - positionTop)
 
 			linkPositions.set(heading.id, {
 				top: positionTop,
-				height: positionHeight
-			});
+				height: positionHeight,
+			})
 
-			const x = (heading.level - 2) * indentStep + halfStroke;
-			const top = positionTop;
-			const bottom = Math.max(positionTop, positionBottom);
+			const x = (heading.level - 2) * indentStep + halfStroke
+			const top = positionTop
+			const bottom = Math.max(positionTop, positionBottom)
 
-			polyline.push({ x, y: top });
-			polyline.push({ x, y: bottom });
+			polyline.push({ x, y: top })
+			polyline.push({ x, y: bottom })
 
-			maxW = Math.max(maxW, x + halfStroke);
-		});
+			maxW = Math.max(maxW, x + halfStroke)
+		})
 
-		svgPath = buildRoundedPath(polyline, CORNER_RADIUS);
-		svgWidth = Math.max(40, maxW + 10);
-		lineHeight = linksWrapper.scrollHeight;
+		svgPath = buildRoundedPath(polyline, CORNER_RADIUS)
+		svgWidth = Math.max(40, maxW + 10)
+		lineHeight = linksWrapper.scrollHeight
 	}
 
 	function updateIndicator(range?: IndicatorRange) {
 		const appliedRange =
-			range ?? indicatorRange ?? (activeId ? { startId: activeId, endId: activeId } : null);
+			range ?? indicatorRange ?? (activeId ? { startId: activeId, endId: activeId } : null)
 
 		if (!appliedRange) {
-			indicatorRange = null;
-			indicatorTop = 0;
-			indicatorHeight = 0;
-			indicatorBottom = 0;
-			return;
+			indicatorRange = null
+			indicatorTop = 0
+			indicatorHeight = 0
+			indicatorBottom = 0
+			return
 		}
 
 		if (range) {
-			indicatorRange = range;
+			indicatorRange = range
 		} else {
-			indicatorRange ??= appliedRange;
+			indicatorRange ??= appliedRange
 		}
 
-		const startPos = linkPositions.get(appliedRange.startId);
-		const endPos = linkPositions.get(appliedRange.endId);
+		const startPos = linkPositions.get(appliedRange.startId)
+		const endPos = linkPositions.get(appliedRange.endId)
 
 		if (!startPos || !endPos) {
-			indicatorTop = 0;
-			indicatorHeight = 0;
-			indicatorBottom = 0;
-			return;
+			indicatorTop = 0
+			indicatorHeight = 0
+			indicatorBottom = 0
+			return
 		}
 
-		const top = Math.min(startPos.top, endPos.top);
-		const bottom = Math.max(startPos.top + startPos.height, endPos.top + endPos.height);
+		const top = Math.min(startPos.top, endPos.top)
+		const bottom = Math.max(startPos.top + startPos.height, endPos.top + endPos.height)
 
-		indicatorTop = top;
-		indicatorHeight = Math.max(0, bottom - top);
-		indicatorBottom = bottom;
+		indicatorTop = top
+		indicatorHeight = Math.max(0, bottom - top)
+		indicatorBottom = bottom
 	}
 
 	function scheduleIndicatorUpdate(range?: IndicatorRange | null) {
-		if (typeof window === 'undefined') {
+		if (typeof window === "undefined") {
 			if (range) {
-				pulseRange(range);
-				updateIndicator(range);
+				pulseRange(range)
+				updateIndicator(range)
 			} else {
-				updateIndicator();
+				updateIndicator()
 			}
-			return;
+			return
 		}
 
 		if (pendingIndicatorFrame !== null) {
-			window.cancelAnimationFrame(pendingIndicatorFrame);
+			window.cancelAnimationFrame(pendingIndicatorFrame)
 		}
 
 		pendingIndicatorFrame = window.requestAnimationFrame(() => {
-			pendingIndicatorFrame = null;
+			pendingIndicatorFrame = null
 			if (range) {
-				pulseRange(range);
-				updateIndicator(range);
+				pulseRange(range)
+				updateIndicator(range)
 			} else {
-				updateIndicator();
+				updateIndicator()
 			}
-		});
+		})
 	}
 
 	function collectDomHeadings(): TocItem[] {
-		const slugCounts = new SvelteMap<string, number>();
-		const usedIds = new SvelteSet<string>();
+		const slugCounts = new SvelteMap<string, number>()
+		const usedIds = new SvelteSet<string>()
 		const nodeList = Array.from(document.querySelectorAll(selector)).filter(
 			(node): node is HTMLElement => node instanceof HTMLElement
-		);
+		)
 
-		const parsed: TocItem[] = [];
+		const parsed: TocItem[] = []
 
 		for (const node of nodeList) {
-			const rawText = node.textContent;
-			const text = rawText ? rawText.trim() : '';
-			if (!text) continue;
+			const rawText = node.textContent
+			const text = rawText ? rawText.trim() : ""
+			if (!text) continue
 
-			let id = node.id;
+			let id = node.id
 			if (!id) {
-				let baseSlug = slugify(text);
+				let baseSlug = slugify(text)
 				if (!baseSlug) {
-					baseSlug = `section-${(parsed.length + 1).toString()}`;
+					baseSlug = `section-${(parsed.length + 1).toString()}`
 				}
-				const count = slugCounts.get(baseSlug);
-				if (typeof count === 'number') {
-					const nextCount = count + 1;
-					slugCounts.set(baseSlug, nextCount);
-					baseSlug = `${baseSlug}-${nextCount.toString()}`;
+				const count = slugCounts.get(baseSlug)
+				if (typeof count === "number") {
+					const nextCount = count + 1
+					slugCounts.set(baseSlug, nextCount)
+					baseSlug = `${baseSlug}-${nextCount.toString()}`
 				} else {
-					slugCounts.set(baseSlug, 0);
+					slugCounts.set(baseSlug, 0)
 				}
-				id = baseSlug;
+				id = baseSlug
 			}
 
 			if (usedIds.has(id)) {
-				const baseId = id;
-				let nextCount = slugCounts.get(baseId) ?? 0;
+				const baseId = id
+				let nextCount = slugCounts.get(baseId) ?? 0
 
 				do {
-					nextCount += 1;
-					id = `${baseId}-${nextCount.toString()}`;
-				} while (usedIds.has(id));
+					nextCount += 1
+					id = `${baseId}-${nextCount.toString()}`
+				} while (usedIds.has(id))
 
-				slugCounts.set(baseId, nextCount);
+				slugCounts.set(baseId, nextCount)
 			}
 
 			if (node.id !== id) {
-				node.id = id;
+				node.id = id
 			}
-			usedIds.add(id);
+			usedIds.add(id)
 
-			const level = Number(node.tagName.replace('H', '')) || 2;
+			const level = Number(node.tagName.replace("H", "")) || 2
 			parsed.push({
 				id,
 				text,
 				level,
-				element: node
-			});
+				element: node,
+			})
 		}
 
-		return parsed;
+		return parsed
 	}
 
 	function resolveInitialHeadingElements(): TocItem[] {
-		if (initialHeadings.length === 0) return [];
+		if (initialHeadings.length === 0) return []
 
 		const parsed = initialHeadings.flatMap((heading): TocItem[] => {
-			const element = document.getElementById(heading.id);
-			return element instanceof HTMLElement ? [{ ...heading, element }] : [];
-		});
+			const element = document.getElementById(heading.id)
+			return element instanceof HTMLElement ? [{ ...heading, element }] : []
+		})
 
-		return parsed.length === initialHeadings.length ? parsed : [];
+		return parsed.length === initialHeadings.length ? parsed : []
 	}
 
 	function collectHeadings() {
-		if (typeof document === 'undefined' || !tocViewportActive) {
-			resetTocState({ clearHeadings: false });
-			return undefined;
+		if (typeof document === "undefined" || !tocViewportActive) {
+			resetTocState({ clearHeadings: false })
+			return undefined
 		}
 
-		const initialParsed = resolveInitialHeadingElements();
-		const parsed = initialParsed.length > 0 ? initialParsed : collectDomHeadings();
+		const initialParsed = resolveInitialHeadingElements()
+		const parsed = initialParsed.length > 0 ? initialParsed : collectDomHeadings()
 
-		applyHeadings(parsed.map(({ element: _element, ...rest }) => rest));
+		applyHeadings(parsed.map(({ element: _element, ...rest }) => rest))
 
-		lineHeight = 0;
-		indicatorTop = 0;
-		indicatorHeight = 0;
-		indicatorBottom = 0;
-		indicatorRange = null;
+		lineHeight = 0
+		indicatorTop = 0
+		indicatorHeight = 0
+		indicatorBottom = 0
+		indicatorRange = null
 
 		requestAnimationFrame(() => {
-			updateLayout();
-		});
+			updateLayout()
+		})
 
 		if (!parsed.length) {
-			return undefined;
+			return undefined
 		}
 
 		const updateActive = () => {
-			let current = parsed[0]?.id ?? '';
-			const scrollEl = getScrollContainer();
-			const isWindow = scrollEl === window;
-			const scrollY = isWindow ? window.scrollY : (scrollEl as HTMLElement).scrollTop;
-			const viewportHeight = isWindow ? window.innerHeight : (scrollEl as HTMLElement).clientHeight;
+			let current = parsed[0]?.id ?? ""
+			const scrollEl = getScrollContainer()
+			const isWindow = scrollEl === window
+			const scrollY = isWindow ? window.scrollY : (scrollEl as HTMLElement).scrollTop
+			const viewportHeight = isWindow ? window.innerHeight : (scrollEl as HTMLElement).clientHeight
 			const scrollHeight = isWindow
 				? document.documentElement.scrollHeight
-				: (scrollEl as HTMLElement).scrollHeight;
+				: (scrollEl as HTMLElement).scrollHeight
 			const containerBounds = isWindow
 				? { top: 0, bottom: viewportHeight }
-				: (scrollEl as HTMLElement).getBoundingClientRect();
-			const viewportTop = containerBounds.top - VISIBLE_BUFFER;
-			const viewportBottom = containerBounds.bottom + VISIBLE_BUFFER;
-			const visibleIds: string[] = [];
+				: (scrollEl as HTMLElement).getBoundingClientRect()
+			const viewportTop = containerBounds.top - VISIBLE_BUFFER
+			const viewportBottom = containerBounds.bottom + VISIBLE_BUFFER
+			const visibleIds: string[] = []
 
 			for (const item of parsed) {
-				const rect = item.element.getBoundingClientRect();
+				const rect = item.element.getBoundingClientRect()
 				if (rect.bottom >= viewportTop && rect.top <= viewportBottom) {
-					visibleIds.push(item.id);
+					visibleIds.push(item.id)
 				}
 				if (rect.top - ACTIVE_OFFSET <= viewportTop + VISIBLE_BUFFER) {
-					current = item.id;
+					current = item.id
 				}
 			}
 
-			const last = parsed[parsed.length - 1];
-			const scrolledBottom = scrollY + viewportHeight;
+			const last = parsed[parsed.length - 1]
+			const scrolledBottom = scrollY + viewportHeight
 			if (scrolledBottom >= scrollHeight - 20) {
-				current = last.id;
+				current = last.id
 			}
 
-			activeId = current;
+			activeId = current
 			const range: IndicatorRange | null =
 				visibleIds.length > 0
 					? {
 							startId: visibleIds[0],
-							endId: visibleIds[visibleIds.length - 1]
+							endId: visibleIds[visibleIds.length - 1],
 						}
 					: current
 						? { startId: current, endId: current }
-						: null;
+						: null
 
-			scheduleIndicatorUpdate(range);
-		};
+			scheduleIndicatorUpdate(range)
+		}
 
-		const container = getScrollContainer();
+		const container = getScrollContainer()
 
 		if (parsed.length > 0) {
-			updateActive();
+			updateActive()
 		}
 
 		const handleResize = () => {
-			updateActive();
-			updateLayout();
-		};
+			updateActive()
+			updateLayout()
+		}
 
-		container.addEventListener('scroll', updateActive, { passive: true });
-		window.addEventListener('resize', handleResize);
+		container.addEventListener("scroll", updateActive, { passive: true })
+		window.addEventListener("resize", handleResize)
 
 		return () => {
-			container.removeEventListener('scroll', updateActive);
-			window.removeEventListener('resize', handleResize);
+			container.removeEventListener("scroll", updateActive)
+			window.removeEventListener("resize", handleResize)
 			pulseTimers.forEach((timer) => {
-				window.clearTimeout(timer);
-			});
-			pulseTimers.clear();
-			pulsingDotIds = [];
-			lastIndicatorIds.clear();
+				window.clearTimeout(timer)
+			})
+			pulseTimers.clear()
+			pulsingDotIds = []
+			lastIndicatorIds.clear()
 			if (pendingIndicatorFrame !== null) {
-				window.cancelAnimationFrame(pendingIndicatorFrame);
-				pendingIndicatorFrame = null;
+				window.cancelAnimationFrame(pendingIndicatorFrame)
+				pendingIndicatorFrame = null
 			}
-		};
+		}
 	}
 
 	function isLinkHighlighted(id: string) {
 		if (!indicatorRange) {
-			return activeId === id;
+			return activeId === id
 		}
 
-		const startIndex = headingOrder.get(indicatorRange.startId);
-		const endIndex = headingOrder.get(indicatorRange.endId);
-		const currentIndex = headingOrder.get(id);
+		const startIndex = headingOrder.get(indicatorRange.startId)
+		const endIndex = headingOrder.get(indicatorRange.endId)
+		const currentIndex = headingOrder.get(id)
 
 		if (startIndex === undefined || endIndex === undefined || currentIndex === undefined) {
-			return activeId === id;
+			return activeId === id
 		}
 
-		const min = Math.min(startIndex, endIndex);
-		const max = Math.max(startIndex, endIndex);
+		const min = Math.min(startIndex, endIndex)
+		const max = Math.max(startIndex, endIndex)
 
-		return currentIndex >= min && currentIndex <= max;
+		return currentIndex >= min && currentIndex <= max
 	}
 
 	function manageToc(
 		_node: HTMLElement,
 		deps: { path: string; active: boolean; selector: string }
 	) {
-		let currentDeps = deps;
+		let currentDeps = deps
 
 		const run = () => {
-			clearCollectionWork();
-			syncInitialHeadings();
+			clearCollectionWork()
+			syncInitialHeadings()
 
 			if (!currentDeps.active) {
-				resetTocState({ clearHeadings: false });
-				return;
+				resetTocState({ clearHeadings: false })
+				return
 			}
 
 			collectFrame = window.requestAnimationFrame(() => {
-				collectFrame = null;
-				collectCleanup = collectHeadings();
-			});
-		};
+				collectFrame = null
+				collectCleanup = collectHeadings()
+			})
+		}
 
-		run();
+		run()
 
 		return {
 			update(nextDeps: { path: string; active: boolean; selector: string }) {
-				currentDeps = nextDeps;
-				run();
+				currentDeps = nextDeps
+				run()
 			},
 			destroy() {
-				clearCollectionWork();
-				resetTocState();
-			}
-		};
+				clearCollectionWork()
+				resetTocState()
+			},
+		}
 	}
 
 	function observeLinksWrapper(node: HTMLOListElement, active: boolean) {
-		let observer: ResizeObserver | null = null;
+		let observer: ResizeObserver | null = null
 
 		const sync = (enabled: boolean) => {
-			observer?.disconnect();
-			observer = null;
+			observer?.disconnect()
+			observer = null
 
-			if (typeof window === 'undefined' || !enabled) return;
+			if (typeof window === "undefined" || !enabled) return
 
 			observer = new ResizeObserver(() => {
-				updateLayout();
-				updateIndicator();
-			});
+				updateLayout()
+				updateIndicator()
+			})
 
-			observer.observe(node);
-		};
+			observer.observe(node)
+		}
 
-		sync(active);
+		sync(active)
 
 		return {
 			update(nextActive: boolean) {
-				sync(nextActive);
+				sync(nextActive)
 			},
 			destroy() {
-				observer?.disconnect();
-			}
-		};
+				observer?.disconnect()
+			},
+		}
 	}
 </script>
 
@@ -668,7 +668,7 @@
 	{@attach fromAction(manageToc, () => ({
 		path: currentPath,
 		active: tocViewportActive,
-		selector
+		selector,
 	}))}
 >
 	{#if renderedHeadings.length > 0}
@@ -719,28 +719,28 @@
 							<a
 								href={`#${heading.id}`}
 								onclick={() => {
-									pulseDot(heading.id);
+									pulseDot(heading.id)
 								}}
 								class={cn(
-									'flex max-w-48 items-center gap-2 py-1 font-medium tracking-normal transition-[color] duration-150 ease-out',
+									"flex max-w-48 items-center gap-2 py-1 font-medium tracking-normal transition-[color] duration-150 ease-out",
 									isLinkHighlighted(heading.id)
-										? 'text-accent'
-										: 'text-foreground-muted hover:text-foreground'
+										? "text-accent"
+										: "text-foreground-muted hover:text-foreground"
 								)}
 								{@attach fromAction(registerLink, () => heading.id)}
 							>
 								<span
 									aria-hidden="true"
 									class={cn(
-										'toc-dot relative size-1.5 flex-none rounded-full transition-[background-color,box-shadow,scale] duration-150 ease-out',
-										isLinkHighlighted(heading.id) && 'toc-dot-active',
-										pulsingDotIds.includes(heading.id) && 'toc-dot-pulse'
+										"toc-dot relative size-1.5 flex-none rounded-full transition-[background-color,box-shadow,scale] duration-150 ease-out",
+										isLinkHighlighted(heading.id) && "toc-dot-active",
+										pulsingDotIds.includes(heading.id) && "toc-dot-pulse"
 									)}
 								></span>
 								<span
 									class={cn(
-										'min-w-0 truncate pl-1',
-										isLinkHighlighted(heading.id) && 'text-accent'
+										"min-w-0 truncate pl-1",
+										isLinkHighlighted(heading.id) && "text-accent"
 									)}
 								>
 									{heading.text}
@@ -785,7 +785,7 @@
 	}
 
 	.toc-dot-active::after {
-		content: '';
+		content: "";
 		position: absolute;
 		inset: 0;
 		border-radius: 9999px;

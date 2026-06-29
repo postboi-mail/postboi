@@ -1,17 +1,17 @@
 export class SearchState {
-	isOpen = $state(false);
+	isOpen = $state(false)
 
 	toggle() {
-		this.isOpen = !this.isOpen;
+		this.isOpen = !this.isOpen
 	}
 
 	open() {
-		this.isOpen = true;
+		this.isOpen = true
 	}
 
 	close() {
-		this.isOpen = false;
+		this.isOpen = false
 	}
 }
 
-export const searchState = new SearchState();
+export const searchState = new SearchState()

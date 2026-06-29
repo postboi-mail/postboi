@@ -1,19 +1,19 @@
 <script lang="ts">
-	import { cn } from '$lib/utils/cn';
-	import type { Snippet } from 'svelte';
+	import { cn } from "$lib/utils/cn"
+	import type { Snippet } from "svelte"
 
 	let {
 		class: className,
 		children,
-		title
+		title,
 	}: {
-		class?: string;
-		children?: Snippet;
-		title?: string;
-	} = $props();
+		class?: string
+		children?: Snippet
+		title?: string
+	} = $props()
 </script>
 
-<div class={cn('relative pl-8', className)}>
+<div class={cn("relative pl-8", className)}>
 	{#if title}
 		<div class="mb-4 flex h-10 items-center">
 			<div
@@ -37,7 +37,7 @@
 		</div>
 	{/if}
 	<div
-		class={cn('text-base leading-relaxed tracking-normal text-foreground-muted', !title && 'pt-2')}
+		class={cn("text-base leading-relaxed tracking-normal text-foreground-muted", !title && "pt-2")}
 	>
 		{@render children?.()}
 	</div>

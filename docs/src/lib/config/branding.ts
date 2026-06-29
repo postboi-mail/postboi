@@ -1,4 +1,4 @@
-import logo from '$lib/assets/postboi-logo.svg?raw';
+import logo from "$lib/assets/postboi-logo.svg?raw"
 
 /**
  * Global visual identity used by shared UI elements.
@@ -8,5 +8,5 @@ export const brandingConfig = {
 	/** Raw SVG markup used in logo components and generated assets. */
 	logoRaw: logo,
 	/** Human-readable brand name displayed in the UI. */
-	name: 'Postboi'
-};
+	name: "Postboi",
+}

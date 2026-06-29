@@ -1,5 +1,5 @@
 <script lang="ts">
-	import './layout.css';
+	import "./layout.css"
 	import {
 		CommandPalette,
 		ContentNavigation,
@@ -9,110 +9,110 @@
 		contentUiDefaults,
 		resolveRepositoryFileUrl,
 		resolveTocSelector,
-		siteConfig
-	} from '$lib';
-	import ContentSectionLayout from '$lib/components/content/ContentSectionLayout.svelte';
+		siteConfig,
+	} from "$lib"
+	import ContentSectionLayout from "$lib/components/content/ContentSectionLayout.svelte"
 	import {
 		getContentSectionConfig,
 		getContentSectionHref,
 		getContentSectionLinks,
 		getContentSectionManifest,
 		getContentSectionRawHref,
-		getContentSectionUiConfig
-	} from '$lib/content/sections';
-	import type { SectionUiConfig } from '$lib/config/content-ui';
-	import type { LayoutData } from './$types';
-	import type { Snippet } from 'svelte';
+		getContentSectionUiConfig,
+	} from "$lib/content/sections"
+	import type { SectionUiConfig } from "$lib/config/content-ui"
+	import type { LayoutData } from "./$types"
+	import type { Snippet } from "svelte"
 
-	const { data, children }: { data: LayoutData; children: Snippet } = $props();
+	const { data, children }: { data: LayoutData; children: Snippet } = $props()
 
-	const sectionId = $derived(data.sectionId);
-	const sectionUi = $derived<SectionUiConfig>(getContentSectionUiConfig(sectionId));
-	const sectionConfig = $derived(getContentSectionConfig(sectionId));
-	const sectionManifest = $derived(getContentSectionManifest(sectionId));
-	const sectionBasePath = '';
+	const sectionId = $derived(data.sectionId)
+	const sectionUi = $derived<SectionUiConfig>(getContentSectionUiConfig(sectionId))
+	const sectionConfig = $derived(getContentSectionConfig(sectionId))
+	const sectionManifest = $derived(getContentSectionManifest(sectionId))
+	const sectionBasePath = ""
 
-	const metadata = $derived(data.metadata);
-	const docSlug = $derived(metadata?.slug);
-	const isHome = $derived(docSlug === '' || docSlug == null);
-	const currentDoc = $derived(sectionManifest.find((d) => d.slug === docSlug));
+	const metadata = $derived(data.metadata)
+	const docSlug = $derived(metadata?.slug)
+	const isHome = $derived(docSlug === "" || docSlug == null)
+	const currentDoc = $derived(sectionManifest.find((d) => d.slug === docSlug))
 
 	const previousLink = $derived(
 		data.previousDoc
 			? {
 					title: data.previousDoc.name,
-					href: getContentSectionHref(sectionId, data.previousDoc.slug)
+					href: getContentSectionHref(sectionId, data.previousDoc.slug),
 				}
 			: null
-	);
+	)
 	const nextLink = $derived(
 		data.nextDoc
 			? {
 					title: data.nextDoc.name,
-					href: getContentSectionHref(sectionId, data.nextDoc.slug)
+					href: getContentSectionHref(sectionId, data.nextDoc.slug),
 				}
 			: null
-	);
+	)
 
-	const siteOrigin = new URL(siteConfig.url).origin;
-	const canonicalUrl = $derived(metadata ? new URL(metadata.href, siteOrigin).href : null);
+	const siteOrigin = new URL(siteConfig.url).origin
+	const canonicalUrl = $derived(metadata ? new URL(metadata.href, siteOrigin).href : null)
 
 	const docOgImage = $derived(
 		sectionUi.pageActions.enabled && metadata
-			? new URL(`/og/${metadata.slug || 'index'}`, siteOrigin).href
+			? new URL(`/og/${metadata.slug || "index"}`, siteOrigin).href
 			: new URL(siteConfig.ogImage, siteOrigin).href
-	);
+	)
 
-	const docTitle = $derived(metadata?.title ?? currentDoc?.name ?? siteConfig.name);
+	const docTitle = $derived(metadata?.title ?? currentDoc?.name ?? siteConfig.name)
 	const pageTitle = $derived(
 		isHome
-			? `${siteConfig.name} — ${siteConfig.description.split('.')[0]}`
+			? `${siteConfig.name} — ${siteConfig.description.split(".")[0]}`
 			: `${docTitle} - ${siteConfig.name}`
-	);
-	const docDescription = $derived(metadata?.description ?? siteConfig.description);
+	)
+	const docDescription = $derived(metadata?.description ?? siteConfig.description)
 
 	const docStructuredData = $derived.by(() => {
-		if (!canonicalUrl) return null;
+		if (!canonicalUrl) return null
 		return JSON.stringify({
-			'@context': 'https://schema.org',
-			'@type': 'TechArticle',
+			"@context": "https://schema.org",
+			"@type": "TechArticle",
 			headline: docTitle,
 			description: docDescription,
 			url: canonicalUrl,
-			author: { '@type': 'Person', name: siteConfig.author },
-			publisher: { '@type': 'Organization', name: siteConfig.name },
-			mainEntityOfPage: canonicalUrl
-		});
-	});
+			author: { "@type": "Person", name: siteConfig.author },
+			publisher: { "@type": "Organization", name: siteConfig.name },
+			mainEntityOfPage: canonicalUrl,
+		})
+	})
 
-	const rawPath = $derived(metadata ? getContentSectionRawHref(sectionId, metadata.slug) : null);
-	const docOrigin = $derived(data.docOrigin);
-	const rawUrl = $derived(rawPath && docOrigin ? new URL(rawPath, docOrigin).href : null);
+	const rawPath = $derived(metadata ? getContentSectionRawHref(sectionId, metadata.slug) : null)
+	const docOrigin = $derived(data.docOrigin)
+	const rawUrl = $derived(rawPath && docOrigin ? new URL(rawPath, docOrigin).href : null)
 
 	const repoRelativePath = $derived(
-		metadata ? `/src/lib/content/${sectionId}/${metadata.slug || 'index'}.svx` : null
-	);
+		metadata ? `/src/lib/content/${sectionId}/${metadata.slug || "index"}.svx` : null
+	)
 	const githubUrl = $derived(
 		repoRelativePath
 			? resolveRepositoryFileUrl(sectionUi.pageActions, siteConfig.links.github, repoRelativePath)
 			: null
-	);
+	)
 
-	const showDocActions = $derived(sectionUi.pageActions.enabled && Boolean(metadata));
-	const showToc = $derived(sectionUi.toc.enabled);
-	const showRightAside = $derived(sectionUi.toc.enabled || sectionUi.pageActions.enabled);
-	const isSvxContent = $derived(metadata?.sourceType === 'svx');
-	const innerViewportStyle = $derived(isSvxContent);
+	const showDocActions = $derived(sectionUi.pageActions.enabled && Boolean(metadata))
+	const showToc = $derived(sectionUi.toc.enabled)
+	const showRightAside = $derived(sectionUi.toc.enabled || sectionUi.pageActions.enabled)
+	const isSvxContent = $derived(metadata?.sourceType === "svx")
+	const innerViewportStyle = $derived(isSvxContent)
 	const showPagination = $derived(
 		sectionUi.pagination.enabled && (isSvxContent || Boolean(currentDoc?.showPagination))
-	);
+	)
 
-	const searchConfig = $derived<SectionUiConfig['search']>(
+	const searchConfig = $derived<SectionUiConfig["search"]>(
 		sectionUi.search ?? contentUiDefaults.search
-	);
-	const showCommandPalette = $derived(searchConfig.enabled);
+	)
+	const showCommandPalette = $derived(searchConfig.enabled)
 
-	const sectionLinks = getContentSectionLinks();
+	const sectionLinks = getContentSectionLinks()
 	const sidebarConfig = $derived({
 		navigation: sectionConfig.navigation,
 		navigationLabel: sectionUi.sidebar.navigationLabel,
@@ -123,12 +123,12 @@
 		repositoryUrl: siteConfig.links.github,
 		repositoryAriaLabel: sectionUi.sidebar.repositoryAriaLabel,
 		searchConfig: sectionUi.search,
-		sectionLinks
-	});
+		sectionLinks,
+	})
 
-	const tocSelector = $derived(resolveTocSelector(sectionUi.toc, docSlug));
-	const mainId = $derived(`${sectionId}-main-content`);
-	const scrollContainerId = $derived(`${sectionId}-content-container`);
+	const tocSelector = $derived(resolveTocSelector(sectionUi.toc, docSlug))
+	const mainId = $derived(`${sectionId}-main-content`)
+	const scrollContainerId = $derived(`${sectionId}-content-container`)
 </script>
 
 <svelte:head>
@@ -136,7 +136,7 @@
 	<meta name="description" content={docDescription} />
 	{#if canonicalUrl}<link rel="canonical" href={canonicalUrl} />{/if}
 	<meta name="author" content={siteConfig.author} />
-	<meta name="keywords" content={siteConfig.keywords.join(', ')} />
+	<meta name="keywords" content={siteConfig.keywords.join(", ")} />
 
 	<meta name="theme-color" content="#ffffff" />
 	<meta
@@ -146,12 +146,12 @@
 	<meta name="docs-package-manager-default" content={contentUiDefaults.packageManager.default} />
 	<meta
 		name="docs-package-manager-enabled"
-		content={contentUiDefaults.packageManager.enabled.join(',')}
+		content={contentUiDefaults.packageManager.enabled.join(",")}
 	/>
 
 	<meta property="og:site_name" content={siteConfig.name} />
 	<meta property="og:locale" content="en_US" />
-	<meta property="og:type" content={isHome ? 'website' : 'article'} />
+	<meta property="og:type" content={isHome ? "website" : "article"} />
 	<meta property="og:title" content={pageTitle} />
 	<meta property="og:description" content={docDescription} />
 	{#if canonicalUrl}<meta property="og:url" content={canonicalUrl} />{/if}
@@ -176,7 +176,7 @@
 	<meta name="apple-mobile-web-app-title" content={siteConfig.name} />
 
 	{#if docStructuredData}
-		<svelte:element this={'script'} type="application/ld+json">
+		<svelte:element this={"script"} type="application/ld+json">
 			{docStructuredData}
 		</svelte:element>
 	{/if}
@@ -195,7 +195,7 @@
 >
 	{#snippet main()}
 		<section class="flex min-w-0 flex-1 flex-col space-y-8">
-			{#if metadata?.sourceType === 'svx'}
+			{#if metadata?.sourceType === "svx"}
 				<div class="space-y-4">
 					{#if currentDoc?.category}
 						<p class="mb-2 text-sm font-medium tracking-normal text-foreground-muted/70 capitalize">
@@ -220,7 +220,9 @@
 						/>
 					{/if}
 				</div>
-				<hr class="h-px border-0 bg-border shadow-2xs shadow-white dark:bg-black dark:shadow-border" />
+				<hr
+					class="h-px border-0 bg-border shadow-2xs shadow-white dark:bg-black dark:shadow-border"
+				/>
 			{/if}
 
 			<div class="flex-1">
@@ -255,7 +257,12 @@
 					</div>
 				{/if}
 				{#if showDocActions}
-					<DocShareActions {rawPath} {rawUrl} {githubUrl} pageActionsConfig={sectionUi.pageActions} />
+					<DocShareActions
+						{rawPath}
+						{rawUrl}
+						{githubUrl}
+						pageActionsConfig={sectionUi.pageActions}
+					/>
 				{/if}
 			</aside>
 		{/if}

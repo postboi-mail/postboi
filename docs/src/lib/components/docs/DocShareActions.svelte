@@ -1,140 +1,140 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
-	import { backOut } from 'svelte/easing';
+	import { fly } from "svelte/transition"
+	import { backOut } from "svelte/easing"
 	import {
 		contentUiDefaults,
 		resolveAssistantUrls,
-		type SectionUiConfig
-	} from '$lib/config/content-ui';
-	import { copyToClipboard } from '$lib/utils/copy';
-	import Checkmark from 'carbon-icons-svelte/lib/Checkmark.svelte';
-	import LogoGithub from 'carbon-icons-svelte/lib/LogoGithub.svelte';
-	import Launch from 'carbon-icons-svelte/lib/Launch.svelte';
+		type SectionUiConfig,
+	} from "$lib/config/content-ui"
+	import { copyToClipboard } from "$lib/utils/copy"
+	import Checkmark from "carbon-icons-svelte/lib/Checkmark.svelte"
+	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
+	import Launch from "carbon-icons-svelte/lib/Launch.svelte"
 
 	type Props = {
-		rawPath?: string | null;
-		rawUrl?: string | null;
-		githubUrl?: string | null;
-		pageActionsConfig?: SectionUiConfig['pageActions'];
-	};
+		rawPath?: string | null
+		rawUrl?: string | null
+		githubUrl?: string | null
+		pageActionsConfig?: SectionUiConfig["pageActions"]
+	}
 
 	let {
 		rawPath,
 		rawUrl,
 		githubUrl,
-		pageActionsConfig = contentUiDefaults.pageActions
-	}: Props = $props();
+		pageActionsConfig = contentUiDefaults.pageActions,
+	}: Props = $props()
 
-	const opensInNewTabLabel = '(opens in a new tab)';
+	const opensInNewTabLabel = "(opens in a new tab)"
 
-	let actionsElement = $state<HTMLDivElement | null>(null);
-	let hoverIndicatorTop = $state(0);
-	let hoverIndicatorHeight = $state(0);
-	let hoverIndicatorVisible = $state(false);
-	let hoveredElement: HTMLElement | null = null;
+	let actionsElement = $state<HTMLDivElement | null>(null)
+	let hoverIndicatorTop = $state(0)
+	let hoverIndicatorHeight = $state(0)
+	let hoverIndicatorVisible = $state(false)
+	let hoveredElement: HTMLElement | null = null
 
-	type CopyState = 'idle' | 'copying' | 'success' | 'error';
-	let copyState = $state<CopyState>('idle');
+	type CopyState = "idle" | "copying" | "success" | "error"
+	let copyState = $state<CopyState>("idle")
 
-	const assistantUrls = $derived(resolveAssistantUrls(pageActionsConfig, rawUrl));
-	const chatGptUrl = $derived(assistantUrls.chatGptUrl);
-	const claudeUrl = $derived(assistantUrls.claudeUrl);
-	const canShowCopy = $derived(pageActionsConfig.showCopyMarkdown && Boolean(rawPath));
-	const canShowRepository = $derived(pageActionsConfig.showRepositoryLink && Boolean(githubUrl));
+	const assistantUrls = $derived(resolveAssistantUrls(pageActionsConfig, rawUrl))
+	const chatGptUrl = $derived(assistantUrls.chatGptUrl)
+	const claudeUrl = $derived(assistantUrls.claudeUrl)
+	const canShowCopy = $derived(pageActionsConfig.showCopyMarkdown && Boolean(rawPath))
+	const canShowRepository = $derived(pageActionsConfig.showRepositoryLink && Boolean(githubUrl))
 	const hasActions = $derived(
 		canShowCopy || canShowRepository || Boolean(chatGptUrl) || Boolean(claudeUrl)
-	);
+	)
 	const actionItemClass =
-		'relative z-10 flex items-center gap-2 rounded-sm px-3 py-1.5 text-left font-medium tracking-normal text-foreground-muted transition-colors duration-150 ease-out hover:text-foreground focus-visible:text-foreground';
+		"relative z-10 flex items-center gap-2 rounded-sm px-3 py-1.5 text-left font-medium tracking-normal text-foreground-muted transition-colors duration-150 ease-out hover:text-foreground focus-visible:text-foreground"
 
 	const copyLabel = $derived(
-		copyState === 'copying'
+		copyState === "copying"
 			? pageActionsConfig.copyLabels.copying
-			: copyState === 'success'
+			: copyState === "success"
 				? pageActionsConfig.copyLabels.success
-				: copyState === 'error'
+				: copyState === "error"
 					? pageActionsConfig.copyLabels.error
 					: pageActionsConfig.copyLabels.desktopIdle
-	);
+	)
 
 	function showHoverIndicator(node: HTMLElement) {
-		if (!actionsElement) return;
+		if (!actionsElement) return
 
-		hoveredElement = node;
-		const actionsRect = actionsElement.getBoundingClientRect();
-		const nodeRect = node.getBoundingClientRect();
+		hoveredElement = node
+		const actionsRect = actionsElement.getBoundingClientRect()
+		const nodeRect = node.getBoundingClientRect()
 
-		hoverIndicatorTop = nodeRect.top - actionsRect.top;
-		hoverIndicatorHeight = nodeRect.height;
-		hoverIndicatorVisible = true;
+		hoverIndicatorTop = nodeRect.top - actionsRect.top
+		hoverIndicatorHeight = nodeRect.height
+		hoverIndicatorVisible = true
 	}
 
 	function hideHoverIndicator() {
-		hoveredElement = null;
-		hoverIndicatorVisible = false;
+		hoveredElement = null
+		hoverIndicatorVisible = false
 	}
 
 	function restoreHoverIndicator() {
-		if (typeof document === 'undefined' || !actionsElement) return;
+		if (typeof document === "undefined" || !actionsElement) return
 
 		const focusedElement =
 			document.activeElement instanceof HTMLElement &&
 			actionsElement.contains(document.activeElement)
 				? document.activeElement
-				: null;
+				: null
 		const hoveredTarget =
 			hoveredElement?.isConnected &&
 			actionsElement.contains(hoveredElement) &&
-			hoveredElement.matches(':hover')
+			hoveredElement.matches(":hover")
 				? hoveredElement
-				: Array.from(actionsElement.querySelectorAll<HTMLElement>('a[href], button')).find((node) =>
-						node.matches(':hover')
-					);
-		const target = hoveredTarget ?? focusedElement;
+				: Array.from(actionsElement.querySelectorAll<HTMLElement>("a[href], button")).find((node) =>
+						node.matches(":hover")
+					)
+		const target = hoveredTarget ?? focusedElement
 
 		if (target) {
-			showHoverIndicator(target);
+			showHoverIndicator(target)
 		}
 	}
 
 	function handleActionsFocusOut(event: FocusEvent) {
-		if (!actionsElement) return;
-		if (event.relatedTarget instanceof Node && actionsElement.contains(event.relatedTarget)) return;
-		hideHoverIndicator();
+		if (!actionsElement) return
+		if (event.relatedTarget instanceof Node && actionsElement.contains(event.relatedTarget)) return
+		hideHoverIndicator()
 	}
 
 	async function handleCopy() {
-		if (!canShowCopy || !rawPath || copyState === 'copying' || copyState === 'success') return;
+		if (!canShowCopy || !rawPath || copyState === "copying" || copyState === "success") return
 
-		copyState = 'copying';
+		copyState = "copying"
 
 		try {
-			const response = await fetch(rawPath);
-			if (!response.ok) throw new Error('Failed to load document');
-			const content = await response.text();
-			await copyToClipboard(content);
-			copyState = 'success';
+			const response = await fetch(rawPath)
+			if (!response.ok) throw new Error("Failed to load document")
+			const content = await response.text()
+			await copyToClipboard(content)
+			copyState = "success"
 		} catch {
-			copyState = 'error';
+			copyState = "error"
 		}
 	}
 
 	// Reset copy state back to idle after 2 seconds
 	$effect(() => {
-		if (copyState !== 'success' && copyState !== 'error') return;
+		if (copyState !== "success" && copyState !== "error") return
 		const t = setTimeout(() => {
-			copyState = 'idle';
-		}, 2000);
+			copyState = "idle"
+		}, 2000)
 		return () => {
-			clearTimeout(t);
-		};
-	});
+			clearTimeout(t)
+		}
+	})
 
 	$effect(() => {
 		if (hasActions) {
-			restoreHoverIndicator();
+			restoreHoverIndicator()
 		}
-	});
+	})
 </script>
 
 {#if hasActions}
@@ -159,7 +159,7 @@
 					onmouseenter={(event) => showHoverIndicator(event.currentTarget)}
 					onfocus={(event) => showHoverIndicator(event.currentTarget)}
 					aria-live="polite"
-					aria-disabled={copyState === 'success'}
+					aria-disabled={copyState === "success"}
 					class={`${actionItemClass} overflow-hidden`}
 				>
 					<span class="grid" style="grid-template-areas: 'content';">
@@ -170,7 +170,7 @@
 								in:fly={{ y: 20, duration: 450, easing: backOut }}
 								out:fly={{ y: -20, duration: 300, easing: backOut }}
 							>
-								{#if copyState === 'success'}
+								{#if copyState === "success"}
 									<Checkmark class="size-4 flex-none" />
 								{:else}
 									<svg
@@ -273,7 +273,7 @@
 
 <style>
 	.doc-share-actions::before {
-		content: '';
+		content: "";
 		position: absolute;
 		inset-inline: 0px;
 		top: 0;

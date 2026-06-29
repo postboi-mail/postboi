@@ -1,58 +1,58 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
-	import { cn } from '$lib/utils/cn';
-	import { copyToClipboard } from '$lib/utils/copy';
+	import type { Snippet } from "svelte"
+	import { cn } from "$lib/utils/cn"
+	import { copyToClipboard } from "$lib/utils/copy"
 
-	import Copy from 'carbon-icons-svelte/lib/Copy.svelte';
-	import Checkmark from 'carbon-icons-svelte/lib/Checkmark.svelte';
+	import Copy from "carbon-icons-svelte/lib/Copy.svelte"
+	import Checkmark from "carbon-icons-svelte/lib/Checkmark.svelte"
 
 	type ComponentProps = {
-		id?: string;
-		class?: string;
-		children?: Snippet;
-		[prop: string]: unknown;
-	};
+		id?: string
+		class?: string
+		children?: Snippet
+		[prop: string]: unknown
+	}
 
-	const { children, id, class: className = '', ...restProps }: ComponentProps = $props();
+	const { children, id, class: className = "", ...restProps }: ComponentProps = $props()
 
-	let copied = $state(false);
+	let copied = $state(false)
 
 	async function copyHeadingUrl(event: MouseEvent) {
-		event.preventDefault();
-		event.stopPropagation();
+		event.preventDefault()
+		event.stopPropagation()
 
-		if (!id || typeof window === 'undefined') return;
+		if (!id || typeof window === "undefined") return
 
-		const hash = `#${encodeURIComponent(id)}`;
-		const url = `${window.location.origin}${window.location.pathname}${window.location.search}${hash}`;
+		const hash = `#${encodeURIComponent(id)}`
+		const url = `${window.location.origin}${window.location.pathname}${window.location.search}${hash}`
 
-		window.history.pushState(null, '', hash);
+		window.history.pushState(null, "", hash)
 
 		try {
-			await copyToClipboard(url);
-			copied = true;
+			await copyToClipboard(url)
+			copied = true
 		} catch (error) {
-			console.error('Failed to copy heading link', error);
+			console.error("Failed to copy heading link", error)
 		}
 	}
 
 	// Reset the copied state after 2 seconds
 	$effect(() => {
-		if (!copied) return;
+		if (!copied) return
 		const t = setTimeout(() => {
-			copied = false;
-		}, 2000);
+			copied = false
+		}, 2000)
 		return () => {
-			clearTimeout(t);
-		};
-	});
+			clearTimeout(t)
+		}
+	})
 </script>
 
 <h4
 	{id}
 	{...restProps}
 	class={cn(
-		'group mt-8 w-fit scroll-m-24 text-lg font-medium tracking-tight text-foreground [&_code]:text-xs',
+		"group mt-8 w-fit scroll-m-24 text-lg font-medium tracking-tight text-foreground [&_code]:text-xs",
 		className
 	)}
 >
@@ -68,15 +68,15 @@
 				<button
 					type="button"
 					class={cn(
-						'relative inline-flex size-6 shrink-0 items-center justify-center rounded-xs bg-background text-foreground card transition-[scale] duration-150 ease-out active:scale-[0.95]'
+						"relative inline-flex size-6 shrink-0 items-center justify-center rounded-xs bg-background text-foreground card transition-[scale] duration-150 ease-out active:scale-[0.95]"
 					)}
 					onclick={copyHeadingUrl}
-					aria-label={copied ? 'Copied heading link' : 'Copy heading link'}
+					aria-label={copied ? "Copied heading link" : "Copy heading link"}
 				>
 					<span
 						class={cn(
-							'absolute inline-flex items-center justify-center transition-[opacity,filter,scale] duration-150 ease-out will-change-[opacity,filter,scale]',
-							copied ? 'scale-[0.25] opacity-0 blur-xs' : 'blur-0 scale-100 opacity-100'
+							"absolute inline-flex items-center justify-center transition-[opacity,filter,scale] duration-150 ease-out will-change-[opacity,filter,scale]",
+							copied ? "scale-[0.25] opacity-0 blur-xs" : "blur-0 scale-100 opacity-100"
 						)}
 					>
 						<Copy size={16} />
@@ -84,8 +84,8 @@
 
 					<span
 						class={cn(
-							'absolute inline-flex items-center justify-center transition-[opacity,filter,scale] duration-150 ease-out will-change-[opacity,filter,scale]',
-							copied ? 'blur-0 scale-100 opacity-100' : 'scale-[0.25] opacity-0 blur-xs'
+							"absolute inline-flex items-center justify-center transition-[opacity,filter,scale] duration-150 ease-out will-change-[opacity,filter,scale]",
+							copied ? "blur-0 scale-100 opacity-100" : "scale-[0.25] opacity-0 blur-xs"
 						)}
 					>
 						<Checkmark size={16} />

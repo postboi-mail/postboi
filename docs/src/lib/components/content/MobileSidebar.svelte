@@ -1,189 +1,189 @@
 <script lang="ts">
-	import { afterNavigate } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { onDestroy } from 'svelte';
-	import ContentSidebar from '$lib/components/content/ContentSidebar.svelte';
-	import { brandingConfig } from '$lib/config/branding';
-	import { contentUiDefaults, type SectionUiConfig } from '$lib/config/content-ui';
-	import { getContentSectionLinks } from '$lib/content/sections';
-	import { siteConfig } from '$lib/config/site';
-	import Menu from 'carbon-icons-svelte/lib/Menu.svelte';
-	import Close from 'carbon-icons-svelte/lib/Close.svelte';
-	import type { ContentItem, ContentSectionLink } from '$lib/config/navigation';
+	import { afterNavigate } from "$app/navigation"
+	import { resolve } from "$app/paths"
+	import { onDestroy } from "svelte"
+	import ContentSidebar from "$lib/components/content/ContentSidebar.svelte"
+	import { brandingConfig } from "$lib/config/branding"
+	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
+	import { getContentSectionLinks } from "$lib/content/sections"
+	import { siteConfig } from "$lib/config/site"
+	import Menu from "carbon-icons-svelte/lib/Menu.svelte"
+	import Close from "carbon-icons-svelte/lib/Close.svelte"
+	import type { ContentItem, ContentSectionLink } from "$lib/config/navigation"
 
-	const defaultSectionLinks = getContentSectionLinks();
+	const defaultSectionLinks = getContentSectionLinks()
 
 	const {
 		navigation = [],
 		navigationLabel = contentUiDefaults.sidebar.navigationLabel,
-		basePath = '/',
+		basePath = "/",
 		showSearch = contentUiDefaults.search.enabled,
 		showThemeToggle = contentUiDefaults.sidebar.showThemeToggle,
 		showRepositoryLink = contentUiDefaults.sidebar.showRepositoryLink,
 		repositoryUrl = siteConfig.links.github,
 		repositoryAriaLabel = contentUiDefaults.sidebar.repositoryAriaLabel,
 		searchConfig = contentUiDefaults.search,
-		sectionLinks = defaultSectionLinks
+		sectionLinks = defaultSectionLinks,
 	}: {
-		navigation?: ContentItem[];
-		navigationLabel?: string;
-		basePath?: string;
-		showSearch?: boolean;
-		showThemeToggle?: boolean;
-		showRepositoryLink?: boolean;
-		repositoryUrl?: string;
-		repositoryAriaLabel?: string;
-		searchConfig?: SectionUiConfig['search'];
-		sectionLinks?: ContentSectionLink[];
-	} = $props();
+		navigation?: ContentItem[]
+		navigationLabel?: string
+		basePath?: string
+		showSearch?: boolean
+		showThemeToggle?: boolean
+		showRepositoryLink?: boolean
+		repositoryUrl?: string
+		repositoryAriaLabel?: string
+		searchConfig?: SectionUiConfig["search"]
+		sectionLinks?: ContentSectionLink[]
+	} = $props()
 
-	let isOpen = $state(false);
-	let isVisible = $state(false);
-	let restoreFocusEl: HTMLElement | null = null;
-	const canUseDocument = typeof document !== 'undefined';
-	const panelId = 'mobile-sidebar-panel';
-	const toggleButtonId = 'mobile-sidebar-toggle';
-	const closeButtonId = 'mobile-sidebar-close';
+	let isOpen = $state(false)
+	let isVisible = $state(false)
+	let restoreFocusEl: HTMLElement | null = null
+	const canUseDocument = typeof document !== "undefined"
+	const panelId = "mobile-sidebar-panel"
+	const toggleButtonId = "mobile-sidebar-toggle"
+	const closeButtonId = "mobile-sidebar-close"
 
 	function setBodyOverflow(value: string) {
-		if (!canUseDocument) return;
-		document.body.style.overflow = value;
+		if (!canUseDocument) return
+		document.body.style.overflow = value
 	}
 
 	function getPanelElement() {
-		if (!canUseDocument) return null;
-		const node = document.getElementById(panelId);
-		return node instanceof HTMLDivElement ? node : null;
+		if (!canUseDocument) return null
+		const node = document.getElementById(panelId)
+		return node instanceof HTMLDivElement ? node : null
 	}
 
 	function getToggleButton() {
-		if (!canUseDocument) return null;
-		const node = document.getElementById(toggleButtonId);
-		return node instanceof HTMLButtonElement ? node : null;
+		if (!canUseDocument) return null
+		const node = document.getElementById(toggleButtonId)
+		return node instanceof HTMLButtonElement ? node : null
 	}
 
 	function getCloseButton() {
-		if (!canUseDocument) return null;
-		const node = document.getElementById(closeButtonId);
-		return node instanceof HTMLButtonElement ? node : null;
+		if (!canUseDocument) return null
+		const node = document.getElementById(closeButtonId)
+		return node instanceof HTMLButtonElement ? node : null
 	}
 
 	function open() {
 		const activeElement =
 			canUseDocument && document.activeElement instanceof HTMLElement
 				? document.activeElement
-				: null;
-		restoreFocusEl = activeElement instanceof HTMLElement ? activeElement : getToggleButton();
-		setBodyOverflow('hidden');
+				: null
+		restoreFocusEl = activeElement instanceof HTMLElement ? activeElement : getToggleButton()
+		setBodyOverflow("hidden")
 
 		if (isVisible) {
-			isOpen = true;
+			isOpen = true
 			requestAnimationFrame(() => {
-				getCloseButton()?.focus();
-			});
-			return;
+				getCloseButton()?.focus()
+			})
+			return
 		}
 
-		isVisible = true;
+		isVisible = true
 		requestAnimationFrame(() => {
-			isOpen = true;
-			getCloseButton()?.focus();
-		});
+			isOpen = true
+			getCloseButton()?.focus()
+		})
 	}
 
 	function toggle() {
 		if (isOpen) {
-			close();
-			return;
+			close()
+			return
 		}
 
-		open();
+		open()
 	}
 
 	function close(options: { restoreFocus?: boolean } = {}) {
-		const { restoreFocus = true } = options;
-		isOpen = false;
-		setBodyOverflow('');
+		const { restoreFocus = true } = options
+		isOpen = false
+		setBodyOverflow("")
 
 		if (restoreFocus) {
-			restoreFocusEl?.focus();
+			restoreFocusEl?.focus()
 		}
 
-		restoreFocusEl = null;
+		restoreFocusEl = null
 	}
 
 	function closePanel() {
-		close();
+		close()
 	}
 
 	function getFocusableElements() {
-		const panel = getPanelElement();
-		if (!panel) return [];
+		const panel = getPanelElement()
+		if (!panel) return []
 		const selector =
-			'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+			'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 		return Array.from(panel.querySelectorAll<HTMLElement>(selector)).filter(
 			(element) =>
-				!element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true'
-		);
+				!element.hasAttribute("disabled") && element.getAttribute("aria-hidden") !== "true"
+		)
 	}
 
 	function handleTabKey(event: KeyboardEvent) {
-		const panel = getPanelElement();
-		if (!panel) return;
+		const panel = getPanelElement()
+		if (!panel) return
 
-		const focusable = getFocusableElements();
+		const focusable = getFocusableElements()
 		if (focusable.length === 0) {
-			event.preventDefault();
-			return;
+			event.preventDefault()
+			return
 		}
 
-		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
+		const first = focusable[0]
+		const last = focusable[focusable.length - 1]
 		const activeElement =
 			canUseDocument && document.activeElement instanceof HTMLElement
 				? document.activeElement
-				: null;
+				: null
 
 		if (event.shiftKey) {
 			if (!activeElement || activeElement === first || !panel.contains(activeElement)) {
-				event.preventDefault();
-				last.focus();
+				event.preventDefault()
+				last.focus()
 			}
-			return;
+			return
 		}
 
 		if (!activeElement || activeElement === last || !panel.contains(activeElement)) {
-			event.preventDefault();
-			first.focus();
+			event.preventDefault()
+			first.focus()
 		}
 	}
 
 	function handleDocumentKeydown(event: KeyboardEvent) {
-		if (!isOpen) return;
+		if (!isOpen) return
 
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			close();
-			return;
+		if (event.key === "Escape") {
+			event.preventDefault()
+			close()
+			return
 		}
 
-		if (event.key === 'Tab') {
-			handleTabKey(event);
+		if (event.key === "Tab") {
+			handleTabKey(event)
 		}
 	}
 
 	function handleSidebarTransitionEnd(event: TransitionEvent) {
-		if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
-		if (!isOpen) isVisible = false;
+		if (event.target !== event.currentTarget || event.propertyName !== "transform") return
+		if (!isOpen) isVisible = false
 	}
 
 	afterNavigate(() => {
-		close({ restoreFocus: false });
-	});
+		close({ restoreFocus: false })
+	})
 
 	onDestroy(() => {
-		setBodyOverflow('');
-	});
+		setBodyOverflow("")
+	})
 </script>
 
 <svelte:document onkeydown={handleDocumentKeydown} />
@@ -192,7 +192,7 @@
 	class="fixed inset-x-0 top-0 z-50 flex items-center justify-between border-b border-border bg-background px-4 py-1.5 lg:hidden"
 >
 	<a
-		href={resolve('/')}
+		href={resolve("/")}
 		class="inline-flex items-center gap-1 px-2 py-2 text-sm tracking-tight text-foreground transition-colors duration-150 ease-out hover:text-foreground"
 	>
 		<span
@@ -222,7 +222,7 @@
 		role="button"
 		tabindex="-1"
 		onkeydown={(event) => {
-			if (event.key === 'Escape') closePanel();
+			if (event.key === "Escape") closePanel()
 		}}
 		aria-label="Close sidebar"
 		aria-hidden={!isOpen}

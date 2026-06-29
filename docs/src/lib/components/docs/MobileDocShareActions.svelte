@@ -1,190 +1,190 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
-	import { backOut } from 'svelte/easing';
+	import { fly } from "svelte/transition"
+	import { backOut } from "svelte/easing"
 	import {
 		contentUiDefaults,
 		resolveAssistantUrls,
-		type SectionUiConfig
-	} from '$lib/config/content-ui';
-	import { portal } from '$lib/utils/use-portal';
-	import { copyToClipboard } from '$lib/utils/copy';
-	import Checkmark from 'carbon-icons-svelte/lib/Checkmark.svelte';
-	import LogoGithub from 'carbon-icons-svelte/lib/LogoGithub.svelte';
-	import OverflowMenuHorizontal from 'carbon-icons-svelte/lib/OverflowMenuHorizontal.svelte';
-	import { onMount, tick } from 'svelte';
+		type SectionUiConfig,
+	} from "$lib/config/content-ui"
+	import { portal } from "$lib/utils/use-portal"
+	import { copyToClipboard } from "$lib/utils/copy"
+	import Checkmark from "carbon-icons-svelte/lib/Checkmark.svelte"
+	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
+	import OverflowMenuHorizontal from "carbon-icons-svelte/lib/OverflowMenuHorizontal.svelte"
+	import { onMount, tick } from "svelte"
 
 	type Props = {
-		rawPath?: string | null;
-		rawUrl?: string | null;
-		githubUrl?: string | null;
-		pageActionsConfig?: SectionUiConfig['pageActions'];
-	};
+		rawPath?: string | null
+		rawUrl?: string | null
+		githubUrl?: string | null
+		pageActionsConfig?: SectionUiConfig["pageActions"]
+	}
 
 	let {
 		rawPath,
 		rawUrl,
 		githubUrl,
-		pageActionsConfig = contentUiDefaults.pageActions
-	}: Props = $props();
+		pageActionsConfig = contentUiDefaults.pageActions,
+	}: Props = $props()
 
-	let copyState = $state<'idle' | 'copying' | 'success' | 'error'>('idle');
-	let isDropdownOpen = $state(false);
-	let dropdownStyle = $state('');
-	const dropdownId = 'mobile-doc-actions-menu';
-	const dropdownTriggerId = `${dropdownId}-trigger`;
-	const opensInNewTabLabel = '(opens in a new tab)';
-	const canUseWindow = typeof window !== 'undefined';
-	const canUseDocument = typeof document !== 'undefined';
+	let copyState = $state<"idle" | "copying" | "success" | "error">("idle")
+	let isDropdownOpen = $state(false)
+	let dropdownStyle = $state("")
+	const dropdownId = "mobile-doc-actions-menu"
+	const dropdownTriggerId = `${dropdownId}-trigger`
+	const opensInNewTabLabel = "(opens in a new tab)"
+	const canUseWindow = typeof window !== "undefined"
+	const canUseDocument = typeof document !== "undefined"
 
-	const assistantUrls = $derived(resolveAssistantUrls(pageActionsConfig, rawUrl));
-	const chatGptUrl = $derived(assistantUrls.chatGptUrl);
-	const claudeUrl = $derived(assistantUrls.claudeUrl);
-	const canShowCopy = $derived(pageActionsConfig.showCopyMarkdown && Boolean(rawPath));
-	const canShowRepository = $derived(pageActionsConfig.showRepositoryLink && Boolean(githubUrl));
-	const hasMenuActions = $derived(canShowRepository || Boolean(chatGptUrl) || Boolean(claudeUrl));
-	const hasActions = $derived(canShowCopy || hasMenuActions);
+	const assistantUrls = $derived(resolveAssistantUrls(pageActionsConfig, rawUrl))
+	const chatGptUrl = $derived(assistantUrls.chatGptUrl)
+	const claudeUrl = $derived(assistantUrls.claudeUrl)
+	const canShowCopy = $derived(pageActionsConfig.showCopyMarkdown && Boolean(rawPath))
+	const canShowRepository = $derived(pageActionsConfig.showRepositoryLink && Boolean(githubUrl))
+	const hasMenuActions = $derived(canShowRepository || Boolean(chatGptUrl) || Boolean(claudeUrl))
+	const hasActions = $derived(canShowCopy || hasMenuActions)
 	const prefetchedContentPromise = $derived.by(() => {
 		if (!canShowCopy || !rawPath || !canUseWindow) {
-			return Promise.resolve<string | null>(null);
+			return Promise.resolve<string | null>(null)
 		}
-		return fetchPrefetchedContent(rawPath);
-	});
+		return fetchPrefetchedContent(rawPath)
+	})
 
 	const copyLabel = $derived(
-		copyState === 'copying'
+		copyState === "copying"
 			? pageActionsConfig.copyLabels.copying
-			: copyState === 'success'
+			: copyState === "success"
 				? pageActionsConfig.copyLabels.success
-				: copyState === 'error'
+				: copyState === "error"
 					? pageActionsConfig.copyLabels.error
 					: pageActionsConfig.copyLabels.mobileIdle
-	);
+	)
 
 	async function fetchPrefetchedContent(path: string) {
 		try {
-			const response = await fetch(path);
+			const response = await fetch(path)
 			if (response.ok) {
-				return await response.text();
+				return await response.text()
 			}
 		} catch (e) {
-			console.warn('Failed to prefetch document content:', e);
+			console.warn("Failed to prefetch document content:", e)
 		}
-		return null;
+		return null
 	}
 
 	async function handleCopy() {
-		if (!canShowCopy || copyState === 'copying' || copyState === 'success') return;
+		if (!canShowCopy || copyState === "copying" || copyState === "success") return
 
-		copyState = 'copying';
+		copyState = "copying"
 
 		try {
-			let content = await prefetchedContentPromise;
+			let content = await prefetchedContentPromise
 			if (!content) {
-				if (!rawPath) throw new Error('No path to fetch');
-				const response = await fetch(rawPath);
-				if (!response.ok) throw new Error('Failed to load document');
-				content = await response.text();
+				if (!rawPath) throw new Error("No path to fetch")
+				const response = await fetch(rawPath)
+				if (!response.ok) throw new Error("Failed to load document")
+				content = await response.text()
 			}
 
-			await copyToClipboard(content);
-			copyState = 'success';
+			await copyToClipboard(content)
+			copyState = "success"
 		} catch (e) {
-			console.error('Copy failed:', e);
-			copyState = 'error';
+			console.error("Copy failed:", e)
+			copyState = "error"
 		}
 	}
 
 	// Reset copy state back to idle after 2 seconds
 	$effect(() => {
-		if (copyState !== 'success' && copyState !== 'error') return;
+		if (copyState !== "success" && copyState !== "error") return
 		const t = setTimeout(() => {
-			copyState = 'idle';
-		}, 2000);
+			copyState = "idle"
+		}, 2000)
 		return () => {
-			clearTimeout(t);
-		};
-	});
+			clearTimeout(t)
+		}
+	})
 
 	function toggleDropdown() {
-		if (!hasMenuActions) return;
+		if (!hasMenuActions) return
 		if (isDropdownOpen) {
-			closeDropdown({ restoreFocus: true });
-			return;
+			closeDropdown({ restoreFocus: true })
+			return
 		}
-		isDropdownOpen = true;
-		updatePosition();
+		isDropdownOpen = true
+		updatePosition()
 		void tick().then(() => {
-			const items = getMenuItems();
-			if (items.length > 0) items[0].focus();
-		});
+			const items = getMenuItems()
+			if (items.length > 0) items[0].focus()
+		})
 	}
 
 	function closeDropdown(options?: { restoreFocus?: boolean }) {
-		isDropdownOpen = false;
+		isDropdownOpen = false
 		if (options?.restoreFocus) {
-			getTriggerElement()?.focus();
+			getTriggerElement()?.focus()
 		}
 	}
 
 	function getDropdownElement() {
-		if (!canUseDocument) return null;
-		const node = document.getElementById(dropdownId);
-		return node instanceof HTMLDivElement ? node : null;
+		if (!canUseDocument) return null
+		const node = document.getElementById(dropdownId)
+		return node instanceof HTMLDivElement ? node : null
 	}
 
 	function getTriggerElement() {
-		if (!canUseDocument) return null;
-		const node = document.getElementById(dropdownTriggerId);
-		return node instanceof HTMLButtonElement ? node : null;
+		if (!canUseDocument) return null
+		const node = document.getElementById(dropdownTriggerId)
+		return node instanceof HTMLButtonElement ? node : null
 	}
 
 	function getMenuItems() {
-		const dropdown = getDropdownElement();
-		if (!dropdown) return [];
-		return Array.from(dropdown.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+		const dropdown = getDropdownElement()
+		if (!dropdown) return []
+		return Array.from(dropdown.querySelectorAll<HTMLElement>('[role="menuitem"]'))
 	}
 
 	function handleDropdownKeydown(event: KeyboardEvent) {
-		if (!isDropdownOpen) return;
+		if (!isDropdownOpen) return
 
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			closeDropdown({ restoreFocus: true });
-			return;
+		if (event.key === "Escape") {
+			event.preventDefault()
+			closeDropdown({ restoreFocus: true })
+			return
 		}
 
-		const items = getMenuItems();
-		if (items.length === 0) return;
+		const items = getMenuItems()
+		if (items.length === 0) return
 
 		const activeElement =
 			canUseDocument && document.activeElement instanceof HTMLElement
 				? document.activeElement
-				: null;
-		const activeIndex = activeElement ? items.indexOf(activeElement) : -1;
+				: null
+		const activeIndex = activeElement ? items.indexOf(activeElement) : -1
 
-		if (event.key === 'ArrowDown') {
-			event.preventDefault();
-			const nextIndex = activeIndex >= 0 ? (activeIndex + 1) % items.length : 0;
-			items[nextIndex]?.focus();
-			return;
+		if (event.key === "ArrowDown") {
+			event.preventDefault()
+			const nextIndex = activeIndex >= 0 ? (activeIndex + 1) % items.length : 0
+			items[nextIndex]?.focus()
+			return
 		}
 
-		if (event.key === 'ArrowUp') {
-			event.preventDefault();
+		if (event.key === "ArrowUp") {
+			event.preventDefault()
 			const nextIndex =
-				activeIndex >= 0 ? (activeIndex - 1 + items.length) % items.length : items.length - 1;
-			items[nextIndex]?.focus();
-			return;
+				activeIndex >= 0 ? (activeIndex - 1 + items.length) % items.length : items.length - 1
+			items[nextIndex]?.focus()
+			return
 		}
 
-		if (event.key === 'Tab') {
-			closeDropdown();
+		if (event.key === "Tab") {
+			closeDropdown()
 		}
 	}
 
 	function handleClickOutside(event: MouseEvent) {
-		const dropdown = getDropdownElement();
-		const trigger = getTriggerElement();
+		const dropdown = getDropdownElement()
+		const trigger = getTriggerElement()
 
 		if (
 			isDropdownOpen &&
@@ -193,50 +193,50 @@
 			trigger &&
 			!trigger.contains(event.target as Node)
 		) {
-			closeDropdown();
+			closeDropdown()
 		}
 	}
 
 	function updatePosition() {
-		const trigger = getTriggerElement();
-		if (!trigger || !canUseWindow) return;
-		const rect = trigger.getBoundingClientRect();
-		dropdownStyle = `top: ${(rect.bottom + 8).toString()}px; right: ${(window.innerWidth - rect.right).toString()}px; position: fixed;`;
+		const trigger = getTriggerElement()
+		if (!trigger || !canUseWindow) return
+		const rect = trigger.getBoundingClientRect()
+		dropdownStyle = `top: ${(rect.bottom + 8).toString()}px; right: ${(window.innerWidth - rect.right).toString()}px; position: fixed;`
 	}
 
 	onMount(() => {
-		if (!canUseWindow) return;
+		if (!canUseWindow) return
 
 		const handleScrollOrResize = () => {
-			if (!isDropdownOpen) return;
-			updatePosition();
-		};
+			if (!isDropdownOpen) return
+			updatePosition()
+		}
 
 		const handleWindowClick = (event: MouseEvent) => {
-			if (!isDropdownOpen) return;
-			handleClickOutside(event);
-		};
+			if (!isDropdownOpen) return
+			handleClickOutside(event)
+		}
 
 		const handleWindowKeydown = (event: KeyboardEvent) => {
-			if (!isDropdownOpen) return;
-			handleDropdownKeydown(event);
-		};
+			if (!isDropdownOpen) return
+			handleDropdownKeydown(event)
+		}
 
-		window.addEventListener('click', handleWindowClick);
-		window.addEventListener('scroll', handleScrollOrResize, true);
-		window.addEventListener('resize', handleScrollOrResize);
-		window.addEventListener('keydown', handleWindowKeydown);
+		window.addEventListener("click", handleWindowClick)
+		window.addEventListener("scroll", handleScrollOrResize, true)
+		window.addEventListener("resize", handleScrollOrResize)
+		window.addEventListener("keydown", handleWindowKeydown)
 
 		return () => {
-			window.removeEventListener('click', handleWindowClick);
-			window.removeEventListener('scroll', handleScrollOrResize, true);
-			window.removeEventListener('resize', handleScrollOrResize);
-			window.removeEventListener('keydown', handleWindowKeydown);
-		};
-	});
+			window.removeEventListener("click", handleWindowClick)
+			window.removeEventListener("scroll", handleScrollOrResize, true)
+			window.removeEventListener("resize", handleScrollOrResize)
+			window.removeEventListener("keydown", handleWindowKeydown)
+		}
+	})
 
 	const buttonClass =
-		"card relative inline-flex h-9 w-full font-medium shrink-0 overflow-hidden items-center justify-center gap-2 rounded-sm bg-background px-4 py-2 text-sm whitespace-nowrap text-foreground transition-[background-color] duration-150 ease-out hover:bg-background-muted disabled:pointer-events-none disabled:opacity-50 has-[>svg]:px-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 flex-1";
+		"card relative inline-flex h-9 w-full font-medium shrink-0 overflow-hidden items-center justify-center gap-2 rounded-sm bg-background px-4 py-2 text-sm whitespace-nowrap text-foreground transition-[background-color] duration-150 ease-out hover:bg-background-muted disabled:pointer-events-none disabled:opacity-50 has-[>svg]:px-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 flex-1"
 </script>
 
 {#if hasActions}
@@ -247,7 +247,7 @@
 					type="button"
 					onclick={() => void handleCopy()}
 					aria-live="polite"
-					aria-disabled={copyState === 'success'}
+					aria-disabled={copyState === "success"}
 					class={buttonClass}
 				>
 					<span class="grid place-items-center" style="grid-template-areas: 'content';">
@@ -258,7 +258,7 @@
 								in:fly={{ y: 20, duration: 300, easing: backOut }}
 								out:fly={{ y: -20, duration: 200, easing: backOut }}
 							>
-								{#if copyState === 'success'}
+								{#if copyState === "success"}
 									<Checkmark class="size-4 flex-none" />
 								{:else}
 									<svg
@@ -304,7 +304,7 @@
 
 				{#if isDropdownOpen}
 					<div
-						use:portal={'main'}
+						use:portal={"main"}
 						id={dropdownId}
 						style={dropdownStyle}
 						class="z-50 flex w-48 origin-top-right flex-col gap-0.5 rounded-md bg-background p-1 card"

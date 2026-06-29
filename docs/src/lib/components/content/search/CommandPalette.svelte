@@ -1,219 +1,219 @@
 <script lang="ts">
-	import { searchState } from '$lib/stores/search.svelte';
-	import { contentUiDefaults, type SectionUiConfig } from '$lib/config/content-ui';
-	import { searchContent } from '$lib/utils/search';
-	import { fade, scale } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
-	import { goto, onNavigate } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { cn } from '$lib/utils/cn';
-	import ScrollArea from '$lib/components/ui/ScrollArea.svelte';
-	import { onMount } from 'svelte';
-	import Search from 'carbon-icons-svelte/lib/Search.svelte';
-	import Return from 'carbon-icons-svelte/lib/Return.svelte';
+	import { searchState } from "$lib/stores/search.svelte"
+	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
+	import { searchContent } from "$lib/utils/search"
+	import { fade, scale } from "svelte/transition"
+	import { cubicOut } from "svelte/easing"
+	import { goto, onNavigate } from "$app/navigation"
+	import { resolve } from "$app/paths"
+	import { cn } from "$lib/utils/cn"
+	import ScrollArea from "$lib/components/ui/ScrollArea.svelte"
+	import { onMount } from "svelte"
+	import Search from "carbon-icons-svelte/lib/Search.svelte"
+	import Return from "carbon-icons-svelte/lib/Return.svelte"
 
-	const { searchConfig = contentUiDefaults.search }: { searchConfig?: SectionUiConfig['search'] } =
-		$props();
+	const { searchConfig = contentUiDefaults.search }: { searchConfig?: SectionUiConfig["search"] } =
+		$props()
 
-	let query = $state('');
-	let results = $derived(searchContent(query, searchConfig));
-	let selectedIndex = $state(0);
-	let inputRef = $state<HTMLInputElement>();
-	let contentHeight = $state(0);
-	let resultsRef = $state<HTMLDivElement | null>(null);
-	let selectedIndicatorTop = $state(0);
-	let selectedIndicatorHeight = $state(0);
-	let selectedIndicatorVisible = $state(false);
-	let selectedGlowLeft = $state(0);
-	let selectedGlowTop = $state(0);
-	let selectedGlowHeight = $state(0);
-	let selectedGlowVisible = $state(false);
-	let selectedResultElement: HTMLElement | null = null;
-	let selectedResultIsChild = false;
-	let pendingSelectedIndicatorFrame: number | null = null;
+	let query = $state("")
+	let results = $derived(searchContent(query, searchConfig))
+	let selectedIndex = $state(0)
+	let inputRef = $state<HTMLInputElement>()
+	let contentHeight = $state(0)
+	let resultsRef = $state<HTMLDivElement | null>(null)
+	let selectedIndicatorTop = $state(0)
+	let selectedIndicatorHeight = $state(0)
+	let selectedIndicatorVisible = $state(false)
+	let selectedGlowLeft = $state(0)
+	let selectedGlowTop = $state(0)
+	let selectedGlowHeight = $state(0)
+	let selectedGlowVisible = $state(false)
+	let selectedResultElement: HTMLElement | null = null
+	let selectedResultIsChild = false
+	let pendingSelectedIndicatorFrame: number | null = null
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
-		const hotkey = searchConfig.hotkey;
+		const hotkey = searchConfig.hotkey
 		if (!hotkey.enabled || !searchConfig.enabled) {
-			return;
+			return
 		}
 
-		const matchesModifier = hotkey.metaOrCtrl ? e.metaKey || e.ctrlKey : true;
-		const matchesKey = e.key.toLowerCase() === hotkey.key.toLowerCase();
+		const matchesModifier = hotkey.metaOrCtrl ? e.metaKey || e.ctrlKey : true
+		const matchesKey = e.key.toLowerCase() === hotkey.key.toLowerCase()
 		if (matchesModifier && matchesKey) {
-			e.preventDefault();
-			searchState.toggle();
+			e.preventDefault()
+			searchState.toggle()
 		}
 	}
 
 	onMount(() => {
-		window.addEventListener('keydown', handleGlobalKeydown);
+		window.addEventListener("keydown", handleGlobalKeydown)
 		return () => {
-			window.removeEventListener('keydown', handleGlobalKeydown);
-		};
-	});
-
-	$effect(() => {
-		if (!searchConfig.enabled) return;
-		if (searchState.isOpen && inputRef) {
-			inputRef.focus();
+			window.removeEventListener("keydown", handleGlobalKeydown)
 		}
-	});
+	})
 
 	$effect(() => {
-		void results;
-		selectedIndex = 0;
-	});
+		if (!searchConfig.enabled) return
+		if (searchState.isOpen && inputRef) {
+			inputRef.focus()
+		}
+	})
+
+	$effect(() => {
+		void results
+		selectedIndex = 0
+	})
 
 	function updateSelectedIndicators() {
 		if (!resultsRef || !selectedResultElement) {
-			selectedIndicatorVisible = false;
-			selectedGlowVisible = false;
-			return;
+			selectedIndicatorVisible = false
+			selectedGlowVisible = false
+			return
 		}
 
-		const resultsRect = resultsRef.getBoundingClientRect();
-		const nodeRect = selectedResultElement.getBoundingClientRect();
+		const resultsRect = resultsRef.getBoundingClientRect()
+		const nodeRect = selectedResultElement.getBoundingClientRect()
 
-		selectedIndicatorTop = nodeRect.top - resultsRect.top;
-		selectedIndicatorHeight = nodeRect.height;
-		selectedIndicatorVisible = true;
+		selectedIndicatorTop = nodeRect.top - resultsRect.top
+		selectedIndicatorHeight = nodeRect.height
+		selectedIndicatorVisible = true
 
-		selectedGlowLeft = nodeRect.left - resultsRect.left + 12;
-		selectedGlowTop = selectedIndicatorTop;
-		selectedGlowHeight = selectedIndicatorHeight;
-		selectedGlowVisible = selectedResultIsChild;
+		selectedGlowLeft = nodeRect.left - resultsRect.left + 12
+		selectedGlowTop = selectedIndicatorTop
+		selectedGlowHeight = selectedIndicatorHeight
+		selectedGlowVisible = selectedResultIsChild
 	}
 
 	function scheduleSelectedIndicatorUpdate() {
-		if (typeof window === 'undefined') {
-			updateSelectedIndicators();
-			return;
+		if (typeof window === "undefined") {
+			updateSelectedIndicators()
+			return
 		}
 
 		if (pendingSelectedIndicatorFrame !== null) {
-			window.cancelAnimationFrame(pendingSelectedIndicatorFrame);
+			window.cancelAnimationFrame(pendingSelectedIndicatorFrame)
 		}
 
 		pendingSelectedIndicatorFrame = window.requestAnimationFrame(() => {
-			pendingSelectedIndicatorFrame = null;
-			updateSelectedIndicators();
-		});
+			pendingSelectedIndicatorFrame = null
+			updateSelectedIndicators()
+		})
 	}
 
 	function registerResult(node: HTMLElement, params: { selected: boolean; child: boolean }) {
 		if (params.selected) {
-			selectedResultElement = node;
-			selectedResultIsChild = params.child;
-			scheduleSelectedIndicatorUpdate();
+			selectedResultElement = node
+			selectedResultIsChild = params.child
+			scheduleSelectedIndicatorUpdate()
 		}
 
 		return {
 			update(nextParams: { selected: boolean; child: boolean }) {
 				if (nextParams.selected) {
-					selectedResultElement = node;
-					selectedResultIsChild = nextParams.child;
-					scheduleSelectedIndicatorUpdate();
+					selectedResultElement = node
+					selectedResultIsChild = nextParams.child
+					scheduleSelectedIndicatorUpdate()
 				} else if (selectedResultElement === node) {
-					selectedResultElement = null;
-					selectedResultIsChild = false;
-					scheduleSelectedIndicatorUpdate();
+					selectedResultElement = null
+					selectedResultIsChild = false
+					scheduleSelectedIndicatorUpdate()
 				}
 			},
 			destroy() {
 				if (selectedResultElement === node) {
-					selectedResultElement = null;
-					selectedResultIsChild = false;
-					scheduleSelectedIndicatorUpdate();
+					selectedResultElement = null
+					selectedResultIsChild = false
+					scheduleSelectedIndicatorUpdate()
 				}
-			}
-		};
+			},
+		}
 	}
 
 	$effect(() => {
-		const index = selectedIndex;
-		const resultCount = results.length;
-		void index;
-		void resultCount;
+		const index = selectedIndex
+		const resultCount = results.length
+		void index
+		void resultCount
 
-		scheduleSelectedIndicatorUpdate();
+		scheduleSelectedIndicatorUpdate()
 
-		if (typeof window === 'undefined') return;
+		if (typeof window === "undefined") return
 
-		window.addEventListener('resize', scheduleSelectedIndicatorUpdate);
+		window.addEventListener("resize", scheduleSelectedIndicatorUpdate)
 
 		return () => {
-			window.removeEventListener('resize', scheduleSelectedIndicatorUpdate);
+			window.removeEventListener("resize", scheduleSelectedIndicatorUpdate)
 			if (pendingSelectedIndicatorFrame !== null) {
-				window.cancelAnimationFrame(pendingSelectedIndicatorFrame);
-				pendingSelectedIndicatorFrame = null;
+				window.cancelAnimationFrame(pendingSelectedIndicatorFrame)
+				pendingSelectedIndicatorFrame = null
 			}
-		};
-	});
+		}
+	})
 
 	function close() {
-		searchState.close();
+		searchState.close()
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (!searchState.isOpen) return;
+		if (!searchState.isOpen) return
 
-		if (e.key === 'Escape') {
-			e.preventDefault();
-			close();
-			return;
+		if (e.key === "Escape") {
+			e.preventDefault()
+			close()
+			return
 		}
 
 		if (results.length === 0) {
-			return;
+			return
 		}
 
-		if (e.key === 'ArrowDown') {
-			e.preventDefault();
-			selectedIndex = (selectedIndex + 1) % results.length;
-		} else if (e.key === 'ArrowUp') {
-			e.preventDefault();
-			selectedIndex = (selectedIndex - 1 + results.length) % results.length;
-		} else if (e.key === 'Enter') {
-			e.preventDefault();
+		if (e.key === "ArrowDown") {
+			e.preventDefault()
+			selectedIndex = (selectedIndex + 1) % results.length
+		} else if (e.key === "ArrowUp") {
+			e.preventDefault()
+			selectedIndex = (selectedIndex - 1 + results.length) % results.length
+		} else if (e.key === "Enter") {
+			e.preventDefault()
 			if (results[selectedIndex]) {
-				selectResult(results[selectedIndex]);
+				selectResult(results[selectedIndex])
 			}
 		}
 	}
 
 	$effect(() => {
-		if (!searchConfig.enabled) return;
+		if (!searchConfig.enabled) return
 		if (searchState.isOpen) {
-			window.addEventListener('keydown', handleKeydown);
+			window.addEventListener("keydown", handleKeydown)
 			return () => {
-				window.removeEventListener('keydown', handleKeydown);
-			};
+				window.removeEventListener("keydown", handleKeydown)
+			}
 		}
-	});
+	})
 
 	function selectResult(result: ReturnType<typeof searchContent>[number]) {
-		const href = `${result.slug}${result.anchor ?? ''}`;
+		const href = `${result.slug}${result.anchor ?? ""}`
 		// @ts-expect-error arg cannot be cast as `resolve`'s expected type
-		void goto(resolve(href));
-		close();
+		void goto(resolve(href))
+		close()
 	}
 
 	onNavigate(() => {
-		close();
-	});
+		close()
+	})
 
 	function highlight(text: string, search: string) {
-		if (!search.trim()) return [{ text, highlight: false }];
+		if (!search.trim()) return [{ text, highlight: false }]
 
-		const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		const regex = new RegExp(`(${escapedSearch})`, 'gi');
-		const parts = text.split(regex);
+		const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+		const regex = new RegExp(`(${escapedSearch})`, "gi")
+		const parts = text.split(regex)
 
 		return parts.map((part) => ({
 			text: part,
-			highlight: part.toLowerCase() === search.toLowerCase()
-		}));
+			highlight: part.toLowerCase() === search.toLowerCase(),
+		}))
 	}
 </script>
 
@@ -231,10 +231,10 @@
 		aria-modal="true"
 		tabindex="-1"
 		onclick={(e) => {
-			if (e.target === e.currentTarget) close();
+			if (e.target === e.currentTarget) close()
 		}}
 		onkeydown={(e) => {
-			if (e.key === 'Escape') close();
+			if (e.key === "Escape") close()
 		}}
 	>
 		<div
@@ -243,11 +243,11 @@
 			transition:scale={{
 				duration: 300,
 				start: 0.95,
-				easing: cubicOut
+				easing: cubicOut,
 			}}
 			onoutroend={() => {
-				query = '';
-				contentHeight = 0;
+				query = ""
+				contentHeight = 0
 			}}
 		>
 			<div
@@ -284,37 +284,37 @@
 								style={`
 										--command-selected-top: ${selectedIndicatorTop.toString()}px;
 										--command-selected-height: ${selectedIndicatorHeight.toString()}px;
-										--command-selected-opacity: ${selectedIndicatorVisible ? '1' : '0'};
+										--command-selected-opacity: ${selectedIndicatorVisible ? "1" : "0"};
 										--command-glow-left: ${selectedGlowLeft.toString()}px;
 										--command-glow-top: ${selectedGlowTop.toString()}px;
 										--command-glow-height: ${selectedGlowHeight.toString()}px;
-										--command-glow-opacity: ${selectedGlowVisible ? '1' : '0'};
+										--command-glow-opacity: ${selectedGlowVisible ? "1" : "0"};
 									`}
 							>
-								{#each results as result, i (`${result.slug}${result.anchor ?? ''}${i.toString()}`)}
+								{#each results as result, i (`${result.slug}${result.anchor ?? ""}${i.toString()}`)}
 									{@const isChild =
-										result.matchType === 'heading' || result.matchType === 'content'}
+										result.matchType === "heading" || result.matchType === "content"}
 									{@const isSelected = i === selectedIndex}
 									<button
 										class={cn(
-											'group relative z-10 flex w-full flex-col items-start gap-1 rounded-sm px-3 py-2 text-sm font-medium tracking-normal transition-colors duration-150 ease-out',
-											isChild && 'pl-8',
-											isSelected ? 'text-foreground' : 'text-foreground hover:text-foreground'
+											"group relative z-10 flex w-full flex-col items-start gap-1 rounded-sm px-3 py-2 text-sm font-medium tracking-normal transition-colors duration-150 ease-out",
+											isChild && "pl-8",
+											isSelected ? "text-foreground" : "text-foreground hover:text-foreground"
 										)}
 										onclick={() => {
-											selectResult(result);
+											selectResult(result)
 										}}
 										onmouseenter={() => (selectedIndex = i)}
 										use:registerResult={{ selected: isSelected, child: isChild }}
 									>
 										{#if isChild}
-											<div class={cn('absolute top-0 bottom-0 left-3 w-px bg-border')}></div>
+											<div class={cn("absolute top-0 bottom-0 left-3 w-px bg-border")}></div>
 										{/if}
 
 										<div class="flex w-full flex-col items-start gap-0.5">
-											{#if result.matchType !== 'content'}
+											{#if result.matchType !== "content"}
 												<div class="flex items-center gap-2 font-medium tracking-normal">
-													{#if result.matchType === 'heading'}
+													{#if result.matchType === "heading"}
 														<span class="opacity-70">#</span>
 													{/if}
 													<span>
@@ -379,7 +379,7 @@
 	}
 
 	.command-results::before {
-		content: '';
+		content: "";
 		position: absolute;
 		inset-inline: 0px;
 		top: 0;
@@ -398,7 +398,7 @@
 	}
 
 	.command-results::after {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;

@@ -1,23 +1,23 @@
 <script lang="ts">
-	import ContentNavButton from './ContentNavButton.svelte';
-	import { contentUiDefaults, type SectionUiConfig } from '$lib/config/content-ui';
+	import ContentNavButton from "./ContentNavButton.svelte"
+	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
 
 	export type ContentNavLink = {
-		title: string;
-		href: string;
-	};
+		title: string
+		href: string
+	}
 
 	const {
 		previous,
 		next,
 		paginationConfig = contentUiDefaults.pagination,
-		enabled = paginationConfig.enabled
+		enabled = paginationConfig.enabled,
 	}: {
-		previous?: ContentNavLink | null;
-		next?: ContentNavLink | null;
-		paginationConfig?: SectionUiConfig['pagination'];
-		enabled?: boolean;
-	} = $props();
+		previous?: ContentNavLink | null
+		next?: ContentNavLink | null
+		paginationConfig?: SectionUiConfig["pagination"]
+		enabled?: boolean
+	} = $props()
 </script>
 
 {#if enabled && (previous ?? next)}

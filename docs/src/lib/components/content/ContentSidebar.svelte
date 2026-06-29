@@ -1,24 +1,24 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { slide } from 'svelte/transition';
-	import { brandingConfig } from '$lib/config/branding';
-	import { contentUiDefaults, type SectionUiConfig } from '$lib/config/content-ui';
-	import { siteConfig } from '$lib/config/site';
-	import { cn } from '$lib/utils/cn';
-	import ScrollArea from '$lib/components/ui/ScrollArea.svelte';
-	import Dropdown from '$lib/components/ui/Dropdown.svelte';
-	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
-	import SearchTrigger from '$lib/components/content/search/SearchTrigger.svelte';
-	import ChevronRight from 'carbon-icons-svelte/lib/ChevronRight.svelte';
-	import LogoGithub from 'carbon-icons-svelte/lib/LogoGithub.svelte';
-	import { getHref } from '$lib/content/manifest';
-	import type { ContentItem, ContentSectionLink } from '$lib/config/navigation';
-	import { resolve } from '$app/paths';
+	import { page } from "$app/state"
+	import { slide } from "svelte/transition"
+	import { brandingConfig } from "$lib/config/branding"
+	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
+	import { siteConfig } from "$lib/config/site"
+	import { cn } from "$lib/utils/cn"
+	import ScrollArea from "$lib/components/ui/ScrollArea.svelte"
+	import Dropdown from "$lib/components/ui/Dropdown.svelte"
+	import ThemeToggle from "$lib/components/ui/ThemeToggle.svelte"
+	import SearchTrigger from "$lib/components/content/search/SearchTrigger.svelte"
+	import ChevronRight from "carbon-icons-svelte/lib/ChevronRight.svelte"
+	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
+	import { getHref } from "$lib/content/manifest"
+	import type { ContentItem, ContentSectionLink } from "$lib/config/navigation"
+	import { resolve } from "$app/paths"
 
 	const {
 		navigation,
 		navigationLabel = contentUiDefaults.sidebar.navigationLabel,
-		basePath = '/docs',
+		basePath = "/docs",
 		showSearch = contentUiDefaults.search.enabled,
 		showThemeToggle = contentUiDefaults.sidebar.showThemeToggle,
 		showRepositoryLink = contentUiDefaults.sidebar.showRepositoryLink,
@@ -26,64 +26,64 @@
 		repositoryAriaLabel = contentUiDefaults.sidebar.repositoryAriaLabel,
 		searchConfig = contentUiDefaults.search,
 		sectionLinks = [],
-		showBranding = true
+		showBranding = true,
 	}: {
-		navigation: ContentItem[];
-		navigationLabel?: string;
-		basePath?: string;
-		showSearch?: boolean;
-		showThemeToggle?: boolean;
-		showRepositoryLink?: boolean;
-		repositoryUrl?: string;
-		repositoryAriaLabel?: string;
-		searchConfig?: SectionUiConfig['search'];
-		sectionLinks?: ContentSectionLink[];
-		showBranding?: boolean;
-	} = $props();
+		navigation: ContentItem[]
+		navigationLabel?: string
+		basePath?: string
+		showSearch?: boolean
+		showThemeToggle?: boolean
+		showRepositoryLink?: boolean
+		repositoryUrl?: string
+		repositoryAriaLabel?: string
+		searchConfig?: SectionUiConfig["search"]
+		sectionLinks?: ContentSectionLink[]
+		showBranding?: boolean
+	} = $props()
 
 	const currentPath = $derived(
-		page.url.pathname.length > 1 ? page.url.pathname.replace(/\/+$/, '') : page.url.pathname
-	);
-	const currentHash = $derived(page.url.hash);
+		page.url.pathname.length > 1 ? page.url.pathname.replace(/\/+$/, "") : page.url.pathname
+	)
+	const currentHash = $derived(page.url.hash)
 
-	let expandedGroups = $state<Partial<Record<string, boolean>>>({});
-	let navElement = $state<HTMLElement | null>(null);
-	let hoverIndicatorTop = $state(0);
-	let hoverIndicatorHeight = $state(0);
-	let hoverIndicatorVisible = $state(false);
-	let hoveredElement: HTMLElement | null = null;
-	let activeIndicatorLeft = $state(0);
-	let activeIndicatorTop = $state(0);
-	let activeIndicatorHeight = $state(0);
-	let activeIndicatorVisible = $state(false);
-	let activeIndicatorFollowsLayout = $state(false);
-	let activeChildElement: HTMLElement | null = null;
-	let pendingHoverRestoreFrame: number | null = null;
-	let pendingActiveIndicatorFrame: number | null = null;
-	let activeIndicatorFollowFrame: number | null = null;
-	let activeIndicatorRevealFrame: number | null = null;
-	let lastAutoExpandedPath = '';
+	let expandedGroups = $state<Partial<Record<string, boolean>>>({})
+	let navElement = $state<HTMLElement | null>(null)
+	let hoverIndicatorTop = $state(0)
+	let hoverIndicatorHeight = $state(0)
+	let hoverIndicatorVisible = $state(false)
+	let hoveredElement: HTMLElement | null = null
+	let activeIndicatorLeft = $state(0)
+	let activeIndicatorTop = $state(0)
+	let activeIndicatorHeight = $state(0)
+	let activeIndicatorVisible = $state(false)
+	let activeIndicatorFollowsLayout = $state(false)
+	let activeChildElement: HTMLElement | null = null
+	let pendingHoverRestoreFrame: number | null = null
+	let pendingActiveIndicatorFrame: number | null = null
+	let activeIndicatorFollowFrame: number | null = null
+	let activeIndicatorRevealFrame: number | null = null
+	let lastAutoExpandedPath = ""
 
 	function normalizePath(pathname: string) {
-		return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+		return pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname
 	}
 
 	const dropdownItems = $derived(
 		sectionLinks.map((link) => {
-			const normalizedHref = normalizePath(link.href);
+			const normalizedHref = normalizePath(link.href)
 			const isActive =
 				currentPath === normalizedHref ||
-				(normalizedHref !== '/' && currentPath.startsWith(`${normalizedHref}/`));
+				(normalizedHref !== "/" && currentPath.startsWith(`${normalizedHref}/`))
 			return {
 				label: link.label,
 				value: link.href,
 				href: isActive ? undefined : link.href,
 				icon: link.icon,
 				description: link.description,
-				active: isActive
-			};
+				active: isActive,
+			}
 		})
-	);
+	)
 
 	function handleSectionClick() {
 		// Navigation is handled natively by the <a> element's resolve()'d href.
@@ -91,289 +91,289 @@
 	}
 
 	function contentHref(slug: string) {
-		return getHref(basePath, slug);
+		return getHref(basePath, slug)
 	}
 
 	function itemMatchesCurrentPath(item: ContentItem): boolean {
 		if (contentHref(item.slug) === currentPath) {
-			return true;
+			return true
 		}
 
-		return item.items?.some((child) => itemMatchesCurrentPath(child)) ?? false;
+		return item.items?.some((child) => itemMatchesCurrentPath(child)) ?? false
 	}
 
 	function isGroupActive(slug: string) {
-		const explicit = expandedGroups[slug];
-		if (explicit !== undefined) return explicit;
+		const explicit = expandedGroups[slug]
+		if (explicit !== undefined) return explicit
 
-		const group = navigation.find((item) => item.slug === slug);
-		return group?.items?.some((child) => itemMatchesCurrentPath(child)) ?? false;
+		const group = navigation.find((item) => item.slug === slug)
+		return group?.items?.some((child) => itemMatchesCurrentPath(child)) ?? false
 	}
 
 	function toggleGroup(slug: string) {
-		expandedGroups[slug] = !isGroupActive(slug);
-		followActiveIndicatorLayoutShift();
+		expandedGroups[slug] = !isGroupActive(slug)
+		followActiveIndicatorLayoutShift()
 	}
 
 	const getGroupSlideDuration = (node: Element) => {
-		const height = Math.max(0, node.scrollHeight);
-		return Math.min(420, Math.max(160, height / 1.2));
-	};
-	const groupSlide = (node: Element) => slide(node, { duration: getGroupSlideDuration(node) });
+		const height = Math.max(0, node.scrollHeight)
+		return Math.min(420, Math.max(160, height / 1.2))
+	}
+	const groupSlide = (node: Element) => slide(node, { duration: getGroupSlideDuration(node) })
 
 	function showHoverIndicator(node: HTMLElement) {
-		if (!navElement) return;
+		if (!navElement) return
 
-		hoveredElement = node;
-		const navRect = navElement.getBoundingClientRect();
-		const nodeRect = node.getBoundingClientRect();
+		hoveredElement = node
+		const navRect = navElement.getBoundingClientRect()
+		const nodeRect = node.getBoundingClientRect()
 
-		hoverIndicatorTop = nodeRect.top - navRect.top;
-		hoverIndicatorHeight = nodeRect.height;
-		hoverIndicatorVisible = true;
+		hoverIndicatorTop = nodeRect.top - navRect.top
+		hoverIndicatorHeight = nodeRect.height
+		hoverIndicatorVisible = true
 	}
 
 	function hideHoverIndicator() {
-		hoveredElement = null;
-		hoverIndicatorVisible = false;
+		hoveredElement = null
+		hoverIndicatorVisible = false
 	}
 
 	function restoreHoverIndicator() {
-		if (typeof document === 'undefined' || !navElement) return;
+		if (typeof document === "undefined" || !navElement) return
 
 		const focusedElement =
 			document.activeElement instanceof HTMLElement && navElement.contains(document.activeElement)
 				? document.activeElement
-				: null;
+				: null
 		const hoveredTarget =
 			hoveredElement?.isConnected &&
 			navElement.contains(hoveredElement) &&
-			hoveredElement.matches(':hover')
+			hoveredElement.matches(":hover")
 				? hoveredElement
-				: Array.from(navElement.querySelectorAll<HTMLElement>('a[href], button')).find((node) =>
-						node.matches(':hover')
-					);
-		const target = hoveredTarget ?? focusedElement;
+				: Array.from(navElement.querySelectorAll<HTMLElement>("a[href], button")).find((node) =>
+						node.matches(":hover")
+					)
+		const target = hoveredTarget ?? focusedElement
 
 		if (target) {
-			showHoverIndicator(target);
+			showHoverIndicator(target)
 		}
 	}
 
 	function scheduleHoverIndicatorRestore() {
-		if (typeof window === 'undefined') {
-			restoreHoverIndicator();
-			return;
+		if (typeof window === "undefined") {
+			restoreHoverIndicator()
+			return
 		}
 
 		if (pendingHoverRestoreFrame !== null) {
-			window.cancelAnimationFrame(pendingHoverRestoreFrame);
+			window.cancelAnimationFrame(pendingHoverRestoreFrame)
 		}
 
 		pendingHoverRestoreFrame = window.requestAnimationFrame(() => {
-			pendingHoverRestoreFrame = null;
-			restoreHoverIndicator();
-		});
+			pendingHoverRestoreFrame = null
+			restoreHoverIndicator()
+		})
 	}
 
 	function handleNavFocusOut(event: FocusEvent) {
-		if (!navElement) return;
-		if (event.relatedTarget instanceof Node && navElement.contains(event.relatedTarget)) return;
-		hideHoverIndicator();
+		if (!navElement) return
+		if (event.relatedTarget instanceof Node && navElement.contains(event.relatedTarget)) return
+		hideHoverIndicator()
 	}
 
 	function updateActiveIndicator() {
 		if (!navElement || !activeChildElement) {
-			activeIndicatorVisible = false;
-			return;
+			activeIndicatorVisible = false
+			return
 		}
 
-		const navRect = navElement.getBoundingClientRect();
-		const nodeRect = activeChildElement.getBoundingClientRect();
-		const groupPanel = activeChildElement.closest('[data-sidebar-group-panel]');
+		const navRect = navElement.getBoundingClientRect()
+		const nodeRect = activeChildElement.getBoundingClientRect()
+		const groupPanel = activeChildElement.closest("[data-sidebar-group-panel]")
 		const clipRect =
-			groupPanel instanceof HTMLElement ? groupPanel.getBoundingClientRect() : nodeRect;
-		const visibleTop = Math.max(nodeRect.top, clipRect.top);
-		const visibleBottom = Math.min(nodeRect.bottom, clipRect.bottom);
-		const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+			groupPanel instanceof HTMLElement ? groupPanel.getBoundingClientRect() : nodeRect
+		const visibleTop = Math.max(nodeRect.top, clipRect.top)
+		const visibleBottom = Math.min(nodeRect.bottom, clipRect.bottom)
+		const visibleHeight = Math.max(0, visibleBottom - visibleTop)
 
-		activeIndicatorLeft = nodeRect.left - navRect.left - 8;
-		activeIndicatorTop = visibleTop - navRect.top;
-		activeIndicatorHeight = visibleHeight;
-		activeIndicatorVisible = visibleHeight > 0;
+		activeIndicatorLeft = nodeRect.left - navRect.left - 8
+		activeIndicatorTop = visibleTop - navRect.top
+		activeIndicatorHeight = visibleHeight
+		activeIndicatorVisible = visibleHeight > 0
 	}
 
 	function scheduleActiveIndicatorUpdate() {
-		if (typeof window === 'undefined') {
-			updateActiveIndicator();
-			return;
+		if (typeof window === "undefined") {
+			updateActiveIndicator()
+			return
 		}
 
 		if (pendingActiveIndicatorFrame !== null) {
-			window.cancelAnimationFrame(pendingActiveIndicatorFrame);
+			window.cancelAnimationFrame(pendingActiveIndicatorFrame)
 		}
 
 		pendingActiveIndicatorFrame = window.requestAnimationFrame(() => {
-			pendingActiveIndicatorFrame = null;
-			updateActiveIndicator();
-		});
+			pendingActiveIndicatorFrame = null
+			updateActiveIndicator()
+		})
 	}
 
 	function followActiveIndicatorLayoutShift() {
-		if (typeof window === 'undefined') {
-			updateActiveIndicator();
-			return;
+		if (typeof window === "undefined") {
+			updateActiveIndicator()
+			return
 		}
 
 		if (activeIndicatorFollowFrame !== null) {
-			window.cancelAnimationFrame(activeIndicatorFollowFrame);
+			window.cancelAnimationFrame(activeIndicatorFollowFrame)
 		}
 
-		activeIndicatorFollowsLayout = true;
-		const startedAt = window.performance.now();
-		const duration = 460;
+		activeIndicatorFollowsLayout = true
+		const startedAt = window.performance.now()
+		const duration = 460
 
 		const follow = (now: number) => {
-			updateActiveIndicator();
+			updateActiveIndicator()
 
 			if (now - startedAt < duration) {
-				activeIndicatorFollowFrame = window.requestAnimationFrame(follow);
-				return;
+				activeIndicatorFollowFrame = window.requestAnimationFrame(follow)
+				return
 			}
 
-			activeIndicatorFollowFrame = null;
-			activeIndicatorFollowsLayout = false;
-			scheduleActiveIndicatorUpdate();
-		};
+			activeIndicatorFollowFrame = null
+			activeIndicatorFollowsLayout = false
+			scheduleActiveIndicatorUpdate()
+		}
 
-		activeIndicatorFollowFrame = window.requestAnimationFrame(follow);
+		activeIndicatorFollowFrame = window.requestAnimationFrame(follow)
 	}
 
 	function revealActiveIndicatorWithoutMotion() {
-		if (typeof window === 'undefined') {
-			updateActiveIndicator();
-			return;
+		if (typeof window === "undefined") {
+			updateActiveIndicator()
+			return
 		}
 
 		if (activeIndicatorFollowFrame !== null) {
-			scheduleActiveIndicatorUpdate();
-			return;
+			scheduleActiveIndicatorUpdate()
+			return
 		}
 
 		if (activeIndicatorRevealFrame !== null) {
-			window.cancelAnimationFrame(activeIndicatorRevealFrame);
+			window.cancelAnimationFrame(activeIndicatorRevealFrame)
 		}
 
-		activeIndicatorFollowsLayout = true;
-		updateActiveIndicator();
+		activeIndicatorFollowsLayout = true
+		updateActiveIndicator()
 
 		activeIndicatorRevealFrame = window.requestAnimationFrame(() => {
 			activeIndicatorRevealFrame = window.requestAnimationFrame(() => {
-				activeIndicatorRevealFrame = null;
+				activeIndicatorRevealFrame = null
 				if (activeIndicatorFollowFrame === null) {
-					activeIndicatorFollowsLayout = false;
+					activeIndicatorFollowsLayout = false
 				}
-			});
-		});
+			})
+		})
 	}
 
 	function activateChildIndicator(node: HTMLElement) {
-		const shouldRevealWithoutMotion = !activeIndicatorVisible;
-		activeChildElement = node;
+		const shouldRevealWithoutMotion = !activeIndicatorVisible
+		activeChildElement = node
 
 		if (shouldRevealWithoutMotion) {
-			revealActiveIndicatorWithoutMotion();
-			return;
+			revealActiveIndicatorWithoutMotion()
+			return
 		}
 
-		if (typeof window !== 'undefined' && activeIndicatorRevealFrame !== null) {
-			window.cancelAnimationFrame(activeIndicatorRevealFrame);
-			activeIndicatorRevealFrame = null;
+		if (typeof window !== "undefined" && activeIndicatorRevealFrame !== null) {
+			window.cancelAnimationFrame(activeIndicatorRevealFrame)
+			activeIndicatorRevealFrame = null
 			if (activeIndicatorFollowFrame === null) {
-				activeIndicatorFollowsLayout = false;
+				activeIndicatorFollowsLayout = false
 			}
 		}
 
-		scheduleActiveIndicatorUpdate();
+		scheduleActiveIndicatorUpdate()
 	}
 
 	function registerActiveChild(node: HTMLElement, isActive: boolean) {
 		if (isActive) {
-			activateChildIndicator(node);
+			activateChildIndicator(node)
 		}
 
 		return {
 			update(nextIsActive: boolean) {
 				if (nextIsActive) {
-					activateChildIndicator(node);
+					activateChildIndicator(node)
 				} else if (activeChildElement === node) {
-					activeChildElement = null;
-					scheduleActiveIndicatorUpdate();
+					activeChildElement = null
+					scheduleActiveIndicatorUpdate()
 				}
 			},
 			destroy() {
 				if (activeChildElement === node) {
-					activeChildElement = null;
-					scheduleActiveIndicatorUpdate();
+					activeChildElement = null
+					scheduleActiveIndicatorUpdate()
 				}
-			}
-		};
+			},
+		}
 	}
 
 	$effect(() => {
-		const path = currentPath;
-		void path;
+		const path = currentPath
+		void path
 
-		if (lastAutoExpandedPath === path) return;
+		if (lastAutoExpandedPath === path) return
 
 		for (const item of navigation) {
 			if (item.items?.length) {
-				const isChildActive = item.items.some((child) => contentHref(child.slug) === currentPath);
+				const isChildActive = item.items.some((child) => contentHref(child.slug) === currentPath)
 				if (isChildActive && expandedGroups[item.slug] !== true) {
-					expandedGroups[item.slug] = true;
-					followActiveIndicatorLayoutShift();
+					expandedGroups[item.slug] = true
+					followActiveIndicatorLayoutShift()
 				}
 			}
 		}
 
-		lastAutoExpandedPath = path;
-	});
+		lastAutoExpandedPath = path
+	})
 
 	$effect(() => {
-		const path = currentPath;
-		const hash = currentHash;
-		void path;
-		void hash;
+		const path = currentPath
+		const hash = currentHash
+		void path
+		void hash
 
-		scheduleHoverIndicatorRestore();
-		scheduleActiveIndicatorUpdate();
+		scheduleHoverIndicatorRestore()
+		scheduleActiveIndicatorUpdate()
 
-		if (typeof window === 'undefined') return;
+		if (typeof window === "undefined") return
 
-		window.addEventListener('resize', scheduleActiveIndicatorUpdate);
+		window.addEventListener("resize", scheduleActiveIndicatorUpdate)
 
 		return () => {
-			window.removeEventListener('resize', scheduleActiveIndicatorUpdate);
+			window.removeEventListener("resize", scheduleActiveIndicatorUpdate)
 			if (pendingActiveIndicatorFrame !== null) {
-				window.cancelAnimationFrame(pendingActiveIndicatorFrame);
-				pendingActiveIndicatorFrame = null;
+				window.cancelAnimationFrame(pendingActiveIndicatorFrame)
+				pendingActiveIndicatorFrame = null
 			}
 			if (pendingHoverRestoreFrame !== null) {
-				window.cancelAnimationFrame(pendingHoverRestoreFrame);
-				pendingHoverRestoreFrame = null;
+				window.cancelAnimationFrame(pendingHoverRestoreFrame)
+				pendingHoverRestoreFrame = null
 			}
 			if (activeIndicatorFollowFrame !== null) {
-				window.cancelAnimationFrame(activeIndicatorFollowFrame);
-				activeIndicatorFollowFrame = null;
-				activeIndicatorFollowsLayout = false;
+				window.cancelAnimationFrame(activeIndicatorFollowFrame)
+				activeIndicatorFollowFrame = null
+				activeIndicatorFollowsLayout = false
 			}
-		};
-	});
+		}
+	})
 </script>
 
-<aside class="flex h-full min-h-0 flex-col bg-background" aria-label={navigationLabel + ' sidebar'}>
+<aside class="flex h-full min-h-0 flex-col bg-background" aria-label={navigationLabel + " sidebar"}>
 	{#if showBranding}
-		<a href={resolve('/')} class="mb-4 flex items-center gap-2 p-4 pb-0 lg:p-0">
+		<a href={resolve("/")} class="mb-4 flex items-center gap-2 p-4 pb-0 lg:p-0">
 			<span
 				class="inline-flex shrink-0 items-center text-accent [&>svg]:size-6 [&>svg]:fill-current"
 				aria-hidden="true"
@@ -410,11 +410,11 @@
 			style={`
 							--sidebar-hover-top: ${hoverIndicatorTop.toString()}px;
 							--sidebar-hover-height: ${hoverIndicatorHeight.toString()}px;
-							--sidebar-hover-opacity: ${hoverIndicatorVisible ? '1' : '0'};
+							--sidebar-hover-opacity: ${hoverIndicatorVisible ? "1" : "0"};
 							--sidebar-active-left: ${activeIndicatorLeft.toString()}px;
 							--sidebar-active-top: ${activeIndicatorTop.toString()}px;
 							--sidebar-active-height: ${activeIndicatorHeight.toString()}px;
-							--sidebar-active-opacity: ${activeIndicatorVisible ? '1' : '0'};
+							--sidebar-active-opacity: ${activeIndicatorVisible ? "1" : "0"};
 						`}
 		>
 			{#each navigation as item (item.slug)}
@@ -423,22 +423,22 @@
 					<div class="flex flex-col">
 						<button
 							onclick={() => {
-								toggleGroup(item.slug);
+								toggleGroup(item.slug)
 							}}
 							onmouseenter={(event) => {
-								showHoverIndicator(event.currentTarget);
+								showHoverIndicator(event.currentTarget)
 							}}
 							onfocus={(event) => {
-								showHoverIndicator(event.currentTarget);
+								showHoverIndicator(event.currentTarget)
 							}}
 							class={cn(
-								'relative z-10 flex w-full items-center justify-between rounded-sm px-3 py-1.5 text-sm font-medium tracking-normal transition-colors duration-150 ease-out hover:text-foreground',
-								groupIsActive ? 'text-foreground' : 'text-foreground-muted'
+								"relative z-10 flex w-full items-center justify-between rounded-sm px-3 py-1.5 text-sm font-medium tracking-normal transition-colors duration-150 ease-out hover:text-foreground",
+								groupIsActive ? "text-foreground" : "text-foreground-muted"
 							)}
 						>
 							<span>{item.name}</span>
 							<ChevronRight
-								class={cn('size-4 transition-transform duration-150', groupIsActive && 'rotate-90')}
+								class={cn("size-4 transition-transform duration-150", groupIsActive && "rotate-90")}
 							/>
 						</button>
 						{#if groupIsActive}
@@ -453,17 +453,17 @@
 											// @ts-expect-error arg cannot be cast as `resolve`s expected type
 											href={resolve(href)}
 											onmouseenter={(event) => {
-												showHoverIndicator(event.currentTarget);
+												showHoverIndicator(event.currentTarget)
 											}}
 											onfocus={(event) => {
-												showHoverIndicator(event.currentTarget);
+												showHoverIndicator(event.currentTarget)
 											}}
 											use:registerActiveChild={isActive}
 											class={cn(
-												'relative block rounded-sm px-3 py-1.5 text-sm font-medium tracking-normal transition-colors duration-150 ease-out',
+												"relative block rounded-sm px-3 py-1.5 text-sm font-medium tracking-normal transition-colors duration-150 ease-out",
 												isActive
-													? 'sidebar-active-child text-accent'
-													: 'text-foreground-muted hover:text-foreground'
+													? "sidebar-active-child text-accent"
+													: "text-foreground-muted hover:text-foreground"
 											)}
 										>
 											{child.name}
@@ -480,14 +480,14 @@
 						// @ts-expect-error arg cannot be cast as `resolve`s expected type
 						href={resolve(href)}
 						onmouseenter={(event) => {
-							showHoverIndicator(event.currentTarget);
+							showHoverIndicator(event.currentTarget)
 						}}
 						onfocus={(event) => {
-							showHoverIndicator(event.currentTarget);
+							showHoverIndicator(event.currentTarget)
 						}}
 						class={cn(
-							'relative z-10 block rounded-sm px-3 py-1.5 text-sm tracking-normal transition-colors duration-150 ease-out',
-							isActive ? 'text-accent' : 'text-foreground-muted hover:text-foreground'
+							"relative z-10 block rounded-sm px-3 py-1.5 text-sm tracking-normal transition-colors duration-150 ease-out",
+							isActive ? "text-accent" : "text-foreground-muted hover:text-foreground"
 						)}
 					>
 						{item.name}
@@ -517,7 +517,7 @@
 
 <style>
 	.sidebar-nav::before {
-		content: '';
+		content: "";
 		position: absolute;
 		inset-inline: 0px;
 		top: 0;
@@ -536,7 +536,7 @@
 	}
 
 	.sidebar-nav::after {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;

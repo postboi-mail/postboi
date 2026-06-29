@@ -1,24 +1,24 @@
 <script lang="ts">
-	import { searchState } from '$lib/stores/search.svelte';
-	import { contentUiDefaults, type SectionUiConfig } from '$lib/config/content-ui';
-	import { cn } from '$lib/utils/cn';
-	import Search from 'carbon-icons-svelte/lib/Search.svelte';
+	import { searchState } from "$lib/stores/search.svelte"
+	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
+	import { cn } from "$lib/utils/cn"
+	import Search from "carbon-icons-svelte/lib/Search.svelte"
 
 	let {
 		class: className,
-		searchConfig = contentUiDefaults.search
-	}: { class?: string; searchConfig?: SectionUiConfig['search'] } = $props();
+		searchConfig = contentUiDefaults.search,
+	}: { class?: string; searchConfig?: SectionUiConfig["search"] } = $props()
 </script>
 
 {#if searchConfig.enabled}
 	<button
 		type="button"
 		class={cn(
-			'group inset-shadow relative flex h-9 w-full items-center gap-2 rounded-sm bg-background-inset px-3 py-1.5 text-sm font-medium text-foreground-muted/70 transition-[color] duration-150 ease-out hover:text-foreground-muted',
+			"group inset-shadow relative flex h-9 w-full items-center gap-2 rounded-sm bg-background-inset px-3 py-1.5 text-sm font-medium text-foreground-muted/70 transition-[color] duration-150 ease-out hover:text-foreground-muted",
 			className
 		)}
 		onclick={() => {
-			searchState.open();
+			searchState.open()
 		}}
 	>
 		<Search size={16} class="text-foreground-muted/70" />
