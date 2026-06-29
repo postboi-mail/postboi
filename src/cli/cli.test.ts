@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { Readable, Writable } from "node:stream"
 import { PROVIDERS, DEFAULT_FIELDS, usage_snippet } from "./providers.js"
 import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./env.js"
-import { detect_hosts, push_spec, manual_hint } from "./deploy.js"
+import { detect_hosts, detect_adapter_host, push_spec, manual_hint } from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
 import { create_prompts, PromptCancelledError } from "./prompts.js"
 import { banner } from "./banner.js"
@@ -120,7 +120,18 @@ describe("deploy detection", () => {
 		expect(detect_hosts([".vercel"])).toEqual(["vercel"])
 		expect(detect_hosts(["wrangler.toml"])).toEqual(["cloudflare"])
 		expect(detect_hosts(["netlify.toml"])).toEqual(["netlify"])
+		expect(detect_hosts(["railway.json"])).toEqual(["railway"])
 		expect(detect_hosts(["package.json"])).toEqual([])
+	})
+
+	it("detects the host from the SvelteKit adapter in config sources", () => {
+		expect(detect_adapter_host(['import adapter from "@sveltejs/adapter-vercel"'])).toBe("vercel")
+		expect(detect_adapter_host(['"@sveltejs/adapter-cloudflare-workers": "^1.0.0"'])).toBe(
+			"cloudflare"
+		)
+		expect(detect_adapter_host(['import adapter from "@sveltejs/adapter-netlify"'])).toBe("netlify")
+		expect(detect_adapter_host(['import adapter from "@sveltejs/adapter-node"'])).toBeNull()
+		expect(detect_adapter_host([])).toBeNull()
 	})
 
 	it("builds push commands (secrets via stdin, netlify via arg)", () => {
@@ -138,11 +149,16 @@ describe("deploy detection", () => {
 			cmd: "netlify",
 			args: ["env:set", "K", "v"],
 		})
+		expect(push_spec("railway", "K", "v")).toEqual({
+			cmd: "railway",
+			args: ["variables", "--set", "K=v"],
+		})
 	})
 
 	it("offers a manual hint per host", () => {
 		expect(manual_hint("vercel", "K")).toContain("vercel env add K")
 		expect(manual_hint("cloudflare", "K")).toContain("wrangler secret put K")
+		expect(manual_hint("railway", "K")).toContain("railway variables --set")
 	})
 })
 

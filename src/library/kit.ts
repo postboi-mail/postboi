@@ -1,11 +1,11 @@
 import { fail, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
-import { send as send_zero_config } from "./cloud.js"
+import { mail as zero_config_mail } from "./cloud.js"
 import { is_error, type SendOptions } from "./index.js"
 
 // Re-export the core so `import { PostboiError, is_error, ... } from "postboi/kit"` works.
 export * from "./index.js"
 
-/** Anything that can send — a configured provider instance, or the zero-config `send`. */
+/** Anything that can send — a configured provider instance, or the zero-config `mail`. */
 interface Mailer {
 	send(options: SendOptions): Promise<unknown>
 }
@@ -33,8 +33,8 @@ export interface ActionOptions {
  *
  * @example Zero-config — uses the provider configured by `bunx postboi init`:
  * ```ts
- * import { send } from "postboi/kit"
- * export const actions = { default: send }
+ * import { mail } from "postboi/kit"
+ * export const actions = { default: mail }
  * ```
  *
  * @example With a configured provider instance:
@@ -42,8 +42,8 @@ export interface ActionOptions {
  * import { action } from "postboi/kit"
  * import Resend from "postboi/resend"
  *
- * const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: "no-reply@example.com" } })
- * export const actions = { default: action(mail) }
+ * const resend = new Resend({ api_key: RESEND_API_KEY, default: { from: "no-reply@example.com" } })
+ * export const actions = { default: action(resend) }
  * ```
  *
  * @example Forcing fields the form shouldn't control:
@@ -57,13 +57,13 @@ export function action(a?: Mailer | ActionOptions, b: ActionOptions = {}): FormA
 	const is_mailer = typeof (a as Mailer | undefined)?.send === "function"
 	const mailer = is_mailer ? (a as Mailer) : undefined
 	const options = is_mailer ? b : ((a as ActionOptions) ?? {})
-	const send = mailer ? (o: SendOptions) => mailer.send(o) : send_zero_config
+	const dispatch = mailer ? (o: SendOptions) => mailer.send(o) : zero_config_mail
 	const status = options.status ?? 400
 
 	return async ({ request }) => {
 		try {
 			const body = await request.formData()
-			await send({ ...options.fields, body })
+			await dispatch({ ...options.fields, body })
 			return { success: true }
 		} catch (error) {
 			return fail(status, { error: is_error(error) ? error.message : String(error) })
@@ -75,10 +75,10 @@ export function action(a?: Mailer | ActionOptions, b: ActionOptions = {}): FormA
  * A ready-made zero-config form action. Drop it straight into a route:
  *
  * ```ts
- * import { send } from "postboi/kit"
- * export const actions = { default: send }
+ * import { mail } from "postboi/kit"
+ * export const actions = { default: mail }
  * ```
  *
  * It sends via whichever provider `POSTBOI_PROVIDER` names (set by `bunx postboi init`).
  */
-export const send: FormAction = action()
+export const mail: FormAction = action()

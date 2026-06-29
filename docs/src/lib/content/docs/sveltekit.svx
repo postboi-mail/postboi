@@ -10,9 +10,9 @@ category: Guides
 
 ```typescript
 // +page.server.ts
-import { send } from 'postboi/kit';
+import { mail } from 'postboi/kit';
 
-export const actions = { default: send };
+export const actions = { default: mail };
 ```
 
 ## The form

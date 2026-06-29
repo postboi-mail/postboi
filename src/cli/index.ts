@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } from "node:fs"
 import { spawnSync } from "node:child_process"
-import { argv, cwd, exit } from "node:process"
+import { join, delimiter } from "node:path"
+import { argv, cwd, exit, platform, env } from "node:process"
 import { PROVIDERS, DEFAULT_FIELDS, usage_snippet, type CliProvider } from "./providers.js"
 import { detect_env_targets, upsert_env, is_gitignored, type EnvTarget } from "./env.js"
-import { detect_hosts, push_spec, manual_hint, HOST_LABEL, type Host } from "./deploy.js"
+import {
+	detect_hosts,
+	detect_adapter_host,
+	push_spec,
+	manual_hint,
+	HOST_LABEL,
+	HOST_CLI,
+	type Host,
+} from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
 import {
 	create_prompts,
@@ -58,6 +67,13 @@ ${bold("Options")}
   -h, --help        Show this help
   -V, --version     Show the version
 `)
+}
+
+/** Is an executable named `cmd` on PATH? Lets us skip a push cleanly instead of failing per-var. */
+function is_on_path(cmd: string): boolean {
+	const dirs = (env.PATH ?? "").split(delimiter).filter(Boolean)
+	const exts = platform === "win32" ? (env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""]
+	return dirs.some((dir) => exts.some((ext) => existsSync(join(dir, cmd + ext))))
 }
 
 function run_push(spec: ReturnType<typeof push_spec>): { ok: boolean; reason?: string } {
@@ -164,8 +180,27 @@ async function init(): Promise<void> {
 			console.log(`${green("✓")} updated ${bold(".gitignore")}`)
 		}
 
-		// 6. Push to a deployment host
-		const detected_hosts = detect_hosts(files)
+		// 6. Push to a deployment host — detect from config files *and* the SvelteKit adapter
+		// (svelte.config / vite.config / package.json), which is where the real signal lives.
+		const config_sources = [
+			"svelte.config.js",
+			"svelte.config.ts",
+			"vite.config.js",
+			"vite.config.ts",
+			"package.json",
+		]
+			.filter((f) => files.includes(f))
+			.map((f) => {
+				try {
+					return readFileSync(f, "utf8")
+				} catch {
+					return ""
+				}
+			})
+		const adapter_host = detect_adapter_host(config_sources)
+		const detected_hosts = Array.from(
+			new Set([...detect_hosts(files), ...(adapter_host ? [adapter_host] : [])])
+		)
 		let host: Host | undefined
 		if (detected_hosts.length > 0) {
 			const picked = await prompts.select<Host | "skip">(`\n${bold("Push these to a host?")}`, [
@@ -184,13 +219,20 @@ async function init(): Promise<void> {
 					{ label: "Vercel", value: "vercel" as Host | "skip" },
 					{ label: "Cloudflare (wrangler)", value: "cloudflare" as const },
 					{ label: "Netlify", value: "netlify" as const },
+					{ label: "Railway", value: "railway" as const },
 					{ label: "Skip", value: "skip" as const },
 				]
 			)
 			if (picked !== "skip") host = picked
 		}
 
-		if (host) {
+		if (host && !is_on_path(HOST_CLI[host])) {
+			// CLI isn't installed — warn once and print the manual commands rather than
+			// failing on every var.
+			console.log(`\n${yellow("!")} ${bold(HOST_CLI[host])} not found on PATH — skipping env push.`)
+			console.log(`  ${dim("install it, then run:")}`)
+			for (const key of Object.keys(values)) console.log(`    ${manual_hint(host, key)}`)
+		} else if (host) {
 			console.log(`\n${dim(`Pushing to ${HOST_LABEL[host]}…`)}`)
 			for (const [key, value] of Object.entries(values)) {
 				const result = run_push(push_spec(host, key, value))

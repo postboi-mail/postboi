@@ -24,7 +24,7 @@ export default config({
 });
 ```
 
-It auto-loads on the first `send()`.
+It auto-loads on the first `mail()`.
 
 ## Precedence
 
@@ -32,7 +32,7 @@ Lowest to highest — later sources win:
 
 1. `postboi.settings.ts`
 2. `POSTBOI_*` environment variables
-3. options passed explicitly to `send()`
+3. options passed explicitly to `mail()`
 
 ## Edge runtimes
 

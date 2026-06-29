@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Postboi, { send, is_error, PostboiError } from "$library/cloud.js"
+import Postboi, { mail, is_error, PostboiError } from "$library/cloud.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -28,8 +28,8 @@ describe("Postboi Cloud (zero-config)", () => {
 		vi.stubEnv("POSTBOI_TOKEN", "pb_live_123")
 		fetch.mockResolvedValue(respond({ json: { id: "abc" } }))
 
-		const mail = new Postboi({ default: { from: "from@test.com" } })
-		const result = await mail.send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
+		const provider = new Postboi({ default: { from: "from@test.com" } })
+		const result = await provider.send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
 
 		expect(sent_url()).toBe("https://api.postboi.uilo.co/v1/send")
 		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer pb_live_123" })
@@ -44,17 +44,17 @@ describe("Postboi Cloud (zero-config)", () => {
 		vi.stubEnv("POSTBOI_TOKEN", "from_env")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
 
-		const mail = new Postboi({ token: "explicit", default: { from: "from@test.com" } })
-		await mail.send({ to: "to@test.com", body: "x" })
+		const provider = new Postboi({ token: "explicit", default: { from: "from@test.com" } })
+		await provider.send({ to: "to@test.com", body: "x" })
 
 		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer explicit" })
 	})
 
 	it("throws a friendly PostboiError when no token is available", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "")
-		const mail = new Postboi({ default: { from: "from@test.com" } })
+		const provider = new Postboi({ default: { from: "from@test.com" } })
 
-		const error = await mail.send({ to: "to@test.com", body: "x" }).catch((e) => e)
+		const error = await provider.send({ to: "to@test.com", body: "x" }).catch((e) => e)
 		expect(error).toBeInstanceOf(PostboiError)
 		expect(error.code).toBe("no_token")
 		expect(error.message).toMatch(/postboi init/)
@@ -106,8 +106,8 @@ describe("Postboi Cloud (zero-config)", () => {
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 401, json: { message: "bad token", code: "unauthorized" } })
 		)
-		const mail = new Postboi({ token: "t", default: { from: "f@test.com" } })
-		const error = await mail.send({ to: "to@test.com", body: "x" }).catch((e) => e)
+		const provider = new Postboi({ token: "t", default: { from: "f@test.com" } })
+		const error = await provider.send({ to: "to@test.com", body: "x" }).catch((e) => e)
 		expect(error).toBeInstanceOf(PostboiError)
 		expect(error.provider).toBe("postboi")
 		expect(error.message).toBe("bad token")
@@ -127,14 +127,14 @@ describe("Postboi Cloud (zero-config)", () => {
 	})
 })
 
-describe("top-level send() — provider-agnostic dispatch", () => {
+describe("top-level mail() — provider-agnostic dispatch", () => {
 	it("dispatches to whichever provider POSTBOI_PROVIDER names", async () => {
 		vi.stubEnv("POSTBOI_PROVIDER", "resend")
 		vi.stubEnv("RESEND_API_KEY", "re_123")
 		vi.stubEnv("POSTBOI_FROM", "from@test.com")
 		fetch.mockResolvedValue(respond({ json: { id: "re-1" } }))
 
-		const result = await send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
+		const result = await mail({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
 
 		expect(sent_url()).toBe("https://api.resend.com/emails")
 		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer re_123" })
@@ -151,7 +151,7 @@ describe("top-level send() — provider-agnostic dispatch", () => {
 		vi.stubEnv("POSTBOI_FROM", "from@test.com")
 		fetch.mockResolvedValue(respond({ json: { id: "<mg-1>" } }))
 
-		await send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
+		await mail({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
 
 		expect(sent_url()).toContain("mg.example.com")
 	})
@@ -162,7 +162,7 @@ describe("top-level send() — provider-agnostic dispatch", () => {
 		vi.stubEnv("POSTBOI_FROM", "from@test.com")
 		fetch.mockResolvedValue(respond({ json: { id: "x" } }))
 
-		const results = await send([
+		const results = await mail([
 			{ to: "a@test.com", body: "x" },
 			{ to: "b@test.com", body: "x" },
 		])
@@ -172,7 +172,7 @@ describe("top-level send() — provider-agnostic dispatch", () => {
 
 	it("throws a friendly PostboiError when no provider is configured", async () => {
 		vi.stubEnv("POSTBOI_PROVIDER", "")
-		const error = await send({ to: "to@test.com", body: "x" }).catch((e) => e)
+		const error = await mail({ to: "to@test.com", body: "x" }).catch((e) => e)
 		expect(error).toBeInstanceOf(PostboiError)
 		expect(error.code).toBe("no_provider")
 		expect(error.message).toMatch(/postboi init/)
@@ -182,7 +182,7 @@ describe("top-level send() — provider-agnostic dispatch", () => {
 	it("throws when the provider's required env var is missing", async () => {
 		vi.stubEnv("POSTBOI_PROVIDER", "resend")
 		vi.stubEnv("RESEND_API_KEY", "")
-		const error = await send({ to: "to@test.com", body: "x" }).catch((e) => e)
+		const error = await mail({ to: "to@test.com", body: "x" }).catch((e) => e)
 		expect(error).toBeInstanceOf(PostboiError)
 		expect(error.code).toBe("missing_env")
 		expect(error.message).toMatch(/RESEND_API_KEY/)

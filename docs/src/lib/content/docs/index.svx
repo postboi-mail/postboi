@@ -9,14 +9,14 @@ Postboi is a framework-agnostic email library optimised for SvelteKit. It works 
 variety of email providers and turns your `FormData` into tidy HTML emails, with **zero
 configuration**.
 
-Import `send`, call it, done — the provider and credentials come from environment
+Import `mail`, call it, done — the provider and credentials come from environment
 variables, so the same line of code works whether you're on Resend, Postmark, Mailgun, or
 any of the other supported providers.
 
 ```typescript
-import { send } from 'postboi';
+import { mail } from 'postboi';
 
-await send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
+await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
 ```
 
 ## Features
@@ -32,7 +32,7 @@ await send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
 
 There are three ways to use Postboi, from least to most explicit:
 
-1. **Zero-config `send()`** — reads `POSTBOI_PROVIDER` and credentials from the
+1. **Zero-config `mail()`** — reads `POSTBOI_PROVIDER` and credentials from the
    environment. Best for apps where one provider is set per environment.
 2. **`postboi/kit` form actions** — a one-line SvelteKit action that reads `FormData`,
    sends it, and returns a result.

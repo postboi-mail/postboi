@@ -34,18 +34,18 @@ bunx postboi init
 Then send from anywhere — no provider import, no constructor, credentials come from env:
 
 ```typescript
-import { send } from "postboi"
+import { mail } from "postboi"
 
-await send({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
 On SvelteKit, a form action is a one-liner:
 
 ```typescript
 // +page.server.ts
-import { send } from "postboi/kit"
+import { mail } from "postboi/kit"
 
-export const actions = { default: send }
+export const actions = { default: mail }
 ```
 
 | Topic                                      | Docs                                                                 |

@@ -1,4 +1,4 @@
-// The provider registry is shared with the library so the CLI and the zero-config `send()`
+// The provider registry is shared with the library so the CLI and the zero-config `mail()`
 // can never drift. The CLI keeps the prompt-only extras (default fields, usage snippet).
 export {
 	PROVIDERS,
@@ -13,7 +13,7 @@ export type CliProvider = ProviderMeta
 
 /**
  * Optional default fields. Stored as `POSTBOI_*` env vars so they're shared between an
- * explicit provider (`default: {...}`) and the zero-config `send()` (which reads them).
+ * explicit provider (`default: {...}`) and the zero-config `mail()` (which reads them).
  */
 export const DEFAULT_FIELDS: Array<{ arg: string; env: string; label: string }> = [
 	{ arg: "from", env: "POSTBOI_FROM", label: "Default from" },

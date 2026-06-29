@@ -10,7 +10,7 @@ import {
 	reset_settings,
 } from "$library/settings.js"
 import Mock from "$library/mock.js"
-import { send } from "$library/cloud.js"
+import { mail } from "$library/cloud.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -38,18 +38,18 @@ describe("global settings", () => {
 		const before = vi.fn()
 		configure({ default: { from: "global@test.com" }, hooks: { before: { send: before } } })
 
-		const mail = new Mock()
-		await mail.send({ to: "to@test.com", body: "hi" })
+		const provider = new Mock()
+		await provider.send({ to: "to@test.com", body: "hi" })
 
-		expect(mail.last?.from.address).toBe("global@test.com")
+		expect(provider.last?.from.address).toBe("global@test.com")
 		expect(before).toHaveBeenCalledOnce()
 	})
 
 	it("lets per-instance options override global settings", async () => {
 		configure({ default: { from: "global@test.com" }, retries: 5 })
-		const mail = new Mock({ default: { from: "local@test.com" } })
-		await mail.send({ to: "to@test.com", body: "hi" })
-		expect(mail.last?.from.address).toBe("local@test.com")
+		const provider = new Mock({ default: { from: "local@test.com" } })
+		await provider.send({ to: "to@test.com", body: "hi" })
+		expect(provider.last?.from.address).toBe("local@test.com")
 	})
 
 	it("merges global hooks with instance hooks rather than replacing them", async () => {
@@ -57,17 +57,17 @@ describe("global settings", () => {
 		const instance_hook = vi.fn()
 		configure({ hooks: { before: { send: global_hook }, after: { send: instance_hook } } })
 
-		const mail = new Mock({
+		const provider = new Mock({
 			default: { from: "f@test.com" },
 			hooks: { after: { send: instance_hook } },
 		})
-		await mail.send({ to: "to@test.com", body: "hi" })
+		await provider.send({ to: "to@test.com", body: "hi" })
 
 		expect(global_hook).toHaveBeenCalledOnce() // kept from global
 		expect(instance_hook).toHaveBeenCalledOnce() // instance wins for after.send
 	})
 
-	it("zero-config send() uses settings.provider when POSTBOI_PROVIDER is unset", async () => {
+	it("zero-config mail() uses settings.provider when POSTBOI_PROVIDER is unset", async () => {
 		configure({ provider: "resend", default: { from: "from@test.com" } })
 		vi.stubEnv("RESEND_API_KEY", "re_123")
 		fetch.mockResolvedValue({
@@ -78,7 +78,7 @@ describe("global settings", () => {
 			json: async () => ({ id: "1" }),
 		})
 
-		await send({ to: "to@test.com", body: "hi" })
+		await mail({ to: "to@test.com", body: "hi" })
 		expect(fetch.mock.calls.at(-1)![0]).toBe("https://api.resend.com/emails")
 	})
 

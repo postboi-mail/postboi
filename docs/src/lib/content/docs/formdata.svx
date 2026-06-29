@@ -7,7 +7,7 @@ category: Guides
 
 Pass a `FormData` object as the `body` and Postboi converts it into a tidy HTML table. This
 is what powers the [SvelteKit form actions](/sveltekit) — but you can pass `FormData`
-to any `send()` call.
+to any `mail()` call.
 
 ## Special fields
 
@@ -36,7 +36,7 @@ This produces sectioned tables in the email body — one section per fieldset (`
 ## Attachments
 
 Attachments work from file inputs (`details→files`) or via `attachments: File | File[]` on
-[`send()`](/api#sendoptions).
+[`mail()`](/api#sendoptions).
 
 ```html
 <input type="file" name="details→attachments" multiple />
@@ -44,5 +44,5 @@ Attachments work from file inputs (`details→files`) or via `attachments: File 
 
 ## Customising the labels
 
-The [`formatter`](/api#sendoptions) option on `send()` controls how fieldset and field
+The [`formatter`](/api#sendoptions) option on `mail()` controls how fieldset and field
 labels are rendered — pass `null` or `false` to a part to leave those labels untouched.

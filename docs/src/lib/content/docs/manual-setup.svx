@@ -34,9 +34,9 @@ POSTBOI_FROM=no-reply@example.com
 		No provider import, no constructor — credentials come from the environment.
 
 ```typescript
-import { send } from 'postboi';
+import { mail } from 'postboi';
 
-await send({
+await mail({
 	to: 'contact@example.com',
 	subject: 'Hi',
 	body: '<p>Hello</p>'
@@ -49,7 +49,7 @@ await send({
 ## Environment variables
 
 `init` writes `POSTBOI_PROVIDER`, the provider's credential env vars, and optional
-`POSTBOI_*` defaults. `send()` reads them on every call.
+`POSTBOI_*` defaults. `mail()` reads them on every call.
 
 | Variable                                                                          | For                                                            |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -63,9 +63,9 @@ A contact-form action is a one-liner. See [SvelteKit form actions](/sveltekit).
 
 ```typescript
 // +page.server.ts
-import { send } from 'postboi/kit';
+import { mail } from 'postboi/kit';
 
-export const actions = { default: send };
+export const actions = { default: mail };
 ```
 
 > On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider

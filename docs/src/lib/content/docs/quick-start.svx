@@ -24,12 +24,12 @@ defaults, writes your env vars, and installs `postboi` if it isn't already there
 - Optionally scaffolds a [`postboi.settings.ts`](/settings) for shared hooks and
   behaviour.
 
-After it finishes, `send()` reads those env vars on every call — no further wiring needed.
+After it finishes, `mail()` reads those env vars on every call — no further wiring needed.
 
 ```typescript
-import { send } from 'postboi';
+import { mail } from 'postboi';
 
-await send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
+await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
 ```
 
 ## Prefer to do it yourself?

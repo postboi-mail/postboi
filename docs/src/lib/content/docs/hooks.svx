@@ -8,11 +8,11 @@ category: Guides
 Pass `hooks` to any provider to run awaitable callbacks around every send. `before.send` can
 observe, rewrite, or cancel a message; the rest are best-effort observers — an error they
 throw is swallowed, so logging and telemetry can never break a send. In a bulk
-[`send(array)`](/bulk), hooks run once per message.
+[`mail(array)`](/bulk), hooks run once per message.
 
 > Setting the same hooks on every instance? Define them **once** in
 > [`postboi.settings.ts`](/settings) and they apply everywhere — including the
-> zero-config `send()`.
+> zero-config `mail()`.
 
 ```typescript
 const mail = new Resend({
