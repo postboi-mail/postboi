@@ -171,11 +171,10 @@ describe("project detection", () => {
 })
 
 describe("banner", () => {
-	it("renders the mascot and wordmark", () => {
+	it("renders the multi-line wordmark and tagline", () => {
 		const out = banner()
-		expect(out).toContain("postboi") // wordmark
-		expect(out).toContain("( O )") // the kid's nose
-		expect(out).toContain("<3") // parcel heart
+		expect(out.split("\n").length).toBeGreaterThan(5) // figlet art is multi-line
+		expect(out).toContain("email for the rest of us")
 	})
 
 	it("degrades to plain text when stdout isn't a TTY", () => {

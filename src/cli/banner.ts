@@ -1,35 +1,25 @@
-import { bold, dim, cyan, yellow, red } from "./prompts.js"
+import { yellow, dim } from "./prompts.js"
 
-// The postboi mascot — a goofy postal kid in his cap, waving, parcel in hand.
-// String.raw keeps the backslashes literal. Leading/trailing blank lines are trimmed below.
+// "postboi" rendered in the figlet "Speed" font. `boi` is tinted in the logo's yellow via a
+// per-row seam that follows the font's slant. String.raw keeps the backslashes literal.
 const ART = String.raw`
-          .-"""""-.
-        .'         '.
-       /   .-----.   \
-      |   |  \*/  |   |
-    __|___|_______|___|__
-      |               |
-      |   o       o   |
-   \o_|               |
-      |     ( O )     |   ___
-      |     \___/     |  |<3|
-       '._         _.'   |__|
-          '-------'
+                     ___________       _____
+_______________________  /___  /__________(_)
+___  __ \  __ \_  ___/  __/_  __ \  __ \_  /
+__  /_/ / /_/ /(__  )/ /_ _  /_/ / /_/ /  /
+_  .___/\____//____/ \__/ /_.___/\____//_/
+/_/
 `
 
-/** Colour one art line: cap blue, nose/parcel orange, heart red, sleeve blue. */
-function colourize(line: string, i: number): string {
-	if (i <= 4) return cyan(line) // cap crown, badge and brim
-	return line
-		.replace("\\o_", cyan("\\o_")) // waving sleeve
-		.replace("( O )", yellow("( O )")) // big round nose
-		.replace(" ___", " " + yellow("___")) // parcel lid
-		.replace("|<3|", yellow("|") + red("<3") + yellow("|")) // parcel + heart
-		.replace("|__|", yellow("|__|")) // parcel base
-}
+// Column on each row where `post` ends and the yellow `boi` begins.
+const SEAMS = [26, 27, 27, 25, 25, 3]
 
-/** The mascot, coloured for a terminal. Colours degrade to plain text when piped. */
+/** The wordmark, with `boi` in yellow. Colours degrade to plain text when not a TTY. */
 export function banner(): string {
-	const art = ART.replace(/^\n/, "").replace(/\n$/, "").split("\n").map(colourize).join("\n")
-	return `${art}\n\n  ${bold("postboi")} ${dim("— email for the rest of us")}`
+	const art = ART.replace(/^\n/, "")
+		.replace(/\n$/, "")
+		.split("\n")
+		.map((line, i) => line.slice(0, SEAMS[i]) + yellow(line.slice(SEAMS[i])))
+		.join("\n")
+	return `${art}\n  ${dim("email for the rest of us")}`
 }

@@ -48,7 +48,8 @@ function version(): string {
 
 function help(): void {
 	console.log(`
-${banner()} ${dim(`v${version()}`)}
+${banner()}
+${dim(`  v${version()}`)}
 
 ${bold("Usage")}
   ${cyan("bunx postboi init")}     Configure a provider and write its env vars
