@@ -174,7 +174,7 @@ describe("banner", () => {
 	it("renders the multi-line wordmark and tagline", () => {
 		const out = banner()
 		expect(out.split("\n").length).toBeGreaterThan(5) // figlet art is multi-line
-		expect(out).toContain("email for the rest of us")
+		expect(out).toContain("but mail ain't 1")
 	})
 
 	it("degrades to plain text when stdout isn't a TTY", () => {

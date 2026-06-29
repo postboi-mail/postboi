@@ -21,5 +21,5 @@ export function banner(): string {
 		.split("\n")
 		.map((line, i) => line.slice(0, SEAMS[i]) + yellow(line.slice(SEAMS[i])))
 		.join("\n")
-	return `${art}\n  ${dim("email for the rest of us")}`
+	return `${art}\n  ${dim("i got 99 problems, but mail ain't 1")}`
 }
