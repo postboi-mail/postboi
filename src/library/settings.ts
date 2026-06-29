@@ -20,11 +20,12 @@
  * (edge/Workers), call {@link configure} explicitly at startup instead.
  */
 import type { Defaults, Hooks } from "./index.js"
+import type { ProviderKey } from "./registry.js"
 
 /** Everything you can configure globally via `postboi.settings.ts` or {@link configure}. */
 export interface PostboiSettings {
 	/** Provider key (`resend`, `mailgun`, …) for the zero-config `send()`. `POSTBOI_PROVIDER` wins. */
-	provider?: string
+	provider?: ProviderKey
 	/** Default fields applied to every send. Merged under `POSTBOI_*` env vars, which win. */
 	default?: Defaults
 	/** Per-request timeout in milliseconds. */

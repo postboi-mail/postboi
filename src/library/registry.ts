@@ -30,7 +30,7 @@ export type ProviderMeta = {
 }
 
 /** The providers that can be configured by `postboi init` / driven by `send()`. */
-export const PROVIDERS: Array<ProviderMeta> = [
+export const PROVIDERS = [
 	{
 		key: "resend",
 		name: "Resend",
@@ -170,7 +170,10 @@ export const PROVIDERS: Array<ProviderMeta> = [
 		url: "https://www.zoho.com/zeptomail/",
 		fields: [{ env: "ZEPTO_TOKEN", arg: "api_key", label: "Send Mail token", secret: true }],
 	},
-]
+] as const satisfies ReadonlyArray<ProviderMeta>
+
+/** A known provider key, e.g. `"resend"` — derived from {@link PROVIDERS} so it can't drift. */
+export type ProviderKey = (typeof PROVIDERS)[number]["key"]
 
 /** Look up a provider by its key. */
 export function find_provider(key: string): ProviderMeta | undefined {
