@@ -1,6 +1,7 @@
 import { styleText } from "node:util"
 import * as readline from "node:readline/promises"
 import { stdin, stdout } from "node:process"
+import type { Readable, Writable } from "node:stream"
 
 /** styleText wrappers — colours degrade to plain text when the stream isn't a TTY. */
 const paint =
@@ -17,14 +18,25 @@ export const red = paint("red")
 
 export type Option<T> = { label: string; value: T; hint?: string }
 
+/** Thrown when the user aborts a prompt (Ctrl+C / Ctrl+D, or piped input runs out). */
+export class PromptCancelledError extends Error {
+	constructor() {
+		super("Prompt cancelled")
+		this.name = "PromptCancelledError"
+	}
+}
+
 /**
  * A tiny readline-backed prompter (no dependencies). Buffers input lines so it works
  * with both interactive TTYs and batched/piped input (CI, scripts, tests).
  */
-export function create_prompts() {
-	const rl = readline.createInterface({ input: stdin, output: stdout })
+export function create_prompts(io: { input?: Readable; output?: Writable } = {}) {
+	const input = io.input ?? stdin
+	const output = io.output ?? stdout
+	const rl = readline.createInterface({ input, output })
 	const buffer: Array<string> = []
-	const waiters: Array<(line: string) => void> = []
+	// A `null` line signals the input ended (EOF / Ctrl+C) so prompts cancel instead of looping.
+	const waiters: Array<(line: string | null) => void> = []
 	let closed = false
 
 	rl.on("line", (line) => {
@@ -34,18 +46,22 @@ export function create_prompts() {
 	})
 	rl.on("close", () => {
 		closed = true
-		for (const waiter of waiters.splice(0)) waiter("")
+		for (const waiter of waiters.splice(0)) waiter(null)
 	})
+	// Ctrl+C: close the interface, which resolves any pending prompt as cancelled.
+	rl.on("SIGINT", () => rl.close())
 
-	function next_line(): Promise<string> {
+	function next_line(): Promise<string | null> {
 		if (buffer.length > 0) return Promise.resolve(buffer.shift()!)
-		if (closed) return Promise.resolve("")
+		if (closed) return Promise.resolve(null)
 		return new Promise((resolve) => waiters.push(resolve))
 	}
 
 	async function prompt(label: string): Promise<string> {
-		stdout.write(label)
-		return (await next_line()).trim()
+		output.write(label)
+		const line = await next_line()
+		if (line === null) throw new PromptCancelledError()
+		return line.trim()
 	}
 
 	return {
@@ -60,22 +76,22 @@ export function create_prompts() {
 				if (answer) return answer
 				if (options.default !== undefined) return options.default
 				if (!options.required) return ""
-				stdout.write(red("  This value is required.\n"))
+				output.write(red("  This value is required.\n"))
 			}
 		},
 
 		/** Numbered single-select. */
 		async select<T>(message: string, options: Array<Option<T>>): Promise<T> {
-			stdout.write(`${message}\n`)
+			output.write(`${message}\n`)
 			options.forEach((option, i) => {
 				const hint = option.hint ? dim(` — ${option.hint}`) : ""
-				stdout.write(`  ${dim(String(i + 1))}) ${option.label}${hint}\n`)
+				output.write(`  ${dim(String(i + 1))}) ${option.label}${hint}\n`)
 			})
 			while (true) {
 				const answer = await prompt(cyan("› "))
 				const n = Number(answer)
 				if (Number.isInteger(n) && n >= 1 && n <= options.length) return options[n - 1].value
-				stdout.write(red(`  Enter a number from 1 to ${options.length}.\n`))
+				output.write(red(`  Enter a number from 1 to ${options.length}.\n`))
 			}
 		},
 

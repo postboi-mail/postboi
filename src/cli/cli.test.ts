@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest"
+import { Readable, Writable } from "node:stream"
 import { PROVIDERS, DEFAULT_FIELDS, usage_snippet } from "./providers.js"
 import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./env.js"
 import { detect_hosts, push_spec, manual_hint } from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
+import { create_prompts, PromptCancelledError } from "./prompts.js"
 
 describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
@@ -164,5 +166,38 @@ describe("project detection", () => {
 		expect(install_command("bun", "postboi")).toEqual({ cmd: "bun", args: ["add", "postboi"] })
 		expect(install_command("pnpm", "postboi")).toEqual({ cmd: "pnpm", args: ["add", "postboi"] })
 		expect(install_command("npm", "postboi")).toEqual({ cmd: "npm", args: ["install", "postboi"] })
+	})
+})
+
+describe("prompts", () => {
+	/** Build a prompter fed by `lines`; the input ends (EOF) once they run out. */
+	const prompter = (lines: Array<string>) =>
+		create_prompts({
+			input: Readable.from(lines.map((l) => `${l}\n`)),
+			output: new Writable({ write: (_chunk, _enc, cb) => cb() }),
+		})
+
+	const options = [
+		{ label: "One", value: 1 },
+		{ label: "Two", value: 2 },
+	]
+
+	it("returns the selected option", async () => {
+		const p = prompter(["2"])
+		expect(await p.select("Pick", options)).toBe(2)
+		p.close()
+	})
+
+	it("cancels instead of looping when input ends mid-select", async () => {
+		// Regression: an invalid line followed by EOF must not spin forever re-prompting.
+		const p = prompter(["99"])
+		await expect(p.select("Pick", options)).rejects.toBeInstanceOf(PromptCancelledError)
+		p.close()
+	})
+
+	it("cancels a required free-text prompt on EOF", async () => {
+		const p = prompter([])
+		await expect(p.ask("Token", { required: true })).rejects.toBeInstanceOf(PromptCancelledError)
+		p.close()
 	})
 })

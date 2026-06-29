@@ -6,7 +6,16 @@ import { PROVIDERS, DEFAULT_FIELDS, usage_snippet, type CliProvider } from "./pr
 import { detect_env_targets, upsert_env, is_gitignored, type EnvTarget } from "./env.js"
 import { detect_hosts, push_spec, manual_hint, HOST_LABEL, type Host } from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
-import { create_prompts, bold, dim, cyan, green, yellow, red } from "./prompts.js"
+import {
+	create_prompts,
+	PromptCancelledError,
+	bold,
+	dim,
+	cyan,
+	green,
+	yellow,
+	red,
+} from "./prompts.js"
 
 const SETTINGS_FILES = [
 	"postboi.settings.ts",
@@ -242,6 +251,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
+	if (error instanceof PromptCancelledError) {
+		console.log(dim("\nCancelled."))
+		exit(130)
+	}
 	console.error(red(error instanceof Error ? error.message : String(error)))
 	exit(1)
 })
