@@ -1,4 +1,10 @@
-import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
+import type {
+	PreparedMessage,
+	ApiKeyOptions,
+	ProviderError,
+	RequestSpec,
+	BatchRecipient,
+} from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Brevo provider constructor. */
@@ -27,6 +33,7 @@ export interface SendParams {
 	tags?: Array<string>
 	attachment?: Array<Attachment>
 	scheduledAt?: string
+	messageVersions?: Array<{ to: Array<EmailName>; params?: Record<string, string> }>
 }
 
 type SendResponse = { messageId: string }
@@ -73,6 +80,10 @@ export default class Brevo extends ProviderBase<SendResponse> {
 			scheduledAt: message.scheduled_at?.toISOString(),
 		}
 
+		return this.#request(params)
+	}
+
+	#request(params: SendParams): RequestSpec {
 		return {
 			url: "https://api.brevo.com/v3/smtp/email",
 			headers: {
@@ -82,6 +93,45 @@ export default class Brevo extends ProviderBase<SendResponse> {
 			},
 			body: JSON.stringify(params),
 		}
+	}
+
+	/**
+	 * Brevo batches natively via `messageVersions`: one request, a version per recipient with
+	 * its own `to` and `params`. Body uses `{{params.key}}`, so we rewrite `{key}` accordingly.
+	 */
+	protected async build_batch_request(
+		template: PreparedMessage,
+		recipients: Array<BatchRecipient>
+	): Promise<RequestSpec> {
+		const sub = (s: string | undefined) =>
+			s === undefined ? undefined : this.translate_placeholders(s, (k) => `{{params.${k}}}`)
+		const params: SendParams = {
+			sender: this.email_name(this.parse_email_address(template.from)),
+			// Brevo requires a top-level `to`; the per-version `to` overrides it.
+			to: this.email_name_list(recipients[0].to),
+			replyTo: template.reply_to ? this.email_name_list(template.reply_to)[0] : undefined,
+			subject: sub(template.subject)!,
+			htmlContent: sub(template.html),
+			textContent: sub(template.text),
+			headers: template.headers,
+			tags: template.tags,
+			scheduledAt: template.scheduled_at?.toISOString(),
+			messageVersions: recipients.map((r) => ({
+				to: this.email_name_list(r.to),
+				params: r.data,
+			})),
+		}
+		return this.#request(params)
+	}
+
+	// messageVersions returns `{ messageIds: [...] }`, aligned to the versions order.
+	protected parse_batch_response(
+		_response: Response,
+		data: unknown,
+		recipients: Array<BatchRecipient>
+	): Array<SendResponse> {
+		const ids = (data as { messageIds?: Array<string> } | null)?.messageIds ?? []
+		return recipients.map((_, i) => ({ messageId: ids[i] ?? "" }))
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {

@@ -1,4 +1,10 @@
-import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
+import type {
+	PreparedMessage,
+	ApiKeyOptions,
+	ProviderError,
+	RequestSpec,
+	BatchRecipient,
+} from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the MailerSend provider constructor. */
@@ -50,8 +56,8 @@ export default class MailerSend extends ProviderBase<SendResponse> {
 		this.#api_key = api_key
 	}
 
-	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
-		const params: SendParams = {
+	async #params(message: PreparedMessage): Promise<SendParams> {
+		return {
 			from: this.email_name(this.parse_email_address(message.from)),
 			to: this.email_name_list(message.to),
 			cc: message.cc ? this.email_name_list(message.cc) : undefined,
@@ -69,16 +75,46 @@ export default class MailerSend extends ProviderBase<SendResponse> {
 					}))
 				: undefined,
 		}
+	}
 
+	#headers(): Record<string, string> {
+		return {
+			Authorization: `Bearer ${this.#api_key}`,
+			"Content-Type": "application/json",
+			"X-Requested-With": "XMLHttpRequest",
+		}
+	}
+
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		return {
 			url: "https://api.mailersend.com/v1/email",
-			headers: {
-				Authorization: `Bearer ${this.#api_key}`,
-				"Content-Type": "application/json",
-				"X-Requested-With": "XMLHttpRequest",
-			},
-			body: JSON.stringify(params),
+			headers: this.#headers(),
+			body: JSON.stringify(await this.#params(message)),
 		}
+	}
+
+	// MailerSend's bulk endpoint takes an array of messages and processes them async,
+	// returning a single bulk_email_id (no per-recipient ids).
+	protected async build_batch_request(
+		_template: PreparedMessage,
+		recipients: Array<BatchRecipient>
+	): Promise<RequestSpec> {
+		const payload = await Promise.all(recipients.map((r) => this.#params(r.message)))
+		return {
+			url: "https://api.mailersend.com/v1/bulk-email",
+			headers: this.#headers(),
+			body: JSON.stringify(payload),
+		}
+	}
+
+	// The bulk id stands in for every recipient's message id.
+	protected parse_batch_response(
+		_response: Response,
+		data: unknown,
+		recipients: Array<BatchRecipient>
+	): Array<SendResponse> {
+		const bulk = (data as { bulk_email_id?: string } | null)?.bulk_email_id
+		return recipients.map(() => ({ message_id: bulk }))
 	}
 
 	// 202 Accepted with an empty body; the id is returned in a response header.

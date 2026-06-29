@@ -1,4 +1,11 @@
-import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec } from "./index.js"
+import type {
+	PreparedMessage,
+	CommonProviderOptions,
+	ProviderError,
+	RequestSpec,
+	BatchRecipient,
+	RecipientVars,
+} from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the Mailgun provider constructor. */
@@ -63,12 +70,47 @@ export default class Mailgun extends ProviderBase<SendResponse> {
 			for (const file of files) form.append("attachment", file, file.name)
 		}
 
+		return this.#request(form)
+	}
+
+	#request(form: FormData): RequestSpec {
 		const auth = Buffer.from(`api:${this.#api_key}`).toString("base64")
 		return {
 			url: `${this.#host}/v3/${this.#domain}/messages`,
 			headers: { Authorization: `Basic ${auth}` },
 			body: form,
 		}
+	}
+
+	/**
+	 * Mailgun batches natively via `recipient-variables`: one request to all recipients with
+	 * `%recipient.key%` merge tags. We rewrite `{key}` → `%recipient.key%` and pass each
+	 * recipient's variables keyed by address.
+	 */
+	protected build_batch_request(
+		template: PreparedMessage,
+		recipients: Array<BatchRecipient>
+	): RequestSpec {
+		const sub = (s: string) => this.translate_placeholders(s, (k) => `%recipient.${k}%`)
+		const form = new FormData()
+		form.append("from", this.stringify_address(this.parse_email_address(template.from)))
+		for (const r of recipients) form.append("to", this.stringify_addresses(r.to))
+		if (template.cc) form.append("cc", this.stringify_addresses(template.cc))
+		if (template.bcc) form.append("bcc", this.stringify_addresses(template.bcc))
+		if (template.reply_to) form.append("h:Reply-To", this.stringify_addresses(template.reply_to))
+		form.append("subject", sub(template.subject))
+		if (template.html) form.append("html", sub(template.html))
+		if (template.text) form.append("text", sub(template.text))
+		if (template.headers) {
+			for (const [name, value] of Object.entries(template.headers)) form.append(`h:${name}`, value)
+		}
+		if (template.tags) for (const tag of template.tags) form.append("o:tag", tag)
+		if (template.scheduled_at) form.append("o:deliverytime", template.scheduled_at.toUTCString())
+
+		const vars: Record<string, RecipientVars> = {}
+		for (const r of recipients) vars[this.parse_addresses(r.to)[0].address] = r.data
+		form.append("recipient-variables", JSON.stringify(vars))
+		return this.#request(form)
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {

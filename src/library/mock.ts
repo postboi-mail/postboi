@@ -5,6 +5,9 @@ import type {
 	MailAttachment,
 	RequestSpec,
 	BatchResult,
+	BatchData,
+	BatchOptions,
+	Email,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 
@@ -68,16 +71,22 @@ export default class Mock extends ProviderBase<SendResponse> {
 		this.sent.length = 0
 	}
 
-	async send(options: SendOptions): Promise<SendResponse>
-	async send(
+	send<const T extends ReadonlyArray<Email>>(
+		options: Omit<BatchOptions, "to" | "data"> & { to: T; data: BatchData<T> }
+	): Promise<Array<BatchResult<SendResponse>>>
+	send(options: SendOptions): Promise<SendResponse>
+	send(
 		options: Array<SendOptions>,
 		batch?: { concurrency?: number }
 	): Promise<Array<BatchResult<SendResponse>>>
 	async send(
-		options: SendOptions | Array<SendOptions>,
+		options: SendOptions | BatchOptions | Array<SendOptions>,
 		batch: { concurrency?: number } = {}
 	): Promise<SendResponse | Array<BatchResult<SendResponse>>> {
 		if (Array.isArray(options)) return this.send_batch(options, batch)
+		if ("data" in options && options.data && Array.isArray(options.to)) {
+			return this.send_data_batch(options)
+		}
 
 		return this.with_hooks(options, async (message) => {
 			if (this.#fail) {

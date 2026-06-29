@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import Mock from "$library/mock.js"
+import { SkipSendError } from "$library/index.js"
 
 describe("Mock provider", () => {
 	let mail: Mock
@@ -114,6 +115,72 @@ describe("Mock provider", () => {
 		const bare = new Mock()
 		await expect(bare.send({ from: "a@test.com", body: "hi" })).rejects.toThrow(/recipient/)
 		await expect(bare.send({ to: "a@test.com", body: "hi" })).rejects.toThrow(/sender/)
+	})
+
+	it("fills {placeholders} per recipient and returns one result each (fan-out)", async () => {
+		const results = await mail.send({
+			to: ["a@test.com", "b@test.com"],
+			from: "sender@test.com",
+			subject: "Hey {name}",
+			body: "A message for {name}, id {id}.",
+			data: {
+				"a@test.com": { name: "Ada", id: "1" },
+				"b@test.com": { name: "Linus", id: "2" },
+			},
+		})
+
+		expect(results).toHaveLength(2)
+		expect(results.every((r) => r.ok)).toBe(true)
+		expect(mail.sent).toHaveLength(2)
+		expect(mail.sent[0]).toMatchObject({
+			to: [{ address: "a@test.com" }],
+			subject: "Hey Ada",
+			html: "A message for Ada, id 1.",
+		})
+		expect(mail.sent[1]).toMatchObject({
+			to: [{ address: "b@test.com" }],
+			subject: "Hey Linus",
+			html: "A message for Linus, id 2.",
+		})
+	})
+
+	it("leaves unknown {placeholders} empty and tolerates missing per-recipient data", async () => {
+		await mail.send({
+			to: ["a@test.com"],
+			from: "sender@test.com",
+			subject: "Hi {name}",
+			body: "{greeting} {name}",
+			data: {}, // no entry for a@test.com
+		})
+		expect(mail.last?.subject).toBe("Hi ")
+		expect(mail.last?.html).toBe(" ")
+	})
+
+	it("a before.send skip drops one recipient but keeps the rest", async () => {
+		const m = new Mock({
+			default: { from: "from@test.com" },
+			hooks: {
+				before: {
+					send: ({ message }) => {
+						const to = Array.isArray(message.to) ? message.to[0] : message.to
+						const addr = typeof to === "string" ? to : to.address
+						if (addr === "skip@test.com") throw new SkipSendError()
+					},
+				},
+			},
+		})
+		const results = await m.send({
+			to: ["keep@test.com", "skip@test.com"],
+			subject: "Hi {name}",
+			body: "{name}",
+			data: { "keep@test.com": { name: "K" }, "skip@test.com": { name: "S" } },
+		})
+
+		expect(results[0].ok).toBe(true)
+		expect(results[1].ok).toBe(false)
+		expect(results[1].ok === false && results[1].error.code).toBe("skipped")
+		expect(m.sent).toHaveLength(1)
+		expect(m.sent[0].to).toEqual([{ address: "keep@test.com" }])
 	})
 
 	it("simulates failures when constructed with fail: true", async () => {

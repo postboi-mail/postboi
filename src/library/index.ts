@@ -89,6 +89,45 @@ export interface SendOptions {
 	scheduled_at?: Date | string
 }
 
+/** A single recipient's template variables (`{key}` → value). */
+export type RecipientVars = Record<string, string>
+
+/**
+ * The personalized-batch form of {@link SendOptions}: an array `to` plus per-recipient
+ * `data`. `data` is kept off {@link SendOptions} so a plain send literal can't smuggle it
+ * in — only this shape (the batch overload) accepts it.
+ */
+export type BatchOptions = Omit<SendOptions, "to"> & {
+	to: Array<Email> | Email
+	/** Per-recipient template variables, keyed by recipient address. */
+	data: Record<string, RecipientVars>
+}
+
+/**
+ * Constrains {@link BatchOptions.data} keys to the addresses in `to` when they are string
+ * literals (so a typo'd address is a type error). Falls back to any string key when `to`
+ * is a non-literal `string[]` or contains `{ address }` objects, which can't be inferred.
+ */
+export type BatchData<T extends ReadonlyArray<Email>> = [T[number]] extends [string]
+	? string extends T[number]
+		? Record<string, RecipientVars>
+		: Partial<Record<T[number] & string, RecipientVars>>
+	: Record<string, RecipientVars>
+
+/**
+ * One recipient of a templated batch, handed to {@link ProviderBase.build_batch_request}.
+ * `message` is fully rendered (placeholders filled) for envelope-batch providers; `data`
+ * and `to` are the raw inputs for providers that do the substitution server-side.
+ */
+export type BatchRecipient = {
+	/** The recipient address (after any `before.send` redirect). */
+	to: Array<Email> | Email
+	/** This recipient's template variables. */
+	data: RecipientVars
+	/** The rendered message for this recipient — placeholders already substituted. */
+	message: PreparedMessage
+}
+
 /**
  * A fully-resolved message handed to a provider's `build_request`. Defaults have been
  * applied, FormData has been rendered, and the HTML/text bodies are split out.
@@ -302,49 +341,72 @@ export abstract class ProviderBase<TResponse = unknown> {
 		return undefined
 	}
 
+	/**
+	 * Send a personalized batch: one `to` array plus per-recipient `data`. `{key}`
+	 * placeholders in `subject`/`body` are filled from each recipient's variables, and the
+	 * `data` keys are type-checked against `to` when they are string literals. Returns one
+	 * {@link BatchResult} per recipient. Uses the provider's native batch endpoint where one
+	 * exists, otherwise sends one request per recipient.
+	 */
+	send<const T extends ReadonlyArray<Email>>(
+		options: Omit<BatchOptions, "to" | "data"> & { to: T; data: BatchData<T> }
+	): Promise<Array<BatchResult<TResponse>>>
 	/** Send a single email. Throws a {@link PostboiError} on any failure. */
-	async send(options: SendOptions): Promise<TResponse>
+	send(options: SendOptions): Promise<TResponse>
 	/**
 	 * Send many emails as individual requests with bounded concurrency (default 5).
 	 * Never rejects — each message yields its own {@link BatchResult}, so one failure
 	 * does not lose the rest.
 	 */
-	async send(
+	send(
 		options: Array<SendOptions>,
 		batch?: { concurrency?: number }
 	): Promise<Array<BatchResult<TResponse>>>
 	async send(
-		options: SendOptions | Array<SendOptions>,
+		options: SendOptions | BatchOptions | Array<SendOptions>,
 		batch: { concurrency?: number } = {}
 	): Promise<TResponse | Array<BatchResult<TResponse>>> {
 		if (Array.isArray(options)) return this.send_batch(options, batch)
+		if ("data" in options && options.data && Array.isArray(options.to)) {
+			return this.send_data_batch(options)
+		}
+		return this.with_hooks(options, (message) => this.deliver(message))
+	}
 
-		return this.with_hooks(options, async (message) => {
-			const spec = await this.build_request(message)
-			const response = await this.request(spec)
-			const data = await this.read_json(response)
+	/** Build the request, send it, and read/validate the success payload for one message. */
+	protected async deliver(message: PreparedMessage): Promise<TResponse> {
+		const spec = await this.build_request(message)
+		const response = await this.request(spec)
+		const data = await this.read_json(response)
+		const error = this.error_for(response, data, "request")
+		if (error) throw error
+		return this.parse_response(response, data)
+	}
 
-			const error = this.parse_error(response, data)
-			if (error) {
-				throw new PostboiError({
-					provider: this.provider,
-					status: response.status,
-					message: error.message,
-					code: error.code,
-					raw: data,
-				})
-			}
-			if (!response.ok) {
-				throw new PostboiError({
-					provider: this.provider,
-					status: response.status,
-					message: `${this.provider} request failed with status ${response.status}`,
-					raw: data,
-				})
-			}
-
-			return this.parse_response(response, data)
-		})
+	/**
+	 * Map a response into a {@link PostboiError} if the provider flags it as a failure
+	 * (via `parse_error`) or the HTTP status is not ok. Returns undefined on success.
+	 */
+	protected error_for(response: Response, data: unknown, kind: string): PostboiError | undefined {
+		const error = this.parse_error(response, data)
+		if (error) {
+			return new PostboiError({
+				provider: this.provider,
+				status: response.status,
+				message: error.message,
+				code: error.code,
+				raw: data,
+			})
+		}
+		if (!response.ok) {
+			return new PostboiError({
+				provider: this.provider,
+				status: response.status,
+				message: `${this.provider} ${kind} failed with status ${response.status}`,
+				raw: data,
+			})
+		}
+		return undefined
 	}
 
 	/**
@@ -365,10 +427,8 @@ export abstract class ProviderBase<TResponse = unknown> {
 		}
 
 		// before.send may observe, replace the message, or throw to cancel (no on.error).
-		if (this.#hooks.before?.send) {
-			const replaced = await this.#hooks.before.send({ provider: this.provider, message })
-			if (replaced) message = replaced
-		}
+		const replaced = await this.before_send(message)
+		if (replaced) message = replaced
 
 		try {
 			const response = await core(message)
@@ -383,6 +443,13 @@ export abstract class ProviderBase<TResponse = unknown> {
 			return response
 		} catch (error) {
 			throw await this.#emit_error(error, message, start)
+		}
+	}
+
+	/** Run the `before.send` hook, returning a replacement message if it provided one. */
+	protected async before_send(message: PreparedMessage): Promise<PreparedMessage | void> {
+		if (this.#hooks.before?.send) {
+			return this.#hooks.before.send({ provider: this.provider, message })
 		}
 	}
 
@@ -429,6 +496,17 @@ export abstract class ProviderBase<TResponse = unknown> {
 		return error instanceof PostboiError
 	}
 
+	/** Normalize any thrown value into a {@link PostboiError}. */
+	protected normalize_error(error: unknown): PostboiError {
+		return error instanceof PostboiError
+			? error
+			: new PostboiError({
+					provider: this.provider,
+					message: error instanceof Error ? error.message : String(error),
+					raw: error,
+				})
+	}
+
 	/** Shared bulk-send dispatch used by the array overload of `send`. */
 	protected async send_batch(
 		messages: Array<SendOptions>,
@@ -438,17 +516,127 @@ export abstract class ProviderBase<TResponse = unknown> {
 			try {
 				return { ok: true, index, response: await this.send(message) }
 			} catch (error) {
-				const normalized =
-					error instanceof PostboiError
-						? error
-						: new PostboiError({
-								provider: this.provider,
-								message: error instanceof Error ? error.message : String(error),
-								raw: error,
-							})
-				return { ok: false, index, error: normalized }
+				return { ok: false, index, error: this.normalize_error(error) }
 			}
 		})
+	}
+
+	/**
+	 * Replace `{key}` placeholders in `text` with the matching variable. Unknown keys
+	 * become empty strings. Only bare `{identifier}` tokens are touched — `{` followed by a
+	 * space (e.g. CSS `{ color: red }`) is left alone.
+	 */
+	protected fill_template(text: string, vars: RecipientVars): string {
+		return text.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? "")
+	}
+
+	/**
+	 * Rewrite every `{key}` placeholder into a provider's native merge syntax (e.g. Mailgun's
+	 * `%recipient.key%`). Used by providers whose batch endpoint does the substitution itself.
+	 */
+	protected translate_placeholders(text: string, to: (key: string) => string): string {
+		return text.replace(/\{(\w+)\}/g, (_, key) => to(key))
+	}
+
+	/**
+	 * Override in providers with a native batch endpoint: map one unrendered `template` plus
+	 * the per-recipient {@link BatchRecipient}s into a single HTTP request. When left
+	 * undefined, {@link send_data_batch} falls back to one request per recipient.
+	 */
+	protected build_batch_request?(
+		template: PreparedMessage,
+		recipients: Array<BatchRecipient>
+	): RequestSpec | Promise<RequestSpec>
+
+	/**
+	 * Map a native batch response into one outcome per recipient (same order as `recipients`).
+	 * The default applies the single-send {@link parse_response} to every recipient — correct
+	 * for providers that return one aggregate id. Providers whose batch returns a per-recipient
+	 * array (Resend, Postmark, Mandrill, …) override this to split it, and may return a
+	 * {@link PostboiError} for any recipient the provider rejected.
+	 */
+	protected parse_batch_response(
+		response: Response,
+		data: unknown,
+		recipients: Array<BatchRecipient>
+	): Array<TResponse | PostboiError> {
+		const single = this.parse_response(response, data)
+		return recipients.map(() => single)
+	}
+
+	/**
+	 * Send a personalized batch. Renders each recipient's message from the `{key}` template,
+	 * runs `before.send` per recipient (so suppression/redirect still work), then dispatches:
+	 * one native batch request where {@link build_batch_request} is implemented, otherwise the
+	 * normal per-recipient fan-out (which carries the full hook/retry pipeline).
+	 *
+	 * ponytail: native batch runs `before.send` only; per-recipient `after.send`/`on.error`
+	 * fire via the fan-out path. Add them to the native path if observability needs parity.
+	 */
+	protected async send_data_batch(options: BatchOptions): Promise<Array<BatchResult<TResponse>>> {
+		const { data: data_in, ...base } = options
+		const data = data_in ?? {}
+		const addresses = this.parse_addresses(base.to)
+		const vars_for = (a: MailAddress): RecipientVars => data[a.address] ?? {}
+		const fill = (s: string | undefined, v: RecipientVars) =>
+			typeof s === "string" ? this.fill_template(s, v) : s
+
+		// One SendOptions per recipient with placeholders already filled.
+		const expanded: Array<SendOptions> = addresses.map((a) => {
+			const v = vars_for(a)
+			return {
+				...base,
+				to: a.name ? { address: a.address, name: a.name } : a.address,
+				subject: fill(base.subject, v),
+				body: typeof base.body === "string" ? this.fill_template(base.body, v) : base.body,
+				text: fill(base.text, v),
+			}
+		})
+
+		// No native endpoint → existing fan-out gives full hooks/retries (and mock support).
+		if (!this.build_batch_request) return this.send_batch(expanded)
+
+		// Native batch: prepare + run before.send per recipient, then one request for survivors.
+		const template = await this.prepare_send(base)
+		const slots: Array<{ index: number; live?: BatchRecipient; result?: BatchResult<TResponse> }> =
+			[]
+		for (let index = 0; index < expanded.length; index++) {
+			try {
+				let message = await this.prepare_send(expanded[index])
+				const replaced = await this.before_send(message)
+				if (replaced) message = replaced
+				slots.push({ index, live: { to: message.to, data: vars_for(addresses[index]), message } })
+			} catch (error) {
+				slots.push({ index, result: { ok: false, index, error: this.normalize_error(error) } })
+			}
+		}
+
+		const live = slots.flatMap((s) => (s.live ? [s.live] : []))
+		if (live.length > 0) {
+			try {
+				const spec = await this.build_batch_request(template, live)
+				const response = await this.request(spec)
+				const body = await this.read_json(response)
+				const error = this.error_for(response, body, "batch request")
+				if (error) throw error
+				const parsed = this.parse_batch_response(response, body, live)
+				let i = 0
+				for (const slot of slots) {
+					if (!slot.live) continue
+					const outcome = parsed[i++]
+					slot.result =
+						outcome instanceof PostboiError
+							? { ok: false, index: slot.index, error: outcome }
+							: { ok: true, index: slot.index, response: outcome }
+				}
+			} catch (error) {
+				const e = this.normalize_error(error)
+				for (const slot of slots) {
+					if (slot.live && !slot.result) slot.result = { ok: false, index: slot.index, error: e }
+				}
+			}
+		}
+		return slots.map((s) => s.result!)
 	}
 
 	/** Perform the HTTP request with a timeout and opt-in retry/backoff. */

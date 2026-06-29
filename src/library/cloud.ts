@@ -1,5 +1,8 @@
 import type {
 	SendOptions,
+	BatchOptions,
+	BatchData,
+	Email,
 	PreparedMessage,
 	CommonProviderOptions,
 	Defaults,
@@ -312,15 +315,19 @@ async function resolve_provider(): Promise<ProviderBase<unknown>> {
  * await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
  * ```
  */
+export function mail<const T extends ReadonlyArray<Email>>(
+	options: Omit<BatchOptions, "to" | "data"> & { to: T; data: BatchData<T> }
+): Promise<Array<BatchResult<unknown>>>
 export function mail(options: SendOptions): Promise<unknown>
 export function mail(
 	options: Array<SendOptions>,
 	batch?: { concurrency?: number }
 ): Promise<Array<BatchResult<unknown>>>
 export async function mail(
-	options: SendOptions | Array<SendOptions>,
+	options: SendOptions | BatchOptions | Array<SendOptions>,
 	batch: { concurrency?: number } = {}
 ): Promise<unknown> {
 	const provider = await resolve_provider()
-	return Array.isArray(options) ? provider.send(options, batch) : provider.send(options)
+	if (Array.isArray(options)) return provider.send(options, batch)
+	return provider.send(options as SendOptions)
 }

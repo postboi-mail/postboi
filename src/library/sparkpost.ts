@@ -1,4 +1,10 @@
-import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
+import type {
+	PreparedMessage,
+	ApiKeyOptions,
+	ProviderError,
+	RequestSpec,
+	BatchRecipient,
+} from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the SparkPost provider constructor. */
@@ -15,6 +21,7 @@ interface Attachment {
 
 interface Recipient {
 	address: { email: string; name?: string; header_to?: string }
+	substitution_data?: Record<string, string>
 }
 
 export interface SendParams {
@@ -94,6 +101,10 @@ export default class SparkPost extends ProviderBase<SendResponse> {
 			recipients,
 		}
 
+		return this.#request(params)
+	}
+
+	#request(params: SendParams): RequestSpec {
 		return {
 			url: `${this.#host}/api/v1/transmissions`,
 			headers: {
@@ -102,6 +113,40 @@ export default class SparkPost extends ProviderBase<SendResponse> {
 			},
 			body: JSON.stringify(params),
 		}
+	}
+
+	/**
+	 * SparkPost batches natively: one transmission with per-recipient `substitution_data` and
+	 * `{{key}}` merge tags. We rewrite `{key}` → `{{key}}` and attach each recipient's vars.
+	 */
+	protected async build_batch_request(
+		template: PreparedMessage,
+		recipients: Array<BatchRecipient>
+	): Promise<RequestSpec> {
+		const sub = (s: string | undefined) =>
+			s === undefined ? undefined : this.translate_placeholders(s, (k) => `{{${k}}}`)
+		const params: SendParams = {
+			content: {
+				from: this.email_name(this.parse_email_address(template.from)),
+				subject: sub(template.subject)!,
+				html: sub(template.html),
+				text: sub(template.text),
+				reply_to: template.reply_to ? this.stringify_addresses(template.reply_to) : undefined,
+				headers: template.headers,
+				attachments: template.attachments
+					? (await this.parse_attachments(template.attachments)).map((a) => ({
+							name: a.name,
+							type: a.mime_type,
+							data: a.content,
+						}))
+					: undefined,
+			},
+			recipients: recipients.map((r) => ({
+				address: this.email_name(this.parse_addresses(r.to)[0]),
+				substitution_data: r.data,
+			})),
+		}
+		return this.#request(params)
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {

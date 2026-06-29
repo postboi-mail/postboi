@@ -1,5 +1,11 @@
-import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
-import { ProviderBase } from "./index.js"
+import type {
+	PreparedMessage,
+	ApiKeyOptions,
+	ProviderError,
+	RequestSpec,
+	BatchRecipient,
+} from "./index.js"
+import { ProviderBase, PostboiError } from "./index.js"
 
 /** Options for the Resend provider constructor. */
 type Options = ApiKeyOptions
@@ -47,8 +53,8 @@ export default class Resend extends ProviderBase<SendResponse> {
 		this.#api_key = api_key
 	}
 
-	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
-		const params: SendParams = {
+	async #params(message: PreparedMessage): Promise<SendParams> {
+		return {
 			from: this.stringify_address(this.parse_email_address(message.from)),
 			to: this.parse_addresses(message.to).map((a) => this.stringify_address(a)),
 			cc: message.cc
@@ -74,7 +80,9 @@ export default class Resend extends ProviderBase<SendResponse> {
 					}))
 				: undefined,
 		}
+	}
 
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
 		return {
 			url: "https://api.resend.com/emails",
 			headers: {
@@ -82,8 +90,38 @@ export default class Resend extends ProviderBase<SendResponse> {
 				"Content-Type": "application/json",
 				...(message.idempotency_key ? { "Idempotency-Key": message.idempotency_key } : {}),
 			},
-			body: JSON.stringify(params),
+			body: JSON.stringify(await this.#params(message)),
 		}
+	}
+
+	// Resend's native batch endpoint: one POST carrying a fully-rendered message per recipient.
+	protected async build_batch_request(
+		_template: PreparedMessage,
+		recipients: Array<BatchRecipient>
+	): Promise<RequestSpec> {
+		const payload = await Promise.all(recipients.map((r) => this.#params(r.message)))
+		return {
+			url: "https://api.resend.com/emails/batch",
+			headers: {
+				Authorization: `Bearer ${this.#api_key}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(payload),
+		}
+	}
+
+	// Batch returns `{ data: [{ id }, …] }`, aligned to the request order.
+	protected parse_batch_response(
+		_response: Response,
+		data: unknown,
+		recipients: Array<BatchRecipient>
+	): Array<SendResponse | PostboiError> {
+		const ids = (data as { data?: Array<SendResponse> } | null)?.data ?? []
+		return recipients.map(
+			(_, i) =>
+				ids[i] ??
+				new PostboiError({ provider: this.provider, message: "Missing batch result for recipient" })
+		)
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {

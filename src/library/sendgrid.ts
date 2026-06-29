@@ -1,4 +1,10 @@
-import type { PreparedMessage, ApiKeyOptions, ProviderError, RequestSpec } from "./index.js"
+import type {
+	PreparedMessage,
+	ApiKeyOptions,
+	ProviderError,
+	RequestSpec,
+	BatchRecipient,
+} from "./index.js"
 import { ProviderBase } from "./index.js"
 
 /** Options for the SendGrid provider constructor. */
@@ -24,6 +30,7 @@ export interface SendParams {
 		to: Array<EmailName>
 		cc?: Array<EmailName>
 		bcc?: Array<EmailName>
+		substitutions?: Record<string, string>
 	}>
 	from: EmailName
 	reply_to?: EmailName
@@ -89,6 +96,10 @@ export default class SendGrid extends ProviderBase<SendResponse> {
 			send_at: message.scheduled_at ? Math.floor(message.scheduled_at.getTime() / 1000) : undefined,
 		}
 
+		return this.#request(params)
+	}
+
+	#request(params: SendParams): RequestSpec {
 		return {
 			url: `${this.#host}/v3/mail/send`,
 			headers: {
@@ -97,6 +108,37 @@ export default class SendGrid extends ProviderBase<SendResponse> {
 			},
 			body: JSON.stringify(params),
 		}
+	}
+
+	/**
+	 * SendGrid batches natively via one `personalizations` entry per recipient. Its
+	 * `substitutions` do a literal string replace, so we keep the `{key}` tags as-is and map
+	 * each recipient's variables to `{ "{key}": value }`.
+	 */
+	protected async build_batch_request(
+		template: PreparedMessage,
+		recipients: Array<BatchRecipient>
+	): Promise<RequestSpec> {
+		const content: SendParams["content"] = []
+		if (template.text) content.push({ type: "text/plain", value: template.text })
+		if (template.html) content.push({ type: "text/html", value: template.html })
+
+		const params: SendParams = {
+			personalizations: recipients.map((r) => ({
+				to: this.email_name_list(r.to),
+				substitutions: Object.fromEntries(Object.entries(r.data).map(([k, v]) => [`{${k}}`, v])),
+			})),
+			from: this.email_name(this.parse_email_address(template.from)),
+			reply_to: template.reply_to ? this.email_name_list(template.reply_to)[0] : undefined,
+			subject: template.subject,
+			content,
+			headers: template.headers,
+			categories: template.tags,
+			send_at: template.scheduled_at
+				? Math.floor(template.scheduled_at.getTime() / 1000)
+				: undefined,
+		}
+		return this.#request(params)
 	}
 
 	// 202 Accepted with an empty body; the id is returned in a response header.

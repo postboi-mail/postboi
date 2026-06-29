@@ -7,10 +7,11 @@ import globals from "globals"
 import ts from "typescript-eslint"
 
 const gitignorePath = fileURLToPath(new URL("./.gitignore", import.meta.url))
+const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url))
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
-	globalIgnores(["src/components/ui/**", "docs/**"]),
+	globalIgnores(["src/components/ui/**", "docs/**", ".claude/**"]),
 	js.configs.recommended,
 	...ts.configs.recommended,
 	...svelte.configs.recommended,
@@ -40,6 +41,7 @@ export default defineConfig(
 		languageOptions: {
 			parserOptions: {
 				projectService: true,
+				tsconfigRootDir,
 				extraFileExtensions: [".svelte"],
 				parser: ts.parser,
 			},
