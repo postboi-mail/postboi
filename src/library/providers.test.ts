@@ -16,6 +16,8 @@ import MailPace from "$library/mailpace.js"
 import Scaleway from "$library/scaleway.js"
 import SES from "$library/ses.js"
 import Microsoft365 from "$library/microsoft365.js"
+import Mailjet from "$library/mailjet.js"
+import ElasticEmail from "$library/elasticemail.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -785,6 +787,115 @@ describe("Microsoft 365", () => {
 		expect(error.provider).toBe("microsoft365")
 		expect(error.message).toBe("bad recipient")
 		expect(error.code).toBe("ErrorInvalidRecipients")
+	})
+})
+
+describe("Mailjet", () => {
+	const mail = () =>
+		new Mailjet({ api_key: "mj_pub", api_secret: "mj_priv", default: { from: "from@test.com" } })
+
+	it("wraps the message in Messages[] with basic auth", async () => {
+		fetch.mockResolvedValue(
+			respond({
+				json: { Messages: [{ Status: "success", To: [{ MessageID: 111, MessageUUID: "uuid-1" }] }] },
+			})
+		)
+		const result = await mail().send({
+			to: { address: "to@test.com", name: "To" },
+			cc: "cc@test.com",
+			bcc: "bcc@test.com",
+			reply_to: "reply@test.com",
+			subject: "Hi",
+			body: "<p>x</p>",
+			text: "x",
+			attachments: attachment(),
+		})
+
+		expect(sent_url()).toBe("https://api.mailjet.com/v3.1/send")
+		expect(sent_init().headers).toMatchObject({
+			Authorization: `Basic ${b64("mj_pub:mj_priv")}`,
+		})
+		const msg = sent_json().Messages[0]
+		expect(msg.From).toEqual({ Email: "from@test.com" })
+		expect(msg.To).toEqual([{ Email: "to@test.com", Name: "To" }])
+		expect(msg.Cc).toEqual([{ Email: "cc@test.com" }])
+		expect(msg.Bcc).toEqual([{ Email: "bcc@test.com" }])
+		expect(msg.ReplyTo).toEqual({ Email: "reply@test.com" })
+		expect(msg.HTMLPart).toBe("<p>x</p>")
+		expect(msg.TextPart).toBe("x")
+		expect(msg.Attachments).toEqual([
+			{ ContentType: "application/pdf", Filename: "doc.pdf", Base64Content: b64("filedata") },
+		])
+		expect(result).toEqual({ message_id: "111", message_uuid: "uuid-1" })
+	})
+
+	it("treats a per-message error Status as a failure on HTTP 200", async () => {
+		const raw = {
+			Messages: [
+				{ Status: "error", Errors: [{ ErrorCode: "mj-0004", ErrorMessage: "invalid email" }] },
+			],
+		}
+		fetch.mockResolvedValue(respond({ ok: true, status: 200, json: raw }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("mailjet")
+		expect(error.message).toBe("invalid email")
+		expect(error.code).toBe("mj-0004")
+	})
+
+	it("normalizes a top-level auth error", async () => {
+		fetch.mockResolvedValue(
+			respond({ ok: false, status: 401, json: { ErrorMessage: "API key invalid" } })
+		)
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.message).toBe("API key invalid")
+	})
+})
+
+describe("Elastic Email", () => {
+	const mail = () =>
+		new ElasticEmail({ api_key: "ee_key", default: { from: "from@test.com" } })
+
+	it("posts to the transactional endpoint with To/CC/BCC and a Body array", async () => {
+		fetch.mockResolvedValue(respond({ json: { MessageID: "msg-1", TransactionID: "tx-1" } }))
+		const result = await mail().send({
+			to: "to@test.com",
+			cc: "cc@test.com",
+			bcc: "bcc@test.com",
+			reply_to: "reply@test.com",
+			subject: "Hi",
+			body: "<p>x</p>",
+			text: "x",
+			headers: { "X-Custom": "1" },
+			attachments: attachment(),
+		})
+
+		expect(sent_url()).toBe("https://api.elasticemail.com/v4/emails/transactional")
+		expect(sent_init().headers).toMatchObject({ "X-ElasticEmail-ApiKey": "ee_key" })
+		const body = sent_json()
+		expect(body.Recipients).toEqual({
+			To: ["to@test.com"],
+			CC: ["cc@test.com"],
+			BCC: ["bcc@test.com"],
+		})
+		expect(body.Content.From).toBe("from@test.com")
+		expect(body.Content.ReplyTo).toBe("reply@test.com")
+		expect(body.Content.Subject).toBe("Hi")
+		expect(body.Content.Body).toEqual([
+			{ ContentType: "HTML", Content: "<p>x</p>", Charset: "utf-8" },
+			{ ContentType: "PlainText", Content: "x", Charset: "utf-8" },
+		])
+		expect(body.Content.Headers).toEqual({ "X-Custom": "1" })
+		expect(body.Content.Attachments).toEqual([
+			{ BinaryContent: b64("filedata"), Name: "doc.pdf", ContentType: "application/pdf" },
+		])
+		expect(result).toEqual({ message_id: "msg-1", transaction_id: "tx-1" })
+	})
+
+	it("detects errors", async () => {
+		fetch.mockResolvedValue(respond({ ok: false, status: 400, json: { Error: "Invalid email" } }))
+		const error = await caught(mail().send({ to: "to@test.com", body: "x" }))
+		expect(error.provider).toBe("elasticemail")
+		expect(error.message).toBe("Invalid email")
 	})
 })
 

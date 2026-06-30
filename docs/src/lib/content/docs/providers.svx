@@ -14,8 +14,10 @@ calling code.
 | Amazon SES     | `postboi/ses`        | `access_key_id`, `secret_access_key`, `region`, `session_token?` |
 | Brevo          | `postboi/brevo`      | `api_key`                            |
 | Cloudflare     | `postboi/cloudflare` | `api_key`, `account_id`              |
+| Elastic Email  | `postboi/elasticemail` | `api_key`                          |
 | MailerSend     | `postboi/mailersend` | `api_key`                            |
 | Mailgun        | `postboi/mailgun`    | `api_key`, `domain`, `region?`       |
+| Mailjet        | `postboi/mailjet`    | `api_key`, `api_secret`              |
 | MailPace       | `postboi/mailpace`   | `api_key`                            |
 | Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
 | Mandrill       | `postboi/mandrill`   | `api_key`                            |
@@ -76,7 +78,7 @@ expect(mail.sent).toHaveLength(1);
 native concept, and quietly ignored where unsupported:
 
 - **headers** → Resend, Postmark, SendGrid, Mailgun (`h:`), Brevo, SparkPost, Mandrill,
-  Plunk, Mailtrap, Scaleway, Cloudflare, SES.
+  Plunk, Mailtrap, Scaleway, Cloudflare, SES, Mailjet, Elastic Email.
 - **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill,
   MailPace, SES (`EmailTags`), Resend (`{name,value}` pairs). Postmark and Mailtrap use the
   **first** tag only.

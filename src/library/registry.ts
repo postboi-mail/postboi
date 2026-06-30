@@ -194,6 +194,25 @@ export const PROVIDERS = [
 		],
 	},
 	{
+		key: "mailjet",
+		name: "Mailjet (Sinch)",
+		import: "postboi/mailjet",
+		class: "Mailjet",
+		url: "https://app.mailjet.com/account/apikeys",
+		fields: [
+			{ env: "MJ_APIKEY_PUBLIC", arg: "api_key", label: "API key", secret: true },
+			{ env: "MJ_APIKEY_PRIVATE", arg: "api_secret", label: "Secret key", secret: true },
+		],
+	},
+	{
+		key: "elasticemail",
+		name: "Elastic Email",
+		import: "postboi/elasticemail",
+		class: "ElasticEmail",
+		url: "https://app.elasticemail.com/marketing/settings/new/manage-api",
+		fields: [{ env: "ELASTICEMAIL_API_KEY", arg: "api_key", label: "API key", secret: true }],
+	},
+	{
 		key: "zepto",
 		name: "ZeptoMail",
 		import: "postboi/zepto",

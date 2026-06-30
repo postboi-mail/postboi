@@ -64,9 +64,17 @@
       "types": "./dist/cloudflare.d.ts",
       "default": "./dist/cloudflare.js"
     },
+    "./elasticemail": {
+      "types": "./dist/elasticemail.d.ts",
+      "default": "./dist/elasticemail.js"
+    },
     "./mailersend": {
       "types": "./dist/mailersend.d.ts",
       "default": "./dist/mailersend.js"
+    },
+    "./mailjet": {
+      "types": "./dist/mailjet.d.ts",
+      "default": "./dist/mailjet.js"
     },
     "./sparkpost": {
       "types": "./dist/sparkpost.d.ts",

@@ -8,6 +8,8 @@ import SparkPost from "$library/sparkpost.js"
 import Mandrill from "$library/mandrill.js"
 import SendGrid from "$library/sendgrid.js"
 import Brevo from "$library/brevo.js"
+import Mailjet from "$library/mailjet.js"
+import ElasticEmail from "$library/elasticemail.js"
 import Mock from "$library/mock.js"
 
 const fetch = vi.fn()
@@ -70,6 +72,57 @@ describe("Resend batch (/emails/batch envelope)", () => {
 		expect(results).toEqual([
 			{ ok: true, index: 0, response: { id: "id-a" } },
 			{ ok: true, index: 1, response: { id: "id-b" } },
+		])
+	})
+})
+
+describe("Mailjet batch (Messages[] envelope)", () => {
+	it("sends one Message per recipient and maps ids and per-message errors", async () => {
+		fetch.mockResolvedValue(
+			respond({
+				json: {
+					Messages: [
+						{ Status: "success", To: [{ MessageID: 1, MessageUUID: "uuid-a" }] },
+						{ Status: "error", Errors: [{ ErrorCode: "mj-0004", ErrorMessage: "bad" }] },
+					],
+				},
+			})
+		)
+		const mail = new Mailjet({ api_key: "pub", api_secret: "priv" })
+		const results = await mail.send(batch)
+
+		expect(fetch).toHaveBeenCalledTimes(1)
+		expect(sent_url()).toBe("https://api.mailjet.com/v3.1/send")
+		const msgs = sent_json().Messages
+		expect(msgs).toHaveLength(2)
+		expect(msgs[0]).toMatchObject({ To: [{ Email: "a@test.com" }], Subject: "Hi Ada" })
+		expect(msgs[1]).toMatchObject({ Subject: "Hi Linus" })
+		expect(results[0]).toEqual({ ok: true, index: 0, response: { message_id: "1", message_uuid: "uuid-a" } })
+		expect(results[1].ok).toBe(false)
+		expect(results[1].ok === false && results[1].error.code).toBe("mj-0004")
+	})
+})
+
+describe("Elastic Email batch (/emails native merge)", () => {
+	it("keeps {key} placeholders and sends per-recipient Fields", async () => {
+		fetch.mockResolvedValue(respond({ json: { MessageID: "msg-1", TransactionID: "tx-1" } }))
+		const mail = new ElasticEmail({ api_key: "ee" })
+		const results = await mail.send(batch)
+
+		expect(fetch).toHaveBeenCalledTimes(1)
+		expect(sent_url()).toBe("https://api.elasticemail.com/v4/emails")
+		const body = sent_json()
+		// Placeholders pass through untouched — Elastic Email merges {key} server-side.
+		expect(body.Content.Subject).toBe("Hi {name}")
+		expect(body.Content.Body[0].Content).toBe("<p>Hello {name}, ref {id}</p>")
+		expect(body.Recipients).toEqual([
+			{ Email: "a@test.com", Fields: { name: "Ada", id: "1" } },
+			{ Email: "b@test.com", Fields: { name: "Linus", id: "2" } },
+		])
+		// One bulk id applied to every recipient.
+		expect(results.map((r) => r.ok === true && r.response)).toEqual([
+			{ message_id: "msg-1", transaction_id: "tx-1" },
+			{ message_id: "msg-1", transaction_id: "tx-1" },
 		])
 	})
 })
