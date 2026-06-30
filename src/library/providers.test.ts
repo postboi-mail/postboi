@@ -797,7 +797,9 @@ describe("Mailjet", () => {
 	it("wraps the message in Messages[] with basic auth", async () => {
 		fetch.mockResolvedValue(
 			respond({
-				json: { Messages: [{ Status: "success", To: [{ MessageID: 111, MessageUUID: "uuid-1" }] }] },
+				json: {
+					Messages: [{ Status: "success", To: [{ MessageID: 111, MessageUUID: "uuid-1" }] }],
+				},
 			})
 		)
 		const result = await mail().send({
@@ -852,8 +854,7 @@ describe("Mailjet", () => {
 })
 
 describe("Elastic Email", () => {
-	const mail = () =>
-		new ElasticEmail({ api_key: "ee_key", default: { from: "from@test.com" } })
+	const mail = () => new ElasticEmail({ api_key: "ee_key", default: { from: "from@test.com" } })
 
 	it("posts to the transactional endpoint with To/CC/BCC and a Body array", async () => {
 		fetch.mockResolvedValue(respond({ json: { MessageID: "msg-1", TransactionID: "tx-1" } }))

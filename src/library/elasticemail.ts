@@ -68,7 +68,8 @@ export default class ElasticEmail extends ProviderBase<SendResponse> {
 	#body(html?: string, text?: string): Array<BodyPart> {
 		const parts: Array<BodyPart> = []
 		if (html !== undefined) parts.push({ ContentType: "HTML", Content: html, Charset: "utf-8" })
-		if (text !== undefined) parts.push({ ContentType: "PlainText", Content: text, Charset: "utf-8" })
+		if (text !== undefined)
+			parts.push({ ContentType: "PlainText", Content: text, Charset: "utf-8" })
 		return parts
 	}
 

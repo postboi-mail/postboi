@@ -76,7 +76,9 @@ export default class Mailjet extends ProviderBase<SendResponse> {
 	}
 
 	#addr(address: { address: string; name?: string }): EmailName {
-		return address.name ? { Email: address.address, Name: address.name } : { Email: address.address }
+		return address.name
+			? { Email: address.address, Name: address.name }
+			: { Email: address.address }
 	}
 
 	async #message(message: PreparedMessage): Promise<Message> {
@@ -123,7 +125,10 @@ export default class Mailjet extends ProviderBase<SendResponse> {
 
 	#result(item: MessageResult | undefined): SendResponse | PostboiError {
 		if (!item) {
-			return new PostboiError({ provider: this.provider, message: "Missing batch result for recipient" })
+			return new PostboiError({
+				provider: this.provider,
+				message: "Missing batch result for recipient",
+			})
 		}
 		if (item.Status !== "success") {
 			const err = item.Errors?.[0]

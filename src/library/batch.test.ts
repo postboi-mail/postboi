@@ -97,7 +97,11 @@ describe("Mailjet batch (Messages[] envelope)", () => {
 		expect(msgs).toHaveLength(2)
 		expect(msgs[0]).toMatchObject({ To: [{ Email: "a@test.com" }], Subject: "Hi Ada" })
 		expect(msgs[1]).toMatchObject({ Subject: "Hi Linus" })
-		expect(results[0]).toEqual({ ok: true, index: 0, response: { message_id: "1", message_uuid: "uuid-a" } })
+		expect(results[0]).toEqual({
+			ok: true,
+			index: 0,
+			response: { message_id: "1", message_uuid: "uuid-a" },
+		})
 		expect(results[1].ok).toBe(false)
 		expect(results[1].ok === false && results[1].error.code).toBe("mj-0004")
 	})
