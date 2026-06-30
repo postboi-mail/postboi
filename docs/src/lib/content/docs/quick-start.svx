@@ -10,7 +10,7 @@ category: Getting started
 </script>
 
 One command, fully set up. The CLI picks a provider, asks for credentials, optionally sets
-defaults, writes your env vars, and installs `postboi` if it isn't already there.
+defaults, and installs `postboi` if it isn't already there.
 
 <InstallationTabs exec args="init" />
 
@@ -18,13 +18,31 @@ defaults, writes your env vars, and installs `postboi` if it isn't already there
 
 - Prompts you to choose one of the [supported providers](/providers).
 - Collects that provider's credentials (e.g. an API key, plus a domain for Mailgun).
-- Optionally sets `POSTBOI_FROM` / `POSTBOI_TO` and other defaults applied to every send.
-- Writes `POSTBOI_PROVIDER`, the credentials, and any defaults to your env file.
+- Optionally collects `from` / `to` and other defaults applied to every send.
+- **Writes only secrets** (API keys, tokens) to your env file.
+- **Writes everything else** — the provider, defaults, and non-secret options like a
+  Mailgun domain or SES region — to a committed [`postboi.settings.ts`](/settings).
 - Installs `postboi` if it isn't installed yet.
-- Optionally scaffolds a [`postboi.settings.ts`](/settings) for shared hooks and
-  behaviour.
 
-After it finishes, `mail()` reads those env vars on every call — no further wiring needed.
+The split means the best case (Resend, Postmark, SendGrid, Brevo, …) is **a single env
+var** — the API key — with the rest in version control.
+
+```ts
+// postboi.settings.ts  (committed)
+import { config } from 'postboi';
+
+export default config({
+	provider: 'resend',
+	default: { from: 'no-reply@example.com' }
+});
+```
+
+```bash
+# .env  (gitignored — secrets only)
+RESEND_API_KEY=re_xxxxxxxx
+```
+
+After it finishes, `mail()` picks all of this up on every call — no further wiring needed.
 
 ```typescript
 import { mail } from 'postboi';
@@ -34,6 +52,6 @@ await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
 
 ## Prefer to do it yourself?
 
-Skip the CLI and set `POSTBOI_PROVIDER` plus the provider credential env vars by hand, or
+Skip the CLI and write the settings file plus the credential env vars by hand, or
 construct a provider instance directly. See [Manual setup](/manual-setup) and
 [Providers](/providers).

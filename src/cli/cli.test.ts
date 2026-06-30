@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest"
 import { Readable, Writable } from "node:stream"
-import { PROVIDERS, DEFAULT_FIELDS, usage_snippet } from "./providers.js"
+import {
+	PROVIDERS,
+	DEFAULT_FIELDS,
+	usage_snippet,
+	render_settings,
+	render_block,
+} from "./providers.js"
 import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./env.js"
 import { detect_hosts, detect_adapter_host, push_spec, manual_hint } from "./deploy.js"
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
@@ -46,6 +52,31 @@ describe("provider registry", () => {
 		expect(snippet).toContain("default: {")
 		expect(snippet).toContain("from: process.env.POSTBOI_FROM")
 		expect(snippet).toContain("to: process.env.POSTBOI_TO")
+	})
+
+	it("renders a settings file with provider, defaults and non-secret options", () => {
+		const out = render_settings(
+			"mailgun",
+			{ from: "no-reply@example.com" },
+			{ domain: "mg.example.com" }
+		)
+		expect(out).toContain('import { config } from "postboi"')
+		expect(out).toContain('provider: "mailgun",')
+		expect(out).toContain('from: "no-reply@example.com",')
+		expect(out).toContain('domain: "mg.example.com",')
+		expect(out).toContain("hooks: {")
+	})
+
+	it("omits empty default / options blocks from the settings file", () => {
+		const out = render_settings("resend", {}, {})
+		expect(out).toContain('provider: "resend",')
+		expect(out).not.toContain("default: {")
+		expect(out).not.toContain("options: {")
+	})
+
+	it("render_block returns empty string for no entries and escapes values", () => {
+		expect(render_block("default", {})).toBe("")
+		expect(render_block("options", { region: 'a"b' })).toContain('region: "a\\"b",')
 	})
 
 	it("maps default fields to POSTBOI_* env vars (no subject)", () => {

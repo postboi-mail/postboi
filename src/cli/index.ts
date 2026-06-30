@@ -3,7 +3,14 @@ import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } 
 import { spawnSync } from "node:child_process"
 import { join, delimiter } from "node:path"
 import { argv, cwd, exit, platform, env } from "node:process"
-import { PROVIDERS, DEFAULT_FIELDS, usage_snippet, type CliProvider } from "./providers.js"
+import {
+	PROVIDERS,
+	DEFAULT_FIELDS,
+	usage_snippet,
+	render_settings,
+	render_block,
+	type CliProvider,
+} from "./providers.js"
 import { detect_env_targets, upsert_env, is_gitignored, type EnvTarget } from "./env.js"
 import {
 	detect_hosts,
@@ -33,18 +40,6 @@ const SETTINGS_FILES = [
 	"postboi.settings.js",
 	"postboi.settings.mjs",
 ]
-
-const SETTINGS_TEMPLATE = `import { config } from "postboi"
-
-// Project-wide config, picked up automatically by send().
-export default config({
-	hooks: {
-		// before: { send: ({ message }) => { /* mutate the message, or throw to cancel */ } },
-		// after: { send: ({ response }) => { /* log a successful send */ } },
-		// on: { error: ({ error }) => { /* report to Sentry, etc. */ } },
-	},
-})
-`
 
 function version(): string {
 	try {
@@ -113,25 +108,26 @@ async function init(): Promise<void> {
 			PROVIDERS.map((p) => ({ label: p.name, value: p }))
 		)
 
-		// 2. Collect credentials (POSTBOI_PROVIDER lets the zero-config `send()` find it later)
+		// 2. Collect credentials. Secrets go to the env file; everything non-secret is committed
+		// to postboi.settings.ts — so the best case is a single env var (the API key).
 		console.log(`\n${dim("Get your credentials at")} ${cyan(provider.url)}\n`)
-		const values: Record<string, string> = { POSTBOI_PROVIDER: provider.key }
+		const values: Record<string, string> = {} // secrets → env file
+		const config_options: Record<string, string> = {} // non-secrets → settings file
 		for (const field of provider.fields) {
-			values[field.env] = await prompts.ask(`${field.label} ${dim(`(${field.env})`)}`, {
+			const value = await prompts.ask(`${field.label} ${dim(`(${field.env})`)}`, {
 				required: field.default === undefined,
 				default: field.default,
 			})
+			if (field.secret) values[field.env] = value
+			else if (value) config_options[field.arg] = value
 		}
 
-		// 2b. Optional default fields (stored as POSTBOI_* so `send()` picks them up too)
-		const default_fields: Array<{ arg: string; env: string }> = []
+		// 2b. Optional default fields (committed to settings, not env)
+		const config_defaults: Record<string, string> = {}
 		if (await prompts.confirm(`\nSet ${bold("default")} from / to / reply-to / cc / bcc?`)) {
 			for (const field of DEFAULT_FIELDS) {
 				const value = await prompts.ask(`${field.label} ${dim("(optional)")}`)
-				if (value) {
-					values[field.env] = value
-					default_fields.push({ arg: field.arg, env: field.env })
-				}
+				if (value) config_defaults[field.arg] = value
 			}
 		}
 
@@ -260,16 +256,21 @@ async function init(): Promise<void> {
 			}
 		}
 
-		// 7b. Offer a postboi.settings.ts for project-wide hooks (Sentry, redirects, …)
-		if (!SETTINGS_FILES.some((f) => existsSync(f))) {
-			if (
-				await prompts.confirm(
-					`\nAdd a ${bold("postboi.settings.ts")} for hooks (error tracking, etc.)?`
-				)
-			) {
-				writeFileSync("postboi.settings.ts", SETTINGS_TEMPLATE)
-				console.log(`${green("✓")} wrote ${bold("postboi.settings.ts")}`)
-			}
+		// 7b. Write postboi.settings.ts — the committed home for provider + non-secret config.
+		console.log()
+		const settings_source = render_settings(provider.key, config_defaults, config_options)
+		const existing_settings = SETTINGS_FILES.find((f) => existsSync(f))
+		if (existing_settings) {
+			// Don't clobber a hand-edited file — show what to merge in instead.
+			console.log(`${yellow("!")} ${bold(existing_settings)} already exists — add to it:`)
+			console.log(dim(`\n  provider: ${JSON.stringify(provider.key)},`))
+			if (Object.keys(config_defaults).length)
+				console.log(dim(`  ${render_block("default", config_defaults, "  ").trimEnd()}`))
+			if (Object.keys(config_options).length)
+				console.log(dim(`  ${render_block("options", config_options, "  ").trimEnd()}`))
+		} else {
+			writeFileSync("postboi.settings.ts", settings_source)
+			console.log(`${green("✓")} wrote ${bold("postboi.settings.ts")}`)
 		}
 
 		// 8. Done — show how to use it
@@ -279,7 +280,7 @@ async function init(): Promise<void> {
 				"\n"
 		)
 		console.log(`${dim("…or construct the provider yourself:")}\n`)
-		console.log(dim(usage_snippet(provider, default_fields)) + "\n")
+		console.log(dim(usage_snippet(provider)) + "\n")
 	} finally {
 		prompts.close()
 	}

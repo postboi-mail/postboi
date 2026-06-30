@@ -82,6 +82,35 @@ describe("global settings", () => {
 		expect(fetch.mock.calls.at(-1)![0]).toBe("https://api.resend.com/emails")
 	})
 
+	it('resolves provider: "mock" with no credentials and no network', async () => {
+		configure({ provider: "mock", default: { from: "from@test.com" } })
+		const result = (await mail({ to: "to@test.com", body: "hi" })) as { id: string }
+		expect(result.id).toBeTruthy()
+		expect(fetch).not.toHaveBeenCalled()
+	})
+
+	it("supplies non-secret provider options from settings.options (env still wins)", async () => {
+		configure({ provider: "mailgun", options: { domain: "from-config.example.com" } })
+		vi.stubEnv("MAILGUN_API_KEY", "key-abc")
+		const ok = {
+			ok: true,
+			status: 200,
+			headers: new Headers(),
+			text: async () => JSON.stringify({ id: "<m>" }),
+			json: async () => ({ id: "<m>" }),
+		}
+		fetch.mockResolvedValue(ok)
+
+		// No MAILGUN_DOMAIN env — the domain comes from settings.options.
+		await mail({ to: "to@test.com", from: "f@test.com", body: "hi" })
+		expect(fetch.mock.calls.at(-1)![0]).toContain("from-config.example.com")
+
+		// With the env var set, it overrides the config value.
+		vi.stubEnv("MAILGUN_DOMAIN", "from-env.example.com")
+		await mail({ to: "to@test.com", from: "f@test.com", body: "hi" })
+		expect(fetch.mock.calls.at(-1)![0]).toContain("from-env.example.com")
+	})
+
 	it("auto-loads a postboi.settings file from disk", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "postboi-settings-"))
 		const original = process.cwd()

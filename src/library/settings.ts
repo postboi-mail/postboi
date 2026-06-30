@@ -24,10 +24,21 @@ import type { ProviderKey } from "./registry.js"
 
 /** Everything you can configure globally via `postboi.settings.ts` or {@link configure}. */
 export interface PostboiSettings {
-	/** Provider key (`resend`, `mailgun`, …) for the zero-config `send()`. `POSTBOI_PROVIDER` wins. */
-	provider?: ProviderKey
+	/**
+	 * Provider key (`resend`, `mailgun`, …) for the zero-config `send()`. `POSTBOI_PROVIDER` wins.
+	 * `"mock"` is also accepted — a credential-free no-op that records instead of sending, handy
+	 * as a safe local default you override with `POSTBOI_PROVIDER` in production.
+	 */
+	provider?: ProviderKey | "mock"
 	/** Default fields applied to every send. Merged under `POSTBOI_*` env vars, which win. */
 	default?: Defaults
+	/**
+	 * Non-secret provider constructor options for the zero-config `send()`, keyed by the
+	 * provider's option name (e.g. `{ domain: "mg.example.com", region: "us-east-1" }`). Lets
+	 * you commit non-secret config and keep only the API key in the environment. The matching
+	 * provider env var (e.g. `MAILGUN_DOMAIN`) still wins. Keep secrets out of here — in env.
+	 */
+	options?: Record<string, string>
 	/** Per-request timeout in milliseconds. */
 	timeout?: number
 	/** Retries on network / 429 / 5xx errors. */

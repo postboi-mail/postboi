@@ -23,6 +23,34 @@ export const DEFAULT_FIELDS: Array<{ arg: string; env: string; label: string }> 
 	{ arg: "bcc", env: "POSTBOI_BCC", label: "Default bcc" },
 ]
 
+/** Render a `{ key: "value" }` block (one entry per line, tab-indented). Empty → "". */
+export function render_block(name: string, entries: Record<string, string>, indent = "\t"): string {
+	const keys = Object.keys(entries)
+	if (keys.length === 0) return ""
+	const lines = keys.map((k) => `${indent}\t${k}: ${JSON.stringify(entries[k])},`)
+	return `${indent}${name}: {\n${lines.join("\n")}\n${indent}},\n`
+}
+
+/** Build a `postboi.settings.ts` carrying the provider, defaults and non-secret options. */
+export function render_settings(
+	provider: string,
+	defaults: Record<string, string>,
+	options: Record<string, string>
+): string {
+	return `import { config } from "postboi"
+
+// Project-wide config, picked up automatically by send(). Commit this — keep secrets in env.
+export default config({
+	provider: ${JSON.stringify(provider)},
+${render_block("default", defaults)}${render_block("options", options)}	hooks: {
+		// before: { send: ({ message }) => { /* mutate the message, or throw to cancel */ } },
+		// after: { send: ({ response }) => { /* log a successful send */ } },
+		// on: { error: ({ error }) => { /* report to Sentry, etc. */ } },
+	},
+})
+`
+}
+
 /** Build the example `new Provider({...})` snippet, optionally with a `default` block. */
 export function usage_snippet(
 	provider: ProviderMeta,

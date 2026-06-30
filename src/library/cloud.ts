@@ -1,22 +1,13 @@
-import type {
-	SendOptions,
-	BatchOptions,
-	BatchData,
-	Email,
-	PreparedMessage,
-	CommonProviderOptions,
-	Defaults,
-	ProviderError,
-	RequestSpec,
-	BatchResult,
-} from "./index.js"
+import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
-import { find_provider } from "./registry.js"
-import { load_settings } from "./settings.js"
+import { read_env, env_defaults } from "./env.js"
 
 // Re-export the core so `import { PostboiError, SkipSendError, ... } from "postboi"` keeps working
 // from the package root.
 export * from "./index.js"
+// The zero-config `mail()` and provider dispatch are general (not Cloud-specific) but belong
+// on the package root, so re-export them here.
+export { mail } from "./mail.js"
 
 /** Options for the Postboi Cloud provider. */
 export type CloudOptions = CommonProviderOptions & {
@@ -53,96 +44,6 @@ export interface SendParams {
 }
 
 type SendResponse = { id: string }
-
-/**
- * `.env` values parsed as a fallback. SvelteKit (and other Vite dev servers) load `.env`
- * files into their own `$env` modules, *not* `process.env`, so a library reading
- * `process.env` directly sees nothing in dev. We fill that gap by reading the files
- * ourselves — `process.env` always wins, so deployed/real env vars take precedence.
- */
-let dotenv: Record<string, string> | null = null
-
-function parse_dotenv(text: string): Array<[string, string]> {
-	const out: Array<[string, string]> = []
-	for (const raw of text.split(/\r?\n/)) {
-		const line = raw.trim()
-		if (!line || line.startsWith("#")) continue
-		const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line)
-		if (!match) continue
-		let value = match[2].trim()
-		if (
-			(value.startsWith('"') && value.endsWith('"')) ||
-			(value.startsWith("'") && value.endsWith("'"))
-		) {
-			value = value.slice(1, -1)
-		}
-		out.push([match[1], value])
-	}
-	return out
-}
-
-/**
- * Load `.env` / `.env.local` from the cwd once (Node/Bun only). Best-effort: any failure
- * leaves the fallback empty and we fall through to `process.env` alone.
- */
-async function ensure_env_loaded(): Promise<void> {
-	if (dotenv) return
-	dotenv = {}
-	if (typeof process === "undefined" || !process.versions?.node) return
-	try {
-		const { existsSync, readFileSync } = await import("node:fs")
-		const { join } = await import("node:path")
-		const dir = process.cwd()
-		// Later files win: `.env.local` overrides `.env`.
-		for (const file of [".env", ".env.local"]) {
-			const path = join(dir, file)
-			if (!existsSync(path)) continue
-			for (const [key, value] of parse_dotenv(readFileSync(path, "utf8"))) dotenv[key] = value
-		}
-	} catch {
-		// no fs / unreadable — fall back to process.env only
-	}
-}
-
-/**
- * Read an environment variable across runtimes. Works in Node, Bun, Vercel/Netlify
- * functions and Deno, and falls back to a `.env` file in dev (see {@link ensure_env_loaded}).
- * Cloudflare Workers pass env via bindings rather than the ambient environment, so this
- * returns undefined there — pass `{ token }` explicitly in Workers.
- */
-function read_env(name: string): string | undefined {
-	if (typeof process !== "undefined" && process.env) {
-		const value = process.env[name]
-		if (value) return value
-	}
-	if (dotenv && dotenv[name]) return dotenv[name]
-	const deno = (globalThis as { Deno?: { env?: { get?(key: string): string | undefined } } }).Deno
-	try {
-		return deno?.env?.get?.(name) || undefined
-	} catch {
-		return undefined
-	}
-}
-
-/**
- * Read the default field values shared by every provider from the environment. Only defined
- * values are included, so an unset env var never clobbers a default from postboi.settings.ts.
- */
-function env_defaults(): Defaults {
-	const env: Record<keyof Defaults, string> = {
-		from: "POSTBOI_FROM",
-		to: "POSTBOI_TO",
-		cc: "POSTBOI_CC",
-		bcc: "POSTBOI_BCC",
-		reply_to: "POSTBOI_REPLY_TO",
-	}
-	const out: Defaults = {}
-	for (const [key, name] of Object.entries(env) as Array<[keyof Defaults, string]>) {
-		const value = read_env(name)
-		if (value !== undefined) out[key] = value
-	}
-	return out
-}
 
 /**
  * Postboi Cloud — the zero-config provider, and the package's default export.
@@ -228,106 +129,4 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		}
 		return undefined
 	}
-}
-
-type ProviderConstructor = new (options: Record<string, unknown>) => ProviderBase<unknown>
-
-/**
- * Lazy loaders for every configurable provider, keyed by `POSTBOI_PROVIDER`. Using explicit
- * dynamic imports keeps each provider in its own chunk — `send()` only loads the one in use.
- */
-const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
-	resend: () => import("./resend.js").then((m) => m.default as unknown as ProviderConstructor),
-	postmark: () => import("./postmark.js").then((m) => m.default as unknown as ProviderConstructor),
-	sendgrid: () => import("./sendgrid.js").then((m) => m.default as unknown as ProviderConstructor),
-	mailgun: () => import("./mailgun.js").then((m) => m.default as unknown as ProviderConstructor),
-	brevo: () => import("./brevo.js").then((m) => m.default as unknown as ProviderConstructor),
-	cloudflare: () =>
-		import("./cloudflare.js").then((m) => m.default as unknown as ProviderConstructor),
-	mailersend: () =>
-		import("./mailersend.js").then((m) => m.default as unknown as ProviderConstructor),
-	sparkpost: () =>
-		import("./sparkpost.js").then((m) => m.default as unknown as ProviderConstructor),
-	mandrill: () => import("./mandrill.js").then((m) => m.default as unknown as ProviderConstructor),
-	plunk: () => import("./plunk.js").then((m) => m.default as unknown as ProviderConstructor),
-	mailtrap: () => import("./mailtrap.js").then((m) => m.default as unknown as ProviderConstructor),
-	mailpace: () => import("./mailpace.js").then((m) => m.default as unknown as ProviderConstructor),
-	scaleway: () => import("./scaleway.js").then((m) => m.default as unknown as ProviderConstructor),
-	ses: () => import("./ses.js").then((m) => m.default as unknown as ProviderConstructor),
-	microsoft365: () =>
-		import("./microsoft365.js").then((m) => m.default as unknown as ProviderConstructor),
-	smtp: () => import("./smtp.js").then((m) => m.default as unknown as ProviderConstructor),
-	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
-}
-
-/** Construct the provider named by `POSTBOI_PROVIDER` from environment variables. */
-async function resolve_provider(): Promise<ProviderBase<unknown>> {
-	// Load global settings (postboi.settings.ts / package.json) first, so hooks and the
-	// `provider` fallback are available; ProviderBase merges the rest at construction.
-	const settings = await load_settings()
-	// Make `.env` values visible in dev (SvelteKit etc. don't put them on process.env).
-	await ensure_env_loaded()
-	const key = read_env("POSTBOI_PROVIDER") ?? settings.provider
-	if (!key) {
-		throw new PostboiError({
-			provider: "postboi",
-			code: "no_provider",
-			message:
-				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), set `provider` in postboi.settings.ts, or import one directly, e.g. `import Resend from "postboi/resend"`.',
-		})
-	}
-
-	const meta = find_provider(key)
-	const load = LOADERS[key]
-	if (!meta || !load) {
-		throw new PostboiError({
-			provider: "postboi",
-			code: "unknown_provider",
-			message: `Unknown POSTBOI_PROVIDER "${key}".`,
-		})
-	}
-
-	const options: Record<string, unknown> = { default: env_defaults() }
-	for (const field of meta.fields) {
-		const value = read_env(field.env) ?? field.default
-		if (value === undefined) {
-			throw new PostboiError({
-				provider: key,
-				code: "missing_env",
-				message: `POSTBOI_PROVIDER is "${key}" but ${field.env} is not set. Run \`bunx postboi init\`.`,
-			})
-		}
-		options[field.arg] = value
-	}
-
-	const Provider = await load()
-	return new Provider(options)
-}
-
-/**
- * Send without constructing anything. The provider is whichever `POSTBOI_PROVIDER` names
- * (set by `bunx postboi init`); its credentials and the `POSTBOI_*` defaults are read from
- * the environment on each call. Pass an array to send many.
- *
- * @example
- * ```ts
- * import { mail } from "postboi"
- * await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
- * ```
- */
-export function mail<const T extends ReadonlyArray<Email>>(
-	options: Omit<BatchOptions, "to" | "data"> & { to: T; data: BatchData<T> }
-): Promise<Array<BatchResult<unknown>>>
-export function mail(options: SendOptions): Promise<unknown>
-export function mail(
-	options: Array<SendOptions>,
-	batch?: { concurrency?: number }
-): Promise<Array<BatchResult<unknown>>>
-export async function mail(
-	options: SendOptions | BatchOptions | Array<SendOptions>,
-	batch: { concurrency?: number } = {}
-): Promise<unknown> {
-	const provider = await resolve_provider()
-	if (Array.isArray(options)) return provider.send(options, batch)
-	return provider.send(options as SendOptions)
 }

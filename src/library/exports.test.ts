@@ -25,7 +25,14 @@ describe("package exports", () => {
 	})
 
 	it("exports every provider module in src/library", () => {
-		const internal = new Set(["index.ts", "utils.ts", "registry.ts", "settings.ts"])
+		const internal = new Set([
+			"index.ts",
+			"utils.ts",
+			"registry.ts",
+			"settings.ts",
+			"env.ts",
+			"mail.ts",
+		])
 		const providers = readdirSync(`${root}src/library`).filter(
 			(f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !internal.has(f)
 		)

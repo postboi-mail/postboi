@@ -31,7 +31,26 @@ Run the CLI to choose a provider, input credentials, optionally set defaults.
 bunx postboi init
 ```
 
-Then send from anywhere — no provider import, no constructor, credentials come from env:
+It writes your provider, defaults, and non-secret options to a committed
+`postboi.settings.ts`, keeping only secrets (API keys) in your env file — so the best case is
+a single env var:
+
+```typescript
+// postboi.settings.ts  (committed)
+import { config } from "postboi"
+
+export default config({
+	provider: "resend",
+	default: { from: "no-reply@example.com" },
+})
+```
+
+```bash
+# .env  (gitignored — secrets only)
+RESEND_API_KEY=re_xxxxxxxx
+```
+
+Then send from anywhere — no provider import, no constructor, config is picked up automatically:
 
 ```typescript
 import { mail } from "postboi"
