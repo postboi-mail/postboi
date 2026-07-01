@@ -104,6 +104,28 @@ const tableCellFormatter = () => {
 	}
 }
 
+// Archived versions live under `content/vX.Y.Z/`. Their prose has root-relative
+// links (e.g. `/settings`) that would otherwise resolve against the latest site
+// — 404ing on renamed slugs and yanking the reader out of the version. Rewrite
+// such links to the version's own base path.
+const versionScopedLinks = () => (tree, file) => {
+	const path = file?.filename ?? file?.path ?? file?.history?.[0] ?? ""
+	const match = /[/\\]content[/\\](v\d[^/\\]*)[/\\]/.exec(path)
+	if (!match) return
+	const base = `/${match[1]}`
+
+	const visit = (node) => {
+		if (node.type === "element" && node.tagName === "a") {
+			const href = node.properties?.href
+			if (typeof href === "string" && href.startsWith("/") && !href.startsWith("//")) {
+				node.properties.href = href === "/" ? base : `${base}${href}`
+			}
+		}
+		for (const child of node.children ?? []) visit(child)
+	}
+	visit(tree)
+}
+
 const themes = {
 	light: "github-light",
 	dark: "github-dark",
@@ -128,7 +150,7 @@ const config = {
 			layout: {
 				_: markdownLayout,
 			},
-			rehypePlugins: [tableCellFormatter, rehypeSlug],
+			rehypePlugins: [tableCellFormatter, rehypeSlug, versionScopedLinks],
 			highlight: {
 				highlighter: (code, lang = "text") => {
 					const safeLang = lang ?? "text"

@@ -16,11 +16,13 @@
 	let {
 		items = [],
 		onItemClick,
+		direction = "down",
 		class: className,
 		...restProps
 	}: {
 		items?: DropdownItem[]
 		onItemClick?: (value: string) => void
+		direction?: "up" | "down"
 		class?: string
 	} = $props()
 
@@ -139,6 +141,7 @@
 
 	function popTransition(_node: Element) {
 		const originX = String(clickRatioX * 100)
+		const originY = direction === "up" ? "bottom" : "top"
 		return {
 			duration: 100,
 			css: (t: number) => {
@@ -150,7 +153,9 @@
 					s +
 					"); transform-origin: " +
 					originX +
-					"% top;"
+					"% " +
+					originY +
+					";"
 				)
 			},
 		}
@@ -184,7 +189,10 @@
 
 	{#if isOpen}
 		<div
-			class="absolute z-50 mt-1 flex min-w-full flex-col gap-1 rounded-sm bg-background p-1 shadow-2xl card"
+			class={cn(
+				"absolute z-50 flex min-w-full flex-col gap-1 rounded-sm bg-background p-1 shadow-2xl card",
+				direction === "up" ? "bottom-full mb-1" : "mt-1"
+			)}
 			role="listbox"
 			transition:popTransition
 		>

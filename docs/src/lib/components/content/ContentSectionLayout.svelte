@@ -8,6 +8,7 @@
 	import ScrollArea from "$lib/components/ui/ScrollArea.svelte"
 	import { type SectionUiConfig } from "$lib/config/content-ui"
 	import type { ContentItem, ContentSectionLink } from "$lib/config/navigation"
+	import type { VersionItem } from "$lib/components/content/ContentSidebar.svelte"
 	import { cn } from "$lib/utils/cn"
 
 	type SidebarConfig = {
@@ -21,6 +22,7 @@
 		repositoryAriaLabel?: string
 		searchConfig?: SectionUiConfig["search"]
 		sectionLinks?: ContentSectionLink[]
+		versionItems?: VersionItem[]
 	}
 
 	const DEFAULT_GRID_CLASS_BASE =
@@ -119,6 +121,7 @@
 	const repositoryAriaLabel = $derived(sidebarConfig.repositoryAriaLabel)
 	const searchConfig = $derived(sidebarConfig.searchConfig)
 	const sectionLinks = $derived(sidebarConfig.sectionLinks ?? [])
+	const versionItems = $derived(sidebarConfig.versionItems ?? [])
 
 	const scrollPositions = new SvelteMap<string, number>()
 	let hashFallbackTimer: ReturnType<typeof setTimeout> | null = null
@@ -213,6 +216,7 @@
 		{repositoryAriaLabel}
 		{searchConfig}
 		{sectionLinks}
+		{versionItems}
 	/>
 
 	<div class={resolvedGridClass}>
@@ -228,6 +232,7 @@
 				{repositoryAriaLabel}
 				{searchConfig}
 				{sectionLinks}
+				{versionItems}
 			/>
 		</div>
 

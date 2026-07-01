@@ -1,0 +1,48 @@
+---
+title: FormData
+name: FormData
+description: How Postboi turns submitted FormData into tidy, sectioned HTML email tables.
+category: Guides
+---
+
+Pass a `FormData` object as the `body` and Postboi converts it into a tidy HTML table. This
+is what powers the [SvelteKit form actions](/sveltekit) — but you can pass `FormData`
+to any `mail()` call.
+
+## Special fields
+
+These keys are extracted from the body and applied to the send options instead of appearing
+in the table:
+
+- `_to`, `_from`, `_subject`, `_reply_to`
+- `_cc`, `_bcc` — comma-separated or repeated
+
+Values can be base64-encoded; they'll be decoded automatically.
+
+## Grouped fields
+
+Use the `fieldset→field` syntax to group related fields into sections:
+
+```html
+<input name="contact→name" />
+<input name="contact→email" />
+<input name="order→product" />
+<input name="order→quantity" />
+```
+
+This produces sectioned tables in the email body — one section per fieldset (`contact`,
+`order`), with a row per field.
+
+## Attachments
+
+Attachments work from file inputs (`details→files`) or via `attachments: File | File[]` on
+[`mail()`](/api#sendoptions).
+
+```html
+<input type="file" name="details→attachments" multiple />
+```
+
+## Customising the labels
+
+The [`formatter`](/api#sendoptions) option on `mail()` controls how fieldset and field
+labels are rendered — pass `null` or `false` to a part to leave those labels untouched.

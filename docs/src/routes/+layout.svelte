@@ -13,6 +13,7 @@
 	} from "$lib"
 	import ContentSectionLayout from "$lib/components/content/ContentSectionLayout.svelte"
 	import {
+		getContentSectionBasePath,
 		getContentSectionConfig,
 		getContentSectionHref,
 		getContentSectionLinks,
@@ -20,6 +21,8 @@
 		getContentSectionRawHref,
 		getContentSectionUiConfig,
 	} from "$lib/content/sections"
+	import { contentSections } from "$lib/config/navigation"
+	import versions from "$lib/config/versions.json"
 	import type { SectionUiConfig } from "$lib/config/content-ui"
 	import type { LayoutData } from "./$types"
 	import type { Snippet } from "svelte"
@@ -30,7 +33,23 @@
 	const sectionUi = $derived<SectionUiConfig>(getContentSectionUiConfig(sectionId))
 	const sectionConfig = $derived(getContentSectionConfig(sectionId))
 	const sectionManifest = $derived(getContentSectionManifest(sectionId))
-	const sectionBasePath = ""
+	const sectionBasePath = $derived(getContentSectionBasePath(sectionId))
+	const isArchivedVersion = $derived(sectionId !== contentSections[0].id)
+
+	const versionItems = $derived([
+		{
+			label: `Latest (v${versions.latest})`,
+			value: "/",
+			href: "/",
+			active: !isArchivedVersion,
+		},
+		...versions.archived.map((v) => ({
+			label: `v${v.version}`,
+			value: `/${v.slug}`,
+			href: `/${v.slug}`,
+			active: sectionId === v.slug,
+		})),
+	])
 
 	const metadata = $derived(data.metadata)
 	const docSlug = $derived(metadata?.slug)
@@ -98,7 +117,9 @@
 			: null
 	)
 
-	const showDocActions = $derived(sectionUi.pageActions.enabled && Boolean(metadata))
+	const showDocActions = $derived(
+		sectionUi.pageActions.enabled && Boolean(metadata) && !isArchivedVersion
+	)
 	const showToc = $derived(sectionUi.toc.enabled)
 	const showRightAside = $derived(sectionUi.toc.enabled || sectionUi.pageActions.enabled)
 	const isSvxContent = $derived(metadata?.sourceType === "svx")
@@ -124,6 +145,7 @@
 		repositoryAriaLabel: sectionUi.sidebar.repositoryAriaLabel,
 		searchConfig: sectionUi.search,
 		sectionLinks,
+		versionItems,
 	})
 
 	const tocSelector = $derived(resolveTocSelector(sectionUi.toc, docSlug))

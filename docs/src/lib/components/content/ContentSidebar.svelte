@@ -15,6 +15,13 @@
 	import type { ContentItem, ContentSectionLink } from "$lib/config/navigation"
 	import { resolve } from "$app/paths"
 
+	export type VersionItem = {
+		label: string
+		value: string
+		href: string
+		active: boolean
+	}
+
 	const {
 		navigation,
 		navigationLabel = contentUiDefaults.sidebar.navigationLabel,
@@ -26,6 +33,7 @@
 		repositoryAriaLabel = contentUiDefaults.sidebar.repositoryAriaLabel,
 		searchConfig = contentUiDefaults.search,
 		sectionLinks = [],
+		versionItems = [],
 		showBranding = true,
 	}: {
 		navigation: ContentItem[]
@@ -38,6 +46,7 @@
 		repositoryAriaLabel?: string
 		searchConfig?: SectionUiConfig["search"]
 		sectionLinks?: ContentSectionLink[]
+		versionItems?: VersionItem[]
 		showBranding?: boolean
 	} = $props()
 
@@ -497,7 +506,13 @@
 		</nav>
 	</ScrollArea>
 
-	<div class="flex items-center gap-1 p-4 lg:p-0">
+	{#if versionItems.length > 1}
+		<div class="p-4 pb-2 lg:p-0 lg:pb-2">
+			<Dropdown items={versionItems} direction="up" class="w-full" />
+		</div>
+	{/if}
+
+	<div class="flex items-center gap-1 p-4 pt-0 lg:p-0">
 		{#if showThemeToggle}
 			<ThemeToggle />
 		{/if}

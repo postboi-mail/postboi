@@ -10,6 +10,7 @@
 	import Menu from "carbon-icons-svelte/lib/Menu.svelte"
 	import Close from "carbon-icons-svelte/lib/Close.svelte"
 	import type { ContentItem, ContentSectionLink } from "$lib/config/navigation"
+	import type { VersionItem } from "$lib/components/content/ContentSidebar.svelte"
 
 	const defaultSectionLinks = getContentSectionLinks()
 
@@ -24,6 +25,7 @@
 		repositoryAriaLabel = contentUiDefaults.sidebar.repositoryAriaLabel,
 		searchConfig = contentUiDefaults.search,
 		sectionLinks = defaultSectionLinks,
+		versionItems = [],
 	}: {
 		navigation?: ContentItem[]
 		navigationLabel?: string
@@ -35,6 +37,7 @@
 		repositoryAriaLabel?: string
 		searchConfig?: SectionUiConfig["search"]
 		sectionLinks?: ContentSectionLink[]
+		versionItems?: VersionItem[]
 	} = $props()
 
 	let isOpen = $state(false)
@@ -254,6 +257,7 @@
 			{repositoryAriaLabel}
 			{searchConfig}
 			{sectionLinks}
+			{versionItems}
 		/>
 	</div>
 {/if}

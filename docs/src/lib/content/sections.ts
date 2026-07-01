@@ -8,6 +8,7 @@ import {
 	getHref,
 	getItemBySlug,
 } from "$lib/content/manifest"
+import versions from "$lib/config/versions.json"
 import GithubSlugger from "github-slugger"
 import type { Component } from "svelte"
 
@@ -32,21 +33,31 @@ export type ContentModule = {
 	metadata?: Record<string, unknown>
 }
 
-// The site mounts its single content section at the root, so public URLs carry no
-// `/section` prefix. Content still lives under `content/${id}/` for module lookups.
+// The latest version mounts at the site root (no prefix); each archived version
+// mounts at `/${slug}`. Content lives under `content/${id}/` for module lookups —
+// archived versions are committed snapshots of the docs at that release.
+const latestSectionId = contentSections[0].id
+
+const versionSections: ContentSectionConfig[] = versions.archived.map((v) => ({
+	id: v.slug,
+	label: `v${v.version}`,
+	navigation: v.nav as ContentItem[],
+}))
+
+const allSections = [...contentSections, ...versionSections]
+
 function basePathFor(id: string): string {
-	void id
-	return ""
+	return id === latestSectionId ? "" : `/${id}`
 }
 
 const contentSectionsById = Object.fromEntries(
-	contentSections.map((section) => [section.id, section])
+	allSections.map((section) => [section.id, section])
 ) as Record<ContentSectionId, ContentSectionConfig>
 
-const contentSectionOrder: ContentSectionId[] = contentSections.map((section) => section.id)
+const contentSectionOrder: ContentSectionId[] = allSections.map((section) => section.id)
 
 const contentManifests = Object.fromEntries(
-	contentSections.map((section) => [section.id, flattenNavigationToManifest(section.navigation)])
+	allSections.map((section) => [section.id, flattenNavigationToManifest(section.navigation)])
 ) as Record<ContentSectionId, ContentItem[]>
 
 const allSvxRaw = import.meta.glob<string>("/src/lib/content/**/*.svx", {
@@ -94,7 +105,11 @@ export function getContentSectionUiConfig(sectionId: ContentSectionId): SectionU
 	return mergeSectionUiConfig(contentSectionsById[sectionId].ui)
 }
 
-export function getContentSectionLinks(order: ContentSectionId[] = contentSectionOrder) {
+// Section links are the top-level content sections only — archived versions are
+// switched via the sidebar version dropdown, not this section picker.
+const rootSectionOrder: ContentSectionId[] = contentSections.map((section) => section.id)
+
+export function getContentSectionLinks(order: ContentSectionId[] = rootSectionOrder) {
 	return order.map((sectionId): ContentSectionLink => {
 		const section = contentSectionsById[sectionId]
 		return {
@@ -213,13 +228,38 @@ export function getContentSectionRawHref(sectionId: ContentSectionId, slug: stri
 	return `${prefix}/raw/${normalizedSlug}`
 }
 
+export function getContentSectionBasePath(sectionId: ContentSectionId) {
+	return basePathFor(sectionId)
+}
+
 export function getContentSectionByPathname(pathname: string) {
 	const normalized = normalizePath(pathname)
-	const section = Object.values(contentSectionsById).find((s) => {
-		const bp = basePathFor(s.id)
-		return normalized === bp || normalized.startsWith(`${bp}/`)
-	})
+	// Prefer the most specific base path so `/v0.5.0/x` resolves to the archived
+	// section, not the root section (whose base path `""` matches everything).
+	const section = Object.values(contentSectionsById)
+		.slice()
+		.sort((a, b) => basePathFor(b.id).length - basePathFor(a.id).length)
+		.find((s) => {
+			const bp = basePathFor(s.id)
+			return normalized === bp || normalized.startsWith(`${bp}/`)
+		})
 	return section ?? null
+}
+
+/** Resolve a full pathname to its section id + section-relative slug. */
+export function resolveSection(pathname: string): { sectionId: ContentSectionId; slug: string } {
+	const section = getContentSectionByPathname(pathname) ?? contentSectionsById[latestSectionId]
+	return { sectionId: section.id, slug: pathToSlug(basePathFor(section.id), pathname) }
+}
+
+/** Every routable page across all sections, as catch-all slug params. */
+export function getAllContentEntries(): { slug: string }[] {
+	return allSections.flatMap((section) =>
+		contentManifests[section.id].map((item) => {
+			const href = getHref(basePathFor(section.id), item.slug)
+			return { slug: href === "/" ? "" : href.replace(/^\//, "") }
+		})
+	)
 }
 
 function slugToTitle(slug: string) {
