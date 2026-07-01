@@ -16,6 +16,9 @@ Thumbs.db
 # Claude Code (local, per-machine)
 .claude/settings.local.json
 
+# Internal plans / notes (never published)
+.private/
+
 # Env
 .env
 .env.*
