@@ -110,3 +110,9 @@ PRs welcome! Especially for new email providers. Make sure you:
 - Follow the existing code style (snake_case, no semicolons)
 - Add tests for new features
 - Run `bun run check` and `bun run lint` before pushing
+
+## Releasing
+
+Maintainers: `npm run release -- <patch|minor|major>` publishes the library and
+creates the GitHub release. See [RELEASING.md](RELEASING.md) for the full
+process, including snapshotting the versioned docs.

@@ -13,7 +13,8 @@
     "format": "oxfmt",
     "lint": "oxfmt --check . && eslint .",
     "test:unit": "vitest",
-    "test": "npm run test:unit -- --run"
+    "test": "npm run test:unit -- --run",
+    "release": "bash scripts/release.sh"
   },
   "bin": {
     "postboi": "dist/cli.js"
