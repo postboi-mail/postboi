@@ -67,15 +67,15 @@ import { mail } from "postboi/kit"
 export const actions = { default: mail }
 ```
 
-| Topic                                      | Docs                                                                 |
-| ------------------------------------------ | -------------------------------------------------------------------- |
-| Quick start — the CLI (`postboi init`)     | [postboi.uilo.co/quick-start](https://postboi.uilo.co/quick-start)   |
-| Manual setup (no CLI)                      | [postboi.uilo.co/manual-setup](https://postboi.uilo.co/manual-setup) |
-| SvelteKit form actions                     | [postboi.uilo.co/sveltekit](https://postboi.uilo.co/sveltekit)       |
-| FormData → HTML tables                     | [postboi.uilo.co/formdata](https://postboi.uilo.co/formdata)         |
-| All providers & their options              | [postboi.uilo.co/providers](https://postboi.uilo.co/providers)       |
-| Hooks, global config, retries, bulk send | [postboi.uilo.co/config](https://postboi.uilo.co/config)         |
-| API reference                              | [postboi.uilo.co/api](https://postboi.uilo.co/api)                   |
+| Topic                                    | Docs                                                                 |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| Quick start — the CLI (`postboi init`)   | [postboi.uilo.co/quick-start](https://postboi.uilo.co/quick-start)   |
+| Manual setup (no CLI)                    | [postboi.uilo.co/manual-setup](https://postboi.uilo.co/manual-setup) |
+| SvelteKit form actions                   | [postboi.uilo.co/sveltekit](https://postboi.uilo.co/sveltekit)       |
+| FormData → HTML tables                   | [postboi.uilo.co/formdata](https://postboi.uilo.co/formdata)         |
+| All providers & their options            | [postboi.uilo.co/providers](https://postboi.uilo.co/providers)       |
+| Hooks, global config, retries, bulk send | [postboi.uilo.co/config](https://postboi.uilo.co/config)             |
+| API reference                            | [postboi.uilo.co/api](https://postboi.uilo.co/api)                   |
 
 > On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider directly — see [Providers](https://postboi.uilo.co/providers#using-a-provider-directly).
 

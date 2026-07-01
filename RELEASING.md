@@ -33,7 +33,13 @@ currently-published version as an archived snapshot **before** you edit docs for
    - Set `"latest"` to the new version `X.Y.Z`.
    - Prepend an entry to `archived` (newest first):
      ```json
-     { "version": "PREV", "slug": "vPREV", "nav": [ /* … */ ] }
+     {
+     	"version": "PREV",
+     	"slug": "vPREV",
+     	"nav": [
+     		/* … */
+     	]
+     }
      ```
      For `nav`, copy the current sidebar structure from
      `contentSections[0].navigation` in

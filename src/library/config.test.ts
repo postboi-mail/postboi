@@ -2,13 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import {
-	configure,
-	config,
-	get_config,
-	load_config,
-	reset_config,
-} from "$library/config.js"
+import { configure, config, get_config, load_config, reset_config } from "$library/config.js"
 import Mock from "$library/mock.js"
 import { mail } from "$library/cloud.js"
 

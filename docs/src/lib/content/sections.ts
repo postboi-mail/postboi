@@ -54,8 +54,6 @@ const contentSectionsById = Object.fromEntries(
 	allSections.map((section) => [section.id, section])
 ) as Record<ContentSectionId, ContentSectionConfig>
 
-const contentSectionOrder: ContentSectionId[] = allSections.map((section) => section.id)
-
 const contentManifests = Object.fromEntries(
 	allSections.map((section) => [section.id, flattenNavigationToManifest(section.navigation)])
 ) as Record<ContentSectionId, ContentItem[]>
