@@ -2,7 +2,7 @@
  * Project-wide configuration. Set it once and every send — `send()`, `postboi/kit`, or any
  * provider instance — picks it up, so the 99% case is just calling `send()`.
  *
- * Drop a `postboi.settings.ts` at your project root:
+ * Drop a `postboi.config.ts` at your project root:
  *
  * ```ts
  * import { config } from "postboi"
@@ -22,8 +22,8 @@
 import type { Defaults, Hooks } from "./index.js"
 import type { ProviderKey } from "./registry.js"
 
-/** Everything you can configure globally via `postboi.settings.ts` or {@link configure}. */
-export interface PostboiSettings {
+/** Everything you can configure globally via `postboi.config.ts` or {@link configure}. */
+export interface PostboiConfig {
 	/**
 	 * Provider key (`resend`, `mailgun`, …) for the zero-config `send()`. `POSTBOI_PROVIDER` wins.
 	 * `"mock"` is also accepted — a credential-free no-op that records instead of sending, handy
@@ -47,7 +47,7 @@ export interface PostboiSettings {
 	retry_delay?: number
 	/** Derive a plain-text body from the HTML body when `text` is omitted. */
 	auto_text?: boolean
-	/** Lifecycle hooks run around every send (the main reason to use a settings file). */
+	/** Lifecycle hooks run around every send (the main reason to use a config file). */
 	hooks?: Hooks
 }
 
@@ -68,7 +68,7 @@ export function merge_hooks(base: Hooks = {}, override: Hooks = {}): Hooks {
 }
 
 /** Merge `override` over `base`, deep-merging the `default` and `hooks` objects. */
-function merge(base: PostboiSettings, override: PostboiSettings): PostboiSettings {
+function merge(base: PostboiConfig, override: PostboiConfig): PostboiConfig {
 	return {
 		...base,
 		...defined(override),
@@ -77,61 +77,61 @@ function merge(base: PostboiSettings, override: PostboiSettings): PostboiSetting
 	}
 }
 
-let explicit: PostboiSettings = {}
-let disk: PostboiSettings = {}
+let explicit: PostboiConfig = {}
+let disk: PostboiConfig = {}
 let disk_loaded = false
 
 /**
- * Register global settings imperatively. Useful in runtimes without filesystem access (edge,
+ * Register global config imperatively. Useful in runtimes without filesystem access (edge,
  * Cloudflare Workers) where the file auto-load can't run. Calls merge, so it's additive.
  */
-export function configure(settings: PostboiSettings): void {
-	explicit = merge(explicit, settings)
+export function configure(config: PostboiConfig): void {
+	explicit = merge(explicit, config)
 }
 
 /**
- * Project settings helper for `postboi.settings.ts`. Registers them as a side effect (so merely
+ * Project config helper for `postboi.config.ts`. Registers them as a side effect (so merely
  * importing the file is enough) and returns them, so it works as a typed `export default`.
  */
-export function config(settings: PostboiSettings): PostboiSettings {
-	configure(settings)
-	return settings
+export function config(config: PostboiConfig): PostboiConfig {
+	configure(config)
+	return config
 }
 
-/** The current effective settings (disk config underneath anything set via {@link configure}). */
-export function get_settings(): PostboiSettings {
+/** The current effective config (disk config underneath anything set via {@link configure}). */
+export function get_config(): PostboiConfig {
 	return merge(disk, explicit)
 }
 
-/** Reset all registered settings. Intended for tests. */
-export function reset_settings(): void {
+/** Reset all registered config. Intended for tests. */
+export function reset_config(): void {
 	explicit = {}
 	disk = {}
 	disk_loaded = false
 }
 
 /**
- * Ensure the settings file has been read (once), then return the effective settings. Called on
+ * Ensure the config file has been read (once), then return the effective config. Called on
  * the `send()` path. Best-effort and Node/Bun-only — any failure falls back to whatever was set
  * via {@link configure}.
  */
-export async function load_settings(): Promise<PostboiSettings> {
+export async function load_config(): Promise<PostboiConfig> {
 	if (!disk_loaded) {
 		disk_loaded = true
 		disk = await read_disk()
 	}
-	return get_settings()
+	return get_config()
 }
 
-const SETTINGS_FILES = [
-	"postboi.settings.ts",
-	"postboi.settings.mts",
-	"postboi.settings.js",
-	"postboi.settings.mjs",
+const CONFIG_FILES = [
+	"postboi.config.ts",
+	"postboi.config.mts",
+	"postboi.config.js",
+	"postboi.config.mjs",
 ]
 
-/** Find and import a `postboi.settings.*` file, walking up from the cwd. */
-async function read_disk(): Promise<PostboiSettings> {
+/** Find and import a `postboi.config.*` file, walking up from the cwd. */
+async function read_disk(): Promise<PostboiConfig> {
 	if (typeof process === "undefined" || !process.versions?.node) return {}
 	try {
 		const { existsSync } = await import("node:fs")
@@ -140,14 +140,14 @@ async function read_disk(): Promise<PostboiSettings> {
 
 		let dir = process.cwd()
 		for (;;) {
-			const file = SETTINGS_FILES.map((f) => path.join(dir, f)).find((f) => existsSync(f))
+			const file = CONFIG_FILES.map((f) => path.join(dir, f)).find((f) => existsSync(f))
 			if (file) {
 				const mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as {
-					default?: PostboiSettings
-					settings?: PostboiSettings
+					default?: PostboiConfig
+					config?: PostboiConfig
 				}
-				const settings = mod.default ?? mod.settings
-				return settings && typeof settings === "object" ? settings : {}
+				const config = mod.default ?? mod.config
+				return config && typeof config === "object" ? config : {}
 			}
 			const parent = path.dirname(dir)
 			if (parent === dir) return {}

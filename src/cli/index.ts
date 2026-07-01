@@ -7,7 +7,7 @@ import {
 	PROVIDERS,
 	DEFAULT_FIELDS,
 	usage_snippet,
-	render_settings,
+	render_config,
 	render_block,
 	type CliProvider,
 } from "./providers.js"
@@ -34,11 +34,11 @@ import {
 } from "./prompts.js"
 import { banner } from "./banner.js"
 
-const SETTINGS_FILES = [
-	"postboi.settings.ts",
-	"postboi.settings.mts",
-	"postboi.settings.js",
-	"postboi.settings.mjs",
+const CONFIG_FILES = [
+	"postboi.config.ts",
+	"postboi.config.mts",
+	"postboi.config.js",
+	"postboi.config.mjs",
 ]
 
 function version(): string {
@@ -109,10 +109,10 @@ async function init(): Promise<void> {
 		)
 
 		// 2. Collect credentials. Secrets go to the env file; everything non-secret is committed
-		// to postboi.settings.ts — so the best case is a single env var (the API key).
+		// to postboi.config.ts — so the best case is a single env var (the API key).
 		console.log(`\n${dim("Get your credentials at")} ${cyan(provider.url)}\n`)
 		const values: Record<string, string> = {} // secrets → env file
-		const config_options: Record<string, string> = {} // non-secrets → settings file
+		const config_options: Record<string, string> = {} // non-secrets → config file
 		for (const field of provider.fields) {
 			const value = await prompts.ask(`${field.label} ${dim(`(${field.env})`)}`, {
 				required: field.default === undefined,
@@ -122,7 +122,7 @@ async function init(): Promise<void> {
 			else if (value) config_options[field.arg] = value
 		}
 
-		// 2b. Optional default fields (committed to settings, not env)
+		// 2b. Optional default fields (committed to config, not env)
 		const config_defaults: Record<string, string> = {}
 		if (await prompts.confirm(`\nSet ${bold("default")} from / to / reply-to / cc / bcc?`)) {
 			for (const field of DEFAULT_FIELDS) {
@@ -256,21 +256,21 @@ async function init(): Promise<void> {
 			}
 		}
 
-		// 7b. Write postboi.settings.ts — the committed home for provider + non-secret config.
+		// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
 		console.log()
-		const settings_source = render_settings(provider.key, config_defaults, config_options)
-		const existing_settings = SETTINGS_FILES.find((f) => existsSync(f))
-		if (existing_settings) {
+		const config_source = render_config(provider.key, config_defaults, config_options)
+		const existing_config = CONFIG_FILES.find((f) => existsSync(f))
+		if (existing_config) {
 			// Don't clobber a hand-edited file — show what to merge in instead.
-			console.log(`${yellow("!")} ${bold(existing_settings)} already exists — add to it:`)
+			console.log(`${yellow("!")} ${bold(existing_config)} already exists — add to it:`)
 			console.log(dim(`\n  provider: ${JSON.stringify(provider.key)},`))
 			if (Object.keys(config_defaults).length)
 				console.log(dim(`  ${render_block("default", config_defaults, "  ").trimEnd()}`))
 			if (Object.keys(config_options).length)
 				console.log(dim(`  ${render_block("options", config_options, "  ").trimEnd()}`))
 		} else {
-			writeFileSync("postboi.settings.ts", settings_source)
-			console.log(`${green("✓")} wrote ${bold("postboi.settings.ts")}`)
+			writeFileSync("postboi.config.ts", config_source)
+			console.log(`${green("✓")} wrote ${bold("postboi.config.ts")}`)
 		}
 
 		// 8. Done — show how to use it

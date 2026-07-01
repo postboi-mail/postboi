@@ -53,7 +53,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "sveltekit", name: "SvelteKit form actions" },
 					{ slug: "formdata", name: "FormData" },
 					{ slug: "providers", name: "Providers" },
-					{ slug: "settings", name: "Global settings" },
+					{ slug: "config", name: "Global config" },
 					{ slug: "hooks", name: "Hooks" },
 					{ slug: "errors", name: "Errors & retries" },
 					{ slug: "bulk", name: "Bulk sending" },

@@ -11,7 +11,7 @@ throw is swallowed, so logging and telemetry can never break a send. In a bulk
 [`mail(array)`](/bulk), hooks run once per message.
 
 > Setting the same hooks on every instance? Define them **once** in
-> [`postboi.settings.ts`](/settings) and they apply everywhere — including the
+> [`postboi.config.ts`](/config) and they apply everywhere — including the
 > zero-config `mail()`.
 
 ```typescript

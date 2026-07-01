@@ -29,7 +29,7 @@ describe("package exports", () => {
 			"index.ts",
 			"utils.ts",
 			"registry.ts",
-			"settings.ts",
+			"config.ts",
 			"env.ts",
 			"mail.ts",
 		])

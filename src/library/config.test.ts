@@ -5,10 +5,10 @@ import { join } from "node:path"
 import {
 	configure,
 	config,
-	get_settings,
-	load_settings,
-	reset_settings,
-} from "$library/settings.js"
+	get_config,
+	load_config,
+	reset_config,
+} from "$library/config.js"
 import Mock from "$library/mock.js"
 import { mail } from "$library/cloud.js"
 
@@ -16,22 +16,22 @@ const fetch = vi.fn()
 global.fetch = fetch
 
 beforeEach(() => {
-	reset_settings()
+	reset_config()
 	fetch.mockReset()
 })
 afterEach(() => vi.unstubAllEnvs())
 
-describe("global settings", () => {
+describe("global config", () => {
 	it("configure() merges; later calls add to earlier ones", () => {
 		configure({ retries: 2 })
 		configure({ default: { from: "a@test.com" } })
-		expect(get_settings()).toMatchObject({ retries: 2, default: { from: "a@test.com" } })
+		expect(get_config()).toMatchObject({ retries: 2, default: { from: "a@test.com" } })
 	})
 
 	it("config() registers as a side effect and returns the value", () => {
 		const value = config({ auto_text: true })
 		expect(value).toEqual({ auto_text: true })
-		expect(get_settings().auto_text).toBe(true)
+		expect(get_config().auto_text).toBe(true)
 	})
 
 	it("applies global default + hooks to every provider instance", async () => {
@@ -45,7 +45,7 @@ describe("global settings", () => {
 		expect(before).toHaveBeenCalledOnce()
 	})
 
-	it("lets per-instance options override global settings", async () => {
+	it("lets per-instance options override global config", async () => {
 		configure({ default: { from: "global@test.com" }, retries: 5 })
 		const provider = new Mock({ default: { from: "local@test.com" } })
 		await provider.send({ to: "to@test.com", body: "hi" })
@@ -67,7 +67,7 @@ describe("global settings", () => {
 		expect(instance_hook).toHaveBeenCalledOnce() // instance wins for after.send
 	})
 
-	it("zero-config mail() uses settings.provider when POSTBOI_PROVIDER is unset", async () => {
+	it("zero-config mail() uses config.provider when POSTBOI_PROVIDER is unset", async () => {
 		configure({ provider: "resend", default: { from: "from@test.com" } })
 		vi.stubEnv("RESEND_API_KEY", "re_123")
 		fetch.mockResolvedValue({
@@ -89,7 +89,7 @@ describe("global settings", () => {
 		expect(fetch).not.toHaveBeenCalled()
 	})
 
-	it("supplies non-secret provider options from settings.options (env still wins)", async () => {
+	it("supplies non-secret provider options from config.options (env still wins)", async () => {
 		configure({ provider: "mailgun", options: { domain: "from-config.example.com" } })
 		vi.stubEnv("MAILGUN_API_KEY", "key-abc")
 		const ok = {
@@ -101,7 +101,7 @@ describe("global settings", () => {
 		}
 		fetch.mockResolvedValue(ok)
 
-		// No MAILGUN_DOMAIN env — the domain comes from settings.options.
+		// No MAILGUN_DOMAIN env — the domain comes from config.options.
 		await mail({ to: "to@test.com", from: "f@test.com", body: "hi" })
 		expect(fetch.mock.calls.at(-1)![0]).toContain("from-config.example.com")
 
@@ -111,20 +111,20 @@ describe("global settings", () => {
 		expect(fetch.mock.calls.at(-1)![0]).toContain("from-env.example.com")
 	})
 
-	it("auto-loads a postboi.settings file from disk", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "postboi-settings-"))
+	it("auto-loads a postboi.config file from disk", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-config-"))
 		const original = process.cwd()
 		try {
 			writeFileSync(
-				join(dir, "postboi.settings.mjs"),
+				join(dir, "postboi.config.mjs"),
 				`export default { retries: 3, auto_text: true, default: { from: "file@test.com" } }`
 			)
 			process.chdir(dir)
 
-			const settings = await load_settings()
-			expect(settings.retries).toBe(3)
-			expect(settings.auto_text).toBe(true)
-			expect(settings.default?.from).toBe("file@test.com")
+			const config = await load_config()
+			expect(config.retries).toBe(3)
+			expect(config.auto_text).toBe(true)
+			expect(config.default?.from).toBe("file@test.com")
 		} finally {
 			process.chdir(original)
 			rmSync(dir, { recursive: true, force: true })

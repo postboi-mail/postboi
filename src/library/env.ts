@@ -78,7 +78,7 @@ export function read_env(name: string): string | undefined {
 
 /**
  * Read the default field values shared by every provider from the environment. Only defined
- * values are included, so an unset env var never clobbers a default from postboi.settings.ts.
+ * values are included, so an unset env var never clobbers a default from postboi.config.ts.
  */
 export function env_defaults(): Defaults {
 	const env: Record<keyof Defaults, string> = {

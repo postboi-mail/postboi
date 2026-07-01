@@ -31,8 +31,8 @@ export function render_block(name: string, entries: Record<string, string>, inde
 	return `${indent}${name}: {\n${lines.join("\n")}\n${indent}},\n`
 }
 
-/** Build a `postboi.settings.ts` carrying the provider, defaults and non-secret options. */
-export function render_settings(
+/** Build a `postboi.config.ts` carrying the provider, defaults and non-secret options. */
+export function render_config(
 	provider: string,
 	defaults: Record<string, string>,
 	options: Record<string, string>

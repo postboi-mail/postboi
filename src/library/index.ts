@@ -1,8 +1,8 @@
 import { title, html_to_text, pooled_map } from "./utils.js"
-import { get_settings, merge_hooks } from "./settings.js"
+import { get_config, merge_hooks } from "./config.js"
 
-// Global configuration (`postboi.settings.ts`) is part of the public surface from the package root.
-export { configure, config, type PostboiSettings } from "./settings.js"
+// Global configuration (`postboi.config.ts`) is part of the public surface from the package root.
+export { configure, config, type PostboiConfig } from "./config.js"
 
 /**
  * A concrete email address used by providers.
@@ -316,9 +316,9 @@ export abstract class ProviderBase<TResponse = unknown> {
 	#hooks: Hooks
 
 	constructor(options: CommonProviderOptions = {}) {
-		// Global settings (postboi.settings.ts / package.json) sit underneath per-instance
+		// Global config (postboi.config.ts / package.json) sit underneath per-instance
 		// options, so explicit constructor arguments always win.
-		const s = get_settings()
+		const s = get_config()
 		this.defaults = { ...s.default, ...options.default }
 		this.#timeout = options.timeout ?? s.timeout ?? 30000
 		this.#retries = options.retries ?? s.retries ?? 0

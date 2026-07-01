@@ -8,7 +8,7 @@ import type {
 } from "./index.js"
 import { PostboiError } from "./index.js"
 import { find_provider } from "./registry.js"
-import { load_settings } from "./settings.js"
+import { load_config } from "./config.js"
 import { ensure_env_loaded, env_defaults, read_env } from "./env.js"
 
 type ProviderConstructor = new (options: Record<string, unknown>) => ProviderBase<unknown>
@@ -46,18 +46,18 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 
 /** Construct the provider named by `POSTBOI_PROVIDER` from environment variables. */
 async function resolve_provider(): Promise<ProviderBase<unknown>> {
-	// Load global settings (postboi.settings.ts / package.json) first, so hooks and the
+	// Load global config (postboi.config.ts / package.json) first, so hooks and the
 	// `provider` fallback are available; ProviderBase merges the rest at construction.
-	const settings = await load_settings()
+	const config = await load_config()
 	// Make `.env` values visible in dev (SvelteKit etc. don't put them on process.env).
 	await ensure_env_loaded()
-	const key = read_env("POSTBOI_PROVIDER") ?? settings.provider
+	const key = read_env("POSTBOI_PROVIDER") ?? config.provider
 	if (!key) {
 		throw new PostboiError({
 			provider: "postboi",
 			code: "no_provider",
 			message:
-				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), set `provider` in postboi.settings.ts, or import one directly, e.g. `import Resend from "postboi/resend"`.',
+				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), set `provider` in postboi.config.ts, or import one directly, e.g. `import Resend from "postboi/resend"`.',
 		})
 	}
 
@@ -74,13 +74,13 @@ async function resolve_provider(): Promise<ProviderBase<unknown>> {
 	// `meta` is undefined for credential-free providers (e.g. mock) that have no registry entry.
 	const meta = find_provider(key)
 	for (const field of meta?.fields ?? []) {
-		// env wins, then a non-secret value from the settings file, then the field default.
-		const value = read_env(field.env) ?? settings.options?.[field.arg] ?? field.default
+		// env wins, then a non-secret value from the config file, then the field default.
+		const value = read_env(field.env) ?? config.options?.[field.arg] ?? field.default
 		if (value === undefined) {
 			throw new PostboiError({
 				provider: key,
 				code: "missing_env",
-				message: `Provider "${key}" needs ${field.env} — set it in the environment${field.secret ? "" : ` or as \`options.${field.arg}\` in postboi.settings.ts`}. Run \`bunx postboi init\`.`,
+				message: `Provider "${key}" needs ${field.env} — set it in the environment${field.secret ? "" : ` or as \`options.${field.arg}\` in postboi.config.ts`}. Run \`bunx postboi init\`.`,
 			})
 		}
 		options[field.arg] = value

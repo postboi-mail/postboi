@@ -4,7 +4,7 @@ import {
 	PROVIDERS,
 	DEFAULT_FIELDS,
 	usage_snippet,
-	render_settings,
+	render_config,
 	render_block,
 } from "./providers.js"
 import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./env.js"
@@ -54,8 +54,8 @@ describe("provider registry", () => {
 		expect(snippet).toContain("to: process.env.POSTBOI_TO")
 	})
 
-	it("renders a settings file with provider, defaults and non-secret options", () => {
-		const out = render_settings(
+	it("renders a config file with provider, defaults and non-secret options", () => {
+		const out = render_config(
 			"mailgun",
 			{ from: "no-reply@example.com" },
 			{ domain: "mg.example.com" }
@@ -67,8 +67,8 @@ describe("provider registry", () => {
 		expect(out).toContain("hooks: {")
 	})
 
-	it("omits empty default / options blocks from the settings file", () => {
-		const out = render_settings("resend", {}, {})
+	it("omits empty default / options blocks from the config file", () => {
+		const out = render_config("resend", {}, {})
 		expect(out).toContain('provider: "resend",')
 		expect(out).not.toContain("default: {")
 		expect(out).not.toContain("options: {")

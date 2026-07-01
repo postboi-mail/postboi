@@ -33,7 +33,7 @@ await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
 There are three ways to use Postboi, from least to most explicit:
 
 1. **Zero-config `mail()`** — reads the provider and defaults from a committed
-   `postboi.settings.ts`, and secrets from the environment. Best for apps where one
+   `postboi.config.ts`, and secrets from the environment. Best for apps where one
    provider is set per environment.
 2. **`postboi/kit` form actions** — a one-line SvelteKit action that reads `FormData`,
    sends it, and returns a result.

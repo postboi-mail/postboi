@@ -21,14 +21,14 @@ defaults, and installs `postboi` if it isn't already there.
 - Optionally collects `from` / `to` and other defaults applied to every send.
 - **Writes only secrets** (API keys, tokens) to your env file.
 - **Writes everything else** — the provider, defaults, and non-secret options like a
-  Mailgun domain or SES region — to a committed [`postboi.settings.ts`](/settings).
+  Mailgun domain or SES region — to a committed [`postboi.config.ts`](/config).
 - Installs `postboi` if it isn't installed yet.
 
 The split means the best case (Resend, Postmark, SendGrid, Brevo, …) is **a single env
 var** — the API key — with the rest in version control.
 
 ```ts
-// postboi.settings.ts  (committed)
+// postboi.config.ts  (committed)
 import { config } from 'postboi';
 
 export default config({
@@ -52,6 +52,6 @@ await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
 
 ## Prefer to do it yourself?
 
-Skip the CLI and write the settings file plus the credential env vars by hand, or
+Skip the CLI and write the config file plus the credential env vars by hand, or
 construct a provider instance directly. See [Manual setup](/manual-setup) and
 [Providers](/providers).
