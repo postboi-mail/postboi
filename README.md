@@ -67,8 +67,8 @@ import { mail } from "postboi/kit"
 export const actions = { default: mail }
 ```
 
-| Topic                                    | Docs                                                                 |
-| ---------------------------------------- | -------------------------------------------------------------------- |
+| Topic                                    | Docs                                                                       |
+| ---------------------------------------- | -------------------------------------------------------------------------- |
 | Quick start — the CLI (`postboi init`)   | [docs.postboi.email/quick-start](https://docs.postboi.email/quick-start)   |
 | Manual setup (no CLI)                    | [docs.postboi.email/manual-setup](https://docs.postboi.email/manual-setup) |
 | SvelteKit form actions                   | [docs.postboi.email/sveltekit](https://docs.postboi.email/sveltekit)       |
