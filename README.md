@@ -12,7 +12,7 @@
 
 Postboi is a framework-agnostic email library optimised for SvelteKit. Works with a variety of email providers and turns your FormData into tidy HTML emails, with **zero configuration**.
 
-📖 **Full documentation: [postboi.uilo.co](https://postboi.uilo.co)**
+📖 **Full documentation: [docs.postboi.email](https://docs.postboi.email)**
 
 ### Features
 
@@ -69,15 +69,15 @@ export const actions = { default: mail }
 
 | Topic                                    | Docs                                                                 |
 | ---------------------------------------- | -------------------------------------------------------------------- |
-| Quick start — the CLI (`postboi init`)   | [postboi.uilo.co/quick-start](https://postboi.uilo.co/quick-start)   |
-| Manual setup (no CLI)                    | [postboi.uilo.co/manual-setup](https://postboi.uilo.co/manual-setup) |
-| SvelteKit form actions                   | [postboi.uilo.co/sveltekit](https://postboi.uilo.co/sveltekit)       |
-| FormData → HTML tables                   | [postboi.uilo.co/formdata](https://postboi.uilo.co/formdata)         |
-| All providers & their options            | [postboi.uilo.co/providers](https://postboi.uilo.co/providers)       |
-| Hooks, global config, retries, bulk send | [postboi.uilo.co/config](https://postboi.uilo.co/config)             |
-| API reference                            | [postboi.uilo.co/api](https://postboi.uilo.co/api)                   |
+| Quick start — the CLI (`postboi init`)   | [docs.postboi.email/quick-start](https://docs.postboi.email/quick-start)   |
+| Manual setup (no CLI)                    | [docs.postboi.email/manual-setup](https://docs.postboi.email/manual-setup) |
+| SvelteKit form actions                   | [docs.postboi.email/sveltekit](https://docs.postboi.email/sveltekit)       |
+| FormData → HTML tables                   | [docs.postboi.email/formdata](https://docs.postboi.email/formdata)         |
+| All providers & their options            | [docs.postboi.email/providers](https://docs.postboi.email/providers)       |
+| Hooks, global config, retries, bulk send | [docs.postboi.email/config](https://docs.postboi.email/config)             |
+| API reference                            | [docs.postboi.email/api](https://docs.postboi.email/api)                   |
 
-> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider directly — see [Providers](https://postboi.uilo.co/providers#using-a-provider-directly).
+> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider directly — see [Providers](https://docs.postboi.email/providers#using-a-provider-directly).
 
 ## Development
 

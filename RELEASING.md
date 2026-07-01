@@ -3,7 +3,7 @@
 A release ships two independent artifacts:
 
 1. **The library** — the `postboi` npm package (published from this repo root).
-2. **The docs site** — [postboi.uilo.co](https://postboi.uilo.co), deployed from `docs/` on push to `main`. Each release is snapshotted so readers can switch to older versions.
+2. **The docs site** — [docs.postboi.email](https://docs.postboi.email), deployed from `docs/` on push to `main`. Each release is snapshotted so readers can switch to older versions.
 
 The library release is scripted. The docs snapshot is a short manual step because it involves copying content and hand-editing the version list.
 

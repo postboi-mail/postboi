@@ -8,7 +8,7 @@ export const siteConfig = {
 	/** Compact site name for environments with strict length limits. */
 	shortName: "Postboi",
 	/** Public canonical URL used to build absolute links. */
-	url: "https://postboi.uilo.co",
+	url: "https://docs.postboi.email",
 	/** Default SEO description for the homepage and fallback metadata. */
 	description:
 		"A framework-agnostic email library optimised for SvelteKit. One API, swappable providers, zero configuration — turn FormData into tidy HTML emails.",
