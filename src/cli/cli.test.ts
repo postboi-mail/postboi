@@ -13,7 +13,7 @@ import {
 	detect_package_manager,
 	has_dependency,
 	install_command,
-	is_svelte_project,
+	is_bundled_framework,
 } from "./project.js"
 import { create_prompts, PromptCancelledError } from "./prompts.js"
 import { banner } from "./banner.js"
@@ -240,14 +240,25 @@ describe("project detection", () => {
 		})
 	})
 
-	it("detects a Svelte project from config file or svelte packages", () => {
-		expect(is_svelte_project(["svelte.config.js"])).toBe(true)
-		expect(is_svelte_project(["svelte.config.ts"])).toBe(true)
-		expect(is_svelte_project([], { devDependencies: { svelte: "^5" } })).toBe(true)
-		expect(is_svelte_project([], { devDependencies: { "@sveltejs/kit": "^2" } })).toBe(true)
-		expect(is_svelte_project([], { dependencies: { svelte: "^5" } })).toBe(true)
-		expect(is_svelte_project(["vite.config.ts"], { dependencies: { react: "^19" } })).toBe(false)
-		expect(is_svelte_project([])).toBe(false)
+	it("detects bundled frameworks from config file or packages", () => {
+		expect(is_bundled_framework(["svelte.config.js"])).toBe(true)
+		expect(is_bundled_framework(["svelte.config.ts"])).toBe(true)
+		expect(is_bundled_framework(["nuxt.config.ts"])).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { svelte: "^5" } })).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { "@sveltejs/kit": "^2" } })).toBe(true)
+		expect(is_bundled_framework([], { dependencies: { nuxt: "^4" } })).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { "@solidjs/start": "^1" } })).toBe(true)
+		expect(is_bundled_framework([], { dependencies: { "@tanstack/react-start": "^1" } })).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { "@analogjs/platform": "^1" } })).toBe(true)
+	})
+
+	it("leaves externalising frameworks (Next, Remix, Astro) as regular deps", () => {
+		expect(is_bundled_framework(["astro.config.mjs"], { dependencies: { astro: "^5" } })).toBe(
+			false
+		)
+		expect(is_bundled_framework(["next.config.js"], { dependencies: { next: "^15" } })).toBe(false)
+		expect(is_bundled_framework(["vite.config.ts"], { dependencies: { react: "^19" } })).toBe(false)
+		expect(is_bundled_framework([])).toBe(false)
 	})
 })
 

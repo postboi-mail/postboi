@@ -28,13 +28,26 @@ export function detect_package_manager(
 }
 
 /**
- * Is this a Svelte / SvelteKit project? Checks for a svelte config file and the svelte
- * packages in any dependency map. Svelte projects get postboi as a devDependency, since
- * Vite bundles everything at build time (the SvelteKit convention).
+ * Frameworks whose production build bundles server code, so postboi can be a devDependency:
+ * SvelteKit bundles everything via its adapters, and the Nitro-based frameworks (Nuxt,
+ * SolidStart, TanStack Start, Analog) emit a self-contained output that doesn't read
+ * node_modules at runtime. Next, Remix and Astro externalise server deps — postboi stays a
+ * regular dependency there.
  */
-export function is_svelte_project(files: ReadonlyArray<string>, pkg?: PackageJson): boolean {
-	if (files.some((f) => /^svelte\.config\.(js|ts|mjs|mts)$/.test(f))) return true
-	return has_dependency(pkg, "svelte") || has_dependency(pkg, "@sveltejs/kit")
+const BUNDLED_FRAMEWORK_PACKAGES = [
+	"svelte",
+	"@sveltejs/kit",
+	"nuxt",
+	"@solidjs/start",
+	"@tanstack/react-start",
+	"@tanstack/solid-start",
+	"@analogjs/platform",
+]
+
+/** Does this project use a framework that bundles server code at build time? */
+export function is_bundled_framework(files: ReadonlyArray<string>, pkg?: PackageJson): boolean {
+	if (files.some((f) => /^(svelte|nuxt)\.config\.(js|ts|mjs|mts)$/.test(f))) return true
+	return BUNDLED_FRAMEWORK_PACKAGES.some((name) => has_dependency(pkg, name))
 }
 
 /** Is the dependency already present in any of the package.json dependency maps? */
