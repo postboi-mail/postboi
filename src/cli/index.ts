@@ -21,7 +21,12 @@ import {
 	HOST_CLI,
 	type Host,
 } from "./deploy.js"
-import { detect_package_manager, has_dependency, install_command } from "./project.js"
+import {
+	detect_package_manager,
+	has_dependency,
+	install_command,
+	is_svelte_project,
+} from "./project.js"
 import {
 	create_prompts,
 	PromptCancelledError,
@@ -246,8 +251,10 @@ async function init(): Promise<void> {
 			const pkg = JSON.parse(readFileSync("package.json", "utf8"))
 			if (!has_dependency(pkg, "postboi")) {
 				const pm = detect_package_manager(files, pkg)
-				if (await prompts.confirm(`\nInstall ${bold("postboi")} with ${cyan(pm)}?`)) {
-					const { cmd, args } = install_command(pm, "postboi")
+				const dev = is_svelte_project(files, pkg)
+				const hint = dev ? ` ${dim("(as a devDependency — Svelte project)")}` : ""
+				if (await prompts.confirm(`\nInstall ${bold("postboi")} with ${cyan(pm)}?${hint}`)) {
+					const { cmd, args } = install_command(pm, "postboi", dev)
 					const result = run_push({ cmd, args })
 					if (result.ok) console.log(`${green("✓")} installed postboi`)
 					else
