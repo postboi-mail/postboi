@@ -308,6 +308,12 @@ export abstract class ProviderBase<TResponse = unknown> {
 	/** Stable provider identifier used in thrown errors. */
 	protected abstract readonly provider: string
 
+	/**
+	 * Whether a sender address must be resolvable client-side. Providers whose API can
+	 * default it from the authenticated account (Postboi Cloud) set this to false.
+	 */
+	protected readonly requires_from: boolean = true
+
 	protected defaults: Defaults
 	#timeout: number
 	#retries: number
@@ -939,7 +945,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 				message: "No recipient address provided (to or default.to)",
 			})
 		}
-		if (!from) {
+		if (!from && this.requires_from) {
 			throw new PostboiError({
 				provider: this.provider,
 				message: "No sender address provided (from or default.from)",
@@ -964,7 +970,8 @@ export abstract class ProviderBase<TResponse = unknown> {
 
 		return {
 			to,
-			from,
+			// Undefined only reaches providers that set requires_from = false and handle it.
+			from: from as Email,
 			reply_to: options.reply_to ?? this.defaults.reply_to,
 			cc: options.cc ?? this.defaults.cc,
 			bcc: options.bcc ?? this.defaults.bcc,

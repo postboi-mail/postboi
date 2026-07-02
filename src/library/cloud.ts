@@ -29,7 +29,8 @@ interface Attachment {
 }
 
 export interface SendParams {
-	from: EmailName
+	/** Omitted = the API uses the account's sending address. */
+	from?: EmailName
 	to: Array<EmailName>
 	cc?: Array<EmailName>
 	bcc?: Array<EmailName>
@@ -64,6 +65,8 @@ type SendResponse = { id: string }
  */
 export default class Postboi extends ProviderBase<SendResponse> {
 	protected readonly provider = "postboi"
+	// The API defaults `from` to the account's sending address, so none is required here.
+	protected override readonly requires_from = false
 	#token: string | undefined
 	#url: string
 
@@ -87,7 +90,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		}
 
 		const params: SendParams = {
-			from: this.email_name(this.parse_email_address(message.from)),
+			from: message.from ? this.email_name(this.parse_email_address(message.from)) : undefined,
 			to: this.email_name_list(message.to),
 			cc: message.cc ? this.email_name_list(message.cc) : undefined,
 			bcc: message.bcc ? this.email_name_list(message.bcc) : undefined,

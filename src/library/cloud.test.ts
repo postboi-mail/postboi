@@ -40,6 +40,17 @@ describe("Postboi Cloud (zero-config)", () => {
 		expect(result).toEqual({ id: "abc" })
 	})
 
+	it("sends without a from — the API defaults to the account's sending address", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "pb_live_123")
+		fetch.mockResolvedValue(respond({ json: { id: "abc" } }))
+
+		const provider = new Postboi()
+		const result = await provider.send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
+
+		expect(sent_json().from).toBeUndefined()
+		expect(result).toEqual({ id: "abc" })
+	})
+
 	it("an explicit token overrides the environment", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "from_env")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))

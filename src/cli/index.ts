@@ -249,10 +249,13 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	if (open_browser(start.url)) console.log(dim("  (opening in your default browser)"))
 	console.log(dim("\nWaiting for authorisation…"))
 
-	const token = await poll_device_auth(base, start)
+	const { token, send_address } = await poll_device_auth(base, start)
 	console.log(`${green("✓")} device authorised`)
 
-	const values = { POSTBOI_TOKEN: token }
+	// POSTBOI_FROM is a convenience default — the API also falls back to the account's
+	// sending address when `from` is omitted, so the token alone is enough.
+	const values: Record<string, string> = { POSTBOI_TOKEN: token }
+	if (send_address) values.POSTBOI_FROM = send_address
 	const targets = await choose_env_targets(prompts, files)
 	write_env_values(targets, values)
 	await offer_gitignore(prompts, targets)
@@ -263,9 +266,12 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	console.log(
 		dim('import { mail } from "postboi"\n\nawait mail({ to: "…", subject: "…", body: "…" })') + "\n"
 	)
+	const from_note = send_address
+		? `Emails send from ${send_address}`
+		: "Emails send from your account's send.postboi.email address"
 	console.log(
 		dim(
-			"Emails send from your account's send.postboi.email address — set reply_to to receive replies. Verify a domain in the dashboard to send from your own."
+			`${from_note} — set reply_to to receive replies. Verify a domain in the dashboard to send from your own.`
 		) + "\n"
 	)
 }

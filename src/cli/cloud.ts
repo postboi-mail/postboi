@@ -58,12 +58,18 @@ export async function start_device_auth(
 	}
 }
 
-/** Poll until the browser side authorises (resolves with the token) or the code dies. */
+/** What a claimed code exchanges into: the API token, plus the account's sending address. */
+export interface DeviceClaim {
+	token: string
+	send_address?: string
+}
+
+/** Poll until the browser side authorises (resolves with the claim) or the code dies. */
 export async function poll_device_auth(
 	base: string,
 	start: DeviceStart,
 	deps: { fetch?: FetchLike; sleep?: (ms: number) => Promise<unknown>; now?: () => number } = {}
-): Promise<string> {
+): Promise<DeviceClaim> {
 	const { fetch: fetch_fn = fetch, sleep = delay, now = Date.now } = deps
 	const deadline = now() + start.expires_in * 1000
 
@@ -83,8 +89,17 @@ export async function poll_device_auth(
 				throw new CloudAuthError("This sign-in code is no longer valid — run `postboi init` again.")
 			}
 			if (response.ok) {
-				const data = (await response.json()) as { status?: string; token?: string }
-				if (data.status === "claimed" && typeof data.token === "string") return data.token
+				const data = (await response.json()) as {
+					status?: string
+					token?: string
+					send_address?: string
+				}
+				if (data.status === "claimed" && typeof data.token === "string") {
+					return {
+						token: data.token,
+						send_address: typeof data.send_address === "string" ? data.send_address : undefined,
+					}
+				}
 			}
 		}
 		await sleep(start.interval * 1000)

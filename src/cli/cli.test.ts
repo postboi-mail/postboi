@@ -311,18 +311,27 @@ describe("cloud device flow", () => {
 		).rejects.toBeInstanceOf(CloudAuthError)
 	})
 
-	it("poll_device_auth polls until claimed and returns the token", async () => {
+	it("poll_device_auth polls until claimed and returns the claim", async () => {
 		const responses = [
 			json({ status: "pending", interval: 2 }),
 			json({ status: "pending", interval: 2 }),
-			json({ status: "claimed", token: "pb_secret" }),
+			json({ status: "claimed", token: "pb_secret", send_address: "darby@send.postboi.email" }),
 		]
-		const token = await poll_device_auth(
+		const claim = await poll_device_auth(
 			"https://postboi.email",
 			{ ...start, expires_in: 600, interval: 2 },
 			{ fetch: async () => responses.shift()!, sleep: async () => {}, now: () => 0 }
 		)
-		expect(token).toBe("pb_secret")
+		expect(claim).toEqual({ token: "pb_secret", send_address: "darby@send.postboi.email" })
+	})
+
+	it("poll_device_auth tolerates servers that don't send send_address", async () => {
+		const claim = await poll_device_auth(
+			"https://postboi.email",
+			{ ...start, expires_in: 600, interval: 2 },
+			{ fetch: async () => json({ status: "claimed", token: "pb_secret" }), sleep: async () => {} }
+		)
+		expect(claim).toEqual({ token: "pb_secret", send_address: undefined })
 	})
 
 	it("poll_device_auth fails fast on an invalid or expired code", async () => {
