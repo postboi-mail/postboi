@@ -1,0 +1,65 @@
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub release
+  id-token: write # npm trusted publishing (OIDC)
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # Trusted publishing needs npm >= 11.5.1
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check tag matches package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "✗ tag $GITHUB_REF_NAME does not match package.json version $version" >&2
+            exit 1
+          fi
+
+      - name: Setup env vars for type checking
+        run: |
+          echo "ZEPTO_TOKEN=test-token" > .env
+          echo "EMAIL_FROM_ADDRESS=test@example.com" >> .env
+          echo "EMAIL_TO_ADDRESS=test@example.com" >> .env
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+      # No token — auth is OIDC via the trusted publisher configured on npmjs.com,
+      # which also attaches provenance to the package.
+      - name: Publish to npm
+        run: npm publish
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "${GITHUB_REF_NAME#v}" --generate-notes
