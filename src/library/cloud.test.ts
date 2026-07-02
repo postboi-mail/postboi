@@ -31,7 +31,7 @@ describe("Postboi Cloud (zero-config)", () => {
 		const provider = new Postboi({ default: { from: "from@test.com" } })
 		const result = await provider.send({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
 
-		expect(sent_url()).toBe("https://api.postboi.email/v1/send")
+		expect(sent_url()).toBe("https://postboi.email/v1/send")
 		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer pb_live_123" })
 		const body = sent_json()
 		expect(body.from).toEqual({ email: "from@test.com" })
@@ -168,6 +168,19 @@ describe("top-level mail() — provider-agnostic dispatch", () => {
 		])
 		expect(results.every((r) => r.ok)).toBe(true)
 		expect(results).toHaveLength(2)
+	})
+
+	it("falls back to Postboi Cloud when only POSTBOI_TOKEN is set", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "")
+		vi.stubEnv("POSTBOI_TOKEN", "pb_zero_config")
+		vi.stubEnv("POSTBOI_FROM", "from@test.com")
+		fetch.mockResolvedValue(respond({ json: { id: "cloud-1" } }))
+
+		const result = await mail({ to: "to@test.com", subject: "Hi", body: "<p>x</p>" })
+
+		expect(sent_url()).toBe("https://postboi.email/v1/send")
+		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer pb_zero_config" })
+		expect(result).toEqual({ id: "cloud-1" })
 	})
 
 	it("throws a friendly PostboiError when no provider is configured", async () => {
