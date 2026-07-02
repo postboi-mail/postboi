@@ -21,7 +21,12 @@ import {
 	HOST_CLI,
 	type Host,
 } from "./deploy.js"
-import { detect_package_manager, has_dependency, install_command } from "./project.js"
+import {
+	detect_package_manager,
+	has_dependency,
+	install_command,
+	is_bundled_framework,
+} from "./project.js"
 import {
 	create_prompts,
 	PromptCancelledError,
@@ -221,8 +226,10 @@ async function offer_install(prompts: Prompts, files: Array<string>): Promise<vo
 	const pkg = JSON.parse(readFileSync("package.json", "utf8"))
 	if (has_dependency(pkg, "postboi")) return
 	const pm = detect_package_manager(files, pkg)
-	if (await prompts.confirm(`\nInstall ${bold("postboi")} with ${cyan(pm)}?`)) {
-		const { cmd, args } = install_command(pm, "postboi")
+	const dev = is_bundled_framework(files, pkg)
+	const hint = dev ? ` ${dim("(as a devDependency — bundled at build time)")}` : ""
+	if (await prompts.confirm(`\nInstall ${bold("postboi")} with ${cyan(pm)}?${hint}`)) {
+		const { cmd, args } = install_command(pm, "postboi", dev)
 		const result = run_push({ cmd, args })
 		if (result.ok) console.log(`${green("✓")} installed postboi`)
 		else console.log(`${red("✗")} ${result.reason} — run \`${cmd} ${args.join(" ")}\` yourself`)

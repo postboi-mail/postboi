@@ -1,6 +1,10 @@
 {
   "name": "postboi",
-  "version": "0.6.0",
+  "version": "0.6.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/darbymanning/postboi.git"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && npm run prepack",

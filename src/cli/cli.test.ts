@@ -9,7 +9,12 @@ import {
 } from "./providers.js"
 import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./env.js"
 import { detect_hosts, detect_adapter_host, push_spec, manual_hint } from "./deploy.js"
-import { detect_package_manager, has_dependency, install_command } from "./project.js"
+import {
+	detect_package_manager,
+	has_dependency,
+	install_command,
+	is_bundled_framework,
+} from "./project.js"
 import { create_prompts, PromptCancelledError } from "./prompts.js"
 import { banner } from "./banner.js"
 import { cloud_base, start_device_auth, poll_device_auth, CloudAuthError } from "./cloud.js"
@@ -215,6 +220,46 @@ describe("project detection", () => {
 		expect(install_command("bun", "postboi")).toEqual({ cmd: "bun", args: ["add", "postboi"] })
 		expect(install_command("pnpm", "postboi")).toEqual({ cmd: "pnpm", args: ["add", "postboi"] })
 		expect(install_command("npm", "postboi")).toEqual({ cmd: "npm", args: ["install", "postboi"] })
+	})
+
+	it("adds -D for a dev install with every manager", () => {
+		expect(install_command("bun", "postboi", true)).toEqual({
+			cmd: "bun",
+			args: ["add", "-D", "postboi"],
+		})
+		expect(install_command("pnpm", "postboi", true)).toEqual({
+			cmd: "pnpm",
+			args: ["add", "-D", "postboi"],
+		})
+		expect(install_command("yarn", "postboi", true)).toEqual({
+			cmd: "yarn",
+			args: ["add", "-D", "postboi"],
+		})
+		expect(install_command("npm", "postboi", true)).toEqual({
+			cmd: "npm",
+			args: ["install", "-D", "postboi"],
+		})
+	})
+
+	it("detects bundled frameworks from config file or packages", () => {
+		expect(is_bundled_framework(["svelte.config.js"])).toBe(true)
+		expect(is_bundled_framework(["svelte.config.ts"])).toBe(true)
+		expect(is_bundled_framework(["nuxt.config.ts"])).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { svelte: "^5" } })).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { "@sveltejs/kit": "^2" } })).toBe(true)
+		expect(is_bundled_framework([], { dependencies: { nuxt: "^4" } })).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { "@solidjs/start": "^1" } })).toBe(true)
+		expect(is_bundled_framework([], { dependencies: { "@tanstack/react-start": "^1" } })).toBe(true)
+		expect(is_bundled_framework([], { devDependencies: { "@analogjs/platform": "^1" } })).toBe(true)
+	})
+
+	it("leaves externalising frameworks (Next, Remix, Astro) as regular deps", () => {
+		expect(is_bundled_framework(["astro.config.mjs"], { dependencies: { astro: "^5" } })).toBe(
+			false
+		)
+		expect(is_bundled_framework(["next.config.js"], { dependencies: { next: "^15" } })).toBe(false)
+		expect(is_bundled_framework(["vite.config.ts"], { dependencies: { react: "^19" } })).toBe(false)
+		expect(is_bundled_framework([])).toBe(false)
 	})
 })
 

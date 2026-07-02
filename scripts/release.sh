@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Release the postboi library: bump → validate → commit → tag → publish → GitHub release.
+# Release the postboi library: bump → validate → commit → tag → push.
 # Usage: npm run release -- <patch|minor|major|X.Y.Z>
+#
+# Pushing the tag triggers the Publish workflow (.github/workflows/publish.yml),
+# which publishes to npm via trusted publishing (OIDC) and creates the GitHub
+# release — no npm or gh login needed here.
 #
 # This is library-only. Docs versioning (snapshotting content/v<version>) is a
 # separate step — see RELEASING.md.
@@ -17,8 +21,6 @@ fi
 branch="$(git rev-parse --abbrev-ref HEAD)"
 [ "$branch" = "main" ] || { echo "✗ release must run on main (currently on '$branch')" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "✗ working tree not clean — commit or stash first" >&2; exit 1; }
-npm whoami >/dev/null 2>&1 || { echo "✗ not logged in to npm — run: npm login" >&2; exit 1; }
-gh auth status >/dev/null 2>&1 || { echo "✗ not logged in to gh — run: gh auth login" >&2; exit 1; }
 
 # --- bump --------------------------------------------------------------------
 npm version "$BUMP" --no-git-tag-version >/dev/null
@@ -35,11 +37,10 @@ git add package.json
 git commit -m "$VERSION"
 git tag -a "$TAG" -m "$VERSION"
 
-# --- publish + push + GitHub release -----------------------------------------
-npm publish
+# --- push — the tag triggers the Publish workflow ------------------------------
 git push origin main
 git push origin "$TAG"
-gh release create "$TAG" --title "$VERSION" --generate-notes
 
-echo "✓ released $TAG — published postboi@$VERSION and created the GitHub release"
+echo "✓ tagged $TAG — the Publish workflow is publishing postboi@$VERSION and creating the GitHub release"
+echo "  watch it: https://github.com/darbymanning/postboi/actions/workflows/publish.yml"
 echo "  next: snapshot the docs for the outgoing version (see RELEASING.md)"
