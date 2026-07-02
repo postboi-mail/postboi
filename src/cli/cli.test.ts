@@ -12,6 +12,7 @@ import { detect_hosts, detect_adapter_host, push_spec, manual_hint } from "./dep
 import { detect_package_manager, has_dependency, install_command } from "./project.js"
 import { create_prompts, PromptCancelledError } from "./prompts.js"
 import { banner } from "./banner.js"
+import { cloud_base, start_device_auth, poll_device_auth, CloudAuthError } from "./cloud.js"
 
 describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
@@ -226,6 +227,84 @@ describe("banner", () => {
 
 	it("degrades to plain text when stdout isn't a TTY", () => {
 		expect(banner().includes("\x1b")).toBe(false) // no ANSI escape character
+	})
+})
+
+describe("cloud device flow", () => {
+	const json = (body: unknown, status = 200) =>
+		({
+			ok: status >= 200 && status < 300,
+			status,
+			json: async () => body,
+		}) as Response
+
+	const start = { code: "abc123", url: "https://postboi.email/cli?code=abc123" }
+
+	it("cloud_base defaults to postboi.email and honours POSTBOI_API_URL", () => {
+		const original = process.env.POSTBOI_API_URL
+		delete process.env.POSTBOI_API_URL
+		expect(cloud_base()).toBe("https://postboi.email")
+		process.env.POSTBOI_API_URL = "http://localhost:5173/"
+		expect(cloud_base()).toBe("http://localhost:5173") // trailing slash stripped
+		if (original === undefined) delete process.env.POSTBOI_API_URL
+		else process.env.POSTBOI_API_URL = original
+	})
+
+	it("start_device_auth returns the code and claim URL with defaults filled in", async () => {
+		const result = await start_device_auth("https://postboi.email", async () => json(start))
+		expect(result).toEqual({ ...start, expires_in: 600, interval: 2 })
+	})
+
+	it("start_device_auth wraps network and server failures in a friendly error", async () => {
+		await expect(
+			start_device_auth("https://postboi.email", async () => {
+				throw new Error("ECONNREFUSED")
+			})
+		).rejects.toBeInstanceOf(CloudAuthError)
+		await expect(
+			start_device_auth("https://postboi.email", async () => json({}, 500))
+		).rejects.toBeInstanceOf(CloudAuthError)
+	})
+
+	it("poll_device_auth polls until claimed and returns the token", async () => {
+		const responses = [
+			json({ status: "pending", interval: 2 }),
+			json({ status: "pending", interval: 2 }),
+			json({ status: "claimed", token: "pb_secret" }),
+		]
+		const token = await poll_device_auth(
+			"https://postboi.email",
+			{ ...start, expires_in: 600, interval: 2 },
+			{ fetch: async () => responses.shift()!, sleep: async () => {}, now: () => 0 }
+		)
+		expect(token).toBe("pb_secret")
+	})
+
+	it("poll_device_auth fails fast on an invalid or expired code", async () => {
+		await expect(
+			poll_device_auth(
+				"https://postboi.email",
+				{ ...start, expires_in: 600, interval: 2 },
+				{ fetch: async () => json({ error: "expired" }, 410), sleep: async () => {} }
+			)
+		).rejects.toBeInstanceOf(CloudAuthError)
+	})
+
+	it("poll_device_auth times out at the deadline", async () => {
+		let clock = 0
+		await expect(
+			poll_device_auth(
+				"https://postboi.email",
+				{ ...start, expires_in: 600, interval: 2 },
+				{
+					fetch: async () => json({ status: "pending", interval: 2 }),
+					sleep: async () => {
+						clock += 300_000
+					},
+					now: () => clock,
+				}
+			)
+		).rejects.toThrow(/timed out/i)
 	})
 })
 

@@ -26,10 +26,12 @@ import type { ProviderKey } from "./registry.js"
 export interface PostboiConfig {
 	/**
 	 * Provider key (`resend`, `mailgun`, …) for the zero-config `send()`. `POSTBOI_PROVIDER` wins.
-	 * `"mock"` is also accepted — a credential-free no-op that records instead of sending, handy
-	 * as a safe local default you override with `POSTBOI_PROVIDER` in production.
+	 * `"postboi"` is Postboi Cloud (usually unnecessary to set — a `POSTBOI_TOKEN` in the
+	 * environment already routes `send()` there). `"mock"` is a credential-free no-op that
+	 * records instead of sending, handy as a safe local default you override with
+	 * `POSTBOI_PROVIDER` in production.
 	 */
-	provider?: ProviderKey | "mock"
+	provider?: ProviderKey | "postboi" | "mock"
 	/** Default fields applied to every send. Merged under `POSTBOI_*` env vars, which win. */
 	default?: Defaults
 	/**

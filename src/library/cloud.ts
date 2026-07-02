@@ -13,7 +13,7 @@ export { mail } from "./mail.js"
 export type CloudOptions = CommonProviderOptions & {
 	/** Postboi Cloud token. Defaults to the `POSTBOI_TOKEN` environment variable. */
 	token?: string
-	/** Override the API base URL. Defaults to `POSTBOI_API_URL` or `https://api.postboi.email`. */
+	/** Override the API base URL. Defaults to `POSTBOI_API_URL` or `https://postboi.email`. */
 	base_url?: string
 }
 
@@ -72,7 +72,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		// explicitly via `default` wins.
 		super({ ...options, default: { ...env_defaults(), ...options.default } })
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
-		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://api.postboi.email"
+		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://postboi.email"
 		this.#url = `${host.replace(/\/$/, "")}/v1/send`
 	}
 

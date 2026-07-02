@@ -33,6 +33,7 @@ import {
 	red,
 } from "./prompts.js"
 import { banner } from "./banner.js"
+import { cloud_base, start_device_auth, poll_device_auth, open_browser } from "./cloud.js"
 
 const CONFIG_FILES = [
 	"postboi.config.ts",
@@ -40,6 +41,8 @@ const CONFIG_FILES = [
 	"postboi.config.js",
 	"postboi.config.mjs",
 ]
+
+type Prompts = ReturnType<typeof create_prompts>
 
 function version(): string {
 	try {
@@ -56,7 +59,7 @@ ${banner()}
 ${dim(`  v${version()}`)}
 
 ${bold("Usage")}
-  ${cyan("bunx postboi init")}     Configure a provider and write its env vars
+  ${cyan("bunx postboi init")}     Set up Postboi Cloud or a provider of your own
 
 ${bold("Options")}
   -h, --help        Show this help
@@ -93,6 +96,239 @@ function run_push(spec: ReturnType<typeof push_spec>): { ok: boolean; reason?: s
 	return { ok: true }
 }
 
+/** Pick the env file(s) to write secrets to (auto when only one is detected). */
+async function choose_env_targets(
+	prompts: Prompts,
+	files: Array<string>
+): Promise<Array<EnvTarget>> {
+	const detected = detect_env_targets(files)
+	if (detected.length === 1) return detected
+
+	const choice = await prompts.select<EnvTarget | "all">(`\n${bold("Write to which env file?")}`, [
+		...detected.map((t) => ({
+			label: t.file,
+			value: t as EnvTarget | "all",
+			hint: t.format,
+		})),
+		{ label: "All of them", value: "all" as const },
+	])
+	return choice === "all" ? detected : [choice]
+}
+
+/** Upsert each `KEY=value` into every target env file. */
+function write_env_values(targets: Array<EnvTarget>, values: Record<string, string>): void {
+	console.log()
+	for (const target of targets) {
+		let content = existsSync(target.file) ? readFileSync(target.file, "utf8") : ""
+		for (const [key, value] of Object.entries(values)) {
+			content = upsert_env(content, key, value, target.format)
+		}
+		writeFileSync(target.file, content)
+		console.log(`${green("✓")} wrote ${Object.keys(values).length} var(s) to ${bold(target.file)}`)
+		if (target.note) console.log(`  ${yellow("!")} ${target.note}`)
+	}
+}
+
+/** Offer to gitignore any env file that isn't covered yet. */
+async function offer_gitignore(prompts: Prompts, targets: Array<EnvTarget>): Promise<void> {
+	const gitignore = existsSync(".gitignore") ? readFileSync(".gitignore", "utf8") : ""
+	const unignored = targets.map((t) => t.file).filter((file) => !is_gitignored(gitignore, file))
+	if (
+		unignored.length > 0 &&
+		(await prompts.confirm(`\nAdd ${unignored.join(", ")} to .gitignore?`))
+	) {
+		appendFileSync(".gitignore", `\n${unignored.join("\n")}\n`)
+		console.log(`${green("✓")} updated ${bold(".gitignore")}`)
+	}
+}
+
+/**
+ * Offer to push the secrets to a deployment host — detected from config files *and* the
+ * SvelteKit adapter (svelte.config / vite.config / package.json), where the real signal lives.
+ */
+async function offer_host_push(
+	prompts: Prompts,
+	files: Array<string>,
+	values: Record<string, string>
+): Promise<void> {
+	const config_sources = [
+		"svelte.config.js",
+		"svelte.config.ts",
+		"vite.config.js",
+		"vite.config.ts",
+		"package.json",
+	]
+		.filter((f) => files.includes(f))
+		.map((f) => {
+			try {
+				return readFileSync(f, "utf8")
+			} catch {
+				return ""
+			}
+		})
+	const adapter_host = detect_adapter_host(config_sources)
+	const detected_hosts = Array.from(
+		new Set([...detect_hosts(files), ...(adapter_host ? [adapter_host] : [])])
+	)
+	let host: Host | undefined
+	if (detected_hosts.length > 0) {
+		const picked = await prompts.select<Host | "skip">(`\n${bold("Push these to a host?")}`, [
+			...detected_hosts.map((h) => ({
+				label: HOST_LABEL[h],
+				value: h as Host | "skip",
+				hint: "detected",
+			})),
+			{ label: "Skip", value: "skip" as const },
+		])
+		if (picked !== "skip") host = picked
+	} else {
+		const picked = await prompts.select<Host | "skip">(
+			`\n${dim("No deployment detected.")} ${bold("Push to a host anyway?")}`,
+			[
+				{ label: "Vercel", value: "vercel" as Host | "skip" },
+				{ label: "Cloudflare (wrangler)", value: "cloudflare" as const },
+				{ label: "Netlify", value: "netlify" as const },
+				{ label: "Railway", value: "railway" as const },
+				{ label: "Skip", value: "skip" as const },
+			]
+		)
+		if (picked !== "skip") host = picked
+	}
+
+	if (host && !is_on_path(HOST_CLI[host])) {
+		// CLI isn't installed — warn once and print the manual commands rather than
+		// failing on every var.
+		console.log(`\n${yellow("!")} ${bold(HOST_CLI[host])} not found on PATH — skipping env push.`)
+		console.log(`  ${dim("install it, then run:")}`)
+		for (const key of Object.keys(values)) console.log(`    ${manual_hint(host, key)}`)
+	} else if (host) {
+		console.log(`\n${dim(`Pushing to ${HOST_LABEL[host]}…`)}`)
+		for (const [key, value] of Object.entries(values)) {
+			const result = run_push(push_spec(host, key, value))
+			if (result.ok) {
+				console.log(`${green("✓")} ${key}`)
+			} else {
+				console.log(`${red("✗")} ${key} — ${result.reason}`)
+				console.log(`  ${dim("run it yourself:")} ${manual_hint(host, key)}`)
+			}
+		}
+	}
+}
+
+/** Make sure postboi itself is installed in the project. */
+async function offer_install(prompts: Prompts, files: Array<string>): Promise<void> {
+	if (!existsSync("package.json")) return
+	const pkg = JSON.parse(readFileSync("package.json", "utf8"))
+	if (has_dependency(pkg, "postboi")) return
+	const pm = detect_package_manager(files, pkg)
+	if (await prompts.confirm(`\nInstall ${bold("postboi")} with ${cyan(pm)}?`)) {
+		const { cmd, args } = install_command(pm, "postboi")
+		const result = run_push({ cmd, args })
+		if (result.ok) console.log(`${green("✓")} installed postboi`)
+		else console.log(`${red("✗")} ${result.reason} — run \`${cmd} ${args.join(" ")}\` yourself`)
+	}
+}
+
+/**
+ * Postboi Cloud onboarding: authorise this device in the browser, then write the
+ * resulting `POSTBOI_TOKEN`. No provider account, no DNS, no config file.
+ */
+async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void> {
+	const base = cloud_base()
+	const start = await start_device_auth(base)
+
+	console.log(`\n${bold("Authorise this device in your browser:")}\n`)
+	console.log(`  ${cyan(start.url)}\n`)
+	if (open_browser(start.url)) console.log(dim("  (opening in your default browser)"))
+	console.log(dim("\nWaiting for authorisation…"))
+
+	const token = await poll_device_auth(base, start)
+	console.log(`${green("✓")} device authorised`)
+
+	const values = { POSTBOI_TOKEN: token }
+	const targets = await choose_env_targets(prompts, files)
+	write_env_values(targets, values)
+	await offer_gitignore(prompts, targets)
+	await offer_host_push(prompts, files, values)
+	await offer_install(prompts, files)
+
+	console.log(`\n${green(bold("Done!"))} No config file needed — just send:\n`)
+	console.log(
+		dim('import { mail } from "postboi"\n\nawait mail({ to: "…", subject: "…", body: "…" })') + "\n"
+	)
+	console.log(
+		dim(
+			"Emails send from your account's send.postboi.email address — set reply_to to receive replies. Verify a domain in the dashboard to send from your own."
+		) + "\n"
+	)
+}
+
+/** Bring-your-own-provider onboarding: pick a provider, collect creds, write config. */
+async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
+	// 1. Choose a provider
+	const provider = await prompts.select<CliProvider>(
+		bold("Which provider?"),
+		PROVIDERS.map((p) => ({ label: p.name, value: p }))
+	)
+
+	// 2. Collect credentials. Secrets go to the env file; everything non-secret is committed
+	// to postboi.config.ts — so the best case is a single env var (the API key).
+	console.log(`\n${dim("Get your credentials at")} ${cyan(provider.url)}\n`)
+	const values: Record<string, string> = {} // secrets → env file
+	const config_options: Record<string, string> = {} // non-secrets → config file
+	for (const field of provider.fields) {
+		const value = await prompts.ask(`${field.label} ${dim(`(${field.env})`)}`, {
+			required: field.default === undefined,
+			default: field.default,
+		})
+		if (field.secret) values[field.env] = value
+		else if (value) config_options[field.arg] = value
+	}
+
+	// 2b. Optional default fields (committed to config, not env)
+	const config_defaults: Record<string, string> = {}
+	if (await prompts.confirm(`\nSet ${bold("default")} from / to / reply-to / cc / bcc?`)) {
+		for (const field of DEFAULT_FIELDS) {
+			const value = await prompts.ask(`${field.label} ${dim("(optional)")}`)
+			if (value) config_defaults[field.arg] = value
+		}
+	}
+
+	// 3–6. Write env vars, gitignore them, offer a host push
+	const targets = await choose_env_targets(prompts, files)
+	write_env_values(targets, values)
+	await offer_gitignore(prompts, targets)
+	await offer_host_push(prompts, files, values)
+
+	// 7. Make sure postboi itself is installed
+	await offer_install(prompts, files)
+
+	// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
+	console.log()
+	const config_source = render_config(provider.key, config_defaults, config_options)
+	const existing_config = CONFIG_FILES.find((f) => existsSync(f))
+	if (existing_config) {
+		// Don't clobber a hand-edited file — show what to merge in instead.
+		console.log(`${yellow("!")} ${bold(existing_config)} already exists — add to it:`)
+		console.log(dim(`\n  provider: ${JSON.stringify(provider.key)},`))
+		if (Object.keys(config_defaults).length)
+			console.log(dim(`  ${render_block("default", config_defaults, "  ").trimEnd()}`))
+		if (Object.keys(config_options).length)
+			console.log(dim(`  ${render_block("options", config_options, "  ").trimEnd()}`))
+	} else {
+		writeFileSync("postboi.config.ts", config_source)
+		console.log(`${green("✓")} wrote ${bold("postboi.config.ts")}`)
+	}
+
+	// 8. Done — show how to use it
+	console.log(`\n${green(bold("Done!"))} Now just send — no setup, no instance:\n`)
+	console.log(
+		dim('import { send } from "postboi"\n\nawait send({ to: "…", subject: "…", body: "…" })') + "\n"
+	)
+	console.log(`${dim("…or construct the provider yourself:")}\n`)
+	console.log(dim(usage_snippet(provider)) + "\n")
+}
+
 async function init(): Promise<void> {
 	const prompts = create_prompts()
 	console.log()
@@ -102,185 +338,20 @@ async function init(): Promise<void> {
 	const files = readdirSync(cwd())
 
 	try {
-		// 1. Choose a provider
-		const provider = await prompts.select<CliProvider>(
-			bold("Which provider?"),
-			PROVIDERS.map((p) => ({ label: p.name, value: p }))
-		)
-
-		// 2. Collect credentials. Secrets go to the env file; everything non-secret is committed
-		// to postboi.config.ts — so the best case is a single env var (the API key).
-		console.log(`\n${dim("Get your credentials at")} ${cyan(provider.url)}\n`)
-		const values: Record<string, string> = {} // secrets → env file
-		const config_options: Record<string, string> = {} // non-secrets → config file
-		for (const field of provider.fields) {
-			const value = await prompts.ask(`${field.label} ${dim(`(${field.env})`)}`, {
-				required: field.default === undefined,
-				default: field.default,
-			})
-			if (field.secret) values[field.env] = value
-			else if (value) config_options[field.arg] = value
-		}
-
-		// 2b. Optional default fields (committed to config, not env)
-		const config_defaults: Record<string, string> = {}
-		if (await prompts.confirm(`\nSet ${bold("default")} from / to / reply-to / cc / bcc?`)) {
-			for (const field of DEFAULT_FIELDS) {
-				const value = await prompts.ask(`${field.label} ${dim("(optional)")}`)
-				if (value) config_defaults[field.arg] = value
-			}
-		}
-
-		// 3. Pick env target(s)
-		const detected = detect_env_targets(files)
-		let targets: Array<EnvTarget>
-		if (detected.length === 1) {
-			targets = detected
-		} else {
-			const choice = await prompts.select<EnvTarget | "all">(
-				`\n${bold("Write to which env file?")}`,
-				[
-					...detected.map((t) => ({
-						label: t.file,
-						value: t as EnvTarget | "all",
-						hint: t.format,
-					})),
-					{ label: "All of them", value: "all" as const },
-				]
-			)
-			targets = choice === "all" ? detected : [choice]
-		}
-
-		// 4. Write env vars
-		console.log()
-		for (const target of targets) {
-			let content = existsSync(target.file) ? readFileSync(target.file, "utf8") : ""
-			for (const [key, value] of Object.entries(values)) {
-				content = upsert_env(content, key, value, target.format)
-			}
-			writeFileSync(target.file, content)
-			console.log(
-				`${green("✓")} wrote ${Object.keys(values).length} var(s) to ${bold(target.file)}`
-			)
-			if (target.note) console.log(`  ${yellow("!")} ${target.note}`)
-		}
-
-		// 5. Ensure secrets are gitignored
-		const gitignore = existsSync(".gitignore") ? readFileSync(".gitignore", "utf8") : ""
-		const unignored = targets.map((t) => t.file).filter((file) => !is_gitignored(gitignore, file))
-		if (
-			unignored.length > 0 &&
-			(await prompts.confirm(`\nAdd ${unignored.join(", ")} to .gitignore?`))
-		) {
-			appendFileSync(".gitignore", `\n${unignored.join("\n")}\n`)
-			console.log(`${green("✓")} updated ${bold(".gitignore")}`)
-		}
-
-		// 6. Push to a deployment host — detect from config files *and* the SvelteKit adapter
-		// (svelte.config / vite.config / package.json), which is where the real signal lives.
-		const config_sources = [
-			"svelte.config.js",
-			"svelte.config.ts",
-			"vite.config.js",
-			"vite.config.ts",
-			"package.json",
-		]
-			.filter((f) => files.includes(f))
-			.map((f) => {
-				try {
-					return readFileSync(f, "utf8")
-				} catch {
-					return ""
-				}
-			})
-		const adapter_host = detect_adapter_host(config_sources)
-		const detected_hosts = Array.from(
-			new Set([...detect_hosts(files), ...(adapter_host ? [adapter_host] : [])])
-		)
-		let host: Host | undefined
-		if (detected_hosts.length > 0) {
-			const picked = await prompts.select<Host | "skip">(`\n${bold("Push these to a host?")}`, [
-				...detected_hosts.map((h) => ({
-					label: HOST_LABEL[h],
-					value: h as Host | "skip",
-					hint: "detected",
-				})),
-				{ label: "Skip", value: "skip" as const },
-			])
-			if (picked !== "skip") host = picked
-		} else {
-			const picked = await prompts.select<Host | "skip">(
-				`\n${dim("No deployment detected.")} ${bold("Push to a host anyway?")}`,
-				[
-					{ label: "Vercel", value: "vercel" as Host | "skip" },
-					{ label: "Cloudflare (wrangler)", value: "cloudflare" as const },
-					{ label: "Netlify", value: "netlify" as const },
-					{ label: "Railway", value: "railway" as const },
-					{ label: "Skip", value: "skip" as const },
-				]
-			)
-			if (picked !== "skip") host = picked
-		}
-
-		if (host && !is_on_path(HOST_CLI[host])) {
-			// CLI isn't installed — warn once and print the manual commands rather than
-			// failing on every var.
-			console.log(`\n${yellow("!")} ${bold(HOST_CLI[host])} not found on PATH — skipping env push.`)
-			console.log(`  ${dim("install it, then run:")}`)
-			for (const key of Object.keys(values)) console.log(`    ${manual_hint(host, key)}`)
-		} else if (host) {
-			console.log(`\n${dim(`Pushing to ${HOST_LABEL[host]}…`)}`)
-			for (const [key, value] of Object.entries(values)) {
-				const result = run_push(push_spec(host, key, value))
-				if (result.ok) {
-					console.log(`${green("✓")} ${key}`)
-				} else {
-					console.log(`${red("✗")} ${key} — ${result.reason}`)
-					console.log(`  ${dim("run it yourself:")} ${manual_hint(host, key)}`)
-				}
-			}
-		}
-
-		// 7. Make sure postboi itself is installed
-		if (existsSync("package.json")) {
-			const pkg = JSON.parse(readFileSync("package.json", "utf8"))
-			if (!has_dependency(pkg, "postboi")) {
-				const pm = detect_package_manager(files, pkg)
-				if (await prompts.confirm(`\nInstall ${bold("postboi")} with ${cyan(pm)}?`)) {
-					const { cmd, args } = install_command(pm, "postboi")
-					const result = run_push({ cmd, args })
-					if (result.ok) console.log(`${green("✓")} installed postboi`)
-					else
-						console.log(`${red("✗")} ${result.reason} — run \`${cmd} ${args.join(" ")}\` yourself`)
-				}
-			}
-		}
-
-		// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
-		console.log()
-		const config_source = render_config(provider.key, config_defaults, config_options)
-		const existing_config = CONFIG_FILES.find((f) => existsSync(f))
-		if (existing_config) {
-			// Don't clobber a hand-edited file — show what to merge in instead.
-			console.log(`${yellow("!")} ${bold(existing_config)} already exists — add to it:`)
-			console.log(dim(`\n  provider: ${JSON.stringify(provider.key)},`))
-			if (Object.keys(config_defaults).length)
-				console.log(dim(`  ${render_block("default", config_defaults, "  ").trimEnd()}`))
-			if (Object.keys(config_options).length)
-				console.log(dim(`  ${render_block("options", config_options, "  ").trimEnd()}`))
-		} else {
-			writeFileSync("postboi.config.ts", config_source)
-			console.log(`${green("✓")} wrote ${bold("postboi.config.ts")}`)
-		}
-
-		// 8. Done — show how to use it
-		console.log(`\n${green(bold("Done!"))} Now just send — no setup, no instance:\n`)
-		console.log(
-			dim('import { send } from "postboi"\n\nawait send({ to: "…", subject: "…", body: "…" })') +
-				"\n"
-		)
-		console.log(`${dim("…or construct the provider yourself:")}\n`)
-		console.log(dim(usage_snippet(provider)) + "\n")
+		const mode = await prompts.select<"cloud" | "byo">(bold("How do you want to send?"), [
+			{
+				label: "Postboi Cloud",
+				value: "cloud",
+				hint: "zero config — sign in and start sending",
+			},
+			{
+				label: "Bring your own provider",
+				value: "byo",
+				hint: "Resend, SES, Mailgun, Postmark, …",
+			},
+		])
+		if (mode === "cloud") await cloud_init(prompts, files)
+		else await byo_init(prompts, files)
 	} finally {
 		prompts.close()
 	}

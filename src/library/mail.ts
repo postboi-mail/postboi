@@ -39,6 +39,9 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 		import("./microsoft365.js").then((m) => m.default as unknown as ProviderConstructor),
 	smtp: () => import("./smtp.js").then((m) => m.default as unknown as ProviderConstructor),
 	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
+	// Postboi Cloud. Not in the registry (its only credential is POSTBOI_TOKEN, which the
+	// provider reads itself) — a token in the environment routes send() here automatically.
+	postboi: () => import("./cloud.js").then((m) => m.default as unknown as ProviderConstructor),
 	// Credential-free no-op — handy as a safe local default (`provider: "mock"`) that records
 	// instead of sending. Deliberately absent from the registry so `postboi init` won't offer it.
 	mock: () => import("./mock.js").then((m) => m.default as unknown as ProviderConstructor),
@@ -51,13 +54,18 @@ async function resolve_provider(): Promise<ProviderBase<unknown>> {
 	const config = await load_config()
 	// Make `.env` values visible in dev (SvelteKit etc. don't put them on process.env).
 	await ensure_env_loaded()
-	const key = read_env("POSTBOI_PROVIDER") ?? config.provider
+	// A POSTBOI_TOKEN alone is enough to send: with nothing else configured, dispatch to
+	// Postboi Cloud — the zero-config path `bunx postboi init` sets up.
+	const key =
+		read_env("POSTBOI_PROVIDER") ??
+		config.provider ??
+		(read_env("POSTBOI_TOKEN") ? "postboi" : undefined)
 	if (!key) {
 		throw new PostboiError({
 			provider: "postboi",
 			code: "no_provider",
 			message:
-				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_PROVIDER), set `provider` in postboi.config.ts, or import one directly, e.g. `import Resend from "postboi/resend"`.',
+				'No provider configured. Run `bunx postboi init` (it sets POSTBOI_TOKEN or POSTBOI_PROVIDER), set `provider` in postboi.config.ts, or import one directly, e.g. `import Resend from "postboi/resend"`.',
 		})
 	}
 
