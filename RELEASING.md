@@ -9,8 +9,14 @@ The library release is scripted. The docs snapshot is a short manual step becaus
 
 ## Prerequisites (one-time)
 
-- `npm login` — publish rights to `postboi`.
-- `gh auth login` — creating the GitHub release.
+- A **trusted publisher** configured on npmjs.com so the Publish workflow can
+  publish without a token: package settings for `postboi` → _Trusted Publisher_
+  → GitHub Actions, with organization/user `darbymanning`, repository
+  `postboi`, and workflow filename `publish.yml`.
+
+No local `npm login` or `gh auth login` needed — publishing and the GitHub
+release happen in CI ([`publish.yml`](.github/workflows/publish.yml)),
+authenticated via OIDC.
 
 ## Steps
 
@@ -67,15 +73,21 @@ npm run release -- X.Y.Z      # or: patch | minor | major
 The script ([`scripts/release.sh`](scripts/release.sh)) does, failing fast if
 anything is off:
 
-1. Checks you're on `main`, tree is clean, and npm + gh are authenticated.
+1. Checks you're on `main` and the tree is clean.
 2. Bumps `package.json` to `X.Y.Z`.
 3. Runs `npm test` and `npm run build` (build runs `publint` on the package).
 4. Commits `X.Y.Z`, tags `vX.Y.Z`.
-5. `npm publish`.
-6. Pushes `main` and the tag, then `gh release create vX.Y.Z --generate-notes`.
+5. Pushes `main` and the tag.
+
+Pushing the tag triggers the **Publish** workflow
+([`publish.yml`](.github/workflows/publish.yml)), which re-runs tests and the
+build, checks the tag matches `package.json`, publishes to npm via trusted
+publishing (OIDC, with provenance), and creates the GitHub release with
+generated notes.
 
 ### C. Verify
 
+- The [Publish run](https://github.com/darbymanning/postboi/actions/workflows/publish.yml) is green.
 - `npm view postboi version` shows `X.Y.Z`.
 - The GitHub release exists at `vX.Y.Z`.
 - The docs site shows the new version as latest and archived versions still load.
