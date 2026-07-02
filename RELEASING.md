@@ -85,6 +85,12 @@ build, checks the tag matches `package.json`, publishes to npm via trusted
 publishing (OIDC, with provenance), and creates the GitHub release with
 generated notes.
 
+If tags can't be pushed from where you're releasing (e.g. a remote sandbox
+whose git proxy only allows branch pushes), push `main` with the version-bump
+commit and trigger the Publish workflow manually on `main` instead
+(`workflow_dispatch`) — it derives the tag from `package.json` and creates
+both the tag and the release itself.
+
 ### C. Verify
 
 - The [Publish run](https://github.com/darbymanning/postboi/actions/workflows/publish.yml) is green.
