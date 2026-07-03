@@ -19,6 +19,10 @@ in the table:
 
 Values can be base64-encoded; they'll be decoded automatically.
 
+Set `_reply_to` to the submitter's email so replies go back to them instead of your
+`from` address — see the [SvelteKit form](/sveltekit#the-form) for the hidden-field
+pattern.
+
 ## Grouped fields
 
 Use the `fieldset→field` syntax to group related fields into sections:

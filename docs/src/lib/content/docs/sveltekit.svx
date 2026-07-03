@@ -21,16 +21,23 @@ Point a `multipart/form-data` form at the action. Field names use the
 [`fieldset→field`](/formdata#grouped-fields) syntax to group related fields, and
 `_subject` (and friends) set the email's [special fields](/formdata#special-fields).
 
+Wire up a hidden `_reply_to` field bound to the sender's email. Then, when the
+notification lands in your inbox, hitting **Reply** goes straight back to the person who
+filled in the form — not to your no-reply `from` address.
+
 ```svelte
 <!-- +page.svelte -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
+
+	let email = $state('');
 </script>
 
 <form method="POST" use:enhance enctype="multipart/form-data">
 	<input type="hidden" name="_subject" value="Contact Form" />
+	<input type="hidden" name="_reply_to" value={email} />
 	<input name="contact→name" placeholder="Name" required />
-	<input name="contact→email" type="email" placeholder="Email" required />
+	<input name="contact→email" type="email" placeholder="Email" required bind:value={email} />
 	<textarea name="details→message" placeholder="Message"></textarea>
 	<input type="file" name="details→attachments" multiple />
 	<button type="submit">Send</button>
@@ -39,6 +46,9 @@ Point a `multipart/form-data` form at the action. Field names use the
 
 The submitted `FormData` becomes a tidy HTML table in the email body. See
 [FormData](/formdata) for how the table is built.
+
+A full, runnable version of this form lives in
+[`examples/sveltekit`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit).
 
 ## Using a configured instance
 

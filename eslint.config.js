@@ -11,7 +11,7 @@ const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url))
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
-	globalIgnores(["src/components/ui/**", "docs/**", ".claude/**"]),
+	globalIgnores(["src/components/ui/**", "docs/**", "examples/**", ".claude/**"]),
 	js.configs.recommended,
 	...ts.configs.recommended,
 	...svelte.configs.recommended,
