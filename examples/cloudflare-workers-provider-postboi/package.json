@@ -1,0 +1,19 @@
+{
+	"name": "postboi-example-cloudflare-workers-provider-postboi",
+	"private": true,
+	"type": "module",
+	"version": "0.0.0",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"start": "wrangler dev"
+	},
+	"dependencies": {
+		"postboi": "^0.9.4"
+	},
+	"devDependencies": {
+		"wrangler": "^4.0.0",
+		"@cloudflare/workers-types": "^4.20250101.0",
+		"typescript": "^5.9.0"
+	}
+}

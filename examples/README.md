@@ -29,10 +29,15 @@ All on Postboi Cloud, each using its framework's server handler to call `mail({ 
 - [`remix-provider-postboi`](./remix-provider-postboi) — Remix, via a route `action`.
 - [`hono-provider-postboi`](./hono-provider-postboi) — Hono on Bun (framework-agnostic,
   Web-standard `Request`/`FormData`).
+- [`express-provider-postboi`](./express-provider-postboi) — Express (plain JS). Shows the
+  one place the pattern differs: parse multipart with `multer`, then rebuild a `FormData`.
+- [`cloudflare-workers-provider-postboi`](./cloudflare-workers-provider-postboi) — a Worker.
+  No filesystem or ambient env, so the token comes from the `env` binding: `new Postboi({ token })`.
 
 ## Scripts
 
-- [`scripts`](./scripts) — plain Bun/Node scripts, no framework: [bulk sending](./scripts/bulk.ts)
-  and [scheduling](./scripts/scheduling.ts).
+- [`scripts`](./scripts) — plain Bun/Node scripts, no framework:
+  [transactional](./scripts/transactional.ts), [bulk sending](./scripts/bulk.ts), and
+  [scheduling](./scripts/scheduling.ts).
 
 Want another framework or provider? PRs welcome.

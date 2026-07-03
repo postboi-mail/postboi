@@ -1,7 +1,9 @@
 # Postboi scripts
 
-Plain Bun/Node scripts for two library features from the docs — no framework involved.
+Plain Bun/Node scripts — no framework, no form. Just call `mail()` from your backend.
 
+- [`transactional.ts`](./transactional.ts) — the simplest send: one `mail({ to, subject, body })`
+  (a welcome email, a receipt, a reset link).
 - [`bulk.ts`](./bulk.ts) — send an array of messages with bounded concurrency
   ([Bulk sending](https://docs.postboi.email/bulk)).
 - [`scheduling.ts`](./scheduling.ts) — send later with `scheduled_at`
@@ -12,6 +14,7 @@ Plain Bun/Node scripts for two library features from the docs — no framework i
 ```bash
 bunx postboi init   # or: cp .env.example .env and fill in POSTBOI_TOKEN
 bun install
+bun run transactional
 bun run bulk
 bun run schedule
 ```

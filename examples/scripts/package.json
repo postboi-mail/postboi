@@ -4,6 +4,7 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
+		"transactional": "bun transactional.ts",
 		"bulk": "bun bulk.ts",
 		"schedule": "bun scheduling.ts"
 	},

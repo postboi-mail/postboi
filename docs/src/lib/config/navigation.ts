@@ -57,6 +57,8 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "nuxt", name: "Nuxt (Vue)" },
 					{ slug: "remix", name: "Remix" },
 					{ slug: "hono", name: "Hono" },
+					{ slug: "express", name: "Express" },
+					{ slug: "cloudflare-workers", name: "Cloudflare Workers" },
 				],
 			},
 			{

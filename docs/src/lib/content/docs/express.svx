@@ -1,0 +1,41 @@
+---
+title: Express
+name: Express
+description: Send email from an Express route — parse multipart with multer, then mail().
+category: Frameworks
+---
+
+Express doesn't hand you a Web `FormData`, so parse the multipart body with
+[`multer`](https://github.com/expressjs/multer) and rebuild a `FormData` for
+[`mail()`](/api). Postboi then extracts the [special fields](/formdata#special-fields) and
+renders the rest into a tidy HTML table.
+
+```typescript
+// src/server.js
+import express from 'express';
+import multer from 'multer';
+import { mail } from 'postboi';
+
+const app = express();
+const form = multer(); // parses multipart/form-data text fields onto req.body
+
+app.post('/contact', form.none(), async (req, res) => {
+	// req.body is a plain object, not a Web FormData — rebuild one for postboi.
+	const body = new FormData();
+	for (const [key, value] of Object.entries(req.body)) body.append(key, String(value));
+
+	await mail({ body });
+	res.redirect(303, '/?sent=1');
+});
+
+app.listen(3000);
+```
+
+Point a `multipart/form-data` form at `/contact`. Include hidden `_subject` and `_reply_to`
+fields, and mirror the email into `_reply_to` with a one-line `oninput` so replying reaches
+the sender. Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax.
+
+The provider and default recipient come from [`postboi.config.js`](/config) — a
+`POSTBOI_TOKEN` routes to [Postboi Cloud](/cloud), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/express-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/express-provider-postboi).

@@ -1,0 +1,4 @@
+# Copy this file to `.dev.vars` for local `wrangler dev`. In production, set it as a secret:
+#   npx wrangler secret put POSTBOI_TOKEN
+# Get a token at https://postboi.email
+POSTBOI_TOKEN=
