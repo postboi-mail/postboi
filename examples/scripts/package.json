@@ -1,0 +1,13 @@
+{
+	"name": "postboi-example-scripts",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"bulk": "bun bulk.ts",
+		"schedule": "bun scheduling.ts"
+	},
+	"devDependencies": {
+		"postboi": "^0.9.4"
+	}
+}

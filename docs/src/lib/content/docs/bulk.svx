@@ -65,3 +65,5 @@ order.
 > `before.send` runs per recipient (so suppression and staging redirects still work). On the
 > native-batch path, `after.send` / `on.error` fire per recipient only when a provider has no
 > batch endpoint and falls back to fan-out.
+
+Each message can also carry its own [`scheduled_at`](/scheduling) to send it later.

@@ -58,6 +58,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "hooks", name: "Hooks" },
 					{ slug: "errors", name: "Errors & retries" },
 					{ slug: "bulk", name: "Bulk sending" },
+					{ slug: "scheduling", name: "Scheduling" },
 				],
 			},
 			{

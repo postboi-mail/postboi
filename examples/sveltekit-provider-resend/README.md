@@ -1,7 +1,7 @@
-# SvelteKit × Postboi Cloud
+# SvelteKit × Resend
 
-A minimal contact form wired to [Postboi](https://github.com/darbymanning/postboi), running
-on [Postboi Cloud](https://postboi.dev) so it can also show off the **typed `from`**.
+A minimal contact form wired to [Postboi](https://github.com/darbymanning/postboi) using
+[Resend](https://resend.com) as the provider.
 
 It demonstrates the two ways to send:
 
@@ -14,11 +14,15 @@ The contact form posts `multipart/form-data`, which Postboi turns into a tidy HT
 the email body. A hidden `_reply_to` field is bound to the sender's email, so replying to
 the notification goes straight back to them — not to your `from` address.
 
+> This is the plain API-key counterpart to
+> [`sveltekit-provider-postboi`](../sveltekit-provider-postboi). The code is identical — only
+> the provider and its secret differ. Postboi Cloud additionally gives you a typed `from`;
+> with Resend you verify your domain in their dashboard instead.
+
 ## Set up
 
-One command does the lot — authenticates you to Postboi Cloud, writes `POSTBOI_TOKEN` to
-your `.env`, generates the typed `from` (see below), and adds a `postboi sync` step to your
-`prepare` script so those types survive reinstalls:
+Run `init` and pick **Resend** — it collects your API key, writes it to `.env`, and drops a
+`postboi.config.ts`:
 
 ```bash
 bunx postboi init
@@ -33,8 +37,8 @@ bun dev
 
 Open http://localhost:5173 and submit the form.
 
-Already have a token? Skip `init`, drop it in `.env` (`cp .env.example .env`), and run
-`bunx postboi sync` to fetch your `from` types.
+Prefer to do it by hand? `cp .env.example .env`, add your `RESEND_API_KEY`, and set your
+verified `from` in [`postboi.config.ts`](./postboi.config.ts).
 
 ## The two sends
 
@@ -65,38 +69,20 @@ await mail({
 
 Same provider (from `postboi.config.ts`), just full control over the message.
 
-## Typed `from`
+## The `from` address
 
-Because this example runs on Postboi Cloud, `bunx postboi sync` narrows `from` to your
-account's verified sending addresses — everywhere it appears: the config default, the kit
-action, and every top-level `mail()` call. Pick a domain you don't own and it won't compile:
-
-```ts
-import { mail } from "postboi"
-
-// ✅ one of your Cloud domains
-await mail({ from: "Acme <hello@acme.example>", to: "you@example.com", subject: "Hi", body: "…" })
-
-// @ts-expect-error — not one of your verified Cloud domains
-await mail({ from: "hello@totally-not-your-domain.example", to: "you@example.com", subject: "Hi", body: "…" })
-```
-
-Those types live *inside* `node_modules/postboi`, written from your account's domains — so
-there's nothing to commit or gitignore, and `prepare` re-runs `sync` after installs. It just
-works once you've run `bunx postboi init`.
-
-> Prefer a plain API-key provider like Resend? See
-> [`sveltekit-provider-resend`](../sveltekit-provider-resend) — same code, different provider.
-> Cloud is used here specifically to demo the typed `from`.
+Resend only sends from domains you've verified in their dashboard, so set `from` to an
+address on one of yours — in `postboi.config.ts` (the default applied to every send) or per
+message. It accepts a display name: `"Acme <hello@yourdomain.com>"` arrives as **Acme**.
 
 ## How it works
 
-- [`postboi.config.ts`](./postboi.config.ts) — selects Postboi Cloud and sets the `from` /
-  `to` defaults applied to every send.
+- [`postboi.config.ts`](./postboi.config.ts) — selects Resend and sets the `from` / `to`
+  defaults applied to every send. The `RESEND_API_KEY` is read from `.env`.
 - [`src/routes/+page.server.ts`](./src/routes/+page.server.ts) — the contact form's backend:
   `export const actions = { default: mail }`.
 - [`src/routes/+page.svelte`](./src/routes/+page.svelte) — the contact form. Field names use
   the [`fieldset→field`](https://postboi.dev/formdata#grouped-fields) syntax, `_subject` sets
   the subject, and `_reply_to` is bound to the sender's email.
 - [`src/routes/welcome/+page.server.ts`](./src/routes/welcome/+page.server.ts) — the same
-  provider, sent via a hand-built top-level `mail()` call with a typed `from`.
+  provider, sent via a hand-built top-level `mail()` call.
