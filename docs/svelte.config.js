@@ -126,12 +126,213 @@ const versionScopedLinks = () => (tree, file) => {
 	visit(tree)
 }
 
+// A Shiki port of Aura Soft Dark (https://github.com/daltonmenezes/aura-theme) — the Aura
+// palette mapped onto TextMate scopes. Used for code blocks in both light and dark mode.
+const aura = {
+	bg: "#21202e",
+	fg: "#edecee",
+	purple: "#a277ff",
+	green: "#61ffca",
+	orange: "#ffca85",
+	blue: "#82e2ff",
+	pink: "#f694ff",
+	red: "#ff6767",
+	gray: "#6d6d6d",
+}
+const auraSoftDark = {
+	name: "aura-soft-dark",
+	type: "dark",
+	colors: {
+		"editor.background": aura.bg,
+		"editor.foreground": aura.fg,
+	},
+	tokenColors: [
+		{
+			scope: ["comment", "punctuation.definition.comment"],
+			settings: { foreground: aura.gray, fontStyle: "italic" },
+		},
+		{
+			scope: ["string", "string.quoted", "punctuation.definition.string", "string.template"],
+			settings: { foreground: aura.green },
+		},
+		{
+			scope: [
+				"constant.numeric",
+				"constant.language",
+				"constant.language.boolean",
+				"constant.character",
+				"constant.other",
+				"support.constant",
+			],
+			settings: { foreground: aura.orange },
+		},
+		{
+			scope: [
+				"keyword",
+				"keyword.control",
+				"keyword.operator.new",
+				"keyword.operator.expression",
+				"storage",
+				"storage.type",
+				"storage.modifier",
+			],
+			settings: { foreground: aura.purple },
+		},
+		{ scope: ["keyword.operator"], settings: { foreground: aura.fg } },
+		{
+			scope: [
+				"entity.name.function",
+				"support.function",
+				"meta.function-call",
+				"meta.function-call.generic",
+			],
+			settings: { foreground: aura.blue },
+		},
+		{
+			scope: [
+				"entity.name.type",
+				"entity.name.class",
+				"support.type",
+				"support.class",
+				"entity.other.inherited-class",
+				"meta.type",
+			],
+			settings: { foreground: aura.orange },
+		},
+		{
+			scope: ["variable", "variable.other", "variable.parameter", "meta.definition.variable"],
+			settings: { foreground: aura.fg },
+		},
+		{
+			scope: ["variable.language", "variable.language.this", "keyword.other.this"],
+			settings: { foreground: aura.purple },
+		},
+		{
+			scope: ["entity.name.tag", "punctuation.definition.tag", "meta.tag"],
+			settings: { foreground: aura.purple },
+		},
+		{ scope: ["entity.other.attribute-name"], settings: { foreground: aura.green } },
+		{
+			scope: ["support.type.property-name", "meta.object-literal.key", "variable.other.property"],
+			settings: { foreground: aura.fg },
+		},
+		{ scope: ["string.regexp", "constant.character.escape"], settings: { foreground: aura.pink } },
+		{
+			scope: ["punctuation", "meta.brace", "punctuation.separator", "punctuation.terminator"],
+			settings: { foreground: aura.fg },
+		},
+		{ scope: ["invalid", "invalid.illegal"], settings: { foreground: aura.red } },
+	],
+}
+
+// A Shiki port of Ayu Light (https://github.com/ayu-theme) — the light counterpart used in
+// light mode. Warm, soft palette that pairs with Aura's dark.
+const ayu = {
+	bg: "#fcfcfc",
+	fg: "#5c6166",
+	orange: "#fa8d3e",
+	salmon: "#ed9366",
+	gold: "#f2ae49",
+	green: "#86b300",
+	purple: "#a37acc",
+	blue: "#399ee6",
+	cyan: "#55b4d4",
+	teal: "#4cbf99",
+	gray: "#8a9199",
+	red: "#e65050",
+}
+const ayuLight = {
+	name: "ayu-light",
+	type: "light",
+	colors: {
+		"editor.background": ayu.bg,
+		"editor.foreground": ayu.fg,
+	},
+	tokenColors: [
+		{
+			scope: ["comment", "punctuation.definition.comment"],
+			settings: { foreground: ayu.gray, fontStyle: "italic" },
+		},
+		{
+			scope: ["string", "string.quoted", "punctuation.definition.string", "string.template"],
+			settings: { foreground: ayu.green },
+		},
+		{
+			scope: [
+				"constant.numeric",
+				"constant.language",
+				"constant.language.boolean",
+				"constant.character",
+				"constant.other",
+				"support.constant",
+			],
+			settings: { foreground: ayu.purple },
+		},
+		{
+			scope: [
+				"keyword",
+				"keyword.control",
+				"keyword.operator.new",
+				"keyword.operator.expression",
+				"storage",
+				"storage.type",
+				"storage.modifier",
+			],
+			settings: { foreground: ayu.orange },
+		},
+		{ scope: ["keyword.operator"], settings: { foreground: ayu.salmon } },
+		{
+			scope: [
+				"entity.name.function",
+				"support.function",
+				"meta.function-call",
+				"meta.function-call.generic",
+			],
+			settings: { foreground: ayu.gold },
+		},
+		{
+			scope: [
+				"entity.name.type",
+				"entity.name.class",
+				"support.type",
+				"support.class",
+				"entity.other.inherited-class",
+				"meta.type",
+			],
+			settings: { foreground: ayu.blue },
+		},
+		{
+			scope: ["variable", "variable.other", "variable.parameter", "meta.definition.variable"],
+			settings: { foreground: ayu.fg },
+		},
+		{
+			scope: ["variable.language", "variable.language.this", "keyword.other.this"],
+			settings: { foreground: ayu.orange },
+		},
+		{
+			scope: ["entity.name.tag", "punctuation.definition.tag", "meta.tag"],
+			settings: { foreground: ayu.cyan },
+		},
+		{ scope: ["entity.other.attribute-name"], settings: { foreground: ayu.gold } },
+		{
+			scope: ["support.type.property-name", "meta.object-literal.key", "variable.other.property"],
+			settings: { foreground: ayu.fg },
+		},
+		{ scope: ["string.regexp", "constant.character.escape"], settings: { foreground: ayu.teal } },
+		{
+			scope: ["punctuation", "meta.brace", "punctuation.separator", "punctuation.terminator"],
+			settings: { foreground: ayu.fg },
+		},
+		{ scope: ["invalid", "invalid.illegal"], settings: { foreground: ayu.red } },
+	],
+}
+
 const themes = {
-	light: "catppuccin-latte",
-	dark: "catppuccin-macchiato",
+	light: "ayu-light",
+	dark: "aura-soft-dark",
 }
 const highlighter = await createHighlighter({
-	themes: Object.values(themes),
+	themes: [ayuLight, auraSoftDark],
 	langs: ["svelte", "bash", "json", "typescript", "tsx", "vue", "html"],
 })
 

@@ -43,6 +43,7 @@
 	},
 	"dependencies": {
 		"@fontsource/inter": "^5.2.8",
+		"@fontsource/monaspace-neon": "^5.2.5",
 		"@takumi-rs/image-response": "1.0.0-rc.12",
 		"carbon-icons-svelte": "^13.9.0",
 		"class-variance-authority": "^0.7.1",
