@@ -21,7 +21,12 @@ Values can be base64-encoded; they'll be decoded automatically.
 
 Set `_reply_to` to the submitter's email so replies go back to them instead of your
 `from` address — see the [SvelteKit form](/sveltekit#the-form) for the hidden-field
-pattern.
+pattern. Typically that's all a contact form needs: a reply-to is enough for replies to
+reach the right person, with no per-message `from` or verified domain required.
+
+Addresses may include a display name — `"ACME Inc <hello@example.com>"` arrives as **ACME
+Inc**. That works anywhere an address does: `_from`, `_reply_to`, `default.from`, and the
+CLI's `Default from` prompt.
 
 ## Grouped fields
 

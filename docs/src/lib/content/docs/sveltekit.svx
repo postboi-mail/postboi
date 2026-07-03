@@ -25,6 +25,10 @@ Wire up a hidden `_reply_to` field bound to the sender's email. Then, when the
 notification lands in your inbox, hitting **Reply** goes straight back to the person who
 filled in the form — not to your no-reply `from` address.
 
+For most contact forms, a reply-to address is all you need: keep `from` as your default
+sending address and let reply-to carry the conversation. Only set a per-message `from`
+when you want the email itself to appear from a specific address.
+
 ```svelte
 <!-- +page.svelte -->
 <script lang="ts">
