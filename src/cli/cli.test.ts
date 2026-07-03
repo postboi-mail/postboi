@@ -17,7 +17,14 @@ import {
 } from "./project.js"
 import { create_prompts, PromptCancelledError } from "./prompts.js"
 import { banner } from "./banner.js"
-import { cloud_base, start_device_auth, poll_device_auth, CloudAuthError } from "./cloud.js"
+import {
+	cloud_base,
+	start_device_auth,
+	poll_device_auth,
+	fetch_domains,
+	CloudAuthError,
+} from "./cloud.js"
+import { render_types, from_status } from "./typegen.js"
 
 describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
@@ -392,5 +399,79 @@ describe("prompts", () => {
 		const p = prompter([])
 		await expect(p.ask("Token", { required: true })).rejects.toBeInstanceOf(PromptCancelledError)
 		p.close()
+	})
+})
+
+describe("cloud domains & generated from types", () => {
+	const json = (body: unknown, status = 200) =>
+		({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
+
+	const domains = [
+		{ domain: "pawnbrokers.london", status: "verified" },
+		{ domain: "other-domain.com", status: "pending" },
+	]
+
+	it("fetch_domains parses the account and defaults missing statuses to pending", async () => {
+		const account = await fetch_domains("https://postboi.email", "pb_secret", async (url, init) => {
+			expect(url).toBe("https://postboi.email/v1/domains")
+			expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer pb_secret")
+			return json({
+				send_address: "darby@send.postboi.email",
+				domains: [...domains, { domain: "half-baked.com" }],
+			})
+		})
+		expect(account).toEqual({
+			send_address: "darby@send.postboi.email",
+			domains: [...domains, { domain: "half-baked.com", status: "pending" }],
+		})
+	})
+
+	it("fetch_domains degrades to undefined on errors and unknown shapes", async () => {
+		expect(await fetch_domains("https://x", "t", async () => json({}, 404))).toBeUndefined()
+		expect(await fetch_domains("https://x", "t", async () => json({ nope: true }))).toBeUndefined()
+		expect(
+			await fetch_domains("https://x", "t", async () => {
+				throw new Error("offline")
+			})
+		).toBeUndefined()
+	})
+
+	it("render_types emits bare and display-name forms for the address and every domain", () => {
+		const source = render_types("darby@send.postboi.email", domains)!
+		expect(source).toContain('declare module "postboi"')
+		expect(source).toContain('| "darby@send.postboi.email"')
+		expect(source).toContain("| `${string}<darby@send.postboi.email>`")
+		expect(source).toContain("| `${string}@pawnbrokers.london`")
+		expect(source).toContain("| `${string}@pawnbrokers.london>`")
+		// pending domains are included — the type answers "plausibly mine", not "will deliver"
+		expect(source).toContain("| `${string}@other-domain.com`")
+		// `export {}` makes it a module, so `declare module` augments instead of replacing
+		expect(source).toContain("export {}")
+	})
+
+	it("render_types returns null when the account has nothing to send from", () => {
+		expect(render_types(undefined, [])).toBeNull()
+	})
+
+	it("from_status classifies the send address, verified, pending and unknown domains", () => {
+		const send = "darby@send.postboi.email"
+		expect(from_status("darby@send.postboi.email", send, domains)).toEqual({ level: "ok" })
+		expect(from_status("Darby <DARBY@send.postboi.email>", send, domains)).toEqual({
+			level: "ok",
+		})
+		expect(from_status("foo@pawnbrokers.london", send, domains)).toEqual({ level: "ok" })
+		expect(from_status("foo@other-domain.com", send, domains)).toEqual({
+			level: "pending",
+			domain: "other-domain.com",
+		})
+		expect(from_status("foo@unknown-domain.com", send, domains)).toEqual({
+			level: "unknown",
+			domain: "unknown-domain.com",
+		})
+		// someone else's stock address is foreign, not ok
+		expect(from_status("mallory@send.postboi.email", send, domains)).toEqual({
+			level: "unknown",
+			domain: "send.postboi.email",
+		})
 	})
 })

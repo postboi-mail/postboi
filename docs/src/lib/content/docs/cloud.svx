@@ -20,9 +20,11 @@ then writes two env vars:
 - `POSTBOI_TOKEN` — your API key (keep it secret)
 - `POSTBOI_FROM` — your sending address, e.g. `darby@send.postboi.email`
 
-It also offers to set default recipients (`to`, `reply_to`, `cc`, `bcc`) and writes a
-committed [`postboi.config.ts`](/config) to hold them — the same file where you can add
-[hooks](/hooks) later.
+It also offers to set defaults (`to`, `reply_to`, `cc`, `bcc` — and `from`, once you have
+custom domains to choose between) and writes a committed [`postboi.config.ts`](/config) to
+hold them — the same file where you can add [hooks](/hooks) later. The CLI knows your
+domains and their verification status, so it warns at setup time if a default `from` uses
+a pending or unknown domain.
 
 That's the whole setup:
 
@@ -69,6 +71,39 @@ await mail({
 	body: "<p>From your own domain</p>",
 })
 ```
+
+## Type-safe `from`
+
+`postboi init` (and `bunx postboi sync`) generate types from your account's sending
+address and domains, narrowing `from` so TypeScript rejects addresses you can't send
+from — before the API does it at runtime:
+
+```ts
+await mail({ from: "foo@unknown-domain.com", ... })
+// ^ Type error: must be your send.postboi.email address or an address
+//   at one of your domains. Run `bunx postboi sync` to regenerate.
+```
+
+Display-name form works too (`"Darby <foo@pawnbrokers.london>"`), and pending domains are
+included deliberately — you can write the code while DNS propagates; deliverability is
+enforced at send time either way (`from_not_allowed`).
+
+The generated types live *inside* the installed package (`node_modules/postboi`), so
+there's no file in your project — nothing to commit, gitignore, or see in diffs. Three
+consequences of that:
+
+- **A reinstall resets them.** `init` adds a `"prepare": "postboi sync"` script that
+  restores them after every install (chained onto your existing prepare script, if any).
+- **They're always optional.** Without them (fresh clone, CI without a token, teammate
+  who hasn't run init), `from` falls back to plain `string` — builds and deploys never
+  fail because the types are missing. `sync` itself is a quiet no-op without a
+  `POSTBOI_TOKEN` and always exits 0, so it's safe anywhere.
+- **They're a snapshot.** Re-run `bunx postboi sync` after adding or removing a domain
+  (your editor may want a TS-server restart to pick the change up).
+
+This only applies to Postboi Cloud (we can't know another provider's identities). If you
+mix Cloud with a bring-your-own provider in one project, remove `postboi sync` from your
+prepare script — the narrowing applies to `from` everywhere.
 
 ## Limits
 

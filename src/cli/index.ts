@@ -38,7 +38,16 @@ import {
 	red,
 } from "./prompts.js"
 import { banner } from "./banner.js"
-import { cloud_base, start_device_auth, poll_device_auth, open_browser } from "./cloud.js"
+import {
+	cloud_base,
+	start_device_auth,
+	poll_device_auth,
+	open_browser,
+	fetch_domains,
+	type CloudDomain,
+} from "./cloud.js"
+import { write_types, from_status, TYPES_TARGET } from "./typegen.js"
+import { ensure_env_loaded, read_env } from "../library/env.js"
 
 const CONFIG_FILES = [
 	"postboi.config.ts",
@@ -65,6 +74,7 @@ ${dim(`  v${version()}`)}
 
 ${bold("Usage")}
   ${cyan("bunx postboi init")}     Set up Postboi Cloud or a provider of your own
+  ${cyan("bunx postboi sync")}     Refresh the generated from types from your Cloud domains
 
 ${bold("Options")}
   -h, --help        Show this help
@@ -220,16 +230,20 @@ async function offer_host_push(
 	}
 }
 
+type DefaultField = { arg: string; label: string; default?: string }
+
 /** Prompt for the optional default fields (committed to postboi.config.ts, not env). */
 async function ask_defaults(
 	prompts: Prompts,
-	fields: typeof DEFAULT_FIELDS = DEFAULT_FIELDS
+	fields: Array<DefaultField> = DEFAULT_FIELDS
 ): Promise<Record<string, string>> {
 	const defaults: Record<string, string> = {}
 	const names = fields.map((f) => f.arg.replace("_", "-")).join(" / ")
 	if (await prompts.confirm(`\nSet ${bold("default")} ${names}?`)) {
 		for (const field of fields) {
-			const value = await prompts.ask(`${field.label} ${dim("(optional)")}`)
+			const value = await prompts.ask(`${field.label} ${dim("(optional)")}`, {
+				default: field.default,
+			})
 			if (value) defaults[field.arg] = value
 		}
 	}
@@ -253,24 +267,90 @@ function write_config(
 		if (Object.keys(options).length)
 			console.log(dim(`  ${render_block("options", options, "  ").trimEnd()}`))
 	} else {
-		writeFileSync("postboi.config.ts", render_config(provider_key, defaults, options))
-		console.log(`${green("✓")} wrote ${bold("postboi.config.ts")}`)
+		// Match the project: .ts needs a TS toolchain; plain-JS projects get .js (ESM) or .mjs.
+		const type_module = (): boolean => {
+			try {
+				return JSON.parse(readFileSync("package.json", "utf8")).type === "module"
+			} catch {
+				return false
+			}
+		}
+		const file = existsSync("tsconfig.json")
+			? "postboi.config.ts"
+			: type_module()
+				? "postboi.config.js"
+				: "postboi.config.mjs"
+		writeFileSync(file, render_config(provider_key, defaults, options))
+		console.log(`${green("✓")} wrote ${bold(file)}`)
 	}
 }
 
-/** Make sure postboi itself is installed in the project. */
-async function offer_install(prompts: Prompts, files: Array<string>): Promise<void> {
+/** Make sure postboi itself is installed in the project — it's required, so no prompt. */
+function ensure_install(files: Array<string>): void {
 	if (!existsSync("package.json")) return
 	const pkg = JSON.parse(readFileSync("package.json", "utf8"))
 	if (has_dependency(pkg, "postboi")) return
 	const pm = detect_package_manager(files, pkg)
 	const dev = is_bundled_framework(files, pkg)
 	const hint = dev ? ` ${dim("(as a devDependency — bundled at build time)")}` : ""
-	if (await prompts.confirm(`\nInstall ${bold("postboi")} with ${cyan(pm)}?${hint}`)) {
-		const { cmd, args } = install_command(pm, "postboi", dev)
-		const result = run_push({ cmd, args })
-		if (result.ok) console.log(`${green("✓")} installed postboi`)
-		else console.log(`${red("✗")} ${result.reason} — run \`${cmd} ${args.join(" ")}\` yourself`)
+	console.log(`\n${dim(`Installing ${bold("postboi")} with ${pm}…`)}${hint}`)
+	const { cmd, args } = install_command(pm, "postboi", dev)
+	const result = run_push({ cmd, args })
+	if (result.ok) console.log(`${green("✓")} installed postboi`)
+	else console.log(`${red("✗")} ${result.reason} — run \`${cmd} ${args.join(" ")}\` yourself`)
+}
+
+/**
+ * Ensure a `prepare` script restores the generated types after every install — they live
+ * inside node_modules, so a reinstall wipes them. Chains onto an existing prepare script
+ * rather than replacing it; no-op when one already runs postboi.
+ */
+function ensure_prepare(): void {
+	if (!existsSync("package.json")) return
+	const raw = readFileSync("package.json", "utf8")
+	const pkg = JSON.parse(raw) as { scripts?: Record<string, string> }
+	if (pkg.scripts?.prepare?.includes("postboi")) return
+	const prepare = pkg.scripts?.prepare ? `${pkg.scripts.prepare} && postboi sync` : "postboi sync"
+	pkg.scripts = { ...pkg.scripts, prepare }
+	const indent = /^(\t| +)"/m.exec(raw)?.[1] ?? "\t"
+	writeFileSync("package.json", `${JSON.stringify(pkg, null, indent)}\n`)
+	console.log(
+		`${green("✓")} set ${cyan(`"prepare": "${prepare}"`)} ${dim("(restores the types after installs)")}`
+	)
+}
+
+/**
+ * Regenerate `postboi.gen.d.ts` from the account's current domains. Safe as a predev/CI
+ * hook: always exits 0, and quietly no-ops without a token or a reachable API.
+ */
+async function sync(): Promise<void> {
+	await ensure_env_loaded()
+	const token = read_env("POSTBOI_TOKEN")
+	if (!token) {
+		console.log(dim("postboi sync: no POSTBOI_TOKEN — skipping (run `bunx postboi init`)."))
+		return
+	}
+	if (!existsSync(TYPES_TARGET)) {
+		console.log(dim("postboi sync: postboi isn't installed here — install it, then re-run."))
+		return
+	}
+	const account = await fetch_domains(cloud_base(), token)
+	if (!account) {
+		console.log(yellow("postboi sync: could not fetch domains from Postboi Cloud — skipped."))
+		return
+	}
+	const file = write_types(account.send_address ?? read_env("POSTBOI_FROM"), account.domains)
+	if (!file) {
+		console.log(dim("postboi sync: no sending addresses on this account yet."))
+		return
+	}
+	console.log(`${green("✓")} wrote ${bold(file)}`)
+	for (const d of account.domains) {
+		console.log(
+			d.status === "verified"
+				? `  ${green("✓")} ${d.domain}`
+				: `  ${yellow("⌛")} ${d.domain} ${dim(`(${d.status})`)}`
+		)
 	}
 }
 
@@ -290,24 +370,59 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	const { token, send_address } = await poll_device_auth(base, start)
 	console.log(`${green("✓")} device authorised`)
 
+	// The domain list drives the default-from hint, the post-input warning, and the
+	// generated `from` types. Best-effort: an older API just means no domain info.
+	const domains: Array<CloudDomain> = (await fetch_domains(base, token))?.domains ?? []
+	if (domains.length > 0) {
+		const list = domains
+			.map((d) => `${d.domain} ${d.status === "verified" ? green("✓") : yellow("⌛")}`)
+			.join(dim(", "))
+		console.log(`${dim("Domains:")} ${list}`)
+	}
+
 	// POSTBOI_FROM is a convenience default — the API also falls back to the account's
 	// sending address when `from` is omitted, so the token alone is enough.
 	const values: Record<string, string> = { POSTBOI_TOKEN: token }
 	if (send_address) values.POSTBOI_FROM = send_address
 
-	// `from` is already covered by POSTBOI_FROM (env wins over config), so don't ask twice.
-	const fields = send_address ? DEFAULT_FIELDS.filter((f) => f.arg !== "from") : DEFAULT_FIELDS
+	// `from` is only worth asking when there's a choice (a custom domain); otherwise
+	// POSTBOI_FROM already carries the only valid address.
+	const fields = DEFAULT_FIELDS.filter(
+		(f) => f.arg !== "from" || domains.length > 0 || !send_address
+	).map((f) => (f.arg === "from" ? { ...f, default: send_address } : f))
 	const config_defaults = await ask_defaults(prompts, fields)
+	if (config_defaults.from) {
+		const status = from_status(config_defaults.from, send_address, domains)
+		if (status.level === "pending")
+			console.log(
+				`${yellow("!")} ${bold(status.domain)} is still pending verification — mail from it may not be delivered yet.`
+			)
+		if (status.level === "unknown")
+			console.log(
+				`${yellow("!")} ${bold(status.domain)} isn't a domain on your account — sends from it will fail (from_not_allowed).`
+			)
+		// The account address is already the API fallback (and POSTBOI_FROM) — keep config minimal.
+		if (config_defaults.from === send_address) delete config_defaults.from
+	}
 
 	const targets = await choose_env_targets(prompts, files)
 	write_env_values(targets, values)
 	await offer_gitignore(prompts, targets)
 	await offer_host_push(prompts, files, values)
-	await offer_install(prompts, files)
+	ensure_install(files)
 
 	// The committed home for defaults and hooks. A POSTBOI_TOKEN alone already routes send()
 	// to Cloud, but `provider: "postboi"` makes it explicit.
 	write_config("postboi", config_defaults, {})
+
+	// Lives inside node_modules — nothing to commit, no diffs, `bunx postboi sync` refreshes it.
+	const types_file = write_types(send_address, domains)
+	if (types_file) {
+		console.log(
+			`${green("✓")} typed ${bold("from")} to your addresses ${dim(`(generated into ${types_file})`)}`
+		)
+		ensure_prepare()
+	}
 
 	console.log(`\n${green(bold("Done!"))} Just send:\n`)
 	console.log(
@@ -355,7 +470,7 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 	await offer_host_push(prompts, files, values)
 
 	// 7. Make sure postboi itself is installed
-	await offer_install(prompts, files)
+	ensure_install(files)
 
 	// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
 	write_config(provider.key, config_defaults, config_options)
@@ -401,6 +516,7 @@ async function main(): Promise<void> {
 	const command = argv[2]
 	if (command === "-V" || command === "--version") return console.log(version())
 	if (command === "init") return init()
+	if (command === "sync") return sync()
 	help()
 	if (command && command !== "-h" && command !== "--help") {
 		console.log(red(`Unknown command: ${command}`))

@@ -23,6 +23,24 @@ export type MailAttachment = { name: string; content: string; mime_type: string 
 export type Email = MailAddress | string
 
 /**
+ * Type registry filled in by the generated types (Postboi Cloud only — `bunx postboi sync`
+ * writes them into this package's own `register.d.ts` in node_modules). When it declares a
+ * `from` member, every `from` field in the API narrows to your permitted sending addresses.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- empty on purpose: augmentation target
+export interface Register {}
+
+/**
+ * The `from` addresses your account can send from, per the generated types — or any
+ * {@link Email} when none have been generated (bring-your-own-provider setups, fresh
+ * installs). If a genuinely valid address is rejected here, the generated types are
+ * stale: run `bunx postboi sync` to regenerate them after adding or removing domains.
+ */
+export type FromAddress = Register extends { from: infer F extends string }
+	? F | { address: F; name?: string }
+	: Email
+
+/**
  * Options accepted by Postboi.send(...).
  *
  * Notes:
@@ -34,7 +52,13 @@ export type Email = MailAddress | string
  */
 export interface SendOptions {
 	to?: Array<Email> | Email
-	from?: Email
+	/**
+	 * The sender. On Postboi Cloud this must be your account's sending address or an address
+	 * at a domain on your account — anything else is rejected at send time with
+	 * `from_not_allowed`. If the *type* rejects an address you know is valid, the generated
+	 * types are stale — run `bunx postboi sync` to regenerate them.
+	 */
+	from?: FromAddress
 	reply_to?: Array<Email> | Email
 	cc?: Array<Email> | Email
 	bcc?: Array<Email> | Email
@@ -168,7 +192,8 @@ export type BatchResult<TResponse> =
  */
 export type Defaults = {
 	to?: Array<Email> | Email
-	from?: Email
+	/** Default sender — see {@link SendOptions.from} for the Postboi Cloud rules. */
+	from?: FromAddress
 	cc?: Array<Email> | Email
 	bcc?: Array<Email> | Email
 	reply_to?: Array<Email> | Email
@@ -855,7 +880,9 @@ export abstract class ProviderBase<TResponse = unknown> {
 						options.subject = this.decode_value(value)
 						continue
 					case "_from":
-						options.from = this.decode_value(value)
+						// FormData carries arbitrary strings; a project-level `Register`
+						// augmentation can narrow `from` below `string`, hence the cast.
+						options.from = this.decode_value(value) as FromAddress
 						continue
 					case "_reply_to":
 						options.reply_to = this.decode_value(value)

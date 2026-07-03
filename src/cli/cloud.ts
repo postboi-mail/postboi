@@ -108,6 +108,52 @@ export async function poll_device_auth(
 	throw new CloudAuthError("Timed out waiting for the browser — run `postboi init` again.")
 }
 
+/** A domain on the account. `status` is `"verified"` when it can deliver; anything else
+ * (`"pending"`, …) means DNS verification hasn't completed. */
+export interface CloudDomain {
+	domain: string
+	status: string
+}
+
+/** The account's sending identity, as reported by `GET /v1/domains`. */
+export interface CloudAccount {
+	send_address?: string
+	domains: Array<CloudDomain>
+}
+
+/**
+ * Best-effort fetch of the account's sendable domains. Returns undefined when the endpoint
+ * is unreachable or unrecognised (e.g. an older API) — callers degrade to no domain info.
+ */
+export async function fetch_domains(
+	base: string,
+	token: string,
+	fetch_fn: FetchLike = fetch
+): Promise<CloudAccount | undefined> {
+	try {
+		const response = await fetch_fn(`${base}/v1/domains`, {
+			headers: { Authorization: `Bearer ${token}` },
+		})
+		if (!response.ok) return undefined
+		const data = (await response.json()) as {
+			send_address?: unknown
+			domains?: Array<Partial<CloudDomain>>
+		}
+		if (!Array.isArray(data.domains)) return undefined
+		return {
+			send_address: typeof data.send_address === "string" ? data.send_address : undefined,
+			domains: data.domains
+				.filter((d) => typeof d.domain === "string")
+				.map((d) => ({
+					domain: d.domain as string,
+					status: typeof d.status === "string" ? d.status : "pending",
+				})),
+		}
+	} catch {
+		return undefined
+	}
+}
+
 /** Best-effort: open `url` in the default browser. The URL is always printed anyway. */
 export function open_browser(url: string, os: string = platform): boolean {
 	const spec =

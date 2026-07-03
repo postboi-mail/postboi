@@ -2,6 +2,9 @@ import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec
 import { ProviderBase, PostboiError } from "./index.js"
 import { read_env, env_defaults } from "./env.js"
 
+// Pull the generated-types placeholder into the compile graph: its `.d.ts` is what
+// `bunx postboi sync` overwrites in node_modules to narrow `from` (a no-op at runtime).
+import "./register.js"
 // Re-export the core so `import { PostboiError, SkipSendError, ... } from "postboi"` keeps working
 // from the package root.
 export * from "./index.js"

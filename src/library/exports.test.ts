@@ -32,6 +32,7 @@ describe("package exports", () => {
 			"config.ts",
 			"env.ts",
 			"mail.ts",
+			"register.ts", // generated-types placeholder, reached via the root export
 		])
 		const providers = readdirSync(`${root}src/library`).filter(
 			(f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !internal.has(f)

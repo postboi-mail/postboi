@@ -91,7 +91,9 @@ export function env_defaults(): Defaults {
 	const out: Defaults = {}
 	for (const [key, name] of Object.entries(env) as Array<[keyof Defaults, string]>) {
 		const value = read_env(name)
-		if (value !== undefined) out[key] = value
+		// `as never`: writing through a union key demands the intersection of field types,
+		// which a project-level `Register` augmentation can narrow below `string`.
+		if (value !== undefined) out[key] = value as never
 	}
 	return out
 }
