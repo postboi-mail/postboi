@@ -27,6 +27,8 @@ export type ContentItem = {
 	name: string
 	category?: string
 	showPagination?: boolean
+	/** Show the framework's brand icon (from BrandIcon, keyed by slug) beside the label. */
+	icon?: boolean
 	items?: ContentItem[]
 }
 
@@ -51,14 +53,14 @@ export const contentSections: ContentSectionConfig[] = [
 				slug: "frameworks",
 				name: "Frameworks",
 				items: [
-					{ slug: "sveltekit", name: "SvelteKit" },
-					{ slug: "nextjs", name: "Next.js" },
-					{ slug: "astro", name: "Astro" },
-					{ slug: "nuxt", name: "Nuxt (Vue)" },
-					{ slug: "remix", name: "Remix" },
-					{ slug: "hono", name: "Hono" },
-					{ slug: "express", name: "Express" },
-					{ slug: "cloudflare-workers", name: "Cloudflare Workers" },
+					{ slug: "sveltekit", name: "SvelteKit", icon: true },
+					{ slug: "nextjs", name: "Next.js", icon: true },
+					{ slug: "astro", name: "Astro", icon: true },
+					{ slug: "nuxt", name: "Nuxt (Vue)", icon: true },
+					{ slug: "remix", name: "Remix", icon: true },
+					{ slug: "hono", name: "Hono", icon: true },
+					{ slug: "express", name: "Express", icon: true },
+					{ slug: "cloudflare-workers", name: "Cloudflare Workers", icon: true },
 				],
 			},
 			{

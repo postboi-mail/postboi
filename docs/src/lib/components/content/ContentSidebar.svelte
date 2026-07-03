@@ -10,6 +10,7 @@
 	import Dropdown from "$lib/components/ui/Dropdown.svelte"
 	import ThemeToggle from "$lib/components/ui/ThemeToggle.svelte"
 	import SearchTrigger from "$lib/components/content/search/SearchTrigger.svelte"
+	import BrandIcon from "$lib/components/content/BrandIcon.svelte"
 	import ChevronRight from "carbon-icons-svelte/lib/ChevronRight.svelte"
 	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
 	import Launch from "carbon-icons-svelte/lib/Launch.svelte"
@@ -474,12 +475,15 @@
 											}}
 											use:registerActiveChild={isActive}
 											class={cn(
-												"relative block rounded-sm px-3 py-1.5 text-sm font-medium tracking-normal transition-colors duration-150 ease-out",
+												"relative flex items-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium tracking-normal transition-colors duration-150 ease-out",
 												isActive
 													? "sidebar-active-child text-accent"
 													: "text-foreground-muted hover:text-foreground"
 											)}
 										>
+											{#if child.icon}
+												<BrandIcon name={child.slug} class="shrink-0 opacity-70" />
+											{/if}
 											{child.name}
 										</a>
 									{/each}
