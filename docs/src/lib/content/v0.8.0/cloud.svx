@@ -18,7 +18,7 @@ Pick **Postboi Cloud** when prompted. The CLI opens your browser to authorise th
 then writes two env vars:
 
 - `POSTBOI_TOKEN` — your API key (keep it secret)
-- `POSTBOI_FROM` — your sending address, e.g. `darby@send.postboi.email`
+- `POSTBOI_FROM` — your sending address, e.g. `joe@send.postboi.email`
 
 It also offers to set default recipients (`to`, `reply_to`, `cc`, `bcc`) and writes a
 committed [`postboi.config.ts`](/config) to hold them — the same file where you can add

@@ -416,17 +416,14 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		return undefined
 	}
 
-	// `from` is only worth asking when there's a choice (a custom domain); otherwise
-	// POSTBOI_FROM already carries the only valid address.
+	// `from` is only worth asking when there's a choice (a custom domain); otherwise the
+	// API already falls back to the account's address. Config-first: whatever's chosen goes
+	// to postboi.config, and the environment carries nothing but the token — POSTBOI_FROM
+	// remains a manual per-environment override (env beats config).
 	const fields = DEFAULT_FIELDS.filter(
 		(f) => f.arg !== "from" || domains.length > 0 || !send_address
 	).map((f) => (f.arg === "from" ? { ...f, default: send_address, validate: validate_from } : f))
 	const config_defaults = await ask_defaults(prompts, fields)
-	// The account address is already the API fallback (and POSTBOI_FROM) — keep config minimal.
-	if (config_defaults.from === send_address) delete config_defaults.from
-	// POSTBOI_FROM is a convenience default (the API falls back to the account's address
-	// anyway) — but env beats config, so never write it over a from the user chose.
-	if (send_address && !config_defaults.from) values.POSTBOI_FROM = send_address
 
 	const targets = await choose_env_targets(prompts, files)
 	write_env_values(targets, values)

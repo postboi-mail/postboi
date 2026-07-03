@@ -322,14 +322,14 @@ describe("cloud device flow", () => {
 		const responses = [
 			json({ status: "pending", interval: 2 }),
 			json({ status: "pending", interval: 2 }),
-			json({ status: "claimed", token: "pb_secret", send_address: "darby@send.postboi.email" }),
+			json({ status: "claimed", token: "pb_secret", send_address: "joe@send.postboi.email" }),
 		]
 		const claim = await poll_device_auth(
 			"https://postboi.email",
 			{ ...start, expires_in: 600, interval: 2 },
 			{ fetch: async () => responses.shift()!, sleep: async () => {}, now: () => 0 }
 		)
-		expect(claim).toEqual({ token: "pb_secret", send_address: "darby@send.postboi.email" })
+		expect(claim).toEqual({ token: "pb_secret", send_address: "joe@send.postboi.email" })
 	})
 
 	it("poll_device_auth tolerates servers that don't send send_address", async () => {
@@ -407,7 +407,7 @@ describe("cloud domains & generated from types", () => {
 		({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
 
 	const domains = [
-		{ domain: "pawnbrokers.london", status: "verified" },
+		{ domain: "example.com", status: "verified" },
 		{ domain: "other-domain.com", status: "pending" },
 	]
 
@@ -416,12 +416,12 @@ describe("cloud domains & generated from types", () => {
 			expect(url).toBe("https://postboi.email/v1/domains")
 			expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer pb_secret")
 			return json({
-				send_address: "darby@send.postboi.email",
+				send_address: "joe@send.postboi.email",
 				domains: [...domains, { domain: "half-baked.com" }],
 			})
 		})
 		expect(account).toEqual({
-			send_address: "darby@send.postboi.email",
+			send_address: "joe@send.postboi.email",
 			domains: [...domains, { domain: "half-baked.com", status: "pending" }],
 		})
 	})
@@ -437,12 +437,12 @@ describe("cloud domains & generated from types", () => {
 	})
 
 	it("render_types emits bare and display-name forms for the address and every domain", () => {
-		const source = render_types("darby@send.postboi.email", domains)!
+		const source = render_types("joe@send.postboi.email", domains)!
 		expect(source).toContain('declare module "postboi"')
-		expect(source).toContain('| "darby@send.postboi.email"')
-		expect(source).toContain("| `${string}<darby@send.postboi.email>`")
-		expect(source).toContain("| `${string}@pawnbrokers.london`")
-		expect(source).toContain("| `${string}@pawnbrokers.london>`")
+		expect(source).toContain('| "joe@send.postboi.email"')
+		expect(source).toContain("| `${string}<joe@send.postboi.email>`")
+		expect(source).toContain("| `${string}@example.com`")
+		expect(source).toContain("| `${string}@example.com>`")
 		// pending domains are included — the type answers "plausibly mine", not "will deliver"
 		expect(source).toContain("| `${string}@other-domain.com`")
 		// `export {}` makes it a module, so `declare module` augments instead of replacing
@@ -454,12 +454,12 @@ describe("cloud domains & generated from types", () => {
 	})
 
 	it("from_status classifies the send address, verified, pending and unknown domains", () => {
-		const send = "darby@send.postboi.email"
-		expect(from_status("darby@send.postboi.email", send, domains)).toEqual({ level: "ok" })
-		expect(from_status("Darby <DARBY@send.postboi.email>", send, domains)).toEqual({
+		const send = "joe@send.postboi.email"
+		expect(from_status("joe@send.postboi.email", send, domains)).toEqual({ level: "ok" })
+		expect(from_status("Joe Bloggs <JOE@send.postboi.email>", send, domains)).toEqual({
 			level: "ok",
 		})
-		expect(from_status("foo@pawnbrokers.london", send, domains)).toEqual({ level: "ok" })
+		expect(from_status("foo@example.com", send, domains)).toEqual({ level: "ok" })
 		expect(from_status("foo@other-domain.com", send, domains)).toEqual({
 			level: "pending",
 			domain: "other-domain.com",
