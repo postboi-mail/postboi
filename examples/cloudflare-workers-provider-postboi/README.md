@@ -20,7 +20,7 @@ npm run deploy
 
 ## How it works
 
-- **`src/index.ts`** — the `fetch` handler renders the form and, on POST to `/contact`, builds `new Postboi({ token: env.POSTBOI_TOKEN })`, reads `await request.formData()`, and calls `mail.send({ body })`.
+- **`src/index.ts`** — the `fetch` handler renders the form and, on POST to `/contact`, builds `new Postboi({ token: env.POSTBOI_TOKEN })` and calls `mail.send({ body: request.formData(), to })` (`body` takes the promise directly).
 - **`wrangler.jsonc`** — Worker config, with `nodejs_compat` turned on.
 
 Full docs live at https://docs.postboi.email and Postboi Cloud is at https://postboi.email.

@@ -43,8 +43,8 @@ export default {
 		if (request.method === "POST" && url.pathname === "/contact") {
 			// No filesystem and no ambient env on Workers: pass the token from the binding and
 			// set defaults here instead of a postboi.config.ts file.
-			const mail = new Postboi({ token: env.POSTBOI_TOKEN, default: { to: "team@acme.example" } })
-			await mail.send({ body: request.formData() })
+			const mail = new Postboi({ token: env.POSTBOI_TOKEN })
+			await mail.send({ body: request.formData(), to: "team@acme.example" })
 			return Response.redirect(new URL("/?sent=1", url).toString(), 303)
 		}
 
