@@ -62,6 +62,16 @@ export function upsert_env(content: string, key: string, value: string, format: 
 	return `${base}${line}\n`
 }
 
+/**
+ * Drop a `KEY=` assignment from env-file content, or return the content unchanged when
+ * the key isn't there. Older inits wrote default fields (POSTBOI_FROM, …) to the
+ * environment; they're config-first now, and a stale env var silently shadows the config.
+ */
+export function remove_env(content: string, key: string): string {
+	const pattern = new RegExp(`^(export\\s+)?${escape_regex(key)}=.*\\n?`, "m")
+	return content.replace(pattern, "")
+}
+
 /** Does a .gitignore already cover this file? Handles plain names and simple `*` globs. */
 export function is_gitignored(gitignore: string, file: string): boolean {
 	return gitignore

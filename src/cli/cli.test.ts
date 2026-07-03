@@ -7,7 +7,7 @@ import {
 	render_config,
 	render_block,
 } from "./providers.js"
-import { detect_env_targets, format_line, upsert_env, is_gitignored } from "./env.js"
+import { detect_env_targets, format_line, upsert_env, remove_env, is_gitignored } from "./env.js"
 import { detect_hosts, detect_adapter_host, push_spec, manual_hint } from "./deploy.js"
 import {
 	detect_package_manager,
@@ -147,6 +147,14 @@ describe("env file writing", () => {
 
 	it("escapes quotes and backslashes", () => {
 		expect(format_line("dotenv", "K", 'a"b\\c')).toBe('K="a\\"b\\\\c"')
+	})
+
+	it("remove_env drops the key line (any flavour) and leaves everything else", () => {
+		expect(remove_env('POSTBOI_TOKEN="t"\nPOSTBOI_FROM="a@b.c"\n', "POSTBOI_FROM")).toBe(
+			'POSTBOI_TOKEN="t"\n'
+		)
+		expect(remove_env('export POSTBOI_FROM="a@b.c"\nOTHER=1\n', "POSTBOI_FROM")).toBe("OTHER=1\n")
+		expect(remove_env("OTHER=1\n", "POSTBOI_FROM")).toBe("OTHER=1\n")
 	})
 })
 

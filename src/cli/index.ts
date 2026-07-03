@@ -11,7 +11,7 @@ import {
 	render_block,
 	type CliProvider,
 } from "./providers.js"
-import { detect_env_targets, upsert_env, is_gitignored, type EnvTarget } from "./env.js"
+import { detect_env_targets, upsert_env, remove_env, is_gitignored, type EnvTarget } from "./env.js"
 import {
 	detect_hosts,
 	detect_adapter_host,
@@ -130,16 +130,32 @@ async function choose_env_targets(
 	return choice === "all" ? detected : [choice]
 }
 
-/** Upsert each `KEY=value` into every target env file. */
+/**
+ * Upsert each `KEY=value` into every target env file, and drop stale default vars
+ * (POSTBOI_FROM, …) that older inits wrote — env beats config, so a leftover would
+ * silently shadow the defaults now committed to postboi.config.
+ */
 function write_env_values(targets: Array<EnvTarget>, values: Record<string, string>): void {
 	console.log()
+	const stale = DEFAULT_FIELDS.map((f) => f.env).filter((env) => !(env in values))
 	for (const target of targets) {
 		let content = existsSync(target.file) ? readFileSync(target.file, "utf8") : ""
 		for (const [key, value] of Object.entries(values)) {
 			content = upsert_env(content, key, value, target.format)
 		}
+		const removed = stale.filter((key) => {
+			const next = remove_env(content, key)
+			const hit = next !== content
+			content = next
+			return hit
+		})
 		writeFileSync(target.file, content)
 		console.log(`${green("✓")} wrote ${Object.keys(values).length} var(s) to ${bold(target.file)}`)
+		for (const key of removed) {
+			console.log(
+				`  ${yellow("!")} removed stale ${bold(key)} — it would override your postboi.config defaults`
+			)
+		}
 		if (target.note) console.log(`  ${yellow("!")} ${target.note}`)
 	}
 }

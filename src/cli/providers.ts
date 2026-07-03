@@ -12,8 +12,9 @@ import type { ProviderMeta } from "../library/registry.js"
 export type CliProvider = ProviderMeta
 
 /**
- * Optional default fields. Stored as `POSTBOI_*` env vars so they're shared between an
- * explicit provider (`default: {...}`) and the zero-config `mail()` (which reads them).
+ * Optional default fields. Config-first: init commits them to postboi.config. The
+ * `POSTBOI_*` env names remain as manual per-environment overrides (env beats config) —
+ * and init removes stale ones it wrote in older versions, which would shadow the config.
  */
 export const DEFAULT_FIELDS: Array<{ arg: string; env: string; label: string }> = [
 	{ arg: "from", env: "POSTBOI_FROM", label: "Default from" },

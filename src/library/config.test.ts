@@ -76,6 +76,19 @@ describe("global config", () => {
 		expect(fetch.mock.calls.at(-1)![0]).toBe("https://api.resend.com/emails")
 	})
 
+	it("warns once when POSTBOI_FROM shadows a differing config default.from", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		configure({ provider: "mock", default: { from: "config@test.com" } })
+		vi.stubEnv("POSTBOI_FROM", "env@test.com")
+
+		await mail({ to: "to@test.com", body: "hi" })
+		await mail({ to: "to@test.com", body: "hi" })
+
+		const shadow_warnings = warn.mock.calls.filter(([msg]) => String(msg).includes("POSTBOI_FROM"))
+		expect(shadow_warnings).toHaveLength(1) // once, not per send
+		warn.mockRestore()
+	})
+
 	it('resolves provider: "mock" with no credentials and no network', async () => {
 		configure({ provider: "mock", default: { from: "from@test.com" } })
 		const result = (await mail({ to: "to@test.com", body: "hi" })) as { id: string }

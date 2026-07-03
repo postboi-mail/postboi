@@ -47,6 +47,8 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 	mock: () => import("./mock.js").then((m) => m.default as unknown as ProviderConstructor),
 }
 
+let warned_shadowed_from = false
+
 /** Construct the provider named by `POSTBOI_PROVIDER` from environment variables. */
 async function resolve_provider(): Promise<ProviderBase<unknown>> {
 	// Load global config (postboi.config.ts / package.json) first, so hooks and the
@@ -54,6 +56,19 @@ async function resolve_provider(): Promise<ProviderBase<unknown>> {
 	const config = await load_config()
 	// Make `.env` values visible in dev (SvelteKit etc. don't put them on process.env).
 	await ensure_env_loaded()
+
+	// The classic trap: a leftover POSTBOI_FROM silently beats the committed config
+	// default. Say so once instead of sending from the wrong address in silence.
+	const env_from = read_env("POSTBOI_FROM")
+	const config_from = config.default?.from
+	if (env_from && typeof config_from === "string" && env_from !== config_from) {
+		if (!warned_shadowed_from) {
+			warned_shadowed_from = true
+			console.warn(
+				`postboi: POSTBOI_FROM (${env_from}) overrides default.from in postboi.config (${config_from}) — remove one of them.`
+			)
+		}
+	}
 	// A POSTBOI_TOKEN alone is enough to send: with nothing else configured, dispatch to
 	// Postboi Cloud — the zero-config path `bunx postboi init` sets up.
 	const key =
