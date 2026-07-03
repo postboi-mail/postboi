@@ -12,7 +12,7 @@ can live, since they're functions.
 
 ```typescript
 // postboi.config.ts
-import { config } from 'postboi';
+import { config } from 'postboi'
 
 export default config({
 	provider: 'resend',
@@ -24,7 +24,7 @@ export default config({
 			error: ({ error }) => Sentry.captureException(error)
 		}
 	}
-});
+})
 ```
 
 It auto-loads on the first `mail()` (Node/Bun).
@@ -55,10 +55,10 @@ Edge runtimes (Cloudflare Workers, etc.) have no filesystem, so the config file 
 auto-loaded. Register config at startup instead with `configure({ ... })`.
 
 ```typescript
-import { configure } from 'postboi';
+import { configure } from 'postboi'
 
 configure({
 	default: { from: 'no-reply@example.com' },
 	retries: 2
-});
+})
 ```

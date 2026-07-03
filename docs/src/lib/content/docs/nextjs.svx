@@ -11,12 +11,12 @@ and renders the rest into a tidy HTML table.
 
 ```tsx
 // app/actions.ts
-'use server';
-import { mail } from 'postboi';
+'use server'
+import { mail } from 'postboi'
 
 export async function submit(_prev: unknown, body: FormData) {
-	await mail({ body });
-	return { ok: true };
+	await mail({ body })
+	return { ok: true }
 }
 ```
 
@@ -25,13 +25,13 @@ mirror the visitor's email into `_reply_to` (with `useState`) so replying reache
 
 ```tsx
 // app/page.tsx
-'use client';
-import { useActionState, useState } from 'react';
-import { submit } from './actions';
+'use client'
+import { useActionState, useState } from 'react'
+import { submit } from './actions'
 
 export default function Page() {
-	const [email, setEmail] = useState('');
-	const [state, action] = useActionState(submit, null);
+	const [email, setEmail] = useState('')
+	const [state, action] = useActionState(submit, null)
 
 	return (
 		<form action={action}>
@@ -48,7 +48,7 @@ export default function Page() {
 			<textarea name="details→message" placeholder="Message" />
 			<button type="submit">Send</button>
 		</form>
-	);
+	)
 }
 ```
 

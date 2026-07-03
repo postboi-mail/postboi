@@ -22,13 +22,13 @@ const mail = new Resend({
 		// observe, mutate, or throw to cancel — runs before the request
 		before: {
 			send({ message }) {
-				if (process.env.NODE_ENV !== 'production') return { ...message, to: 'qa@example.com' };
+				if (process.env.NODE_ENV !== 'production') return { ...message, to: 'qa@example.com' }
 			}
 		},
 		// success — analytics / audit
 		after: {
 			send({ provider, message, duration_ms }) {
-				track('email.sent', { provider, to: message.to, duration_ms });
+				track('email.sent', { provider, to: message.to, duration_ms })
 			}
 		},
 		// any failure — report it
@@ -37,15 +37,15 @@ const mail = new Resend({
 				Sentry.captureException(error, {
 					tags: { provider: error.provider },
 					extra: { to: message?.to }
-				});
+				})
 			},
 			// each retry — observe provider flakiness
 			retry({ provider, attempt, status }) {
-				console.warn(`${provider} retry ${attempt} (${status})`);
+				console.warn(`${provider} retry ${attempt} (${status})`)
 			}
 		}
 	}
-});
+})
 ```
 
 ## The hooks
@@ -64,17 +64,17 @@ unsubscribed recipient). It's a `PostboiError` with `code: "skipped"`, and it do
 trigger `on.error`:
 
 ```typescript
-import Resend from 'postboi/resend';
-import { SkipSendError } from 'postboi';
+import Resend from 'postboi/resend'
+import { SkipSendError } from 'postboi'
 
 const mail = new Resend({
 	api_key: RESEND_API_KEY,
 	hooks: {
 		before: {
 			async send({ message }) {
-				if (await isSuppressed(message.to)) throw new SkipSendError(`suppressed: ${message.to}`);
+				if (await isSuppressed(message.to)) throw new SkipSendError(`suppressed: ${message.to}`)
 			}
 		}
 	}
-});
+})
 ```

@@ -46,18 +46,18 @@ Useful when you want an explicit instance, or you're on a runtime without ambien
 (e.g. Cloudflare Workers):
 
 ```typescript
-import Resend from 'postboi/resend';
+import Resend from 'postboi/resend'
 
 const mail = new Resend({
 	api_key: process.env.RESEND_API_KEY!,
 	default: { from: 'no-reply@example.com' }
-});
+})
 
 await mail.send({
 	to: 'someone@example.com',
 	subject: 'hello',
 	body: '<p>hello world</p>'
-});
+})
 ```
 
 Every provider also accepts `default`, `timeout`, `retries`, `retry_delay`, `auto_text`,
@@ -70,12 +70,12 @@ and `hooks` on top of its own credentials — see
 real provider. Perfect for tests.
 
 ```typescript
-import Mock from 'postboi/mock';
+import Mock from 'postboi/mock'
 
-const mail = new Mock({ default: { from: 'no-reply@example.com' } });
-await mail.send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
+const mail = new Mock({ default: { from: 'no-reply@example.com' } })
+await mail.send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
 
-expect(mail.sent).toHaveLength(1);
+expect(mail.sent).toHaveLength(1)
 ```
 
 ## Custom headers & tags

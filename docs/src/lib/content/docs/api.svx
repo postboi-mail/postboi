@@ -10,15 +10,15 @@ category: Reference
 Every provider exposes the same surface:
 
 ```typescript
-import Resend from 'postboi/resend';
+import Resend from 'postboi/resend'
 
 const mail = new Resend({
 	api_key: string, // see Providers for credential option names
 	default?: { from?, to?, cc?, bcc?, reply_to? }
-});
+})
 
-await mail.send(options: SendOptions): Promise<SendResponse>;
-mail.is_error(error: unknown): error is PostboiError;
+await mail.send(options: SendOptions): Promise<SendResponse>
+mail.is_error(error: unknown): error is PostboiError
 ```
 
 See [Providers](/providers) for each provider's credential option names.
@@ -27,25 +27,25 @@ See [Providers](/providers) for each provider's credential option names.
 
 ```typescript
 interface SendOptions {
-	to?: Email | Email[];
-	from?: Email;
-	reply_to?: Email | Email[];
-	cc?: Email | Email[];
-	bcc?: Email | Email[];
-	subject?: string; // default: "Mail sent from website"
-	body: string | FormData;
-	text?: string;
+	to?: Email | Email[]
+	from?: Email
+	reply_to?: Email | Email[]
+	cc?: Email | Email[]
+	bcc?: Email | Email[]
+	subject?: string // default: "Mail sent from website"
+	body: string | FormData
+	text?: string
 	formatter?:
 		| {
-				fieldset?: ((label: string) => string) | null | false;
-				name?: ((label: string) => string) | null | false;
+				fieldset?: ((label: string) => string) | null | false
+				name?: ((label: string) => string) | null | false
 		  }
 		| null
-		| false;
-	attachments?: File | File[];
-	idempotency_key?: string;
-	headers?: Record<string, string>;
-	tags?: string[];
+		| false
+	attachments?: File | File[]
+	idempotency_key?: string
+	headers?: Record<string, string>
+	tags?: string[]
 }
 ```
 
@@ -60,12 +60,12 @@ Every provider also accepts these, on top of its own credentials:
 ```typescript
 {
 	// field defaults applied when a send omits them; to/cc/bcc accept a string or array
-	default?: { from?, to?, cc?, bcc?, reply_to? };
-	timeout?: number; // per-request timeout in ms (default 30000)
-	retries?: number; // retries on 429/5xx and network errors (default 0)
-	retry_delay?: number; // base backoff in ms, doubles each attempt (default 500)
-	auto_text?: boolean; // derive a plain-text body from the HTML (default false)
-	hooks?: Hooks; // see Hooks
+	default?: { from?, to?, cc?, bcc?, reply_to? }
+	timeout?: number // per-request timeout in ms (default 30000)
+	retries?: number // retries on 429/5xx and network errors (default 0)
+	retry_delay?: number // base backoff in ms, doubles each attempt (default 500)
+	auto_text?: boolean // derive a plain-text body from the HTML (default false)
+	hooks?: Hooks // see Hooks
 }
 ```
 
@@ -77,16 +77,16 @@ See [Errors & retries](/errors) for retry behaviour and [Hooks](/hooks) for the
 ```typescript
 type Email =
 	| string // plain address or "Name <address>"
-	| { address: string; name?: string };
+	| { address: string; name?: string }
 ```
 
 All accepted address formats:
 
 ```typescript
-'user@example.com';
+'user@example.com'
 { address: 'user@example.com', name: 'User Name' }
-'User Name <user@example.com>';
-['user1@example.com', 'user2@example.com'];
+'User Name <user@example.com>'
+['user1@example.com', 'user2@example.com']
 ```
 
 ## PostboiError
@@ -96,10 +96,10 @@ usage.
 
 ```typescript
 interface PostboiError {
-	provider: string; // e.g. "resend"
-	status?: number; // HTTP status, when applicable
-	code?: string; // provider-specific code, when available
-	message: string; // normalised message
-	raw: unknown; // the original provider payload
+	provider: string // e.g. "resend"
+	status?: number // HTTP status, when applicable
+	code?: string // provider-specific code, when available
+	message: string // normalised message
+	raw: unknown // the original provider payload
 }
 ```

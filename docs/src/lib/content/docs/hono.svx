@@ -11,17 +11,17 @@ request's `FormData` and hand it straight to [`mail()`](/api). Postboi extracts 
 
 ```typescript
 // src/index.ts
-import { Hono } from 'hono';
-import { mail } from 'postboi';
+import { Hono } from 'hono'
+import { mail } from 'postboi'
 
-const app = new Hono();
+const app = new Hono()
 
 app.post('/contact', async (c) => {
-	await mail({ body: c.req.formData() });
-	return c.redirect('/?sent=1', 303);
-});
+	await mail({ body: c.req.formData() })
+	return c.redirect('/?sent=1', 303)
+})
 
-export default app;
+export default app
 ```
 
 Point a `multipart/form-data` form at `/contact`. Include hidden `_subject` and `_reply_to`

@@ -127,8 +127,8 @@ const versionScopedLinks = () => (tree, file) => {
 }
 
 const themes = {
-	light: "github-light",
-	dark: "github-dark",
+	light: "catppuccin-latte",
+	dark: "catppuccin-macchiato",
 }
 const highlighter = await createHighlighter({
 	themes: Object.values(themes),

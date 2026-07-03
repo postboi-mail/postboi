@@ -29,12 +29,12 @@ var** — the API key — with the rest in version control.
 
 ```ts
 // postboi.config.ts  (committed)
-import { config } from 'postboi';
+import { config } from 'postboi'
 
 export default config({
 	provider: 'resend',
 	default: { from: 'no-reply@example.com' }
-});
+})
 ```
 
 ```bash
@@ -45,9 +45,9 @@ RESEND_API_KEY=re_xxxxxxxx
 After it finishes, `mail()` picks all of this up on every call — no further wiring needed.
 
 ```typescript
-import { mail } from 'postboi';
+import { mail } from 'postboi'
 
-await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
+await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
 ```
 
 ## Prefer to do it yourself?

@@ -13,7 +13,7 @@ to any `mail()` call.
 framework's `request.formData()` straight through without awaiting it yourself:
 
 ```typescript
-await mail({ body: request.formData() });
+await mail({ body: request.formData() })
 ```
 
 ## Special fields

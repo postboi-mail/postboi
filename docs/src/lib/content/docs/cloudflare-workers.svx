@@ -12,25 +12,25 @@ read the request's `FormData` and hand it to `send()`. Postboi extracts the
 
 ```typescript
 // src/index.ts
-import Postboi from 'postboi';
+import Postboi from 'postboi'
 
 interface Env {
-	POSTBOI_TOKEN: string;
+	POSTBOI_TOKEN: string
 }
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
-		const url = new URL(request.url);
+		const url = new URL(request.url)
 
 		if (request.method === 'POST' && url.pathname === '/contact') {
-			const mail = new Postboi({ token: env.POSTBOI_TOKEN });
-			await mail.send({ body: request.formData(), to: 'team@example.com' });
-			return Response.redirect(new URL('/?sent=1', url).toString(), 303);
+			const mail = new Postboi({ token: env.POSTBOI_TOKEN })
+			await mail.send({ body: request.formData(), to: 'team@example.com' })
+			return Response.redirect(new URL('/?sent=1', url).toString(), 303)
 		}
 
-		return new Response(/* the contact form */);
+		return new Response(/* the contact form */)
 	},
-};
+}
 ```
 
 Point a `multipart/form-data` form at `/contact`. Include hidden `_subject` and `_reply_to`

@@ -9,14 +9,14 @@ Pass `scheduled_at` to send a message at a future time instead of right away. It
 `Date`:
 
 ```typescript
-import { mail } from 'postboi';
+import { mail } from 'postboi'
 
 await mail({
 	to: 'contact@example.com',
 	subject: 'Your weekly digest',
 	body: '<p>Here is what you missed.</p>',
 	scheduled_at: new Date(Date.now() + 60 * 60 * 1000) // in one hour
-});
+})
 ```
 
 Or an ISO 8601 string — include an explicit timezone offset or `Z`, otherwise it's read as
@@ -28,7 +28,7 @@ await mail({
 	subject: 'Launch day',
 	body: '<p>We are live.</p>',
 	scheduled_at: '2026-07-10T14:30:00Z'
-});
+})
 ```
 
 An invalid or unparseable `scheduled_at` throws before anything is sent.

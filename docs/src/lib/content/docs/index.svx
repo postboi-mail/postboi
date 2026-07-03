@@ -14,9 +14,9 @@ variables, so the same line of code works whether you're on Resend, Postmark, Ma
 any of the other supported providers.
 
 ```typescript
-import { mail } from 'postboi';
+import { mail } from 'postboi'
 
-await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' });
+await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
 ```
 
 ## Features

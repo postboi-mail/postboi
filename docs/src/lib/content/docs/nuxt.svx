@@ -11,12 +11,12 @@ hand it straight to [`mail()`](/api). Postboi extracts the
 
 ```typescript
 // server/api/contact.post.ts
-import { mail } from 'postboi';
+import { mail } from 'postboi'
 
 export default defineEventHandler(async (event) => {
-	await mail({ body: readFormData(event) });
-	return sendRedirect(event, '/?sent=1', 303);
-});
+	await mail({ body: readFormData(event) })
+	return sendRedirect(event, '/?sent=1', 303)
+})
 ```
 
 `defineEventHandler`, `readFormData`, and `sendRedirect` are Nuxt auto-imports. Point a
@@ -25,7 +25,7 @@ and bind `_reply_to` to the email (`v-model` + `:value`) so replying reaches the
 
 ```vue
 <script setup lang="ts">
-const email = ref('');
+const email = ref('')
 </script>
 
 <template>

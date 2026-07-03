@@ -11,13 +11,13 @@ and renders the rest into a tidy HTML table.
 
 ```typescript
 // src/pages/api/contact.ts
-import type { APIRoute } from 'astro';
-import { mail } from 'postboi';
+import type { APIRoute } from 'astro'
+import { mail } from 'postboi'
 
 export const POST: APIRoute = async ({ request, redirect }) => {
-	await mail({ body: request.formData() });
-	return redirect('/?sent=1', 303);
-};
+	await mail({ body: request.formData() })
+	return redirect('/?sent=1', 303)
+}
 ```
 
 Point a `multipart/form-data` form at the route. Include hidden `_subject` and `_reply_to`

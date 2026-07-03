@@ -11,18 +11,18 @@ and renders the rest into a tidy HTML table.
 
 ```tsx
 // app/routes/_index.tsx
-import { Form } from '@remix-run/react';
-import { useState } from 'react';
-import { mail } from 'postboi';
+import { Form } from '@remix-run/react'
+import { useState } from 'react'
+import { mail } from 'postboi'
 
 export async function action({ request }: { request: Request }) {
-	await mail({ body: request.formData() });
-	return { ok: true };
+	await mail({ body: request.formData() })
+	return { ok: true }
 }
 
 export default function Index() {
 	// Mirror the email into the hidden _reply_to field so replies reach the sender.
-	const [email, setEmail] = useState('');
+	const [email, setEmail] = useState('')
 
 	return (
 		<Form method="post" encType="multipart/form-data">
@@ -39,7 +39,7 @@ export default function Index() {
 			<textarea name="details→message" placeholder="Message" />
 			<button type="submit">Send</button>
 		</Form>
-	);
+	)
 }
 ```
 

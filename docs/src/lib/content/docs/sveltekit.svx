@@ -10,9 +10,9 @@ category: Frameworks
 
 ```typescript
 // +page.server.ts
-import { mail } from 'postboi/kit';
+import { mail } from 'postboi/kit'
 
-export const actions = { default: mail };
+export const actions = { default: mail }
 ```
 
 ## The form
@@ -32,9 +32,9 @@ when you want the email itself to appear from a specific address.
 ```svelte
 <!-- +page.svelte -->
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance } from '$app/forms'
 
-	let email = $state('');
+	let email = $state('')
 </script>
 
 <form method="POST" use:enhance enctype="multipart/form-data">
@@ -60,13 +60,13 @@ Got a configured provider instance (or no ambient env vars)? Wrap it with `actio
 can pass `status` for the failure code and `fields` for defaults merged into every send.
 
 ```typescript
-import Resend from 'postboi/resend';
-import { action } from 'postboi/kit';
-import { RESEND_API_KEY, EMAIL_FROM_ADDRESS } from '$env/static/private';
+import Resend from 'postboi/resend'
+import { action } from 'postboi/kit'
+import { RESEND_API_KEY, EMAIL_FROM_ADDRESS } from '$env/static/private'
 
-const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: EMAIL_FROM_ADDRESS } });
+const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: EMAIL_FROM_ADDRESS } })
 
 export const actions = {
 	default: action(mail, { status: 422, fields: { to: 'team@example.com' } })
-};
+}
 ```

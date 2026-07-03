@@ -14,17 +14,17 @@ kept on `.raw`.
 
 ```typescript
 try {
-	await mail.send({ to: 'bad@email', body: 'test' });
+	await mail.send({ to: 'bad@email', body: 'test' })
 } catch (error) {
 	if (mail.is_error(error)) {
 		// error is a PostboiError
-		console.error(error.provider); // e.g. "resend"
-		console.error(error.status); // HTTP status, when applicable
-		console.error(error.code); // provider-specific code, when available
-		console.error(error.message); // normalised message
-		console.error(error.raw); // the original provider payload
+		console.error(error.provider) // e.g. "resend"
+		console.error(error.status) // HTTP status, when applicable
+		console.error(error.code) // provider-specific code, when available
+		console.error(error.message) // normalised message
+		console.error(error.raw) // the original provider payload
 	} else {
-		console.error(error);
+		console.error(error)
 	}
 }
 ```
@@ -39,7 +39,7 @@ const mail = new Resend({
 	timeout: 30000, // per-request timeout in ms (default 30000)
 	retries: 2, // retries on 429/5xx and network errors (default 0)
 	retry_delay: 500 // base backoff in ms, doubles each attempt (default 500)
-});
+})
 ```
 
 Retries fire on `429`, `5xx`, and network errors. The delay doubles each attempt

@@ -6,7 +6,7 @@ category: Getting started
 ---
 
 <script lang="ts">
-	import { InstallationTabs, Step, Steps } from '$lib';
+	import { InstallationTabs, Step, Steps } from "$lib"
 </script>
 
 The [Quick start](/quick-start) CLI does all of this for you. Prefer to wire it up by
@@ -24,12 +24,12 @@ hand? It's three steps.
 
 ```ts
 // postboi.config.ts  (commit this)
-import { config } from 'postboi';
+import { config } from 'postboi'
 
 export default config({
 	provider: 'resend',
 	default: { from: 'no-reply@example.com' }
-});
+})
 ```
 
 ```bash
@@ -43,13 +43,13 @@ RESEND_API_KEY=re_xxxxxxxx
 		No provider import, no constructor — credentials come from the environment.
 
 ```typescript
-import { mail } from 'postboi';
+import { mail } from 'postboi'
 
 await mail({
 	to: 'contact@example.com',
 	subject: 'Hi',
 	body: '<p>Hello</p>'
-});
+})
 ```
 
 	</Step>
@@ -81,7 +81,7 @@ flip it on the host. This works on every runtime — Node, Bun, and edge — wit
 
 ```ts
 // postboi.config.ts — safe default for local dev
-export default config({ provider: 'mock' }); // sends nothing locally
+export default config({ provider: 'mock' }) // sends nothing locally
 ```
 
 ```bash
@@ -100,13 +100,13 @@ is available — it runs once at startup and works on every adapter, including W
 
 ```ts
 // src/hooks.server.ts
-import type { ServerInit } from '@sveltejs/kit';
-import { dev } from '$app/environment';
-import { configure } from 'postboi';
+import type { ServerInit } from '@sveltejs/kit'
+import { dev } from '$app/environment'
+import { configure } from 'postboi'
 
 export const init: ServerInit = () => {
-	configure({ provider: dev ? 'mock' : 'resend' });
-};
+	configure({ provider: dev ? 'mock' : 'resend' })
+}
 ```
 
 > Avoid `process.env.NODE_ENV` in the config file — a self-hosted Node deploy that
@@ -118,9 +118,9 @@ A contact-form action is a one-liner. See [SvelteKit form actions](/sveltekit).
 
 ```typescript
 // +page.server.ts
-import { mail } from 'postboi/kit';
+import { mail } from 'postboi/kit'
 
-export const actions = { default: mail };
+export const actions = { default: mail }
 ```
 
 > On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider
