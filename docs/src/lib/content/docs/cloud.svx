@@ -23,8 +23,9 @@ then writes two env vars:
 It also offers to set defaults (`to`, `reply_to`, `cc`, `bcc` — and `from`, once you have
 custom domains to choose between) and writes a committed [`postboi.config.ts`](/config) to
 hold them — the same file where you can add [hooks](/hooks) later. The CLI knows your
-domains and their verification status, so it warns at setup time if a default `from` uses
-a pending or unknown domain.
+domains and their verification status, so it won't accept a default `from` at a domain
+that isn't on your account (listing the ones that are), and warns when the domain is
+still pending verification.
 
 That's the whole setup:
 

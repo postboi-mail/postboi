@@ -230,7 +230,13 @@ async function offer_host_push(
 	}
 }
 
-type DefaultField = { arg: string; label: string; default?: string }
+type DefaultField = {
+	arg: string
+	label: string
+	default?: string
+	/** Return an error message to reject the value and re-ask; print-and-undefined to accept. */
+	validate?: (value: string) => string | undefined
+}
 
 /** Prompt for the optional default fields (committed to postboi.config.ts, not env). */
 async function ask_defaults(
@@ -241,10 +247,18 @@ async function ask_defaults(
 	const names = fields.map((f) => f.arg.replace("_", "-")).join(" / ")
 	if (await prompts.confirm(`\nSet ${bold("default")} ${names}?`)) {
 		for (const field of fields) {
-			const value = await prompts.ask(`${field.label} ${dim("(optional)")}`, {
-				default: field.default,
-			})
-			if (value) defaults[field.arg] = value
+			while (true) {
+				const value = await prompts.ask(`${field.label} ${dim("(optional)")}`, {
+					default: field.default,
+				})
+				const error = value ? field.validate?.(value) : undefined
+				if (error) {
+					console.log(`${red("✗")} ${error}`)
+					continue
+				}
+				if (value) defaults[field.arg] = value
+				break
+			}
 		}
 	}
 	return defaults
@@ -380,30 +394,39 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		console.log(`${dim("Domains:")} ${list}`)
 	}
 
-	// POSTBOI_FROM is a convenience default — the API also falls back to the account's
-	// sending address when `from` is omitted, so the token alone is enough.
 	const values: Record<string, string> = { POSTBOI_TOKEN: token }
-	if (send_address) values.POSTBOI_FROM = send_address
+
+	// Reject a from we know the API would bounce (from_not_allowed) and re-ask; a pending
+	// domain is accepted with a warning — it's theirs, the DNS just hasn't landed yet.
+	const validate_from = (value: string): string | undefined => {
+		// Nothing to validate against (older API, no domains yet) — accept anything.
+		if (!send_address && domains.length === 0) return undefined
+		const status = from_status(value, send_address, domains)
+		if (status.level === "unknown") {
+			const permitted = [
+				...(send_address ? [send_address] : []),
+				...domains.map((d) => `…@${d.domain}`),
+			].join(", ")
+			return `${bold(status.domain)} isn't a domain on your account — use ${permitted}, or verify the domain in the dashboard first.`
+		}
+		if (status.level === "pending")
+			console.log(
+				`${yellow("!")} ${bold(status.domain)} is still pending verification — mail from it may not be delivered yet.`
+			)
+		return undefined
+	}
 
 	// `from` is only worth asking when there's a choice (a custom domain); otherwise
 	// POSTBOI_FROM already carries the only valid address.
 	const fields = DEFAULT_FIELDS.filter(
 		(f) => f.arg !== "from" || domains.length > 0 || !send_address
-	).map((f) => (f.arg === "from" ? { ...f, default: send_address } : f))
+	).map((f) => (f.arg === "from" ? { ...f, default: send_address, validate: validate_from } : f))
 	const config_defaults = await ask_defaults(prompts, fields)
-	if (config_defaults.from) {
-		const status = from_status(config_defaults.from, send_address, domains)
-		if (status.level === "pending")
-			console.log(
-				`${yellow("!")} ${bold(status.domain)} is still pending verification — mail from it may not be delivered yet.`
-			)
-		if (status.level === "unknown")
-			console.log(
-				`${yellow("!")} ${bold(status.domain)} isn't a domain on your account — sends from it will fail (from_not_allowed).`
-			)
-		// The account address is already the API fallback (and POSTBOI_FROM) — keep config minimal.
-		if (config_defaults.from === send_address) delete config_defaults.from
-	}
+	// The account address is already the API fallback (and POSTBOI_FROM) — keep config minimal.
+	if (config_defaults.from === send_address) delete config_defaults.from
+	// POSTBOI_FROM is a convenience default (the API falls back to the account's address
+	// anyway) — but env beats config, so never write it over a from the user chose.
+	if (send_address && !config_defaults.from) values.POSTBOI_FROM = send_address
 
 	const targets = await choose_env_targets(prompts, files)
 	write_env_values(targets, values)
@@ -428,14 +451,14 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	console.log(
 		dim('import { mail } from "postboi"\n\nawait mail({ to: "…", subject: "…", body: "…" })') + "\n"
 	)
-	const from_note = send_address
-		? `Emails send from ${send_address}`
+	const from = config_defaults.from ?? send_address
+	const from_note = from
+		? `Emails send from ${from}`
 		: "Emails send from your account's send.postboi.email address"
-	console.log(
-		dim(
-			`${from_note} — set reply_to to receive replies. Verify a domain in the dashboard to send from your own.`
-		) + "\n"
-	)
+	const domain_hint = config_defaults.from
+		? ""
+		: " Verify a domain in the dashboard to send from your own."
+	console.log(dim(`${from_note} — set reply_to to receive replies.${domain_hint}`) + "\n")
 }
 
 /** Bring-your-own-provider onboarding: pick a provider, collect creds, write config. */
