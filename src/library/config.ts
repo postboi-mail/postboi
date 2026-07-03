@@ -144,12 +144,25 @@ async function read_disk(): Promise<PostboiConfig> {
 		for (;;) {
 			const file = CONFIG_FILES.map((f) => path.join(dir, f)).find((f) => existsSync(f))
 			if (file) {
-				const mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as {
-					default?: PostboiConfig
-					config?: PostboiConfig
+				try {
+					const mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as {
+						default?: PostboiConfig
+						config?: PostboiConfig
+					}
+					const config = mod.default ?? mod.config
+					return config && typeof config === "object" ? config : {}
+				} catch (error) {
+					// A found config that fails to import is a misconfiguration, not a missing file —
+					// be loud so defaults/hooks/provider don't silently vanish.
+					const hint = file.endsWith("ts")
+						? " (this Node can't import TypeScript config — use Node 23.6+ or rename to postboi.config.js)"
+						: ""
+					console.warn(
+						`postboi: found ${path.basename(file)} but couldn't import it${hint}:`,
+						error
+					)
+					return {}
 				}
-				const config = mod.default ?? mod.config
-				return config && typeof config === "object" ? config : {}
 			}
 			const parent = path.dirname(dir)
 			if (parent === dir) return {}

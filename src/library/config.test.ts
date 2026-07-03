@@ -118,6 +118,26 @@ describe("global config", () => {
 		expect(fetch.mock.calls.at(-1)![0]).toContain("from-env.example.com")
 	})
 
+	it("warns when a config file is found but fails to import", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		const dir = mkdtempSync(join(tmpdir(), "postboi-config-"))
+		const original = process.cwd()
+		try {
+			writeFileSync(join(dir, "postboi.config.mjs"), `throw new Error("boom")`)
+			process.chdir(dir)
+
+			const config = await load_config()
+			expect(config.retries).toBeUndefined()
+			const warnings = warn.mock.calls.filter(([msg]) => String(msg).includes("postboi.config.mjs"))
+			expect(warnings).toHaveLength(1)
+			expect(String(warnings[0][0])).toContain("couldn't import")
+		} finally {
+			process.chdir(original)
+			rmSync(dir, { recursive: true, force: true })
+			warn.mockRestore()
+		}
+	})
+
 	it("auto-loads a postboi.config file from disk", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "postboi-config-"))
 		const original = process.cwd()
