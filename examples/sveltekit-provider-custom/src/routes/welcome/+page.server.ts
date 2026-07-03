@@ -11,7 +11,7 @@ export const actions = {
 
 		try {
 			await mail({
-				// Must be an address on a domain you've verified in Resend.
+				// Use an address your provider is allowed to send from.
 				from: "Acme <hello@acme.example>",
 				to: email,
 				subject: "Welcome to Acme",

@@ -12,8 +12,9 @@ email so hitting **Reply** goes straight back to the person who filled it in. Th
 - [`sveltekit-provider-postboi`](./sveltekit-provider-postboi) — SvelteKit on Postboi Cloud.
   Shows both the one-line `postboi/kit` action and a hand-built top-level `mail()` call, plus
   the typed `from` that Cloud enables.
-- [`sveltekit-provider-resend`](./sveltekit-provider-resend) — the same app on Resend (plain
-  API key). Same code, different provider.
+- [`sveltekit-provider-custom`](./sveltekit-provider-custom) — the same app on any
+  bring-your-own provider (Resend, Postmark, SendGrid, Mailgun, SES, SMTP, …). Shows that
+  `postboi.config.ts` is the only file that changes between providers.
 
 ## Scripts
 

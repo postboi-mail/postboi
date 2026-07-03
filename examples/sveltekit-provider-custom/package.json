@@ -1,5 +1,5 @@
 {
-	"name": "postboi-example-sveltekit-provider-resend",
+	"name": "postboi-example-sveltekit-provider-custom",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",

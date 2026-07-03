@@ -85,9 +85,9 @@ Those types live *inside* `node_modules/postboi`, written from your account's do
 there's nothing to commit or gitignore, and `prepare` re-runs `sync` after installs. It just
 works once you've run `bunx postboi init`.
 
-> Prefer a plain API-key provider like Resend? See
-> [`sveltekit-provider-resend`](../sveltekit-provider-resend) — same code, different provider.
-> Cloud is used here specifically to demo the typed `from`.
+> Prefer a plain API-key provider (Resend, Postmark, SES, SMTP, …)? See
+> [`sveltekit-provider-custom`](../sveltekit-provider-custom) — same code, you just pick the
+> provider in one config file. Cloud is used here specifically to demo the typed `from`.
 
 ## How it works
 
