@@ -1,7 +1,7 @@
 # SvelteKit × bring-your-own provider
 
 A minimal contact form wired to [Postboi](https://github.com/darbymanning/postboi) that runs
-on **any** of the [~20 supported providers](https://postboi.dev/providers) — Resend,
+on **any** of the [~20 supported providers](https://docs.postboi.email/providers) — Resend,
 Postmark, SendGrid, Mailgun, SES, SMTP, and the rest.
 
 The point of this example: **[`postboi.config.ts`](./postboi.config.ts) is the only file that
@@ -90,7 +90,7 @@ domain). It accepts a display name: `"Acme <hello@yourdomain.com>"` arrives as *
 - [`src/routes/+page.server.ts`](./src/routes/+page.server.ts) — the contact form's backend:
   `export const actions = { default: mail }`.
 - [`src/routes/+page.svelte`](./src/routes/+page.svelte) — the contact form. Field names use
-  the [`fieldset→field`](https://postboi.dev/formdata#grouped-fields) syntax, `_subject` sets
+  the [`fieldset→field`](https://docs.postboi.email/formdata#grouped-fields) syntax, `_subject` sets
   the subject, and `_reply_to` is bound to the sender's email.
 - [`src/routes/welcome/+page.server.ts`](./src/routes/welcome/+page.server.ts) — a hand-built
   top-level `mail()` call, again provider-agnostic.

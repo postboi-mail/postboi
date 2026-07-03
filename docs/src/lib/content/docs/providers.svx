@@ -9,28 +9,34 @@ Each provider is its own entry point, so you only bundle the one you import. Eve
 exposes the same `send()` and `is_error()` methods — swap providers without changing your
 calling code.
 
-| Provider       | Import               | Constructor options                  |
-| -------------- | -------------------- | ------------------------------------ |
-| Amazon SES     | `postboi/ses`        | `access_key_id`, `secret_access_key`, `region`, `session_token?` |
-| Brevo          | `postboi/brevo`      | `api_key`                            |
-| Cloudflare     | `postboi/cloudflare` | `api_key`, `account_id`              |
-| Elastic Email  | `postboi/elasticemail` | `api_key`                          |
-| MailerSend     | `postboi/mailersend` | `api_key`                            |
-| Mailgun        | `postboi/mailgun`    | `api_key`, `domain`, `region?`       |
-| Mailjet        | `postboi/mailjet`    | `api_key`, `api_secret`              |
-| MailPace       | `postboi/mailpace`   | `api_key`                            |
-| Mailtrap       | `postboi/mailtrap`   | `api_key`, `sandbox?`, `inbox_id?`   |
-| Mandrill       | `postboi/mandrill`   | `api_key`                            |
-| Microsoft 365  | `postboi/microsoft365` | `tenant_id`, `client_id`, `client_secret` |
-| Plunk          | `postboi/plunk`      | `api_key`                            |
-| Postmark       | `postboi/postmark`   | `api_key`, `message_stream?`         |
-| Resend         | `postboi/resend`     | `api_key`                            |
-| Scaleway       | `postboi/scaleway`   | `secret_key`, `project_id`, `region` |
-| SendGrid       | `postboi/sendgrid`   | `api_key`, `region?`                 |
-| SMTP (any)     | `postboi/smtp`       | `host`, `port?`, `user?`, `pass?`, `secure?` |
-| SparkPost      | `postboi/sparkpost`  | `api_key`, `region?`                 |
-| ZeptoMail      | `postboi/zepto`      | `api_key`                            |
-| Mock (testing) | `postboi/mock`       | _none_                               |
+The **environment variables** are what [`postboi init`](/quick-start) writes and the
+zero-config [`mail()`](/api) reads; the **constructor options** are the same values passed
+explicitly when you [construct a provider directly](#using-a-provider-directly). Non-secret
+bits (a Mailgun domain, an SES region) can instead live in [`postboi.config.ts`](/config) —
+keep the secrets in the environment.
+
+| Provider       | Import               | Environment variables                                   | Constructor options                  |
+| -------------- | -------------------- | ------------------------------------------------------- | ------------------------------------ |
+| Amazon SES     | `postboi/ses`        | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `access_key_id`, `secret_access_key`, `region`, `session_token?` |
+| Brevo          | `postboi/brevo`      | `BREVO_API_KEY`                                         | `api_key`                            |
+| Cloudflare     | `postboi/cloudflare` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`        | `api_key`, `account_id`              |
+| Elastic Email  | `postboi/elasticemail` | `ELASTICEMAIL_API_KEY`                               | `api_key`                            |
+| MailerSend     | `postboi/mailersend` | `MAILERSEND_API_KEY`                                   | `api_key`                            |
+| Mailgun        | `postboi/mailgun`    | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`                    | `api_key`, `domain`, `region?`       |
+| Mailjet        | `postboi/mailjet`    | `MJ_APIKEY_PUBLIC`, `MJ_APIKEY_PRIVATE`                | `api_key`, `api_secret`              |
+| MailPace       | `postboi/mailpace`   | `MAILPACE_SERVER_TOKEN`                                | `api_key`                            |
+| Mailtrap       | `postboi/mailtrap`   | `MAILTRAP_TOKEN`                                       | `api_key`, `sandbox?`, `inbox_id?`   |
+| Mandrill       | `postboi/mandrill`   | `MANDRILL_API_KEY`                                     | `api_key`                            |
+| Microsoft 365  | `postboi/microsoft365` | `MS365_TENANT_ID`, `MS365_CLIENT_ID`, `MS365_CLIENT_SECRET` | `tenant_id`, `client_id`, `client_secret` |
+| Plunk          | `postboi/plunk`      | `PLUNK_API_KEY`                                        | `api_key`                            |
+| Postmark       | `postboi/postmark`   | `POSTMARK_SERVER_TOKEN`                                | `api_key`, `message_stream?`         |
+| Resend         | `postboi/resend`     | `RESEND_API_KEY`                                       | `api_key`                            |
+| Scaleway       | `postboi/scaleway`   | `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID`, `SCALEWAY_REGION` | `secret_key`, `project_id`, `region` |
+| SendGrid       | `postboi/sendgrid`   | `SENDGRID_API_KEY`                                     | `api_key`, `region?`                 |
+| SMTP (any)     | `postboi/smtp`       | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` | `host`, `port?`, `user?`, `pass?`, `secure?` |
+| SparkPost      | `postboi/sparkpost`  | `SPARKPOST_API_KEY`                                    | `api_key`, `region?`                 |
+| ZeptoMail      | `postboi/zepto`      | `ZEPTO_TOKEN`                                          | `api_key`                            |
+| Mock (testing) | `postboi/mock`       | _none_                                                  | _none_                               |
 
 Want another provider? Quit being a baby and [open a PR](https://github.com/darbymanning/postboi).
 

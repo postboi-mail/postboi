@@ -16,4 +16,4 @@ for (const r of results) {
 }
 
 // Sending the *same* message to many people? Pass one `to` array plus per-recipient `data`
-// and let `{name}` placeholders fill in — see https://postboi.dev/bulk#personalized-batches.
+// and let `{name}` placeholders fill in — see https://docs.postboi.email/bulk#personalized-batches.

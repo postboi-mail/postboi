@@ -2,7 +2,7 @@ import { mail } from "postboi"
 
 // `scheduled_at` takes a Date or an ISO 8601 string. Providers that support scheduling
 // (Postboi Cloud, Resend, Brevo, Mailgun, SendGrid) honour it; every other provider sends
-// immediately. See https://postboi.dev/scheduling.
+// immediately. See https://docs.postboi.email/scheduling.
 const in_one_hour = new Date(Date.now() + 60 * 60 * 1000)
 
 const result = await mail({

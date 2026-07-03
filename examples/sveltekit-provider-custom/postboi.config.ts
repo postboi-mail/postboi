@@ -8,7 +8,7 @@ import { config } from "postboi"
 //   2. Put that provider's secret(s) in .env (see .env.example).
 //   3. Any non-secret bits (a Mailgun domain, an SES region) go in `options` here.
 //
-// A few of the ~20 providers (full list: https://postboi.dev/providers):
+// A few of the ~20 providers (full list: https://docs.postboi.email/providers):
 //
 //   provider       secret env var(s)                        non-secret options
 //   ─────────      ───────────────────────────────────      ─────────────────────────────
