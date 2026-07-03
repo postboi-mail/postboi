@@ -1,12 +1,14 @@
 ---
 title: Scheduling
 name: Scheduling
-description: Send later by passing scheduled_at — a Date or ISO 8601 string — on any mail() call.
+description: Send later with scheduled_at — a relative duration, a Date, or an ISO 8601 string.
 category: Guides
 ---
 
-Pass `scheduled_at` to send a message at a future time instead of right away. It accepts a
-`Date`:
+Pass `scheduled_at` to send a message at a future time instead of right away.
+
+The easiest way is a **relative duration** — an object of units added to the send time. Fields
+combine, so `{ days: 1, hours: 5 }` is 29 hours from now:
 
 ```typescript
 import { mail } from 'postboi'
@@ -15,12 +17,15 @@ await mail({
 	to: 'contact@example.com',
 	subject: 'Your weekly digest',
 	body: '<p>Here is what you missed.</p>',
-	scheduled_at: new Date(Date.now() + 60 * 60 * 1000) // in one hour
+	scheduled_at: { days: 1, hours: 5 }
 })
 ```
 
-Or an ISO 8601 string — include an explicit timezone offset or `Z`, otherwise it's read as
-UTC:
+Every unit is optional: `seconds`, `minutes`, `hours`, `days`, `weeks`, `months`, `years`.
+Months and years are calendar-aware (a real "+1 month").
+
+You can also pass an absolute `Date`, or an ISO 8601 string (include an explicit timezone
+offset or `Z`, otherwise it's read as UTC):
 
 ```typescript
 await mail({

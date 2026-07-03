@@ -51,6 +51,28 @@ export type FormFields = Record<string, string | Array<string>>
 export type BodyInput = string | FormData | FormFields
 
 /**
+ * A relative delay for {@link SendOptions.scheduled_at}, added to the send time. Every field is
+ * optional and they combine — `{ days: 1, hours: 5 }` is 26 hours from now. Days/weeks/hours/…
+ * are fixed spans; months and years are calendar-aware (a real "+1 month").
+ */
+export interface Duration {
+	/** Seconds from now. */
+	seconds?: number
+	/** Minutes from now. */
+	minutes?: number
+	/** Hours from now. */
+	hours?: number
+	/** Days from now. */
+	days?: number
+	/** Weeks from now. */
+	weeks?: number
+	/** Calendar months from now (e.g. Jan 31 + 1 month lands in Feb). */
+	months?: number
+	/** Calendar years from now. */
+	years?: number
+}
+
+/**
  * Options accepted by Postboi.send(...).
  *
  * Notes:
@@ -120,11 +142,12 @@ export interface SendOptions {
 	 */
 	tags?: Array<string>
 	/**
-	 * Schedule the message for future delivery. Accepts a `Date` or a date string. Forwarded
-	 * to providers with native scheduling (Resend, Brevo, SendGrid, Mailgun, Postboi Cloud);
+	 * Schedule the message for future delivery. Accepts a `Date`, an ISO 8601 string, or a
+	 * relative {@link Duration} added to now — e.g. `{ days: 1, hours: 5 }`. Forwarded to
+	 * providers with native scheduling (Resend, Brevo, SendGrid, Mailgun, Postboi Cloud);
 	 * ignored by providers without it, which send immediately.
 	 */
-	scheduled_at?: Date | string
+	scheduled_at?: Date | string | Duration
 }
 
 /** A single recipient's template variables (`{key}` → value). */
@@ -847,6 +870,25 @@ export abstract class ProviderBase<TResponse = unknown> {
 	}
 
 	/**
+	 * Resolve a {@link SendOptions.scheduled_at} input to a `Date`: a `Date` passes through, an
+	 * ISO 8601 string is parsed, and a relative {@link Duration} is added to the current time
+	 * (months/years via calendar arithmetic, the rest as fixed spans).
+	 */
+	private resolve_scheduled_at(value: Date | string | Duration): Date {
+		if (value instanceof Date) return value
+		if (typeof value === "string") return new Date(value)
+		const date = new Date()
+		if (value.years) date.setFullYear(date.getFullYear() + value.years)
+		if (value.months) date.setMonth(date.getMonth() + value.months)
+		if (value.weeks) date.setDate(date.getDate() + value.weeks * 7)
+		if (value.days) date.setDate(date.getDate() + value.days)
+		if (value.hours) date.setHours(date.getHours() + value.hours)
+		if (value.minutes) date.setMinutes(date.getMinutes() + value.minutes)
+		if (value.seconds) date.setSeconds(date.getSeconds() + value.seconds)
+		return date
+	}
+
+	/**
 	 * Normalise a `body` for {@link parse_form_data}: FormData passes through, a plain object of
 	 * fields (e.g. Express/multer's `req.body`) is appended key/value — array values become
 	 * repeated fields — and a string body (already-rendered HTML) returns null.
@@ -1021,8 +1063,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 
 		let scheduled_at: Date | undefined
 		if (options.scheduled_at !== undefined) {
-			scheduled_at =
-				options.scheduled_at instanceof Date ? options.scheduled_at : new Date(options.scheduled_at)
+			scheduled_at = this.resolve_scheduled_at(options.scheduled_at)
 			if (Number.isNaN(scheduled_at.getTime())) {
 				throw new PostboiError({
 					provider: this.provider,
