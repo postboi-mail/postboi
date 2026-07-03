@@ -10,24 +10,41 @@ straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#sp
 and renders the rest into a tidy HTML table.
 
 ```tsx
-// app/page.tsx
+// app/actions.ts
+'use server';
 import { mail } from 'postboi';
 
-async function submit(formData: FormData) {
-	'use server';
-
-	// Reply-to comes from the submitted email, so replying reaches the sender.
-	formData.set('_reply_to', String(formData.get('contact→email') ?? ''));
-	formData.set('_subject', 'Contact Form');
-
-	await mail({ body: formData });
+export async function submit(_prev: unknown, body: FormData) {
+	await mail({ body });
+	return { ok: true };
 }
+```
+
+Point a client-component form at it. Include hidden `_subject` and `_reply_to` fields, and
+mirror the visitor's email into `_reply_to` (with `useState`) so replying reaches the sender:
+
+```tsx
+// app/page.tsx
+'use client';
+import { useActionState, useState } from 'react';
+import { submit } from './actions';
 
 export default function Page() {
+	const [email, setEmail] = useState('');
+	const [state, action] = useActionState(submit, null);
+
 	return (
-		<form action={submit}>
+		<form action={action}>
+			<input type="hidden" name="_subject" value="Contact Form" />
+			<input type="hidden" name="_reply_to" value={email} />
 			<input name="contact→name" placeholder="Name" required />
-			<input name="contact→email" type="email" placeholder="Email" required />
+			<input
+				name="contact→email"
+				type="email"
+				value={email}
+				onChange={(e) => setEmail(e.target.value)}
+				required
+			/>
 			<textarea name="details→message" placeholder="Message" />
 			<button type="submit">Send</button>
 		</form>

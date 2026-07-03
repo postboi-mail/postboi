@@ -15,23 +15,31 @@ import type { APIRoute } from 'astro';
 import { mail } from 'postboi';
 
 export const POST: APIRoute = async ({ request, redirect }) => {
-	const form = await request.formData();
-
-	// Reply-to comes from the submitted email, so replying reaches the sender.
-	form.set('_reply_to', String(form.get('contact→email') ?? ''));
-	form.set('_subject', 'Contact Form');
-
-	await mail({ body: form });
+	const body = await request.formData();
+	await mail({ body });
 	return redirect('/?sent=1', 303);
 };
 ```
 
-Point a `multipart/form-data` form at the route with fields like `contact→name`,
-`contact→email`, and `details→message` — the [`fieldset→field`](/formdata#grouped-fields)
-syntax groups them in the email. API routes need SSR, so set `output: 'server'` with an
-adapter in `astro.config.mjs`.
+Point a `multipart/form-data` form at the route. Include hidden `_subject` and `_reply_to`
+fields, and mirror the email into `_reply_to` with a one-line `oninput` so replying reaches
+the sender:
 
-The provider and default recipient come from [`postboi.config.ts`](/config) — a
-`POSTBOI_TOKEN` routes to [Postboi Cloud](/cloud), or pick any [provider](/providers).
+```html
+<form method="post" action="/api/contact" enctype="multipart/form-data">
+	<input type="hidden" name="_subject" value="Contact Form" />
+	<input type="hidden" name="_reply_to" />
+	<input name="contact→name" placeholder="Name" required />
+	<input name="contact→email" type="email" required
+		oninput="this.form._reply_to.value = this.value" />
+	<textarea name="details→message" placeholder="Message"></textarea>
+	<button type="submit">Send</button>
+</form>
+```
+
+Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. API routes need SSR,
+so set `output: 'server'` with an adapter in `astro.config.mjs`. The provider and default
+recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+[Postboi Cloud](/cloud), or pick any [provider](/providers).
 
 **Runnable example:** [`examples/astro-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/astro-provider-postboi).

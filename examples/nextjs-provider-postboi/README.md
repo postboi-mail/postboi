@@ -1,6 +1,6 @@
 # Next.js × Postboi Cloud
 
-A contact form that turns a submission into a tidy HTML email via [postboi](https://docs.postboi.email), running on Postboi Cloud. Reply-to is set from the submitted email in the server action, so replying to the notification reaches the person who filled in the form.
+A contact form that turns a submission into a tidy HTML email via [postboi](https://docs.postboi.email), running on Postboi Cloud. The form carries a hidden `_reply_to` field mirrored from the submitted email, so replying to the notification reaches the person who filled it in.
 
 ## Set up
 
@@ -29,7 +29,8 @@ Open http://localhost:3000.
 
 ## How it works
 
-- **`app/page.tsx`** — the contact form plus a `"use server"` Server Action that sets `_reply_to` / `_subject` and calls `mail({ body: formData })`. Fields named `group→field` (e.g. `contact→name`) become grouped sections in the rendered HTML email.
+- **`app/page.tsx`** — the contact form (a client component). Hidden `_subject` and `_reply_to` fields ride along; `_reply_to` mirrors the email via `useState`. Fields named `group→field` (e.g. `contact→name`) become grouped sections in the rendered HTML email.
+- **`app/actions.ts`** — a `"use server"` Server Action that just hands the whole `FormData` to `mail({ body })`.
 - **`postboi.config.ts`** — selects the provider (`postboi`, i.e. Postboi Cloud) and the default recipient the contact-form notification lands at.
 
 Learn more in the [postboi docs](https://docs.postboi.email) or grab a token at [postboi.email](https://postboi.email).

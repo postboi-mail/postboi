@@ -17,8 +17,16 @@ app.get("/", function (c) {
 		<h1>Contact us</h1>
 		${sent ? `<p>Thanks — we'll be in touch.</p>` : ""}
 		<form method="post" action="/contact" enctype="multipart/form-data">
+			<input type="hidden" name="_subject" value="Contact Form" />
+			<input type="hidden" name="_reply_to" />
 			<input name="contact→name" placeholder="Name" required />
-			<input name="contact→email" type="email" placeholder="Email" required />
+			<input
+				name="contact→email"
+				type="email"
+				placeholder="Email"
+				required
+				oninput="this.form._reply_to.value = this.value"
+			/>
 			<textarea name="details→message" placeholder="Message"></textarea>
 			<button type="submit">Send</button>
 		</form>
@@ -27,13 +35,10 @@ app.get("/", function (c) {
 })
 
 app.post("/contact", async function (c) {
-	const form = await c.req.formData()
-
-	form.set("_reply_to", String(form.get("contact→email") ?? ""))
-	form.set("_subject", "Contact Form")
-
-	await mail({ body: form })
-
+	// The form carries `_subject` and `_reply_to` (mirrored from the email) as hidden fields,
+	// so the whole submission is just handed to postboi as the body.
+	const body = await c.req.formData()
+	await mail({ body })
 	return c.redirect("/?sent=1", 303)
 })
 
