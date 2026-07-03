@@ -9,6 +9,8 @@ hitting **Reply** goes straight back to the person who filled it in.
 
 ## Frameworks
 
-- [`sveltekit`](./sveltekit) — SvelteKit form action via `postboi/kit`.
+- [`sveltekit`](./sveltekit) — SvelteKit form action via `postboi/kit`, running on Postboi
+  Cloud so it can also demo the typed `from`.
 
-More coming (Next.js, Remix, Astro, …). PRs welcome.
+More coming (Next.js, Remix, Astro, …), plus provider-specific variants (e.g. a plain
+API-key Resend setup). PRs welcome.

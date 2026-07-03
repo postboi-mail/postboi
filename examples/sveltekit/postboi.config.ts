@@ -1,11 +1,14 @@
 import { config } from "postboi"
 
-// Committed, non-secret config. The only secret — your provider's API key — lives in .env.
-// Swap `provider` for any of the supported providers: https://postboi.dev/providers
+// Postboi Cloud — the zero-config provider. `bunx postboi init` authenticates, writes your
+// POSTBOI_TOKEN to .env, and generates the typed `from` (see the README). Nothing here is
+// secret, so it's committed.
 export default config({
-	provider: "resend",
+	provider: "postboi",
 	default: {
-		from: "Acme <no-reply@example.com>",
-		to: "team@example.com",
+		// After `bunx postboi sync`, `from` is narrowed to your verified Cloud domains — a
+		// domain you don't own won't typecheck. See "Typed from" in the README.
+		from: "Acme <hello@acme.example>",
+		to: "team@acme.example",
 	},
 })
