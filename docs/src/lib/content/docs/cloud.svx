@@ -134,7 +134,13 @@ when that happens.
 
 ## Notes
 
-- `scheduled_at` isn't supported on Cloud yet — sends are immediate.
+- `scheduled_at` schedules a send up to 30 days ahead. Scheduled messages appear in the
+  dashboard's Messages → Scheduled tab, where they can be rescheduled or canceled until
+  they send. Scheduling counts against the free tier's daily cap on the day it's
+  accepted; the monthly quota is charged when the message actually sends.
+- `scheduled_at` accepts an ISO 8601 datetime string. Include an explicit timezone offset
+  or `Z` (e.g. `2026-07-10T14:30:00Z` or `2026-07-10T09:30:00-05:00`) — a bare local time
+  without an offset is interpreted as UTC. It must be in the future and at most 30 days ahead.
 - In runtimes without ambient env vars (e.g. Cloudflare Workers), pass the token
   explicitly: `new Postboi({ token })`.
 - The token can be revoked and reissued any time from the dashboard's API keys panel.
