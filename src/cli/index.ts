@@ -220,6 +220,44 @@ async function offer_host_push(
 	}
 }
 
+/** Prompt for the optional default fields (committed to postboi.config.ts, not env). */
+async function ask_defaults(
+	prompts: Prompts,
+	fields: typeof DEFAULT_FIELDS = DEFAULT_FIELDS
+): Promise<Record<string, string>> {
+	const defaults: Record<string, string> = {}
+	const names = fields.map((f) => f.arg.replace("_", "-")).join(" / ")
+	if (await prompts.confirm(`\nSet ${bold("default")} ${names}?`)) {
+		for (const field of fields) {
+			const value = await prompts.ask(`${field.label} ${dim("(optional)")}`)
+			if (value) defaults[field.arg] = value
+		}
+	}
+	return defaults
+}
+
+/** Write postboi.config.ts, or show what to merge in when one already exists. */
+function write_config(
+	provider_key: string,
+	defaults: Record<string, string>,
+	options: Record<string, string>
+): void {
+	console.log()
+	const existing_config = CONFIG_FILES.find((f) => existsSync(f))
+	if (existing_config) {
+		// Don't clobber a hand-edited file — show what to merge in instead.
+		console.log(`${yellow("!")} ${bold(existing_config)} already exists — add to it:`)
+		console.log(dim(`\n  provider: ${JSON.stringify(provider_key)},`))
+		if (Object.keys(defaults).length)
+			console.log(dim(`  ${render_block("default", defaults, "  ").trimEnd()}`))
+		if (Object.keys(options).length)
+			console.log(dim(`  ${render_block("options", options, "  ").trimEnd()}`))
+	} else {
+		writeFileSync("postboi.config.ts", render_config(provider_key, defaults, options))
+		console.log(`${green("✓")} wrote ${bold("postboi.config.ts")}`)
+	}
+}
+
 /** Make sure postboi itself is installed in the project. */
 async function offer_install(prompts: Prompts, files: Array<string>): Promise<void> {
 	if (!existsSync("package.json")) return
@@ -237,8 +275,8 @@ async function offer_install(prompts: Prompts, files: Array<string>): Promise<vo
 }
 
 /**
- * Postboi Cloud onboarding: authorise this device in the browser, then write the
- * resulting `POSTBOI_TOKEN`. No provider account, no DNS, no config file.
+ * Postboi Cloud onboarding: authorise this device in the browser, write the resulting
+ * `POSTBOI_TOKEN`, then a `postboi.config.ts` for defaults and hooks. No provider account, no DNS.
  */
 async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void> {
 	const base = cloud_base()
@@ -256,13 +294,22 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	// sending address when `from` is omitted, so the token alone is enough.
 	const values: Record<string, string> = { POSTBOI_TOKEN: token }
 	if (send_address) values.POSTBOI_FROM = send_address
+
+	// `from` is already covered by POSTBOI_FROM (env wins over config), so don't ask twice.
+	const fields = send_address ? DEFAULT_FIELDS.filter((f) => f.arg !== "from") : DEFAULT_FIELDS
+	const config_defaults = await ask_defaults(prompts, fields)
+
 	const targets = await choose_env_targets(prompts, files)
 	write_env_values(targets, values)
 	await offer_gitignore(prompts, targets)
 	await offer_host_push(prompts, files, values)
 	await offer_install(prompts, files)
 
-	console.log(`\n${green(bold("Done!"))} No config file needed — just send:\n`)
+	// The committed home for defaults and hooks. A POSTBOI_TOKEN alone already routes send()
+	// to Cloud, but `provider: "postboi"` makes it explicit.
+	write_config("postboi", config_defaults, {})
+
+	console.log(`\n${green(bold("Done!"))} Just send:\n`)
 	console.log(
 		dim('import { mail } from "postboi"\n\nawait mail({ to: "…", subject: "…", body: "…" })') + "\n"
 	)
@@ -299,13 +346,7 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 	}
 
 	// 2b. Optional default fields (committed to config, not env)
-	const config_defaults: Record<string, string> = {}
-	if (await prompts.confirm(`\nSet ${bold("default")} from / to / reply-to / cc / bcc?`)) {
-		for (const field of DEFAULT_FIELDS) {
-			const value = await prompts.ask(`${field.label} ${dim("(optional)")}`)
-			if (value) config_defaults[field.arg] = value
-		}
-	}
+	const config_defaults = await ask_defaults(prompts)
 
 	// 3–6. Write env vars, gitignore them, offer a host push
 	const targets = await choose_env_targets(prompts, files)
@@ -317,21 +358,7 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 	await offer_install(prompts, files)
 
 	// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
-	console.log()
-	const config_source = render_config(provider.key, config_defaults, config_options)
-	const existing_config = CONFIG_FILES.find((f) => existsSync(f))
-	if (existing_config) {
-		// Don't clobber a hand-edited file — show what to merge in instead.
-		console.log(`${yellow("!")} ${bold(existing_config)} already exists — add to it:`)
-		console.log(dim(`\n  provider: ${JSON.stringify(provider.key)},`))
-		if (Object.keys(config_defaults).length)
-			console.log(dim(`  ${render_block("default", config_defaults, "  ").trimEnd()}`))
-		if (Object.keys(config_options).length)
-			console.log(dim(`  ${render_block("options", config_options, "  ").trimEnd()}`))
-	} else {
-		writeFileSync("postboi.config.ts", config_source)
-		console.log(`${green("✓")} wrote ${bold("postboi.config.ts")}`)
-	}
+	write_config(provider.key, config_defaults, config_options)
 
 	// 8. Done — show how to use it
 	console.log(`\n${green(bold("Done!"))} Now just send — no setup, no instance:\n`)
