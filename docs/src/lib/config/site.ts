@@ -34,6 +34,7 @@ export const siteConfig = {
 	links: {
 		github: "https://github.com/darbymanning/postboi",
 		twitter: "https://github.com/darbymanning/postboi",
+		site: "https://postboi.email",
 	},
 	/** Package metadata used in installation snippets and docs helpers. */
 	package: {

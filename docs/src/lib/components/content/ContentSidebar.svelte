@@ -2,6 +2,7 @@
 	import { page } from "$app/state"
 	import { slide } from "svelte/transition"
 	import { brandingConfig } from "$lib/config/branding"
+	import cryingRaw from "$lib/assets/crying.svg?raw"
 	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
 	import { siteConfig } from "$lib/config/site"
 	import { cn } from "$lib/utils/cn"
@@ -11,6 +12,7 @@
 	import SearchTrigger from "$lib/components/content/search/SearchTrigger.svelte"
 	import ChevronRight from "carbon-icons-svelte/lib/ChevronRight.svelte"
 	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
+	import Launch from "carbon-icons-svelte/lib/Launch.svelte"
 	import { getHref } from "$lib/content/manifest"
 	import type { ContentItem, ContentSectionLink } from "$lib/config/navigation"
 	import { resolve } from "$app/paths"
@@ -54,6 +56,9 @@
 		page.url.pathname.length > 1 ? page.url.pathname.replace(/\/+$/, "") : page.url.pathname
 	)
 	const currentHash = $derived(page.url.hash)
+
+	// Swap the brand mark for the crying mascot while an error page is showing.
+	const logoRaw = $derived(page.error ? cryingRaw : brandingConfig.logoRaw)
 
 	let expandedGroups = $state<Partial<Record<string, boolean>>>({})
 	let navElement = $state<HTMLElement | null>(null)
@@ -382,15 +387,15 @@
 
 <aside class="flex h-full min-h-0 flex-col bg-background" aria-label={navigationLabel + " sidebar"}>
 	{#if showBranding}
-		<a href={resolve("/")} class="mb-4 flex items-center gap-2 p-4 pb-0 lg:p-0">
-			<span
-				class="inline-flex shrink-0 items-center text-accent [&>svg]:size-6 [&>svg]:fill-current"
-				aria-hidden="true"
-			>
+		<a
+			href={resolve("/")}
+			class="mb-4 flex items-center p-4 pb-0 lg:p-0"
+			aria-label={brandingConfig.name}
+		>
+			<span class="inline-flex shrink-0 items-center [&>svg]:size-9" aria-hidden="true">
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-				{@html brandingConfig.logoRaw}
+				{@html logoRaw}
 			</span>
-			<span class="text-xl font-medium tracking-tight text-foreground">{brandingConfig.name}</span>
 		</a>
 	{/if}
 
@@ -516,6 +521,15 @@
 		{#if showThemeToggle}
 			<ThemeToggle />
 		{/if}
+		<a
+			class="group transition-scale inset-shadow relative inline-flex size-7 cursor-pointer items-center justify-center rounded-sm bg-background-inset text-foreground duration-150 ease-out active:scale-[0.95]"
+			href={siteConfig.links.site}
+			target="_blank"
+			rel="external"
+			aria-label="Go to the Postboi website (opens in a new tab)"
+		>
+			<Launch class="size-4 flex-none" />
+		</a>
 		{#if showRepositoryLink}
 			<a
 				class="group transition-scale inset-shadow relative inline-flex size-7 cursor-pointer items-center justify-center rounded-sm bg-background-inset text-foreground duration-150 ease-out active:scale-[0.95]"

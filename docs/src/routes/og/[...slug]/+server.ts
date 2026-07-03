@@ -93,8 +93,10 @@ const takumiFontLoaders = [
 	},
 ]
 
+// Brand orange (oklch(0.74 0.17 55)) as hex — the OG card is on white, where the
+// brand yellow would be illegible. The renderer needs a literal colour. See BRANDING.md.
 const logoDataUri = `data:image/svg+xml,${encodeURIComponent(
-	brandLogoRaw.replaceAll("currentColor", "#ff6900")
+	brandLogoRaw.replaceAll("currentColor", "#f88825")
 )}`
 const LOGO_DISPLAY_HEIGHT = 78
 

@@ -13,5 +13,6 @@ publish/push steps by hand — the script sequences them and checks precondition
 ## Conventions
 
 - Code style: snake_case, no semicolons. Run `bun run check` and `bun run lint`.
+- Styling the docs site: follow **[docs/BRANDING.md](docs/BRANDING.md)** — brand yellow `#FDC005`, all colours in oklch, accent adapts per light/dark.
 - Release commits are the bare version (`0.7.0`); tags are `vX.Y.Z`.
 - Pre-1.0: breaking changes are **minor** bumps.

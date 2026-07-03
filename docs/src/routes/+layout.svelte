@@ -22,6 +22,7 @@
 		getContentSectionUiConfig,
 	} from "$lib/content/sections"
 	import { contentSections } from "$lib/config/navigation"
+	import { page } from "$app/state"
 	import versions from "$lib/config/versions.json"
 	import type { SectionUiConfig } from "$lib/config/content-ui"
 	import type { LayoutData } from "./$types"
@@ -117,11 +118,16 @@
 			: null
 	)
 
+	// On an error page (e.g. 404) there's no doc, so the TOC/actions aside would only
+	// ever show "No headings" — hide the whole right rail in that case.
+	const isError = $derived(Boolean(page.error))
 	const showDocActions = $derived(
-		sectionUi.pageActions.enabled && Boolean(metadata) && !isArchivedVersion
+		sectionUi.pageActions.enabled && Boolean(metadata) && !isArchivedVersion && !isError
 	)
-	const showToc = $derived(sectionUi.toc.enabled)
-	const showRightAside = $derived(sectionUi.toc.enabled || sectionUi.pageActions.enabled)
+	const showToc = $derived(sectionUi.toc.enabled && !isError)
+	const showRightAside = $derived(
+		(sectionUi.toc.enabled || sectionUi.pageActions.enabled) && !isError
+	)
 	const isSvxContent = $derived(metadata?.sourceType === "svx")
 	const innerViewportStyle = $derived(isSvxContent)
 	const showPagination = $derived(

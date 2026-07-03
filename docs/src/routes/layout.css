@@ -17,10 +17,20 @@ html {
 	--background-muted: oklch(0.9264 0.002 var(--base-hue));
 	--foreground: oklch(0.1881 0.006 var(--base-hue));
 	--foreground-muted: oklch(0.5493 0.0081 var(--base-hue));
-	--accent: oklch(0.6996 0.201959 44.4414);
-	--accent-secondary: oklch(0.5096 0.151959 44.4414);
+	/* Light mode: interactive accent is the brand orange — the yellow is too pale
+	   to read on a white background. See BRANDING.md. */
+	--accent: oklch(0.7 0.19 55);
+	--accent-secondary: oklch(0.55 0.16 52);
 	--border: oklch(0 0.0013 var(--base-hue) / 0.08);
 	--highlight: oklch(0 0.0013 var(--base-hue));
+
+	/* Brand (constant across modes) — the yellow #FDC005 is the hero colour,
+	   orange is its accent/gradient partner. Use these for logos, gradient fills
+	   and primary buttons; ink is the dark text that sits on top. */
+	--brand-yellow: oklch(0.84 0.17 85);
+	--brand-orange: oklch(0.74 0.17 55);
+	--brand-ink: oklch(0.18 0.025 var(--base-hue));
+	--brand-gradient: linear-gradient(100deg, var(--brand-yellow), var(--brand-orange));
 }
 
 .dark {
@@ -29,8 +39,10 @@ html {
 	--background-muted: oklch(0.3017 0.0073 var(--base-hue));
 	--foreground: oklch(0.9674 0.0013 var(--base-hue));
 	--foreground-muted: oklch(0.669 0.0107 var(--base-hue));
-	--accent: oklch(0.6996 0.181959 44.4414);
-	--accent-secondary: oklch(0.5096 0.131959 44.4414);
+	/* Dark mode: the dark background gives the brand yellow enough contrast to be
+	   the interactive accent, matching the postboi-app dashboard. */
+	--accent: oklch(0.84 0.17 85);
+	--accent-secondary: oklch(0.74 0.17 55);
 	--border: oklch(1 0.013 var(--base-hue) / 0.05);
 	--highlight: oklch(1 0.013 var(--base-hue));
 }
@@ -50,6 +62,9 @@ html {
 	--color-accent: var(--accent);
 	--color-accent-secoundary: var(--accent-secondary);
 	--color-border: var(--border);
+	--color-brand-yellow: var(--brand-yellow);
+	--color-brand-orange: var(--brand-orange);
+	--color-brand-ink: var(--brand-ink);
 
 	--tracking-tighter: -0.06rem;
 	--tracking-tight: -0.035rem;
