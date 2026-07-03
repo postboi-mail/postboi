@@ -250,6 +250,8 @@ type DefaultField = {
 	arg: string
 	label: string
 	default?: string
+	/** Example shown dimmed after the label — e.g. the `Name <email>` form for `from`. */
+	hint?: string
 	/** Return an error message to reject the value and re-ask; print-and-undefined to accept. */
 	validate?: (value: string) => string | undefined
 }
@@ -264,7 +266,8 @@ async function ask_defaults(
 	if (await prompts.confirm(`\nSet ${bold("default")} ${names}?`)) {
 		for (const field of fields) {
 			while (true) {
-				const value = await prompts.ask(`${field.label} ${dim("(optional)")}`, {
+				const hint = field.hint ? dim(` — ${field.hint}`) : ""
+				const value = await prompts.ask(`${field.label} ${dim("(optional)")}${hint}`, {
 					default: field.default,
 				})
 				const error = value ? field.validate?.(value) : undefined

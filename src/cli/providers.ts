@@ -16,8 +16,13 @@ export type CliProvider = ProviderMeta
  * `POSTBOI_*` env names remain as manual per-environment overrides (env beats config) —
  * and init removes stale ones it wrote in older versions, which would shadow the config.
  */
-export const DEFAULT_FIELDS: Array<{ arg: string; env: string; label: string }> = [
-	{ arg: "from", env: "POSTBOI_FROM", label: "Default from" },
+export const DEFAULT_FIELDS: Array<{ arg: string; env: string; label: string; hint?: string }> = [
+	{
+		arg: "from",
+		env: "POSTBOI_FROM",
+		label: "Default from",
+		hint: 'e.g. "ACME Inc <hello@example.com>"',
+	},
 	{ arg: "to", env: "POSTBOI_TO", label: "Default to" },
 	{ arg: "reply_to", env: "POSTBOI_REPLY_TO", label: "Default reply-to" },
 	{ arg: "cc", env: "POSTBOI_CC", label: "Default cc" },
