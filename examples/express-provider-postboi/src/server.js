@@ -1,9 +1,8 @@
 import express from "express"
-import multer from "multer"
 import { mail } from "postboi"
 
 const app = express()
-const form = multer() // parses multipart/form-data text fields into req.body
+app.use(express.urlencoded({ extended: true })) // parses form fields onto req.body — no multer needed
 
 app.get("/", function (req, res) {
 	const sent = req.query.sent === "1"
@@ -17,7 +16,7 @@ app.get("/", function (req, res) {
 	<body>
 		<h1>Contact us</h1>
 		${sent ? `<p>Thanks — we'll be in touch.</p>` : ""}
-		<form method="post" action="/contact" enctype="multipart/form-data">
+		<form method="post" action="/contact">
 			<input type="hidden" name="_subject" value="Contact Form" />
 			<input type="hidden" name="_reply_to" />
 			<input name="contact→name" placeholder="Name" required />
@@ -35,9 +34,7 @@ app.get("/", function (req, res) {
 </html>`)
 })
 
-app.post("/contact", form.none(), async ({ body }, res) => {
-	// `body` is req.body — the plain object of submitted fields. postboi takes it directly:
-	// special fields (`_subject`, `_reply_to`, …) are extracted, the rest become an HTML table.
+app.post("/contact", async ({ body }, res) => {
 	await mail({ body })
 	res.redirect(303, "/?sent=1")
 })
