@@ -1,0 +1,106 @@
+---
+title: Postboi Cloud
+name: Postboi Cloud
+description: Zero-config sending — one command, one token, no provider account, no DNS.
+category: Getting started
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "$lib"
+</script>
+
+The zero-config way to send. No provider account, no DNS records, no card — run one
+command, authorise in the browser, and `mail()` works.
+
+<InstallationTabs exec args="init" />
+
+Pick **Postboi Cloud** when prompted. The CLI opens your browser to authorise the device,
+then writes two env vars:
+
+- `POSTBOI_TOKEN` — your API key (keep it secret)
+- `POSTBOI_FROM` — your sending address, e.g. `darby@send.postboi.email`
+
+It also offers to set default recipients (`to`, `reply_to`, `cc`, `bcc`) and writes a
+committed [`postboi.config.ts`](/config) to hold them — the same file where you can add
+[hooks](/hooks) later.
+
+That's the whole setup:
+
+```ts
+import { mail } from "postboi"
+
+await mail({
+	to: "someone@example.com",
+	subject: "Hello",
+	body: "<p>Sent through Postboi Cloud</p>",
+})
+```
+
+`from` is optional — when omitted (even without `POSTBOI_FROM`), the API uses your
+account's sending address, which the token identifies.
+
+## Your sending address
+
+Free-tier mail goes out from `you@send.postboi.email`, derived from your signup email.
+It's a real, deliverable address on our reputation-managed sending domain — but it isn't
+an inbox, so set `reply_to` if you want responses:
+
+```ts
+await mail({
+	to: "someone@example.com",
+	reply_to: "you@yourdomain.com",
+	subject: "Hello",
+	body: "<p>Replies come to you</p>",
+})
+```
+
+You can rename the address (once a day) from the [dashboard](https://postboi.email/dashboard).
+
+## Sending from your own domain
+
+Verify a domain in the dashboard — add a domain, publish the three DKIM CNAME records it
+shows you, and hit **Check**. Once verified, any address at that domain is a valid `from`:
+
+```ts
+await mail({
+	from: "hello@yourdomain.com",
+	to: "someone@example.com",
+	subject: "Hello",
+	body: "<p>From your own domain</p>",
+})
+```
+
+## Limits
+
+| Plan    | Included   | Daily cap | Overage   |
+| ------- | ---------- | --------- | --------- |
+| Free    | 3,000/mo   | 100/day   | — (hard)  |
+| Starter | 20,000/mo  | —         | £0.40/1k  |
+| Pro     | 100,000/mo | —         | £0.35/1k  |
+| Scale   | 500,000/mo | —         | £0.30/1k  |
+
+The free tier stops at its caps; paid tiers keep sending and meter the overage. Every
+plan has a burst rate limit. When a limit is hit, `mail()` throws a `PostboiError` with a
+machine-readable `code`:
+
+| Code                     | Meaning                                             |
+| ------------------------ | --------------------------------------------------- |
+| `daily_limit_exceeded`   | Free-tier daily cap — resets at midnight UTC        |
+| `monthly_limit_exceeded` | Free-tier monthly wall — upgrade to keep sending    |
+| `rate_limited`           | Burst limit — back off and retry                    |
+| `from_not_allowed`       | `from` isn't your address or a verified domain      |
+| `sending_paused`         | Bounce/complaint rate tripped the safety threshold  |
+
+## Delivery status
+
+Every send appears in the [message log](https://postboi.email/dashboard/messages) with
+its delivery status — bounces and complaints are tracked automatically. High bounce or
+complaint rates pause sending to protect deliverability for everyone; the dashboard shows
+when that happens.
+
+## Notes
+
+- `scheduled_at` isn't supported on Cloud yet — sends are immediate.
+- In runtimes without ambient env vars (e.g. Cloudflare Workers), pass the token
+  explicitly: `new Postboi({ token })`.
+- The token can be revoked and reissued any time from the dashboard's API keys panel.
