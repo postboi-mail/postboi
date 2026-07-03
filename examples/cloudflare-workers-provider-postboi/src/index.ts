@@ -44,8 +44,7 @@ export default {
 			// No filesystem and no ambient env on Workers: pass the token from the binding and
 			// set defaults here instead of a postboi.config.ts file.
 			const mail = new Postboi({ token: env.POSTBOI_TOKEN, default: { to: "team@acme.example" } })
-			const body = await request.formData()
-			await mail.send({ body })
+			await mail.send({ body: request.formData() })
 			return Response.redirect(new URL("/?sent=1", url).toString(), 303)
 		}
 

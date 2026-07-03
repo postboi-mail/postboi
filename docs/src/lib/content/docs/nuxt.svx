@@ -14,8 +14,7 @@ hand it straight to [`mail()`](/api). Postboi extracts the
 import { mail } from 'postboi';
 
 export default defineEventHandler(async (event) => {
-	const body = await readFormData(event);
-	await mail({ body });
+	await mail({ body: readFormData(event) });
 	return sendRedirect(event, '/?sent=1', 303);
 });
 ```

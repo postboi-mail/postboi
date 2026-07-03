@@ -15,8 +15,7 @@ import type { APIRoute } from 'astro';
 import { mail } from 'postboi';
 
 export const POST: APIRoute = async ({ request, redirect }) => {
-	const body = await request.formData();
-	await mail({ body });
+	await mail({ body: request.formData() });
 	return redirect('/?sent=1', 303);
 };
 ```

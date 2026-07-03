@@ -17,8 +17,7 @@ import { mail } from 'postboi';
 const app = new Hono();
 
 app.post('/contact', async (c) => {
-	const body = await c.req.formData();
-	await mail({ body });
+	await mail({ body: c.req.formData() });
 	return c.redirect('/?sent=1', 303);
 });
 

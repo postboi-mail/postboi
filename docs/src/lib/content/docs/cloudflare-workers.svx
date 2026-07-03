@@ -24,8 +24,7 @@ export default {
 
 		if (request.method === 'POST' && url.pathname === '/contact') {
 			const mail = new Postboi({ token: env.POSTBOI_TOKEN, default: { to: 'team@example.com' } });
-			const body = await request.formData();
-			await mail.send({ body });
+			await mail.send({ body: request.formData() });
 			return Response.redirect(new URL('/?sent=1', url).toString(), 303);
 		}
 

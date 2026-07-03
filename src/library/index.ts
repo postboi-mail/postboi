@@ -68,8 +68,11 @@ export interface SendOptions {
 	 * The body of the email. If FormData is provided, it will be parsed:
 	 * - Special email fields are extracted (see notes above)
 	 * - Remaining fields are rendered into a compact HTML table with group headers
+	 *
+	 * May also be a promise resolving to either, so a framework's `request.formData()` can be
+	 * passed straight through without awaiting it yourself.
 	 */
-	body: string | FormData
+	body: string | FormData | Promise<string | FormData>
 	/**
 	 * Optional plain-text alternative body. When provided alongside `body`, providers
 	 * that support multipart emails will send both the HTML and plain-text versions.
@@ -953,6 +956,9 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 * sender and recipient are present. Returns a {@link PreparedMessage} for `build_request`.
 	 */
 	protected async prepare_send(options: SendOptions): Promise<PreparedMessage> {
+		// `body` may be a promise (e.g. a framework's `request.formData()`) — resolve it first.
+		options = { ...options, body: await options.body }
+
 		// FormData → extract headers/body/attachments (honouring any formatter)
 		if (options.body instanceof FormData) {
 			const { options: extracted, attachments } = await this.parse_form_data(

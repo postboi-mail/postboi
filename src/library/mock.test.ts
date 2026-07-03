@@ -88,6 +88,22 @@ describe("Mock provider", () => {
 		expect(mail.last?.html).toContain("Darby")
 	})
 
+	it("accepts a promise resolving to FormData (e.g. request.formData())", async () => {
+		const form = new FormData()
+		form.append("_to", "form@test.com")
+		form.append("name", "Darby")
+		await mail.send({ body: Promise.resolve(form) })
+
+		expect(mail.last?.to).toEqual([{ address: "form@test.com" }])
+		expect(mail.last?.html).toContain("Darby")
+	})
+
+	it("accepts a promise resolving to a string body", async () => {
+		await mail.send({ body: Promise.resolve("<p>later</p>") })
+
+		expect(mail.last?.html).toBe("<p>later</p>")
+	})
+
 	it("captures attachments as base64", async () => {
 		await mail.send({
 			to: "a@test.com",

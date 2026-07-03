@@ -16,8 +16,7 @@ import { useState } from 'react';
 import { mail } from 'postboi';
 
 export async function action({ request }: { request: Request }) {
-	const body = await request.formData();
-	await mail({ body });
+	await mail({ body: request.formData() });
 	return { ok: true };
 }
 

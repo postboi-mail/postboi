@@ -36,9 +36,8 @@ app.get("/", function (c) {
 
 app.post("/contact", async function (c) {
 	// The form carries `_subject` and `_reply_to` (mirrored from the email) as hidden fields,
-	// so the whole submission is just handed to postboi as the body.
-	const body = await c.req.formData()
-	await mail({ body })
+	// so the whole submission is handed straight to postboi — `body` accepts the promise.
+	await mail({ body: c.req.formData() })
 	return c.redirect("/?sent=1", 303)
 })
 
