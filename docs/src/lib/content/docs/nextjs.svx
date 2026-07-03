@@ -1,0 +1,42 @@
+---
+title: Next.js
+name: Next.js
+description: Send email from a Next.js Server Action with the top-level mail().
+category: Frameworks
+---
+
+Postboi is framework-agnostic — read the request's `FormData` in a Server Action and hand it
+straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#special-fields)
+and renders the rest into a tidy HTML table.
+
+```tsx
+// app/page.tsx
+import { mail } from 'postboi';
+
+async function submit(formData: FormData) {
+	'use server';
+
+	// Reply-to comes from the submitted email, so replying reaches the sender.
+	formData.set('_reply_to', String(formData.get('contact→email') ?? ''));
+	formData.set('_subject', 'Contact Form');
+
+	await mail({ body: formData });
+}
+
+export default function Page() {
+	return (
+		<form action={submit}>
+			<input name="contact→name" placeholder="Name" required />
+			<input name="contact→email" type="email" placeholder="Email" required />
+			<textarea name="details→message" placeholder="Message" />
+			<button type="submit">Send</button>
+		</form>
+	);
+}
+```
+
+Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The provider and
+default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+[Postboi Cloud](/cloud), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/nextjs-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nextjs-provider-postboi).

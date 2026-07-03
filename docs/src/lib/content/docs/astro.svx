@@ -1,0 +1,37 @@
+---
+title: Astro
+name: Astro
+description: Send email from an Astro API route with the top-level mail().
+category: Frameworks
+---
+
+Postboi is framework-agnostic — read the request's `FormData` in an API route and hand it
+straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#special-fields)
+and renders the rest into a tidy HTML table.
+
+```typescript
+// src/pages/api/contact.ts
+import type { APIRoute } from 'astro';
+import { mail } from 'postboi';
+
+export const POST: APIRoute = async ({ request, redirect }) => {
+	const form = await request.formData();
+
+	// Reply-to comes from the submitted email, so replying reaches the sender.
+	form.set('_reply_to', String(form.get('contact→email') ?? ''));
+	form.set('_subject', 'Contact Form');
+
+	await mail({ body: form });
+	return redirect('/?sent=1', 303);
+};
+```
+
+Point a `multipart/form-data` form at the route with fields like `contact→name`,
+`contact→email`, and `details→message` — the [`fieldset→field`](/formdata#grouped-fields)
+syntax groups them in the email. API routes need SSR, so set `output: 'server'` with an
+adapter in `astro.config.mjs`.
+
+The provider and default recipient come from [`postboi.config.ts`](/config) — a
+`POSTBOI_TOKEN` routes to [Postboi Cloud](/cloud), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/astro-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/astro-provider-postboi).

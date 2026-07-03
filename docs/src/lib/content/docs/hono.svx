@@ -1,0 +1,41 @@
+---
+title: Hono
+name: Hono
+description: Send email from a Hono handler with the top-level mail().
+category: Frameworks
+---
+
+Hono speaks the Web-standard `Request`/`Response`, so there's no framework magic: read the
+request's `FormData` and hand it straight to [`mail()`](/api). Postboi extracts the
+[special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
+
+```typescript
+// src/index.ts
+import { Hono } from 'hono';
+import { mail } from 'postboi';
+
+const app = new Hono();
+
+app.post('/contact', async (c) => {
+	const form = await c.req.formData();
+
+	// Reply-to comes from the submitted email, so replying reaches the sender.
+	form.set('_reply_to', String(form.get('contact→email') ?? ''));
+	form.set('_subject', 'Contact Form');
+
+	await mail({ body: form });
+	return c.redirect('/?sent=1', 303);
+});
+
+export default app;
+```
+
+Point a `multipart/form-data` form at `/contact` with fields like `contact→name`,
+`contact→email`, and `details→message` — the [`fieldset→field`](/formdata#grouped-fields)
+syntax groups them. The same handler works on any Web-standard runtime (Bun, Deno, Workers,
+Node with an adapter).
+
+The provider and default recipient come from [`postboi.config.ts`](/config) — a
+`POSTBOI_TOKEN` routes to [Postboi Cloud](/cloud), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/hono-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/hono-provider-postboi).

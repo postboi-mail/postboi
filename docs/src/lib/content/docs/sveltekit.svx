@@ -1,8 +1,8 @@
 ---
-title: SvelteKit form actions
-name: SvelteKit form actions
+title: SvelteKit
+name: SvelteKit
 description: Wire a contact form to Postboi with a one-line SvelteKit action.
-category: Guides
+category: Frameworks
 ---
 
 `postboi/kit` reads `FormData`, sends it, and returns `{ success: true }` — or

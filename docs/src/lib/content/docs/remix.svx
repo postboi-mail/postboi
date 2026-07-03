@@ -1,0 +1,44 @@
+---
+title: Remix
+name: Remix
+description: Send email from a Remix route action with the top-level mail().
+category: Frameworks
+---
+
+Postboi is framework-agnostic — read the request's `FormData` in a route `action` and hand it
+straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#special-fields)
+and renders the rest into a tidy HTML table.
+
+```tsx
+// app/routes/_index.tsx
+import { Form } from '@remix-run/react';
+import { mail } from 'postboi';
+
+export async function action({ request }: { request: Request }) {
+	const form = await request.formData();
+
+	// Reply-to comes from the submitted email, so replying reaches the sender.
+	form.set('_reply_to', String(form.get('contact→email') ?? ''));
+	form.set('_subject', 'Contact Form');
+
+	await mail({ body: form });
+	return { ok: true };
+}
+
+export default function Index() {
+	return (
+		<Form method="post" encType="multipart/form-data">
+			<input name="contact→name" placeholder="Name" required />
+			<input name="contact→email" type="email" placeholder="Email" required />
+			<textarea name="details→message" placeholder="Message" />
+			<button type="submit">Send</button>
+		</Form>
+	);
+}
+```
+
+Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The provider and
+default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+[Postboi Cloud](/cloud), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/remix-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/remix-provider-postboi).

@@ -48,10 +48,21 @@ export const contentSections: ContentSectionConfig[] = [
 				],
 			},
 			{
+				slug: "frameworks",
+				name: "Frameworks",
+				items: [
+					{ slug: "sveltekit", name: "SvelteKit" },
+					{ slug: "nextjs", name: "Next.js" },
+					{ slug: "astro", name: "Astro" },
+					{ slug: "nuxt", name: "Nuxt (Vue)" },
+					{ slug: "remix", name: "Remix" },
+					{ slug: "hono", name: "Hono" },
+				],
+			},
+			{
 				slug: "guides",
 				name: "Guides",
 				items: [
-					{ slug: "sveltekit", name: "SvelteKit form actions" },
 					{ slug: "formdata", name: "FormData" },
 					{ slug: "providers", name: "Providers" },
 					{ slug: "config", name: "Global config" },

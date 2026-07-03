@@ -1,0 +1,35 @@
+---
+title: Nuxt (Vue)
+name: Nuxt (Vue)
+description: Send email from a Nuxt server route with the top-level mail().
+category: Frameworks
+---
+
+Postboi is framework-agnostic — read the request's `FormData` in a Nitro server route and
+hand it straight to [`mail()`](/api). Postboi extracts the
+[special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
+
+```typescript
+// server/api/contact.post.ts
+import { mail } from 'postboi';
+
+export default defineEventHandler(async (event) => {
+	const form = await readFormData(event);
+
+	// Reply-to comes from the submitted email, so replying reaches the sender.
+	form.set('_reply_to', String(form.get('contact→email') ?? ''));
+	form.set('_subject', 'Contact Form');
+
+	await mail({ body: form });
+	return sendRedirect(event, '/?sent=1', 303);
+});
+```
+
+`defineEventHandler`, `readFormData`, and `sendRedirect` are Nuxt auto-imports. Point a
+`multipart/form-data` form at the route with fields like `contact→name`, `contact→email`,
+and `details→message` — the [`fieldset→field`](/formdata#grouped-fields) syntax groups them.
+
+The provider and default recipient come from [`postboi.config.ts`](/config) — a
+`POSTBOI_TOKEN` routes to [Postboi Cloud](/cloud), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nuxt-provider-postboi).
