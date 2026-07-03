@@ -1,0 +1,17 @@
+{
+	"name": "postboi-example-nuxt-provider-postboi",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "nuxt dev",
+		"build": "nuxt build",
+		"postinstall": "nuxt prepare"
+	},
+	"dependencies": {
+		"nuxt": "^3.14",
+		"vue": "^3"
+	},
+	"devDependencies": {
+		"postboi": "^0.9.4"
+	}
+}

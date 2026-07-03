@@ -1,0 +1,27 @@
+{
+	"name": "postboi-example-remix-provider-postboi",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"scripts": {
+		"dev": "remix vite:dev",
+		"build": "remix vite:build",
+		"start": "remix-serve ./build/server/index.js"
+	},
+	"dependencies": {
+		"@remix-run/node": "^2.15",
+		"@remix-run/react": "^2.15",
+		"@remix-run/serve": "^2.15",
+		"react": "^18.3",
+		"react-dom": "^18.3",
+		"isbot": "^5"
+	},
+	"devDependencies": {
+		"postboi": "^0.9.4",
+		"@remix-run/dev": "^2.15",
+		"vite": "^6",
+		"typescript": "^5.9",
+		"@types/react": "^18.3",
+		"@types/react-dom": "^18.3"
+	}
+}

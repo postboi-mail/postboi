@@ -1,0 +1,18 @@
+{
+	"name": "postboi-example-astro-provider-postboi",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview"
+	},
+	"dependencies": {
+		"astro": "^5",
+		"@astrojs/node": "^9"
+	},
+	"devDependencies": {
+		"postboi": "^0.9.4",
+		"typescript": "^5.9"
+	}
+}

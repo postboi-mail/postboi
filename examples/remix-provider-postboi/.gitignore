@@ -1,0 +1,8 @@
+node_modules
+bun.lock
+build
+.cache
+.env
+.env.*
+!.env.example
+.DS_Store
