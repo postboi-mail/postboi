@@ -7,10 +7,14 @@ Every example does the same thing: a `multipart/form-data` contact form whose su
 becomes a tidy HTML email, with a hidden `_reply_to` field bound to the sender's email so
 hitting **Reply** goes straight back to the person who filled it in.
 
-## Frameworks
+Examples are named `<framework>-provider-<provider>` so each framework can have one per
+provider.
 
-- [`sveltekit`](./sveltekit) — SvelteKit form action via `postboi/kit`, running on Postboi
-  Cloud so it can also demo the typed `from`.
+## Examples
 
-More coming (Next.js, Remix, Astro, …), plus provider-specific variants (e.g. a plain
-API-key Resend setup). PRs welcome.
+- [`sveltekit-provider-postboi`](./sveltekit-provider-postboi) — SvelteKit on Postboi Cloud.
+  Shows both the one-line `postboi/kit` action and a hand-built top-level `mail()` call, plus
+  the typed `from` that Cloud enables.
+
+More coming (Next.js, Remix, Astro, …) and other providers (e.g. `sveltekit-provider-resend`
+for a plain API-key setup). PRs welcome.

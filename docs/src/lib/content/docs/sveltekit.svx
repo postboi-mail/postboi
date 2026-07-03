@@ -48,7 +48,7 @@ The submitted `FormData` becomes a tidy HTML table in the email body. See
 [FormData](/formdata) for how the table is built.
 
 A full, runnable version of this form lives in
-[`examples/sveltekit`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit).
+[`examples/sveltekit-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit-provider-postboi).
 
 ## Using a configured instance
 

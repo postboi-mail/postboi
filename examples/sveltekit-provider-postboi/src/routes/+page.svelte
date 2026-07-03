@@ -49,6 +49,8 @@
 	{:else if form?.error}
 		<p role="alert">{form.error}</p>
 	{/if}
+
+	<p>Or see the <a href="/welcome">top-level <code>mail()</code> example</a>.</p>
 </main>
 
 <style>
