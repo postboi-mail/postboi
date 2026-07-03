@@ -41,6 +41,16 @@ export type FromAddress = Register extends { from: infer F extends string }
 	: Email
 
 /**
+ * A plain object of form fields — e.g. Express/multer's `req.body`. Passed as a `body`, it's
+ * normalised to FormData and parsed the same way (special fields extracted, the rest tabled).
+ * Repeated fields come through as arrays.
+ */
+export type FormFields = Record<string, string | Array<string>>
+
+/** Everything accepted as a message `body`: rendered HTML, or form fields to render. */
+export type BodyInput = string | FormData | FormFields
+
+/**
  * Options accepted by Postboi.send(...).
  *
  * Notes:
@@ -65,14 +75,15 @@ export interface SendOptions {
 	/** The subject of the email. */
 	subject?: string
 	/**
-	 * The body of the email. If FormData is provided, it will be parsed:
+	 * The body of the email. If FormData — or a plain object of fields, like Express/multer's
+	 * `req.body` — is provided, it will be parsed:
 	 * - Special email fields are extracted (see notes above)
 	 * - Remaining fields are rendered into a compact HTML table with group headers
 	 *
-	 * May also be a promise resolving to either, so a framework's `request.formData()` can be
-	 * passed straight through without awaiting it yourself.
+	 * May also be a promise resolving to any of those, so a framework's `request.formData()`
+	 * can be passed straight through without awaiting it yourself.
 	 */
-	body: string | FormData | Promise<string | FormData>
+	body: BodyInput | Promise<BodyInput>
 	/**
 	 * Optional plain-text alternative body. When provided alongside `body`, providers
 	 * that support multipart emails will send both the HTML and plain-text versions.
@@ -836,6 +847,22 @@ export abstract class ProviderBase<TResponse = unknown> {
 	}
 
 	/**
+	 * Normalise a `body` for {@link parse_form_data}: FormData passes through, a plain object of
+	 * fields (e.g. Express/multer's `req.body`) is appended key/value — array values become
+	 * repeated fields — and a string body (already-rendered HTML) returns null.
+	 */
+	private to_form_data(body: BodyInput): FormData | null {
+		if (body instanceof FormData) return body
+		if (!body || typeof body !== "object") return null
+		const form = new FormData()
+		for (const [key, value] of Object.entries(body)) {
+			if (Array.isArray(value)) for (const item of value) form.append(key, String(item))
+			else form.append(key, String(value))
+		}
+		return form
+	}
+
+	/**
 	 * Parse FormData, extracting special header fields and rendering the remaining
 	 * data into a compact HTML table, grouped by the `fieldset→field` key syntax.
 	 * Returns the extracted SendOptions (to/from/etc) along with any File attachments.
@@ -957,12 +984,15 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 */
 	protected async prepare_send(options: SendOptions): Promise<PreparedMessage> {
 		// `body` may be a promise (e.g. a framework's `request.formData()`) — resolve it first.
-		options = { ...options, body: await options.body }
+		const body = await options.body
+		options = { ...options, body }
 
-		// FormData → extract headers/body/attachments (honouring any formatter)
-		if (options.body instanceof FormData) {
+		// FormData — or a plain object of fields (Express/multer's `req.body`) — is parsed into
+		// extracted header fields plus a rendered HTML table (honouring any formatter).
+		const form = this.to_form_data(body)
+		if (form) {
 			const { options: extracted, attachments } = await this.parse_form_data(
-				options.body,
+				form,
 				options.formatter
 			)
 			options = { ...options, ...extracted }

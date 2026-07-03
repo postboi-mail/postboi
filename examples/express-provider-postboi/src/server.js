@@ -35,18 +35,11 @@ app.get("/", function (req, res) {
 </html>`)
 })
 
-app.post("/contact", form.none(), async function (req, res) {
-	try {
-		// Express gives you parsed fields on req.body, not a Web FormData — rebuild one so
-		// postboi can extract the special fields and render the rest into an HTML table.
-		const body = new FormData()
-		for (const [key, value] of Object.entries(req.body)) body.append(key, String(value))
-
-		await mail({ body })
-		res.redirect(303, "/?sent=1")
-	} catch (error) {
-		res.status(500).send(error instanceof Error ? error.message : String(error))
-	}
+app.post("/contact", form.none(), async ({ body }, res) => {
+	// `body` is req.body — the plain object of submitted fields. postboi takes it directly:
+	// special fields (`_subject`, `_reply_to`, …) are extracted, the rest become an HTML table.
+	await mail({ body })
+	res.redirect(303, "/?sent=1")
 })
 
 app.listen(3000, () => console.log("→ http://localhost:3000"))

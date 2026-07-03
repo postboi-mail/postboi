@@ -9,8 +9,15 @@ Pass a `FormData` object as the `body` and Postboi converts it into a tidy HTML 
 is what powers the [SvelteKit form actions](/sveltekit) — but you can pass `FormData`
 to any `mail()` call.
 
-`body` also accepts a **promise** resolving to `FormData` (or a string), so you can hand a
-framework's `request.formData()` straight through without awaiting it yourself:
+`body` also accepts a **plain object** of fields — like Express/multer's `req.body` — which
+is normalised and parsed the same way:
+
+```typescript
+await mail({ body: req.body })
+```
+
+And a **promise** resolving to any of these, so you can hand a framework's
+`request.formData()` straight through without awaiting it yourself:
 
 ```typescript
 await mail({ body: request.formData() })

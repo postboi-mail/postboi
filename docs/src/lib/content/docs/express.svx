@@ -1,13 +1,13 @@
 ---
 title: Express
 name: Express
-description: Send email from an Express route — parse multipart with multer, then mail().
+description: Send email from an Express route — pass multer's parsed req.body straight to mail().
 category: Frameworks
 ---
 
-Express doesn't hand you a Web `FormData`, so parse the multipart body with
-[`multer`](https://github.com/expressjs/multer) and rebuild a `FormData` for
-[`mail()`](/api). Postboi then extracts the [special fields](/formdata#special-fields) and
+Express doesn't expose a Web `FormData`, but [`multer`](https://github.com/expressjs/multer)
+parses the multipart body into a plain object on `req.body` — and [`mail()`](/api) accepts
+that object directly. Postboi extracts the [special fields](/formdata#special-fields) and
 renders the rest into a tidy HTML table.
 
 ```typescript
@@ -17,13 +17,9 @@ import multer from 'multer'
 import { mail } from 'postboi'
 
 const app = express()
-const form = multer() // parses multipart/form-data text fields onto req.body
+const form = multer() // parses multipart/form-data fields onto req.body
 
-app.post('/contact', form.none(), async (req, res) => {
-	// req.body is a plain object, not a Web FormData — rebuild one for postboi.
-	const body = new FormData()
-	for (const [key, value] of Object.entries(req.body)) body.append(key, String(value))
-
+app.post('/contact', form.none(), async ({ body }, res) => {
 	await mail({ body })
 	res.redirect(303, '/?sent=1')
 })

@@ -104,6 +104,15 @@ describe("Mock provider", () => {
 		expect(mail.last?.html).toBe("<p>later</p>")
 	})
 
+	it("accepts a plain object of fields (e.g. Express req.body)", async () => {
+		await mail.send({ body: { _to: "form@test.com", name: "Darby", tags: ["a", "b"] } })
+
+		expect(mail.last?.to).toEqual([{ address: "form@test.com" }])
+		expect(mail.last?.html).toContain("Darby")
+		expect(mail.last?.html).toContain("a")
+		expect(mail.last?.html).toContain("b")
+	})
+
 	it("captures attachments as base64", async () => {
 		await mail.send({
 			to: "a@test.com",
