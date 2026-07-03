@@ -2,6 +2,13 @@
 	"version": "0.0.1",
 	"configurations": [
 		{
+			"name": "app",
+			"runtimeExecutable": "bash",
+			"runtimeArgs": ["-c", "cd /Users/zyb/Sites/postboi-app && bun dev --port ${PORT:-5174}"],
+			"port": 5174,
+			"autoPort": true
+		},
+		{
 			"name": "docs",
 			"runtimeExecutable": "bash",
 			"runtimeArgs": ["-c", "cd docs && bun run dev -- --port 5200"],
