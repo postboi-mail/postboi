@@ -101,7 +101,7 @@ bun run test
 bun run build
 ```
 
-The docs site lives in [`docs/`](docs) — `cd docs && bun install && bun run dev`.
+The docs site is the SvelteKit app at the repo root — `bun run dev` serves it locally.
 
 ## Contributing
 

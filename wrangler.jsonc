@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "postboi-docs",
+	"name": "postboi",
 	"compatibility_date": "2026-06-14",
 	"workers_dev": true,
 	"preview_urls": true,

@@ -3,7 +3,7 @@
 A release ships two independent artifacts:
 
 1. **The library** — the `postboi` npm package (published from this repo root).
-2. **The docs site** — [docs.postboi.email](https://docs.postboi.email), deployed from `docs/` on push to `main`. Each release is snapshotted so readers can switch to older versions.
+2. **The docs site** — [docs.postboi.email](https://docs.postboi.email), the SvelteKit app at the repo root, deployed on push to `main`. Each release is snapshotted so readers can switch to older versions.
 
 The library release is scripted. The docs snapshot is a short manual step because it involves copying content and hand-editing the version list.
 
@@ -25,17 +25,17 @@ didn't change since the last release.
 
 ### A. Snapshot the outgoing docs version (before editing docs for the new one)
 
-`docs/src/lib/content/docs/` always holds the **latest** docs. Freeze the
+`src/lib/content/docs/` always holds the **latest** docs. Freeze the
 currently-published version as an archived snapshot **before** you edit docs for
 `X.Y.Z`. Let `PREV` be the value of `latest` in
-[`docs/src/lib/config/versions.json`](docs/src/lib/config/versions.json).
+[`src/lib/config/versions.json`](src/lib/config/versions.json).
 
 1. Copy the current docs into a version folder (set `PREV` to that value first):
    ```sh
    PREV=0.6.0   # ← the current "latest" in versions.json
-   cp -R docs/src/lib/content/docs "docs/src/lib/content/v$PREV"
+   cp -R src/lib/content/docs "src/lib/content/v$PREV"
    ```
-2. In `docs/src/lib/config/versions.json`:
+2. In `src/lib/config/versions.json`:
    - Set `"latest"` to the new version `X.Y.Z`.
    - Prepend an entry to `archived` (newest first):
      ```json
@@ -49,15 +49,15 @@ currently-published version as an archived snapshot **before** you edit docs for
      ```
      For `nav`, copy the current sidebar structure from
      `contentSections[0].navigation` in
-     [`docs/src/lib/config/navigation.ts`](docs/src/lib/config/navigation.ts)
+     [`src/lib/config/navigation.ts`](src/lib/config/navigation.ts)
      (JSON, so no icons/types — just `slug`/`name`/`items`). This freezes the
      old nav even if you rename or reorder pages in the new version.
-3. Now make the actual `X.Y.Z` doc edits in `docs/src/lib/content/docs/` (and
+3. Now make the actual `X.Y.Z` doc edits in `src/lib/content/docs/` (and
    `navigation.ts` if the nav changed).
-4. Commit and push `docs/` — this deploys the site. Verify the switcher lists
+4. Commit and push — this deploys the site (the docs app is the repo root now). Verify the switcher lists
    the new version and `/vPREV` still renders the old docs.
 
-> Snapshots are plain committed files under `docs/src/lib/content/v*/`. There's
+> Snapshots are plain committed files under `src/lib/content/v*/`. There's
 > no build-time git dependency — the site builds on a shallow clone. (The first
 > snapshot, `v0.5.0`, was seeded once from git history; everything after is a
 > `cp`.)

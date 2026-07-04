@@ -2,6 +2,9 @@
 @import "@fontsource/inter/latin.css";
 @import "@fontsource/monaspace-neon/latin.css";
 
+/* The example apps under examples/ are separate projects — don't scan them for classes. */
+@source not "../../examples";
+
 @variant dark (&:where(.dark, .dark *));
 
 html {

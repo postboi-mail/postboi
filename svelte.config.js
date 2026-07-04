@@ -380,6 +380,10 @@ const config = {
 
 	kit: {
 		adapter: adapter(),
+		// The library's tests import via `$library/*`; the docs app uses the default `$lib`.
+		alias: {
+			$library: "src/library",
+		},
 	},
 }
 

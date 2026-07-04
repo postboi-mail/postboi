@@ -11,7 +11,15 @@ const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url))
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
-	globalIgnores(["src/components/ui/**", "docs/**", "examples/**", ".claude/**"]),
+	// eslint covers the library + CLI; the docs app (src/lib, src/routes) is checked by
+	// svelte-check and oxfmt instead.
+	globalIgnores([
+		"src/lib/**",
+		"src/routes/**",
+		"src/hooks.server.ts",
+		"examples/**",
+		".claude/**",
+	]),
 	js.configs.recommended,
 	...ts.configs.recommended,
 	...svelte.configs.recommended,
