@@ -1,0 +1,17 @@
+{
+	"name": "postboi-example-hono-provider-postboi",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun run --hot src/index.ts",
+		"start": "bun run src/index.ts"
+	},
+	"dependencies": {
+		"hono": "^4",
+		"postboi": "^0.9.4"
+	},
+	"devDependencies": {
+		"typescript": "^5.9",
+		"@types/bun": "latest"
+	}
+}

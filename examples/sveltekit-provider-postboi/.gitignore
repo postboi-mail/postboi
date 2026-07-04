@@ -1,0 +1,8 @@
+node_modules
+bun.lock
+/.svelte-kit
+/build
+.env
+.env.*
+!.env.example
+.DS_Store

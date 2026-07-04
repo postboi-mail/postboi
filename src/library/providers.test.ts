@@ -958,6 +958,15 @@ describe("resilience (shared base)", () => {
 		const error = await caught(make().send({ to: "to@test.com", body: "x", scheduled_at: "nope" }))
 		expect(error.message).toContain("Invalid scheduled_at")
 	})
+
+	it("accepts a relative Duration for scheduled_at", async () => {
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+		const before = Date.now()
+		await make().send({ to: "to@test.com", body: "x", scheduled_at: { days: 1, hours: 5 } })
+		const sent = new Date(sent_json().scheduled_at).getTime()
+		// 1 day + 5 hours from "now" (calendar arithmetic ≈ 29h with no DST boundary crossed).
+		expect(Math.abs(sent - (before + 29 * 60 * 60 * 1000))).toBeLessThan(60_000)
+	})
 })
 
 describe("scheduled_at provider formats", () => {

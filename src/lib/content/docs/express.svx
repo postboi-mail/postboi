@@ -1,0 +1,40 @@
+---
+title: Express
+name: Express
+description: Send email from an Express route — pass req.body straight to mail().
+category: Frameworks
+---
+
+Express's built-in `express.urlencoded()` parses a submitted form into a plain object on
+`req.body` — and [`mail()`](/api) accepts that object directly, no extra dependency needed.
+Postboi extracts the [special fields](/formdata#special-fields) and renders the rest into a
+tidy HTML table.
+
+```typescript
+// src/server.js
+import express from 'express'
+import { mail } from 'postboi'
+
+const app = express()
+app.use(express.urlencoded({ extended: true })) // parses form fields onto req.body
+
+app.post('/contact', async ({ body }, res) => {
+	await mail({ body })
+	res.redirect(303, '/?sent=1')
+})
+
+app.listen(3000)
+```
+
+Point a form at `/contact`. Include hidden `_subject` and `_reply_to` fields, and mirror the
+email into `_reply_to` with a one-line `oninput` so replying reaches the sender. Field names
+use the [`fieldset→field`](/formdata#grouped-fields) syntax.
+
+A urlencoded form can't carry files. For attachments, switch to `enctype="multipart/form-data"`
+and parse it with a multipart parser like [`multer`](https://github.com/expressjs/multer) —
+`req.body` still flows into `mail({ body })` the same way.
+
+The provider and default recipient come from [`postboi.config.js`](/config) — a
+`POSTBOI_TOKEN` routes to [Postboi Cloud](/cloud), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/express-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/express-provider-postboi).

@@ -41,6 +41,38 @@ export type FromAddress = Register extends { from: infer F extends string }
 	: Email
 
 /**
+ * A plain object of form fields — e.g. Express/multer's `req.body`. Passed as a `body`, it's
+ * normalised to FormData and parsed the same way (special fields extracted, the rest tabled).
+ * Repeated fields come through as arrays.
+ */
+export type FormFields = Record<string, string | Array<string>>
+
+/** Everything accepted as a message `body`: rendered HTML, or form fields to render. */
+export type BodyInput = string | FormData | FormFields
+
+/**
+ * A relative delay for {@link SendOptions.scheduled_at}, added to the send time. Every field is
+ * optional and they combine — `{ days: 1, hours: 5 }` is 26 hours from now. Days/weeks/hours/…
+ * are fixed spans; months and years are calendar-aware (a real "+1 month").
+ */
+export interface Duration {
+	/** Seconds from now. */
+	seconds?: number
+	/** Minutes from now. */
+	minutes?: number
+	/** Hours from now. */
+	hours?: number
+	/** Days from now. */
+	days?: number
+	/** Weeks from now. */
+	weeks?: number
+	/** Calendar months from now (e.g. Jan 31 + 1 month lands in Feb). */
+	months?: number
+	/** Calendar years from now. */
+	years?: number
+}
+
+/**
  * Options accepted by Postboi.send(...).
  *
  * Notes:
@@ -65,11 +97,15 @@ export interface SendOptions {
 	/** The subject of the email. */
 	subject?: string
 	/**
-	 * The body of the email. If FormData is provided, it will be parsed:
+	 * The body of the email. If FormData — or a plain object of fields, like Express/multer's
+	 * `req.body` — is provided, it will be parsed:
 	 * - Special email fields are extracted (see notes above)
 	 * - Remaining fields are rendered into a compact HTML table with group headers
+	 *
+	 * May also be a promise resolving to any of those, so a framework's `request.formData()`
+	 * can be passed straight through without awaiting it yourself.
 	 */
-	body: string | FormData
+	body: BodyInput | Promise<BodyInput>
 	/**
 	 * Optional plain-text alternative body. When provided alongside `body`, providers
 	 * that support multipart emails will send both the HTML and plain-text versions.
@@ -106,11 +142,12 @@ export interface SendOptions {
 	 */
 	tags?: Array<string>
 	/**
-	 * Schedule the message for future delivery. Accepts a `Date` or a date string. Forwarded
-	 * to providers with native scheduling (Resend, Brevo, SendGrid, Mailgun, Postboi Cloud);
+	 * Schedule the message for future delivery. Accepts a `Date`, an ISO 8601 string, or a
+	 * relative {@link Duration} added to now — e.g. `{ days: 1, hours: 5 }`. Forwarded to
+	 * providers with native scheduling (Resend, Brevo, SendGrid, Mailgun, Postboi Cloud);
 	 * ignored by providers without it, which send immediately.
 	 */
-	scheduled_at?: Date | string
+	scheduled_at?: Date | string | Duration
 }
 
 /** A single recipient's template variables (`{key}` → value). */
@@ -833,6 +870,41 @@ export abstract class ProviderBase<TResponse = unknown> {
 	}
 
 	/**
+	 * Resolve a {@link SendOptions.scheduled_at} input to a `Date`: a `Date` passes through, an
+	 * ISO 8601 string is parsed, and a relative {@link Duration} is added to the current time
+	 * (months/years via calendar arithmetic, the rest as fixed spans).
+	 */
+	private resolve_scheduled_at(value: Date | string | Duration): Date {
+		if (value instanceof Date) return value
+		if (typeof value === "string") return new Date(value)
+		const date = new Date()
+		if (value.years) date.setFullYear(date.getFullYear() + value.years)
+		if (value.months) date.setMonth(date.getMonth() + value.months)
+		if (value.weeks) date.setDate(date.getDate() + value.weeks * 7)
+		if (value.days) date.setDate(date.getDate() + value.days)
+		if (value.hours) date.setHours(date.getHours() + value.hours)
+		if (value.minutes) date.setMinutes(date.getMinutes() + value.minutes)
+		if (value.seconds) date.setSeconds(date.getSeconds() + value.seconds)
+		return date
+	}
+
+	/**
+	 * Normalise a `body` for {@link parse_form_data}: FormData passes through, a plain object of
+	 * fields (e.g. Express/multer's `req.body`) is appended key/value — array values become
+	 * repeated fields — and a string body (already-rendered HTML) returns null.
+	 */
+	private to_form_data(body: BodyInput): FormData | null {
+		if (body instanceof FormData) return body
+		if (!body || typeof body !== "object") return null
+		const form = new FormData()
+		for (const [key, value] of Object.entries(body)) {
+			if (Array.isArray(value)) for (const item of value) form.append(key, String(item))
+			else form.append(key, String(value))
+		}
+		return form
+	}
+
+	/**
 	 * Parse FormData, extracting special header fields and rendering the remaining
 	 * data into a compact HTML table, grouped by the `fieldset→field` key syntax.
 	 * Returns the extracted SendOptions (to/from/etc) along with any File attachments.
@@ -953,10 +1025,16 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 * sender and recipient are present. Returns a {@link PreparedMessage} for `build_request`.
 	 */
 	protected async prepare_send(options: SendOptions): Promise<PreparedMessage> {
-		// FormData → extract headers/body/attachments (honouring any formatter)
-		if (options.body instanceof FormData) {
+		// `body` may be a promise (e.g. a framework's `request.formData()`) — resolve it first.
+		const body = await options.body
+		options = { ...options, body }
+
+		// FormData — or a plain object of fields (Express/multer's `req.body`) — is parsed into
+		// extracted header fields plus a rendered HTML table (honouring any formatter).
+		const form = this.to_form_data(body)
+		if (form) {
 			const { options: extracted, attachments } = await this.parse_form_data(
-				options.body,
+				form,
 				options.formatter
 			)
 			options = { ...options, ...extracted }
@@ -985,8 +1063,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 
 		let scheduled_at: Date | undefined
 		if (options.scheduled_at !== undefined) {
-			scheduled_at =
-				options.scheduled_at instanceof Date ? options.scheduled_at : new Date(options.scheduled_at)
+			scheduled_at = this.resolve_scheduled_at(options.scheduled_at)
 			if (Number.isNaN(scheduled_at.getTime())) {
 				throw new PostboiError({
 					provider: this.provider,
