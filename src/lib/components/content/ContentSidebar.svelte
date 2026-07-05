@@ -5,6 +5,7 @@
 	import cryingRaw from "$lib/assets/crying.svg?raw"
 	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
 	import { siteConfig } from "$lib/config/site"
+	import versions from "$lib/config/versions.json"
 	import { cn } from "$lib/utils/cn"
 	import ScrollArea from "$lib/components/ui/ScrollArea.svelte"
 	import Dropdown from "$lib/components/ui/Dropdown.svelte"
@@ -388,16 +389,20 @@
 
 <aside class="flex h-full min-h-0 flex-col bg-background" aria-label={navigationLabel + " sidebar"}>
 	{#if showBranding}
-		<a
-			href={resolve("/")}
-			class="mb-4 flex items-center p-4 pb-0 lg:p-0"
-			aria-label={brandingConfig.name}
-		>
-			<span class="inline-flex shrink-0 items-center [&>svg]:size-9" aria-hidden="true">
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-				{@html logoRaw}
+		<div class="mb-4 flex items-center gap-2 p-4 pb-0 lg:p-0">
+			<a href={resolve("/")} class="flex items-center" aria-label={brandingConfig.name}>
+				<span class="inline-flex shrink-0 items-center [&>svg]:size-9" aria-hidden="true">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+					{@html logoRaw}
+				</span>
+			</a>
+			<span
+				class="rounded-full border border-border px-2 py-0.5 text-xs font-medium tracking-normal text-foreground-muted"
+				title={`Postboi is in pre-release — currently v${versions.latest}`}
+			>
+				Pre-release
 			</span>
-		</a>
+		</div>
 	{/if}
 
 	<div class="grid gap-2 p-4 lg:px-0">

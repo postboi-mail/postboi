@@ -193,9 +193,12 @@
 	<meta name="twitter:description" content={docDescription} />
 	<meta name="twitter:image" content={docOgImage} />
 
+	<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="48x48" />
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
 	<link rel="manifest" href="/site.webmanifest" />
-	<link rel="mask-icon" href="/favicon.svg" color="#1f2125" />
+	<link rel="mask-icon" href="/favicon.svg" color="#0F1C41" />
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 	<meta name="apple-mobile-web-app-title" content={siteConfig.name} />
