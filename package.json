@@ -122,6 +122,10 @@
       "types": "./dist/mock.d.ts",
       "default": "./dist/mock.js"
     },
+    "./maizzle": {
+      "types": "./dist/maizzle.d.ts",
+      "default": "./dist/maizzle.js"
+    },
     "./kit": {
       "types": "./dist/kit.d.ts",
       "svelte": "./dist/kit.js",
@@ -129,10 +133,14 @@
     }
   },
   "peerDependencies": {
+    "@maizzle/framework": "^6.0.0",
     "@sveltejs/kit": "^2.0.0",
     "svelte": "^5.0.0"
   },
   "peerDependenciesMeta": {
+    "@maizzle/framework": {
+      "optional": true
+    },
     "@sveltejs/kit": {
       "optional": true
     }
@@ -141,6 +149,7 @@
     "@eslint/js": "10.0.1",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/monaspace-neon": "^5.2.5",
+    "@maizzle/framework": "6.0.5",
     "@sveltejs/adapter-cloudflare": "^7.2.8",
     "@sveltejs/kit": "2.68.0",
     "@sveltejs/package": "2.5.8",

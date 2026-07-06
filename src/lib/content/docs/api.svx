@@ -49,7 +49,9 @@ interface SendOptions {
 }
 ```
 
-`body` accepts a string of HTML or a [`FormData`](/formdata) object. `formatter`
+`body` accepts a string of HTML, a [`FormData`](/formdata) object, or a promise resolving
+to either — so you can pass a template renderer's output straight through; see
+[Email templates](/templates). `formatter`
 controls how grouped-field labels are rendered. `headers` and `tags` are forwarded to each
 provider's native concept — see [Custom headers & tags](/providers#custom-headers--tags).
 
