@@ -26,6 +26,8 @@ await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
 - 📝 **Smart FormData parsing** — automatically converts `FormData` to HTML tables.
 - 🎯 **Grouped fields** — organise form fields with `fieldset→field` syntax.
 - 📎 **Attachments** — attach files directly from form inputs or `File` objects.
+- 🎨 **Bring your own templates** — `body` takes any HTML (or a promise of it), and the
+  optional `postboi/maizzle` helper renders [Maizzle](/templates) templates straight into it.
 - 🛡️ **Type-safe** — full TypeScript support with normalised error handling.
 
 ## How it fits together
@@ -50,5 +52,6 @@ or set things up by hand with [Manual setup](/manual-setup).
 | [Quick start](/quick-start)           | `postboi init` — pick a provider, send your first email |
 | [Manual setup](/manual-setup)         | Wire Postboi up by hand without the CLI           |
 | [SvelteKit form actions](/sveltekit)  | One-line contact forms                            |
+| [Email templates](/templates)         | Design emails with Maizzle, React Email, or MJML  |
 | [Providers](/providers)               | The full provider list and their options          |
 | [API reference](/api)                 | `SendOptions`, types, and the provider surface    |
