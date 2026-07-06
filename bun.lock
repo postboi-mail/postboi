@@ -44,10 +44,12 @@
         "wrangler": "^4.72.0",
       },
       "peerDependencies": {
+        "@maizzle/framework": "^6.0.0",
         "@sveltejs/kit": "^2.0.0",
         "svelte": "^5.0.0",
       },
       "optionalPeers": [
+        "@maizzle/framework",
         "@sveltejs/kit",
       ],
     },

@@ -12,6 +12,7 @@
 	import ThemeToggle from "$lib/components/ui/ThemeToggle.svelte"
 	import SearchTrigger from "$lib/components/content/search/SearchTrigger.svelte"
 	import BrandIcon from "$lib/components/content/BrandIcon.svelte"
+	import BrandLogo from "$lib/components/content/BrandLogo.svelte"
 	import ChevronRight from "carbon-icons-svelte/lib/ChevronRight.svelte"
 	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
 	import Launch from "carbon-icons-svelte/lib/Launch.svelte"
@@ -391,10 +392,7 @@
 	{#if showBranding}
 		<div class="mb-4 flex items-center gap-2 p-4 pb-0 lg:p-0">
 			<a href={resolve("/")} class="flex items-center" aria-label={brandingConfig.name}>
-				<span class="inline-flex shrink-0 items-center [&>svg]:size-9" aria-hidden="true">
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-					{@html logoRaw}
-				</span>
+				<BrandLogo defaultRaw={logoRaw} wink={!page.error} class="[&_svg]:size-9" />
 			</a>
 			<span
 				class="rounded-full border border-border px-2 py-0.5 text-xs font-medium tracking-normal text-foreground-muted"

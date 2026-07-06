@@ -2,6 +2,7 @@
 	import { afterNavigate } from "$app/navigation"
 	import { resolve } from "$app/paths"
 	import { onDestroy } from "svelte"
+	import BrandLogo from "$lib/components/content/BrandLogo.svelte"
 	import ContentSidebar from "$lib/components/content/ContentSidebar.svelte"
 	import { brandingConfig } from "$lib/config/branding"
 	import { contentUiDefaults, type SectionUiConfig } from "$lib/config/content-ui"
@@ -196,16 +197,10 @@
 >
 	<a
 		href={resolve("/")}
-		class="inline-flex items-center gap-1 px-2 py-2 text-sm tracking-tight text-foreground transition-colors duration-150 ease-out hover:text-foreground"
+		class="inline-flex items-center px-2 py-2"
+		aria-label={brandingConfig.name}
 	>
-		<span
-			class="inline-flex shrink-0 items-center text-accent [&>svg]:size-4 [&>svg]:fill-current"
-			aria-hidden="true"
-		>
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-			{@html brandingConfig.logoRaw}
-		</span>
-		<span class="font-medium tracking-tight text-foreground">{brandingConfig.name}</span>
+		<BrandLogo defaultRaw={brandingConfig.logoRaw} class="[&_svg]:size-4" />
 	</a>
 	<button
 		id={toggleButtonId}

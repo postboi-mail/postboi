@@ -12,7 +12,7 @@ html {
 }
 
 :root {
-	--base-hue: 265;
+	--base-hue: 271;
 
 	--radius-base: 0.275rem;
 
@@ -38,17 +38,19 @@ html {
 }
 
 .dark {
-	--background-inset: oklch(0.2099 0.0039 var(--base-hue));
-	--background: oklch(0.2574 0.0056 var(--base-hue));
-	--background-muted: oklch(0.3017 0.0073 var(--base-hue));
-	--foreground: oklch(0.9674 0.0013 var(--base-hue));
-	--foreground-muted: oklch(0.669 0.0107 var(--base-hue));
+	/* Neutrals carry the app's subtle cool tint: hue 271 with .02 chroma on
+	   surfaces/borders, lighter .005 on text. See the postboi-app --page-* palette. */
+	--background-inset: oklch(0.2099 0.02 var(--base-hue));
+	--background: oklch(0.2574 0.02 var(--base-hue));
+	--background-muted: oklch(0.3017 0.02 var(--base-hue));
+	--foreground: oklch(0.9674 0.005 var(--base-hue));
+	--foreground-muted: oklch(0.669 0.02 var(--base-hue));
 	/* Dark mode: the dark background gives the brand yellow enough contrast to be
 	   the interactive accent, matching the postboi-app dashboard. */
 	--accent: oklch(0.84 0.17 85);
 	--accent-secondary: oklch(0.74 0.17 55);
-	--border: oklch(1 0.013 var(--base-hue) / 0.05);
-	--highlight: oklch(1 0.013 var(--base-hue));
+	--border: oklch(1 0.02 var(--base-hue) / 0.05);
+	--highlight: oklch(1 0.02 var(--base-hue));
 }
 
 @theme {
