@@ -1,0 +1,50 @@
+---
+title: Errors & retries
+name: Errors & retries
+description: One normalised PostboiError across every provider, plus opt-in retries.
+category: Guides
+---
+
+## Error handling
+
+Every provider throws the **same** normalised `PostboiError` on failure — HTTP errors,
+provider error envelopes, timeouts, and network failures all funnel through it. Error
+handling is identical no matter which provider you use, and the original provider payload is
+kept on `.raw`.
+
+```typescript
+try {
+	await mail.send({ to: 'bad@email', body: 'test' })
+} catch (error) {
+	if (mail.is_error(error)) {
+		// error is a PostboiError
+		console.error(error.provider) // e.g. "resend"
+		console.error(error.status) // HTTP status, when applicable
+		console.error(error.code) // provider-specific code, when available
+		console.error(error.message) // normalised message
+		console.error(error.raw) // the original provider payload
+	} else {
+		console.error(error)
+	}
+}
+```
+
+## Retries
+
+Every provider accepts `retries`, `retry_delay`, and `timeout`:
+
+```typescript
+const mail = new Resend({
+	api_key: RESEND_API_KEY,
+	timeout: 30000, // per-request timeout in ms (default 30000)
+	retries: 2, // retries on 429/5xx and network errors (default 0)
+	retry_delay: 500 // base backoff in ms, doubles each attempt (default 500)
+})
+```
+
+Retries fire on `429`, `5xx`, and network errors. The delay doubles each attempt
+(exponential backoff).
+
+> **Retries are off by default on purpose.** Retrying a send that already reached the
+> provider can deliver a duplicate email, so enable `retries` only alongside an
+> `idempotency_key` (where the provider supports it).

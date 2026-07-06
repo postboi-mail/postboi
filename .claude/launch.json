@@ -11,7 +11,7 @@
 		{
 			"name": "docs",
 			"runtimeExecutable": "bash",
-			"runtimeArgs": ["-c", "cd docs && bun run dev -- --port 5200"],
+			"runtimeArgs": ["-c", "cd /Users/zyb/Sites/postboi && bun run dev -- --port 5200"],
 			"port": 5200
 		}
 	]
