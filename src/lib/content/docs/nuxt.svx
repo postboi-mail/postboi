@@ -44,30 +44,27 @@ Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The p
 default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
-## Or use the MailForm component
+## Or use the Captcha component
 
-`postboi/vue` ships the form boilerplate as a component — the [spam-protection](/spam)
-honeypot, hidden special fields from props, and (given your dashboard's `captcha` key)
-the managed invisible captcha:
+`postboi/vue` ships the [spam protection](/spam) — honeypot plus, on Postboi Cloud, the
+managed invisible captcha — as a single prop-free component. Your form stays a native
+`<form>`; just drop it inside:
 
 ```vue
 <script setup>
-import { ref } from 'vue'
-import { MailForm } from 'postboi/vue'
-
-const email = ref('')
+import { Captcha } from 'postboi/vue'
 </script>
 
 <template>
-	<MailForm action="/api/contact" subject="Contact Form" :reply_to="email" captcha="pk_…">
-		<input name="contact→name" placeholder="Name" required />
-		<input name="contact→email" type="email" v-model="email" required />
-		<textarea name="details→message" placeholder="Message"></textarea>
+	<form method="post" action="/api/contact" enctype="multipart/form-data">
+		<!-- your fields… -->
+		<Captcha />
 		<button type="submit">Send</button>
-	</MailForm>
+	</form>
 </template>
 ```
 
-See [Spam protection](/spam#form-components) for every prop.
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
 
 **Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nuxt-provider-postboi).

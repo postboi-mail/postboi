@@ -1,82 +1,55 @@
+"use client"
+
 /**
- * `<MailForm>` for React — Next.js, Remix, or plain React. A POST form with Postboi's
- * spam protection built in: the 🍯 honeypot field, hidden special fields (`_subject`,
- * `_reply_to`, …) from props, and — given a publishable `captcha` key from the
- * dashboard — the managed invisible captcha.
+ * `<Captcha>` for React — Next.js, Remix, or plain React. Drop-in spam protection for a
+ * native `<form>`: renders the 🍯 honeypot field and, on Postboi Cloud, activates the
+ * managed invisible captcha on the surrounding form. The publishable key is baked in by
+ * `bunx postboi sync`, so no props are needed.
  *
  * Written with `createElement` (no JSX) so it needs no build-tool configuration here;
  * React itself is an optional peer dependency.
  *
  * @example
  * ```tsx
- * import { MailForm } from "postboi/react"
+ * import { Captcha } from "postboi/react"
  *
- * <MailForm action="/api/contact" subject="Contact form" captcha="pk_…">
+ * <form action={action}>
  * 	<input name="contact→name" required />
+ * 	<Captcha />
  * 	<button>Send</button>
- * </MailForm>
+ * </form>
  * ```
  */
 
-import { createElement, useEffect, type FormHTMLAttributes, type ReactNode } from "react"
+import { createElement, useEffect, useRef } from "react"
 import { HONEYPOT_FIELD } from "./captcha.js"
-import {
-	ensure_captcha_script,
-	honeypot_style_object,
-	special_fields,
-	type MailFormFields,
-} from "./form.js"
+import { activate_captcha, honeypot_style_object } from "./form.js"
 
-export type { MailFormFields } from "./form.js"
-
-export interface MailFormProps extends FormHTMLAttributes<HTMLFormElement>, MailFormFields {
-	/** Publishable managed-captcha key (`pk_…`) from the Postboi dashboard. */
-	captcha?: string
+export interface CaptchaProps {
+	/** Publishable key (`pk_…`) override. Defaults to the key baked by `bunx postboi sync`. */
+	pk?: string
 	/** Origin serving the captcha loader. Defaults to https://postboi.email. */
-	captcha_origin?: string
+	origin?: string
 	/** Render the hidden 🍯 honeypot field. Defaults to true. */
 	honeypot?: boolean
-	children?: ReactNode
 }
 
-export function MailForm(props: MailFormProps) {
-	const {
-		captcha,
-		captcha_origin,
-		honeypot = true,
-		subject,
-		to,
-		from,
-		reply_to,
-		cc,
-		bcc,
-		children,
-		...rest
-	} = props
+export function Captcha({ pk, origin, honeypot = true }: CaptchaProps) {
+	const marker = useRef<HTMLElement>(null)
 
 	useEffect(() => {
-		if (captcha) ensure_captcha_script(captcha, captcha_origin)
-	}, [captcha, captcha_origin])
+		activate_captcha(marker.current, pk, origin)
+	}, [pk, origin])
 
-	const hidden = special_fields({ subject, to, from, reply_to, cc, bcc }).map(([name, value]) =>
-		createElement("input", { key: name, type: "hidden", name, value })
-	)
-
-	return createElement(
-		"form",
-		{ method: "POST", ...rest, ...(captcha ? { "data-captcha": "" } : {}) },
-		...hidden,
-		honeypot
-			? createElement("input", {
-					key: HONEYPOT_FIELD,
-					type: "text",
-					name: HONEYPOT_FIELD,
-					tabIndex: -1,
-					autoComplete: "off",
-					"aria-hidden": "true",
-					style: honeypot_style_object,
-				})
-			: null,
-		children
-	)
+	return honeypot
+		? createElement("input", {
+				ref: marker,
+				type: "text",
+				name: HONEYPOT_FIELD,
+				tabIndex: -1,
+				autoComplete: "off",
+				"aria-hidden": "true",
+				style: honeypot_style_object,
+			})
+		: createElement("span", { ref: marker, hidden: true })
 }

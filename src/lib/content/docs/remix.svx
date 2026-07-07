@@ -47,22 +47,24 @@ Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The p
 default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
-## Or use the MailForm component
+## Or use the Captcha component
 
-`postboi/react` ships the form boilerplate as a component — the [spam-protection](/spam)
-honeypot, hidden special fields from props, and (given your dashboard's `captcha` key)
-the managed invisible captcha. It renders a plain `<form>`, so for client-side routing
-keep Remix's `<Form>` — or pass `method` and let the browser submit:
+`postboi/react` ships the [spam protection](/spam) — honeypot plus, on Postboi Cloud,
+the managed invisible captcha — as a single prop-free component. It renders inside your
+existing form, so Remix's `<Form>` keeps working:
 
 ```tsx
-import { MailForm } from 'postboi/react'
+import { Form } from '@remix-run/react'
+import { Captcha } from 'postboi/react'
 
-<MailForm subject="Contact Form" reply_to={email} captcha="pk_…">
-	<input name="contact→name" placeholder="Name" required />
+<Form method="post" encType="multipart/form-data">
+	{/* your fields… */}
+	<Captcha />
 	<button type="submit">Send</button>
-</MailForm>
+</Form>
 ```
 
-See [Spam protection](/spam#form-components) for every prop.
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
 
 **Runnable example:** [`examples/remix-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/remix-provider-postboi).

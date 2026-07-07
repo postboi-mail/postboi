@@ -132,9 +132,9 @@
       "default": "./dist/kit.js"
     },
     "./svelte": {
-      "types": "./dist/MailForm.svelte.d.ts",
-      "svelte": "./dist/MailForm.svelte",
-      "default": "./dist/MailForm.svelte"
+      "types": "./dist/Captcha.svelte.d.ts",
+      "svelte": "./dist/Captcha.svelte",
+      "default": "./dist/Captcha.svelte"
     },
     "./react": {
       "types": "./dist/react.d.ts",
@@ -144,7 +144,7 @@
       "types": "./dist/vue.d.ts",
       "default": "./dist/vue.js"
     },
-    "./astro": "./dist/MailForm.astro",
+    "./astro": "./dist/Captcha.astro",
     "./form": {
       "types": "./dist/form.d.ts",
       "default": "./dist/form.js"

@@ -1,8 +1,10 @@
 /**
- * Shared plumbing for the framework `<MailForm>` components (Svelte, React, Vue, Astro).
- * Everything here is framework-agnostic: the honeypot styling, the special-field mapping,
- * and the managed-captcha loader injection.
+ * Shared plumbing for the framework `<Captcha>` components (Svelte, React, Vue, Astro).
+ * Everything here is framework-agnostic: the honeypot styling, the managed-captcha loader
+ * injection, and the parent-form activation the components run on mount.
  */
+
+import { captcha_key } from "./register.js"
 
 /** Where the managed-captcha loader script lives. */
 export const CAPTCHA_ORIGIN = "https://postboi.email"
@@ -18,35 +20,6 @@ export const honeypot_style_object = {
 	width: 0,
 	opacity: 0,
 } as const
-
-/** The special-field props accepted by every `<MailForm>` — rendered as hidden `_x` inputs. */
-export interface MailFormFields {
-	/** Sets the email's subject via a hidden `_subject` field. */
-	subject?: string
-	/** Sets the recipient via a hidden `_to` field. */
-	to?: string
-	/** Sets the sender via a hidden `_from` field. */
-	from?: string
-	/** Sets the reply-to via a hidden `_reply_to` field. */
-	reply_to?: string
-	/** Sets the cc via a hidden `_cc` field (comma-separated). */
-	cc?: string
-	/** Sets the bcc via a hidden `_bcc` field (comma-separated). */
-	bcc?: string
-}
-
-/** Map the field props to their hidden-input `[name, value]` pairs, skipping unset ones. */
-export function special_fields(fields: MailFormFields): Array<[string, string]> {
-	const entries: Array<[string, string | undefined]> = [
-		["_subject", fields.subject],
-		["_to", fields.to],
-		["_from", fields.from],
-		["_reply_to", fields.reply_to],
-		["_cc", fields.cc],
-		["_bcc", fields.bcc],
-	]
-	return entries.filter((entry): entry is [string, string] => Boolean(entry[1]))
-}
 
 const SCRIPT_MARKER = "data-postboi-captcha"
 
@@ -65,4 +38,34 @@ export function ensure_captcha_script(key: string, origin: string = CAPTCHA_ORIG
 	tag.setAttribute("data-key", key)
 	tag.setAttribute(SCRIPT_MARKER, "")
 	document.head.appendChild(tag)
+}
+
+/**
+ * What a `<Captcha>` component does on mount: find the surrounding native `<form>` from
+ * its rendered marker element, tag it `data-captcha` for the loader, and inject the
+ * loader script. The key comes from the `pk` prop when given, otherwise from
+ * {@link captcha_key} — the value `bunx postboi sync` bakes into this package, which is
+ * what makes `<Captcha />` prop-free on Postboi Cloud. With no key at all it stays a
+ * honeypot and says so, rather than failing silently.
+ */
+export function activate_captcha(
+	marker: Element | null | undefined,
+	pk?: string,
+	origin?: string
+): void {
+	if (!marker || typeof document === "undefined") return
+	const form = marker.closest("form")
+	if (!form) {
+		console.warn("postboi: <Captcha> must be rendered inside a <form>")
+		return
+	}
+	const key = pk ?? captcha_key
+	if (!key) {
+		console.warn(
+			"postboi: <Captcha> has no publishable key — run `bunx postboi sync` (Postboi Cloud) or pass pk. The honeypot still works; the managed captcha is off."
+		)
+		return
+	}
+	form.setAttribute("data-captcha", "")
+	ensure_captcha_script(key, origin)
 }

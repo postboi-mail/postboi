@@ -11,7 +11,7 @@ const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8")) as {
 const to_source = (target: string) =>
 	target
 		.replace("./dist/", "src/library/")
-		// Svelte component types (MailForm.svelte.d.ts) are generated from the .svelte source.
+		// Svelte component types (Captcha.svelte.d.ts) are generated from the .svelte source.
 		.replace(/\.svelte\.d\.ts$/, ".svelte")
 		.replace(/\.d\.ts$/, ".ts")
 		.replace(/\.js$/, ".ts")

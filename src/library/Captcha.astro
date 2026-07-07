@@ -1,0 +1,62 @@
+---
+/**
+ * `<Captcha>` for Astro. Drop-in spam protection for a native `<form>`: renders the 🍯
+ * honeypot field and, on Postboi Cloud, activates the managed invisible captcha on the
+ * surrounding form. The publishable key is baked in by `bunx postboi sync`, so no props
+ * are needed.
+ *
+ * ```astro
+ * ---
+ * import Captcha from "postboi/astro"
+ * ---
+ * <form method="post" action="/api/contact">
+ * 	<input name="contact→name" required />
+ * 	<Captcha />
+ * 	<button>Send</button>
+ * </form>
+ * ```
+ */
+import { captcha_key } from "./register.js"
+
+interface Props {
+	/** Publishable key (`pk_…`) override. Defaults to the key baked by `bunx postboi sync`. */
+	pk?: string
+	/** Origin serving the captcha loader. Defaults to https://postboi.email. */
+	origin?: string
+	/** Render the hidden 🍯 honeypot field. Defaults to true. */
+	honeypot?: boolean
+}
+
+const { pk = captcha_key, origin = "https://postboi.email", honeypot = true } = Astro.props
+
+// The loader finds the surrounding form via this marker — no inline script needed.
+const marker = pk ? { "data-postboi-marker": "" } : {}
+---
+
+{
+	honeypot ? (
+		<input
+			type="text"
+			name="🍯"
+			tabindex="-1"
+			autocomplete="off"
+			aria-hidden="true"
+			style="position:absolute;left:-9999px;height:0;width:0;opacity:0"
+			{...marker}
+		/>
+	) : (
+		<span hidden {...marker} />
+	)
+}
+{
+	pk && (
+		<script
+			is:inline
+			src={`${origin.replace(/\/$/, "")}/captcha.js`}
+			data-key={pk}
+			data-postboi-captcha
+			async
+			defer
+		/>
+	)
+}

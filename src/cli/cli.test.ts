@@ -24,7 +24,7 @@ import {
 	fetch_domains,
 	CloudAuthError,
 } from "./cloud.js"
-import { render_types, from_status } from "./typegen.js"
+import { render_types, render_runtime, from_status } from "./typegen.js"
 
 describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
@@ -431,7 +431,15 @@ describe("cloud domains & generated from types", () => {
 		expect(account).toEqual({
 			send_address: "joe@send.postboi.email",
 			domains: [...domains, { domain: "half-baked.com", status: "pending" }],
+			captcha_key: undefined,
 		})
+	})
+
+	it("fetch_domains picks up the publishable captcha key", async () => {
+		const account = await fetch_domains("https://x", "t", async () =>
+			json({ send_address: "a@b.c", domains: [], captcha_key: "pk_123" })
+		)
+		expect(account?.captcha_key).toBe("pk_123")
 	})
 
 	it("fetch_domains degrades to undefined on errors and unknown shapes", async () => {
@@ -453,12 +461,24 @@ describe("cloud domains & generated from types", () => {
 		expect(source).toContain("| `${string}@example.com>`")
 		// pending domains are included — the type answers "plausibly mine", not "will deliver"
 		expect(source).toContain("| `${string}@other-domain.com`")
-		// `export {}` makes it a module, so `declare module` augments instead of replacing
-		expect(source).toContain("export {}")
+		// the export makes it a module, so `declare module` augments instead of replacing —
+		// and it must mirror the shipped placeholder so `<Captcha />` imports type-check
+		expect(source).toContain("export declare const captcha_key: string | undefined")
 	})
 
-	it("render_types returns null when the account has nothing to send from", () => {
+	it("render_types returns null when the account has nothing to send from and no key", () => {
 		expect(render_types(undefined, [])).toBeNull()
+	})
+
+	it("a captcha key alone is enough to generate (shared-address accounts)", () => {
+		const source = render_types(undefined, [], "pk_123")!
+		expect(source).not.toContain('declare module "postboi"')
+		expect(source).toContain("export declare const captcha_key: string | undefined")
+	})
+
+	it("render_runtime bakes the key, or undefined without one", () => {
+		expect(render_runtime("pk_123")).toContain('export const captcha_key = "pk_123"')
+		expect(render_runtime(undefined)).toContain("export const captcha_key = undefined")
 	})
 
 	it("from_status classifies the send address, verified, pending and unknown domains", () => {

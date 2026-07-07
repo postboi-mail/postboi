@@ -1,8 +1,8 @@
 /**
- * `<MailForm>` for Vue — Nuxt or plain Vue 3. A POST form with Postboi's spam protection
- * built in: the 🍯 honeypot field, hidden special fields (`_subject`, `_reply_to`, …)
- * from props, and — given a publishable `captcha` key from the dashboard — the managed
- * invisible captcha.
+ * `<Captcha>` for Vue — Nuxt or plain Vue 3. Drop-in spam protection for a native
+ * `<form>`: renders the 🍯 honeypot field and, on Postboi Cloud, activates the managed
+ * invisible captcha on the surrounding form. The publishable key is baked in by
+ * `bunx postboi sync`, so no props are needed.
  *
  * Written with render functions (no SFC) so it needs no build-tool configuration here;
  * Vue itself is an optional peer dependency.
@@ -10,66 +10,53 @@
  * @example
  * ```vue
  * <script setup>
- * import { MailForm } from "postboi/vue"
+ * import { Captcha } from "postboi/vue"
  * </script>
  *
  * <template>
- * 	<MailForm action="/api/contact" subject="Contact form" captcha="pk_…">
+ * 	<form method="post" action="/api/contact">
  * 		<input name="contact→name" required />
+ * 		<Captcha />
  * 		<button>Send</button>
- * 	</MailForm>
+ * 	</form>
  * </template>
  * ```
  */
 
-import { defineComponent, h, onMounted } from "vue"
+import { defineComponent, h, onMounted, ref } from "vue"
 import { HONEYPOT_FIELD } from "./captcha.js"
-import { ensure_captcha_script, honeypot_style, special_fields } from "./form.js"
+import { activate_captcha, honeypot_style } from "./form.js"
 
-export type { MailFormFields } from "./form.js"
-
-export const MailForm = defineComponent({
-	name: "MailForm",
-	// Attrs (action, class, …) are spread onto the <form> by hand so data-captcha wins.
-	inheritAttrs: false,
+export const Captcha = defineComponent({
+	name: "Captcha",
 	props: {
-		/** Publishable managed-captcha key (`pk_…`) from the Postboi dashboard. */
-		captcha: { type: String, required: false },
+		/** Publishable key (`pk_…`) override. Defaults to the key baked by `bunx postboi sync`. */
+		pk: { type: String, required: false },
 		/** Origin serving the captcha loader. Defaults to https://postboi.email. */
-		captcha_origin: { type: String, required: false },
+		origin: { type: String, required: false },
 		/** Render the hidden 🍯 honeypot field. Defaults to true. */
 		honeypot: { type: Boolean, default: true },
-		subject: { type: String, required: false },
-		to: { type: String, required: false },
-		from: { type: String, required: false },
-		reply_to: { type: String, required: false },
-		cc: { type: String, required: false },
-		bcc: { type: String, required: false },
 	},
-	setup(props, { slots, attrs }) {
+	setup(props) {
+		const marker = ref<HTMLElement>()
+
 		onMounted(function () {
-			if (props.captcha) ensure_captcha_script(props.captcha, props.captcha_origin)
+			activate_captcha(marker.value, props.pk, props.origin)
 		})
 
 		return () =>
-			h("form", { method: "POST", ...attrs, ...(props.captcha ? { "data-captcha": "" } : {}) }, [
-				...special_fields(props).map(([name, value]) =>
-					h("input", { key: name, type: "hidden", name, value })
-				),
-				props.honeypot
-					? h("input", {
-							key: HONEYPOT_FIELD,
-							type: "text",
-							name: HONEYPOT_FIELD,
-							tabindex: "-1",
-							autocomplete: "off",
-							"aria-hidden": "true",
-							style: honeypot_style,
-						})
-					: null,
-				slots.default ? slots.default() : null,
-			])
+			props.honeypot
+				? h("input", {
+						ref: marker,
+						type: "text",
+						name: HONEYPOT_FIELD,
+						tabindex: "-1",
+						autocomplete: "off",
+						"aria-hidden": "true",
+						style: honeypot_style,
+					})
+				: h("span", { ref: marker, hidden: true })
 	},
 })
 
-export default MailForm
+export default Captcha

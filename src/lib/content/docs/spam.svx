@@ -10,67 +10,78 @@ puzzles, no checkboxes, nothing for real visitors to do. Both run automatically 
 [FormData](/formdata) send, with every provider — and on Postboi Cloud the captcha is
 fully managed: no Cloudflare account, no keys, no env vars.
 
-## Form components
+## The Captcha component
 
-The fastest way to get everything on this page: a ready-made form component for Svelte,
-React, Vue, and Astro. It renders the honeypot, turns props like `subject` and `reply_to`
-into the hidden [special fields](/formdata#special-fields), and — given the publishable
-`captcha` key from your [dashboard](https://postboi.email/dashboard/keys) — wires up the
-managed invisible captcha, including forms mounted on client-side navigations.
+The fastest way to get everything on this page: drop `<Captcha />` — no props — inside
+your own `<form>`. Your form stays a native form (bring any form library you like); the
+component renders the honeypot and activates the managed invisible captcha on the
+surrounding form, including forms mounted on client-side navigations.
 
 ```svelte
 <script>
 	import { enhance } from '$app/forms'
-	import MailForm from 'postboi/svelte'
+	import Captcha from 'postboi/svelte'
 </script>
 
-<MailForm subject="Contact form" captcha="pk_…" {enhance}>
+<form method="POST" use:enhance>
 	<input name="contact→name" required />
+	<Captcha />
 	<button>Send</button>
-</MailForm>
+</form>
 ```
 
 ```tsx
 // React — Next.js, Remix, …
-import { MailForm } from 'postboi/react'
+import { Captcha } from 'postboi/react'
 
-<MailForm action={action} subject="Contact form" captcha="pk_…">
+<form action={action}>
 	<input name="contact→name" required />
+	<Captcha />
 	<button>Send</button>
-</MailForm>
+</form>
 ```
 
 ```vue
 <!-- Vue / Nuxt -->
 <script setup>
-import { MailForm } from 'postboi/vue'
+import { Captcha } from 'postboi/vue'
 </script>
 
 <template>
-	<MailForm action="/api/contact" subject="Contact form" captcha="pk_…">
+	<form method="post" action="/api/contact">
 		<input name="contact→name" required />
+		<Captcha />
 		<button>Send</button>
-	</MailForm>
+	</form>
 </template>
 ```
 
 ```astro
 ---
-import MailForm from 'postboi/astro'
+import Captcha from 'postboi/astro'
 ---
 
-<MailForm action="/api/contact" subject="Contact form" captcha="pk_…">
+<form method="post" action="/api/contact">
 	<input name="contact→name" required />
+	<Captcha />
 	<button>Send</button>
-</MailForm>
+</form>
 ```
 
-Every component takes the same props: the special fields (`subject`, `to`, `from`,
-`reply_to`, `cc`, `bcc`), `captcha` (the `pk_…` key — omit it for honeypot-only),
-`honeypot` (`false` to disable), and any normal `<form>` attribute, which passes through
-(`method` defaults to `POST`). The Svelte one also accepts SvelteKit's `enhance` and a
-bindable `element`. No component? The rest of this page shows the plain-HTML pieces they
-render.
+**Where does the key come from?** `bunx postboi sync` — already in your `prepare` script
+if you set up with `bunx postboi init` — bakes your account's publishable key into the
+installed package alongside the generated `from` types. No props, no env vars, nothing to
+commit. Re-run `bunx postboi sync` (and restart the dev server) if the component warns
+that no key is baked, or pass one explicitly with `pk="pk_…"` (from your
+[dashboard](https://postboi.email/dashboard/keys)) — handy off Postboi Cloud or in
+environments where `sync` can't run. Make sure `POSTBOI_TOKEN` is available at **build**
+time (it usually is — it's the same env your server sends with) so CI builds bake the key
+too.
+
+Props, all optional: `pk` (key override), `origin` (loader origin), and `honeypot`
+(`false` to render no honeypot field). Without any key the component is honeypot-only and
+logs a console warning. No component? The rest of this page shows the plain-HTML pieces
+it renders.
 
 ## The honeypot — zero config
 

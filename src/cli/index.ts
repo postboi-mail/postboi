@@ -372,12 +372,17 @@ async function sync(): Promise<void> {
 		console.log(yellow("postboi sync: could not fetch domains from Postboi Cloud — skipped."))
 		return
 	}
-	const file = write_types(account.send_address ?? read_env("POSTBOI_FROM"), account.domains)
+	const file = write_types(
+		account.send_address ?? read_env("POSTBOI_FROM"),
+		account.domains,
+		account.captcha_key
+	)
 	if (!file) {
 		console.log(dim("postboi sync: no sending addresses on this account yet."))
 		return
 	}
 	console.log(`${green("✓")} wrote ${bold(file)}`)
+	if (account.captcha_key) console.log(`  ${green("✓")} captcha key baked for <Captcha />`)
 	for (const d of account.domains) {
 		console.log(
 			d.status === "verified"
@@ -404,8 +409,10 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	console.log(`${green("✓")} device authorised`)
 
 	// The domain list drives the default-from hint, the post-input warning, and the
-	// generated `from` types. Best-effort: an older API just means no domain info.
-	const domains: Array<CloudDomain> = (await fetch_domains(base, token))?.domains ?? []
+	// generated `from` types; the captcha key gets baked in for the <Captcha /> components.
+	// Best-effort: an older API just means no domain info.
+	const cloud_account = await fetch_domains(base, token)
+	const domains: Array<CloudDomain> = cloud_account?.domains ?? []
 	if (domains.length > 0) {
 		const list = domains
 			.map((d) => `${d.domain} ${d.status === "verified" ? green("✓") : yellow("⌛")}`)
@@ -455,11 +462,16 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	write_config("postboi", config_defaults, {})
 
 	// Lives inside node_modules — nothing to commit, no diffs, `bunx postboi sync` refreshes it.
-	const types_file = write_types(send_address, domains)
+	const types_file = write_types(send_address, domains, cloud_account?.captcha_key)
 	if (types_file) {
 		console.log(
 			`${green("✓")} typed ${bold("from")} to your addresses ${dim(`(generated into ${types_file})`)}`
 		)
+		if (cloud_account?.captcha_key) {
+			console.log(
+				`${green("✓")} baked your captcha key — drop ${bold("<Captcha />")} into any form`
+			)
+		}
 		ensure_prepare()
 	}
 

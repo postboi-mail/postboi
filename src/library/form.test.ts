@@ -1,37 +1,28 @@
 import { describe, it, expect } from "vitest"
-import { special_fields, ensure_captcha_script, honeypot_style } from "$library/form.js"
+import {
+	activate_captcha,
+	ensure_captcha_script,
+	honeypot_style,
+	honeypot_style_object,
+} from "$library/form.js"
+import { captcha_key } from "$library/register.js"
 import { HONEYPOT_FIELD } from "$library/captcha.js"
 
-describe("MailForm plumbing", () => {
-	it("maps set field props to hidden-input pairs, skipping unset ones", () => {
-		expect(
-			special_fields({ subject: "Contact", reply_to: "ada@example.com", to: "", cc: undefined })
-		).toEqual([
-			["_subject", "Contact"],
-			["_reply_to", "ada@example.com"],
-		])
-		expect(special_fields({})).toEqual([])
-	})
-
-	it("orders every supported field consistently", () => {
-		const names = special_fields({
-			subject: "s",
-			to: "t",
-			from: "f",
-			reply_to: "r",
-			cc: "c",
-			bcc: "b",
-		}).map(([name]) => name)
-		expect(names).toEqual(["_subject", "_to", "_from", "_reply_to", "_cc", "_bcc"])
-	})
-
-	it("ensure_captcha_script is a no-op without a DOM (SSR)", () => {
+describe("Captcha component plumbing", () => {
+	it("is inert without a DOM (SSR)", () => {
 		expect(() => ensure_captcha_script("pk_test")).not.toThrow()
+		expect(() => activate_captcha(undefined, "pk_test")).not.toThrow()
+		expect(() => activate_captcha(null)).not.toThrow()
+	})
+
+	it("ships with no baked key — sync generates it into the installed package", () => {
+		expect(captcha_key).toBeUndefined()
 	})
 
 	it("hides the honeypot without display: none", () => {
 		expect(honeypot_style).toContain("position:absolute")
 		expect(honeypot_style).not.toContain("display")
+		expect(honeypot_style_object.position).toBe("absolute")
 		expect(HONEYPOT_FIELD).toBe("🍯")
 	})
 })

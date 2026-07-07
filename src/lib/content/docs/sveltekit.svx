@@ -65,29 +65,27 @@ bot learns nothing. Want more? [Spam protection](/spam) covers the invisible cap
 fully managed on Postboi Cloud (one script tag, no keys), or bring your own Turnstile with
 a single env var.
 
-## Or use the MailForm component
+## Or use the Captcha component
 
-`postboi/svelte` ships the boilerplate as a component: the honeypot, hidden special
-fields from props, and — given your dashboard's `captcha` key — the managed invisible
-captcha. Pass `enhance` for progressive enhancement, exactly like a plain form:
+`postboi/svelte` ships that honeypot — plus the [managed invisible captcha](/spam) on
+Postboi Cloud — as a single prop-free component. Your form stays a native `<form>`
+(`use:enhance` and form libraries keep working); just drop it inside:
 
 ```svelte
 <script lang="ts">
 	import { enhance } from '$app/forms'
-	import MailForm from 'postboi/svelte'
-
-	let email = $state('')
+	import Captcha from 'postboi/svelte'
 </script>
 
-<MailForm subject="Contact Form" reply_to={email} captcha="pk_…" {enhance} enctype="multipart/form-data">
-	<input name="contact→name" placeholder="Name" required />
-	<input name="contact→email" type="email" placeholder="Email" required bind:value={email} />
-	<textarea name="details→message" placeholder="Message"></textarea>
+<form method="POST" use:enhance enctype="multipart/form-data">
+	<!-- your fields… -->
+	<Captcha />
 	<button type="submit">Send</button>
-</MailForm>
+</form>
 ```
 
-See [Spam protection](/spam#form-components) for every prop.
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
 
 A full, runnable version of this form lives in
 [`examples/sveltekit-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit-provider-postboi).

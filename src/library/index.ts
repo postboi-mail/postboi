@@ -6,6 +6,8 @@ import { check_captcha, type CaptchaOptions } from "./captcha.js"
 export { configure, config, type PostboiConfig } from "./config.js"
 // Spam protection (honeypot + Turnstile) is part of the public surface too.
 export { HONEYPOT_FIELD, TURNSTILE_FIELD, type CaptchaOptions } from "./captcha.js"
+// The publishable key `bunx postboi sync` bakes in for the <Captcha /> components.
+export { captcha_key } from "./register.js"
 
 /**
  * A concrete email address used by providers.
