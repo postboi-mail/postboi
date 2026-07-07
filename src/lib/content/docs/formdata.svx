@@ -42,6 +42,10 @@ Addresses may include a display name — `"ACME Inc <hello@example.com>"` arrive
 Inc**. That works anywhere an address does: `_from`, `_reply_to`, `default.from`, and the
 CLI's `Default from` prompt.
 
+Two more fields are stripped before rendering: the `🍯` honeypot and Turnstile's
+`cf-turnstile-response` token — they drive the built-in [spam protection](/spam) and never
+appear in your emails.
+
 ## Grouped fields
 
 Use the `fieldset→field` syntax to group related fields into sections:

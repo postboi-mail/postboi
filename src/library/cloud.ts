@@ -45,6 +45,10 @@ export interface SendParams {
 	tags?: Array<string>
 	attachments?: Array<Attachment>
 	scheduled_at?: string
+	/** Managed-captcha Turnstile token from the form, verified server-side by the API. */
+	captcha_token?: string
+	/** True when the send originated from a form submission — the only sends captcha gates. */
+	form?: boolean
 }
 
 type SendResponse = { id: string }
@@ -70,6 +74,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	protected readonly provider = "postboi"
 	// The API defaults `from` to the account's sending address, so none is required here.
 	protected override readonly requires_from = false
+	// Turnstile tokens are verified by the API against the account's managed widget —
+	// FormData sends need no local secret key.
+	protected override readonly managed_captcha = true
 	#token: string | undefined
 	#url: string
 
@@ -111,6 +118,8 @@ export default class Postboi extends ProviderBase<SendResponse> {
 					}))
 				: undefined,
 			scheduled_at: message.scheduled_at?.toISOString(),
+			captcha_token: message.captcha?.token,
+			form: message.captcha ? true : undefined,
 		}
 
 		return {

@@ -15,6 +15,16 @@
 		<input type="hidden" name="_subject" value="Contact Form" />
 		<input type="hidden" name="_reply_to" value={email} />
 
+		<!-- Honeypot: humans never see it, bots fill it, and a filled 🍯 skips the send. -->
+		<input
+			type="text"
+			name="🍯"
+			tabindex="-1"
+			autocomplete="off"
+			aria-hidden="true"
+			class="honeypot"
+		/>
+
 		<label>
 			Name
 			<input name="contact→name" placeholder="Ada Lovelace" required />
@@ -69,6 +79,14 @@
 	label {
 		display: grid;
 		gap: 0.25rem;
+	}
+
+	.honeypot {
+		position: absolute;
+		left: -9999px;
+		height: 0;
+		width: 0;
+		opacity: 0;
 	}
 
 	input,

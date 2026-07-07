@@ -44,4 +44,27 @@ Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The p
 default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
+## Or use the Captcha component
+
+`postboi/vue` ships the [spam protection](/spam) — honeypot plus, on Postboi Cloud, the
+managed invisible captcha — as a single prop-free component. Your form stays a native
+`<form>`; just drop it inside:
+
+```vue
+<script setup>
+import { Captcha } from 'postboi/vue'
+</script>
+
+<template>
+	<form method="post" action="/api/contact" enctype="multipart/form-data">
+		<!-- your fields… -->
+		<Captcha />
+		<button type="submit">Send</button>
+	</form>
+</template>
+```
+
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
+
 **Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nuxt-provider-postboi).

@@ -119,6 +119,8 @@ export interface CloudDomain {
 export interface CloudAccount {
 	send_address?: string
 	domains: Array<CloudDomain>
+	/** Publishable managed-captcha key (pk_…), baked into node_modules by `postboi sync`. */
+	captcha_key?: string
 }
 
 /**
@@ -138,6 +140,7 @@ export async function fetch_domains(
 		const data = (await response.json()) as {
 			send_address?: unknown
 			domains?: Array<Partial<CloudDomain>>
+			captcha_key?: unknown
 		}
 		if (!Array.isArray(data.domains)) return undefined
 		return {
@@ -148,6 +151,7 @@ export async function fetch_domains(
 					domain: d.domain as string,
 					status: typeof d.status === "string" ? d.status : "pending",
 				})),
+			captcha_key: typeof data.captcha_key === "string" ? data.captcha_key : undefined,
 		}
 	} catch {
 		return undefined

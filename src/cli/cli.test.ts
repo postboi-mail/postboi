@@ -24,7 +24,13 @@ import {
 	fetch_domains,
 	CloudAuthError,
 } from "./cloud.js"
-import { render_types, from_status } from "./typegen.js"
+import {
+	render_types,
+	render_runtime,
+	config_captcha_key,
+	upsert_captcha_key,
+	from_status,
+} from "./typegen.js"
 
 describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
@@ -431,7 +437,15 @@ describe("cloud domains & generated from types", () => {
 		expect(account).toEqual({
 			send_address: "joe@send.postboi.email",
 			domains: [...domains, { domain: "half-baked.com", status: "pending" }],
+			captcha_key: undefined,
 		})
+	})
+
+	it("fetch_domains picks up the publishable captcha key", async () => {
+		const account = await fetch_domains("https://x", "t", async () =>
+			json({ send_address: "a@b.c", domains: [], captcha_key: "pk_123" })
+		)
+		expect(account?.captcha_key).toBe("pk_123")
 	})
 
 	it("fetch_domains degrades to undefined on errors and unknown shapes", async () => {
@@ -453,12 +467,40 @@ describe("cloud domains & generated from types", () => {
 		expect(source).toContain("| `${string}@example.com>`")
 		// pending domains are included — the type answers "plausibly mine", not "will deliver"
 		expect(source).toContain("| `${string}@other-domain.com`")
-		// `export {}` makes it a module, so `declare module` augments instead of replacing
-		expect(source).toContain("export {}")
+		// the export makes it a module, so `declare module` augments instead of replacing —
+		// and it must mirror the shipped placeholder so `<Captcha />` imports type-check
+		expect(source).toContain("export declare const captcha_key: string | undefined")
 	})
 
 	it("render_types returns null when the account has nothing to send from", () => {
 		expect(render_types(undefined, [])).toBeNull()
+	})
+
+	it("render_runtime bakes the key", () => {
+		expect(render_runtime("pk_123")).toContain('export const captcha_key = "pk_123"')
+	})
+
+	it("config_captcha_key reads the committed key", () => {
+		expect(config_captcha_key('captcha: {\n\t\tkey: "pk_123",\n\t},')).toBe("pk_123")
+		expect(config_captcha_key("captcha: { honeypot: false },")).toBeUndefined()
+		expect(config_captcha_key("provider: 'resend',")).toBeUndefined()
+	})
+
+	it("upsert_captcha_key replaces, extends, or inserts — and gives up on odd shapes", () => {
+		// replace an existing key
+		expect(upsert_captcha_key('captcha: { key: "pk_old" },', "pk_new")).toContain('key: "pk_new"')
+		// extend an existing captcha block
+		const extended = upsert_captcha_key("captcha: { honeypot: false },", "pk_1")!
+		expect(config_captcha_key(extended)).toBe("pk_1")
+		expect(extended).toContain("honeypot: false")
+		// insert a block into a fresh config
+		const inserted = upsert_captcha_key(
+			'export default config({\n\tprovider: "postboi",\n})\n',
+			"pk_1"
+		)!
+		expect(config_captcha_key(inserted)).toBe("pk_1")
+		// unrecognised shape → null, caller prints a hint instead
+		expect(upsert_captcha_key("module.exports = something", "pk_1")).toBeNull()
 	})
 
 	it("from_status classifies the send address, verified, pending and unknown domains", () => {

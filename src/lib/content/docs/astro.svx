@@ -41,4 +41,25 @@ so set `output: 'server'` with an adapter in `astro.config.mjs`. The provider an
 recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
+## Or use the Captcha component
+
+`postboi/astro` ships the [spam protection](/spam) — honeypot plus, on Postboi Cloud,
+the managed invisible captcha — as a single prop-free component. Your form stays a
+native `<form>`; just drop it inside:
+
+```astro
+---
+import Captcha from 'postboi/astro'
+---
+
+<form method="post" action="/api/contact" enctype="multipart/form-data">
+	<!-- your fields… -->
+	<Captcha />
+	<button type="submit">Send</button>
+</form>
+```
+
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
+
 **Runnable example:** [`examples/astro-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/astro-provider-postboi).

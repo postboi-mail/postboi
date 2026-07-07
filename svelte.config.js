@@ -333,7 +333,7 @@ const themes = {
 }
 const highlighter = await createHighlighter({
 	themes: [ayuLight, auraSoftDark],
-	langs: ["svelte", "bash", "json", "typescript", "tsx", "vue", "html"],
+	langs: ["svelte", "bash", "json", "typescript", "tsx", "vue", "html", "astro"],
 })
 
 const markdownLayout = fileURLToPath(

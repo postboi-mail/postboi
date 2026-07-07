@@ -20,6 +20,7 @@
  * (edge/Workers), call {@link configure} explicitly at startup instead.
  */
 import type { Defaults, Hooks } from "./index.js"
+import type { CaptchaOptions } from "./captcha.js"
 import type { ProviderKey } from "./registry.js"
 
 /** Everything you can configure globally via `postboi.config.ts` or {@link configure}. */
@@ -51,6 +52,8 @@ export interface PostboiConfig {
 	auto_text?: boolean
 	/** Lifecycle hooks run around every send (the main reason to use a config file). */
 	hooks?: Hooks
+	/** Spam-protection settings applied to every FormData send (honeypot + Turnstile). */
+	captcha?: CaptchaOptions
 }
 
 /** Keep only defined entries so a shallow merge never clobbers a value with `undefined`. */
@@ -69,13 +72,14 @@ export function merge_hooks(base: Hooks = {}, override: Hooks = {}): Hooks {
 	}
 }
 
-/** Merge `override` over `base`, deep-merging the `default` and `hooks` objects. */
+/** Merge `override` over `base`, deep-merging the `default`, `hooks` and `captcha` objects. */
 function merge(base: PostboiConfig, override: PostboiConfig): PostboiConfig {
 	return {
 		...base,
 		...defined(override),
 		default: { ...base.default, ...defined(override.default ?? {}) },
 		hooks: merge_hooks(base.hooks, override.hooks),
+		captcha: { ...base.captcha, ...defined(override.captcha ?? {}) },
 	}
 }
 

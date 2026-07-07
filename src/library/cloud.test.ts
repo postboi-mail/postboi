@@ -136,6 +136,44 @@ describe("Postboi Cloud (zero-config)", () => {
 		expect(body.from).toEqual({ email: "noreply@test.com" })
 		expect(body.to).toEqual([{ email: "ops@test.com" }])
 	})
+
+	it("forwards the Turnstile token and form flag from FormData sends (managed captcha)", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("cf-turnstile-response", "token_1")
+		form.append("contact→name", "Ada")
+		await new Postboi().send({ to: "to@test.com", body: form })
+
+		const body = sent_json()
+		expect(body.captcha_token).toBe("token_1")
+		expect(body.form).toBe(true)
+		expect(body.html).not.toContain("cf-turnstile-response")
+	})
+
+	it("flags form sends even without a token, so the API can gate them", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("contact→name", "Ada")
+		await new Postboi().send({ to: "to@test.com", body: form })
+
+		const body = sent_json()
+		expect(body.captcha_token).toBeUndefined()
+		expect(body.form).toBe(true)
+	})
+
+	it("string bodies carry no captcha fields", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		const body = sent_json()
+		expect(body.form).toBeUndefined()
+		expect(body.captcha_token).toBeUndefined()
+	})
 })
 
 describe("top-level mail() — provider-agnostic dispatch", () => {

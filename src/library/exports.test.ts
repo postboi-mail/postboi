@@ -4,23 +4,28 @@ import { fileURLToPath } from "node:url"
 
 const root = fileURLToPath(new URL("../../", import.meta.url))
 const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8")) as {
-	exports: Record<string, { types: string; default: string }>
+	exports: Record<string, string | { types?: string; default: string }>
 }
 
 /** Map an exports target like "./dist/resend.js" or "./dist/resend.d.ts" to "src/library/resend.ts". */
 const to_source = (target: string) =>
 	target
 		.replace("./dist/", "src/library/")
+		// Svelte component types (Captcha.svelte.d.ts) are generated from the .svelte source.
+		.replace(/\.svelte\.d\.ts$/, ".svelte")
 		.replace(/\.d\.ts$/, ".ts")
 		.replace(/\.js$/, ".ts")
 
 describe("package exports", () => {
-	const entries = Object.entries(pkg.exports)
+	const entries = Object.entries(pkg.exports).map(
+		([name, target]) => [name, typeof target === "string" ? { default: target } : target] as const
+	)
 
 	it("points every entry at an existing source module and matching types", () => {
 		for (const [name, target] of entries) {
 			expect(existsSync(root + to_source(target.default)), `${name} default`).toBe(true)
-			expect(existsSync(root + to_source(target.types)), `${name} types`).toBe(true)
+			if (target.types)
+				expect(existsSync(root + to_source(target.types)), `${name} types`).toBe(true)
 		}
 	})
 
@@ -32,6 +37,7 @@ describe("package exports", () => {
 			"config.ts",
 			"env.ts",
 			"mail.ts",
+			"captcha.ts", // spam protection, reached via the root export
 			"register.ts", // generated-types placeholder, reached via the root export
 		])
 		const providers = readdirSync(`${root}src/library`).filter(
