@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Captcha } from "postboi/vue"
+
 const route = useRoute()
 const sent = computed(() => route.query.sent === "1")
 
@@ -15,6 +17,8 @@ const email = ref("")
 		<form method="post" action="/api/contact" enctype="multipart/form-data">
 			<input type="hidden" name="_subject" value="Contact Form" />
 			<input type="hidden" name="_reply_to" :value="email" />
+			<!-- Invisible spam protection: 🍯 honeypot plus, with a Postboi key, the managed captcha. -->
+			<Captcha />
 			<input name="contact→name" placeholder="Name" required />
 			<input name="contact→email" type="email" placeholder="Email" required v-model="email" />
 			<textarea name="details→message" placeholder="Message"></textarea>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from "$app/forms"
+	import Captcha from "postboi/svelte"
 
 	let { form } = $props()
 
@@ -15,15 +16,8 @@
 		<input type="hidden" name="_subject" value="Contact Form" />
 		<input type="hidden" name="_reply_to" value={email} />
 
-		<!-- Honeypot: humans never see it, bots fill it, and a filled 🍯 skips the send. -->
-		<input
-			type="text"
-			name="🍯"
-			tabindex="-1"
-			autocomplete="off"
-			aria-hidden="true"
-			class="honeypot"
-		/>
+		<!-- Invisible spam protection: renders the 🍯 honeypot and, with a Postboi key, the managed captcha. -->
+		<Captcha />
 
 		<label>
 			Name
@@ -79,14 +73,6 @@
 	label {
 		display: grid;
 		gap: 0.25rem;
-	}
-
-	.honeypot {
-		position: absolute;
-		left: -9999px;
-		height: 0;
-		width: 0;
-		opacity: 0;
 	}
 
 	input,

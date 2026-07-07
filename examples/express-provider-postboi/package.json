@@ -9,6 +9,6 @@
 	},
 	"dependencies": {
 		"express": "^4.21.2",
-		"postboi": "^0.9.4"
+		"postboi": "^0.11.0"
 	}
 }
