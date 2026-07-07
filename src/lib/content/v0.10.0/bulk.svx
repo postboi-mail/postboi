@@ -1,0 +1,69 @@
+---
+title: Bulk sending
+name: Bulk sending
+description: Pass an array to mail() for bounded-concurrency bulk sends that never throw.
+category: Guides
+---
+
+Pass an array to `mail()` and each message becomes its own request, sent with bounded
+concurrency. The call **never throws** — you get one result per message.
+
+```typescript
+const results = await mail([
+	{ to: 'a@example.com', body: '…' },
+	{ to: 'b@example.com', body: '…' }
+])
+```
+
+## Concurrency and results
+
+On a provider instance you can tune concurrency (default `5`). Each result tells you whether
+that message succeeded:
+
+```typescript
+const results = await mail.send(messages, { concurrency: 10 })
+
+const failed = results.filter((r) => !r.ok)
+for (const r of failed) console.error(r.index, r.error.message)
+```
+
+Because the call never throws, you handle failures by inspecting `results` rather than with
+`try`/`catch`. Each failed result carries the same normalised
+[`PostboiError`](/errors) on `.error`.
+
+[Hooks](/hooks) run once per message, so `before.send`, `after.send`, and `on.error`
+fire for each item in the array.
+
+## Personalized batches
+
+When every recipient gets the *same* message with a few values swapped in, pass one `to`
+array plus per-recipient `data` instead of building the array yourself. `{name}` placeholders
+in `subject` and `body` are filled from each recipient's variables:
+
+```typescript
+const results = await mail({
+	to: ['a@example.com', 'b@example.com'],
+	subject: 'Hey {name}',
+	body: 'A message just for you, {name}.',
+	data: {
+		'a@example.com': { name: 'Ada' },
+		'b@example.com': { name: 'Linus' }
+	}
+})
+```
+
+When `to` is a literal array, the `data` keys are **type-checked against it** — a typo'd or
+missing-from-`to` address is a compile error. (Recipients written as `{ address }` objects or
+a non-literal `string[]` can't be inferred, so their keys relax to any string.)
+
+Providers with a native batch API send the whole thing as **one request** — Resend, Postmark
+and MailerSend pack the rendered messages; Mailgun, SparkPost, Mandrill, SendGrid and Brevo
+map your `{name}` tags onto their server-side merge fields. Every other provider falls back to
+one request per recipient. Either way you get one [`BatchResult`](/errors) per recipient, in
+order.
+
+> `before.send` runs per recipient (so suppression and staging redirects still work). On the
+> native-batch path, `after.send` / `on.error` fire per recipient only when a provider has no
+> batch endpoint and falls back to fan-out.
+
+Each message can also carry its own [`scheduled_at`](/scheduling) to send it later.
