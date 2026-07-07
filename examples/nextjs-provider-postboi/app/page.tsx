@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState, useState } from "react"
+import { Captcha } from "postboi/react"
 import { submit } from "./actions"
 
 export default function Home() {
@@ -21,6 +22,8 @@ export default function Home() {
 				>
 					<input type="hidden" name="_subject" value="Contact Form" />
 					<input type="hidden" name="_reply_to" value={email} />
+					{/* Invisible spam protection: 🍯 honeypot plus, with a Postboi key, the managed captcha. */}
+					<Captcha />
 					<input name="contact→name" placeholder="Name" required />
 					<input
 						name="contact→email"

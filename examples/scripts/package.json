@@ -9,6 +9,6 @@
 		"schedule": "bun scheduling.ts"
 	},
 	"devDependencies": {
-		"postboi": "^0.9.4"
+		"postboi": "^0.11.0"
 	}
 }

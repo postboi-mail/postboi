@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/node"
 import { Form, useActionData } from "@remix-run/react"
 import { useState } from "react"
 import { mail } from "postboi"
+import { Captcha } from "postboi/react"
 
 export async function action({ request }: ActionFunctionArgs) {
 	// The form carries `_subject` and `_reply_to` (mirrored from the email) as hidden fields,
@@ -31,6 +32,8 @@ export default function Index() {
 			>
 				<input type="hidden" name="_subject" value="Contact Form" />
 				<input type="hidden" name="_reply_to" value={email} />
+				{/* Invisible spam protection: 🍯 honeypot plus, with a Postboi key, the managed captcha. */}
+				<Captcha />
 				<input name="contact→name" placeholder="Name" required />
 				<input
 					name="contact→email"
