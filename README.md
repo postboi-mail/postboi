@@ -22,7 +22,7 @@ Postboi is a framework-agnostic email library optimised for SvelteKit. Works wit
 - 🎯 **Grouped fields** - organize form fields with `fieldset→field` syntax
 - 📎 **Attachments** - attach files directly from form inputs or file objects
 - 🎨 **Bring your own templates** - `body` takes any HTML, and the optional `postboi/maizzle` helper renders [Maizzle](https://docs.postboi.email/templates) templates straight into it
-- 🍯 **Invisible spam protection** - a zero-config [honeypot](https://docs.postboi.email/spam), plus Cloudflare Turnstile with a single env var
+- 🍯 **Invisible spam protection** - a zero-config [honeypot](https://docs.postboi.email/spam), plus invisible captcha — fully managed on Postboi Cloud, or bring your own Turnstile key
 - 🛡️ **Type-safe** - full TypeScript support with normalized error handling
 
 ## Quick start

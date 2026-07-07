@@ -61,8 +61,9 @@ The submitted `FormData` becomes a tidy HTML table in the email body. See
 
 The hidden `🍯` field is the built-in honeypot: bots fill it, humans can't see it, and a
 filled honeypot skips the send while the action still returns `{ success: true }` — the
-bot learns nothing. See [Spam protection](/spam), including one-env-var Cloudflare
-Turnstile when you want more.
+bot learns nothing. Want more? [Spam protection](/spam) covers the invisible captcha too —
+fully managed on Postboi Cloud (one script tag, no keys), or bring your own Turnstile with
+a single env var.
 
 A full, runnable version of this form lives in
 [`examples/sveltekit-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit-provider-postboi).

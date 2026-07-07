@@ -217,6 +217,12 @@ export interface PreparedMessage {
 	tags?: Array<string>
 	/** Normalized future delivery time; provider-format conversion happens in build_request. */
 	scheduled_at?: Date
+	/**
+	 * Managed-captcha forwarding. Present when the body was FormData and the provider does
+	 * managed verification (Postboi Cloud): `token` is the widget's Turnstile token when one
+	 * arrived. Providers without managed captcha never see this set.
+	 */
+	captcha?: { token?: string }
 }
 
 /** A provider-agnostic description of the HTTP request to send. */
@@ -404,6 +410,13 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 * default it from the authenticated account (Postboi Cloud) set this to false.
 	 */
 	protected readonly requires_from: boolean = true
+
+	/**
+	 * Whether the provider's API verifies Turnstile tokens itself (Postboi Cloud's managed
+	 * captcha). When true and no local secret is configured, FormData sends forward the
+	 * token on {@link PreparedMessage.captcha} instead of verifying client-side.
+	 */
+	protected readonly managed_captcha: boolean = false
 
 	protected defaults: Defaults
 	#timeout: number
@@ -1057,10 +1070,18 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 * Run the spam checks (honeypot + Turnstile) over a FormData body, stripping their fields
 	 * from `form`. Throws {@link SpamError} on a tripped honeypot (an intentional skip) or a
 	 * {@link PostboiError} with code `captcha_failed` / `captcha_misconfigured` otherwise.
+	 * On a managed-captcha pass (Postboi Cloud), returns the token to forward with the send.
 	 */
-	protected async enforce_captcha(form: FormData, overrides?: CaptchaOptions): Promise<void> {
-		const verdict = await check_captcha(form, { ...this.#captcha, ...overrides })
-		if (verdict.ok) return
+	protected async enforce_captcha(
+		form: FormData,
+		overrides?: CaptchaOptions
+	): Promise<{ token?: string } | undefined> {
+		const verdict = await check_captcha(
+			form,
+			{ ...this.#captcha, ...overrides },
+			this.managed_captcha
+		)
+		if (verdict.ok) return verdict.managed ? { token: verdict.token } : undefined
 		if (verdict.code === "spam") throw new SpamError(verdict.message)
 		throw new PostboiError({
 			provider: this.provider,
@@ -1081,9 +1102,10 @@ export abstract class ProviderBase<TResponse = unknown> {
 		// FormData — or a plain object of fields (Express/multer's `req.body`) — is parsed into
 		// extracted header fields plus a rendered HTML table (honouring any formatter).
 		const form = this.to_form_data(body)
+		let captcha: { token?: string } | undefined
 		if (form) {
 			// Spam checks run first, and strip their plumbing fields so they never reach the email.
-			await this.enforce_captcha(form, options.captcha)
+			captcha = await this.enforce_captcha(form, options.captcha)
 			const { options: extracted, attachments } = await this.parse_form_data(
 				form,
 				options.formatter
@@ -1138,6 +1160,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 			headers: options.headers,
 			tags: options.tags,
 			scheduled_at,
+			captcha,
 		}
 	}
 }

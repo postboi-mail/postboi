@@ -41,9 +41,13 @@ export type CaptchaOptions = {
 	turnstile?: { secret_key?: string } | boolean
 }
 
-/** The outcome of {@link check_captcha}: pass, or a code + message for the caller to throw. */
+/**
+ * The outcome of {@link check_captcha}: pass, or a code + message for the caller to throw.
+ * On a `managed` pass, `token` carries the (stripped) Turnstile token so the caller can
+ * forward it to Postboi Cloud for server-side verification.
+ */
 export type CaptchaVerdict =
-	| { ok: true }
+	| { ok: true; token?: string; managed?: boolean }
 	| { ok: false; code: "spam" | "captcha_failed" | "captcha_misconfigured"; message: string }
 
 /** The subset of the Turnstile siteverify response we act on. */
@@ -57,10 +61,15 @@ type SiteverifyResponse = { success?: boolean; "error-codes"?: Array<string> }
  * - Turnstile enforced but the token is missing/invalid/unverifiable → `captcha_failed`
  *   (verification fails closed — an unreachable verifier must not wave submissions through)
  * - a token arrived but no secret is configured → `captcha_misconfigured`
+ *
+ * With `managed` (the Postboi Cloud provider) and no local secret, nothing is verified
+ * here: the token is returned on the verdict instead, to ride along with the send for
+ * server-side verification against the account's managed widget.
  */
 export async function check_captcha(
 	form: FormData,
-	options: CaptchaOptions = {}
+	options: CaptchaOptions = {},
+	managed = false
 ): Promise<CaptchaVerdict> {
 	if (options.honeypot !== false) {
 		const name = options.honeypot ?? HONEYPOT_FIELD
@@ -75,8 +84,9 @@ export async function check_captcha(
 		}
 	}
 
-	const token = form.get(TURNSTILE_FIELD)
+	const raw_token = form.get(TURNSTILE_FIELD)
 	form.delete(TURNSTILE_FIELD)
+	const token = typeof raw_token === "string" && raw_token ? raw_token : undefined
 
 	if (options.turnstile === false) return { ok: true }
 
@@ -85,18 +95,21 @@ export async function check_captcha(
 	const explicit = typeof options.turnstile === "object" ? options.turnstile.secret_key : undefined
 	const secret = explicit ?? read_env("TURNSTILE_SECRET_KEY")
 
+	// Managed captcha: no local secret needed — a BYO secret (above) still wins when set.
+	if (!secret && managed) return { ok: true, token, managed: true }
+
 	// No secret, no token, not forced on — Turnstile isn't in play for this send.
-	if (!secret && typeof token !== "string" && options.turnstile !== true) return { ok: true }
+	if (!secret && !token && options.turnstile !== true) return { ok: true }
 
 	if (!secret) {
 		return {
 			ok: false,
 			code: "captcha_misconfigured",
 			message:
-				"Turnstile verification is expected but no secret key is configured — set TURNSTILE_SECRET_KEY or pass captcha: { turnstile: { secret_key } }.",
+				"Turnstile verification is expected but no secret key is configured — set TURNSTILE_SECRET_KEY, pass captcha: { turnstile: { secret_key } }, or send via Postboi Cloud for managed captcha.",
 		}
 	}
-	if (typeof token !== "string" || !token) {
+	if (!token) {
 		return {
 			ok: false,
 			code: "captcha_failed",

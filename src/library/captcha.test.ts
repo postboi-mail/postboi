@@ -136,6 +136,43 @@ describe("check_captcha — Turnstile", () => {
 	})
 })
 
+describe("check_captcha — managed (Postboi Cloud)", () => {
+	it("returns the stripped token for the send to carry, without verifying locally", async () => {
+		const data = form({ [TURNSTILE_FIELD]: "token_1", name: "Ada" })
+		const verdict = await check_captcha(data, {}, true)
+		expect(verdict).toEqual({ ok: true, token: "token_1", managed: true })
+		expect(data.has(TURNSTILE_FIELD)).toBe(false)
+		expect(fetch).not.toHaveBeenCalled()
+	})
+
+	it("still flags managed with no token — the API decides whether to gate", async () => {
+		const verdict = await check_captcha(form({ name: "Ada" }), {}, true)
+		expect(verdict).toEqual({ ok: true, token: undefined, managed: true })
+	})
+
+	it("a BYO secret wins over managed and verifies locally", async () => {
+		vi.stubEnv("TURNSTILE_SECRET_KEY", "secret_1")
+		fetch.mockResolvedValue(siteverify({ success: true }))
+		const verdict = await check_captcha(form({ [TURNSTILE_FIELD]: "token_1" }), {}, true)
+		expect(verdict).toEqual({ ok: true })
+		expect(fetch).toHaveBeenCalledTimes(1)
+	})
+
+	it("turnstile: false opts a managed send out entirely", async () => {
+		const verdict = await check_captcha(
+			form({ [TURNSTILE_FIELD]: "token_1" }),
+			{ turnstile: false },
+			true
+		)
+		expect(verdict).toEqual({ ok: true })
+	})
+
+	it("the honeypot still applies in managed mode", async () => {
+		const verdict = await check_captcha(form({ [HONEYPOT_FIELD]: "spam" }), {}, true)
+		expect(verdict).toMatchObject({ ok: false, code: "spam" })
+	})
+})
+
 describe("provider integration", () => {
 	const defaults = { from: "from@test.com", to: "to@test.com" }
 

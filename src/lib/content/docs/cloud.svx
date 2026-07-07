@@ -40,6 +40,9 @@ which the token identifies. Env vars still override config for per-environment t
 (`POSTBOI_FROM` beats `default.from`), but nothing needs to live in the environment
 except the token.
 
+Cloud also includes **managed invisible captcha** for your forms — one script tag from
+the dashboard, no Cloudflare account, no keys. See [Spam protection](/spam).
+
 ## Your sending address
 
 Free-tier mail goes out from `you@send.postboi.email`, derived from your signup email.

@@ -1,13 +1,14 @@
 ---
 title: Spam protection
 name: Spam protection
-description: Invisible, zero-friction spam protection — a built-in honeypot plus one-env-var Cloudflare Turnstile.
+description: Invisible, zero-friction spam protection — a built-in honeypot plus managed Cloudflare Turnstile.
 category: Guides
 ---
 
 Public contact forms attract bots. Postboi ships two invisible layers of protection — no
 puzzles, no checkboxes, nothing for real visitors to do. Both run automatically on every
-[FormData](/formdata) send, with every provider.
+[FormData](/formdata) send, with every provider — and on Postboi Cloud the captcha is
+fully managed: no Cloudflare account, no keys, no env vars.
 
 ## The honeypot — zero config
 
@@ -51,11 +52,42 @@ try {
 Spam skips are intentional, so they never fire the [`on.error` hook](/hooks) — your Sentry
 stays quiet.
 
-## Cloudflare Turnstile — one env var
+## Managed captcha — Postboi Cloud, zero keys
 
-For stronger protection, Postboi has [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/)
-baked in — invisible for almost all real visitors, free, and no Cloudflare-hosted site
-required. Two steps:
+On [Postboi Cloud](/cloud), invisible captcha is fully managed: no Cloudflare account, no
+keys to create, no env vars. Grab the snippet from your
+[dashboard](https://postboi.email/dashboard/keys), drop it on the page, and mark the form:
+
+```html
+<script src="https://postboi.email/captcha.js" data-key="pk_…" async defer></script>
+
+<form method="POST" data-captcha>
+	<!-- your fields… -->
+	<button type="submit">Send</button>
+</form>
+```
+
+That's the whole setup. Behind the scenes, Postboi mints a
+[Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) widget for your
+account the first time the script runs (registering each hostname it sees, localhost
+included), renders an invisible challenge into every `form[data-captcha]`, and verifies
+the token server-side when the send arrives. The `data-key` is publishable — it's safe in
+your HTML; the widget secret never leaves Postboi.
+
+Once your account has a widget, form sends are **enforced**: a form submission arriving
+without a valid token — a bot POSTing straight to your action — is rejected with
+`captcha_failed`, which `postboi/kit` surfaces as `fail(400, { error })`. Sends you make
+from code (a string `body`) are never captcha-checked, so transactional email is
+unaffected. Got a form that shouldn't be verified? Opt it out per send:
+
+```typescript
+await mail({ body, captcha: { turnstile: false } })
+```
+
+## Bring your own Turnstile — one env var
+
+Using your own provider (Resend, Mailgun, …), or want your own Cloudflare account?
+Turnstile is still baked in — two steps:
 
 **1. Add the widget to your form** ([get your keys here](https://dash.cloudflare.com/?to=/:account/turnstile)):
 
@@ -78,13 +110,13 @@ TURNSTILE_SECRET_KEY=0x4AAAAAAA...
 
 Done. The widget injects a `cf-turnstile-response` token into the form, and Postboi
 verifies it with Cloudflare before every FormData send. The token is stripped from the
-email, invalid or missing tokens are rejected with a `PostboiError`
-(`code: "captcha_failed"`), and `postboi/kit` surfaces that as `fail(400, { error })`.
+email, and invalid or missing tokens are rejected with a `PostboiError`
+(`code: "captcha_failed"`). A configured secret always wins — set one on Postboi Cloud and
+verification happens locally instead of via managed captcha.
 
 > **Setting `TURNSTILE_SECRET_KEY` enforces Turnstile on every FormData send.** That's
 > deliberate — if a bot could skip the widget and POST directly, the captcha would be
-> decorative. Got a form that shouldn't be verified? Turn it off per send:
-> `mail({ body, captcha: { turnstile: false } })`.
+> decorative. Opt individual sends out with `captcha: { turnstile: false }`.
 
 On runtimes without ambient env vars (Cloudflare Workers), pass the secret explicitly:
 
@@ -112,10 +144,10 @@ export default config({
 })
 ```
 
-| Option      | Values                                | Default                                          |
-| ----------- | ------------------------------------- | ------------------------------------------------ |
-| `honeypot`  | field name, or `false` to disable     | `"🍯"`                                           |
-| `turnstile` | `{ secret_key }`, `true`, or `false`  | auto — on when `TURNSTILE_SECRET_KEY` is set     |
+| Option      | Values                               | Default                                                                       |
+| ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
+| `honeypot`  | field name, or `false` to disable    | `"🍯"`                                                                        |
+| `turnstile` | `{ secret_key }`, `true`, or `false` | auto — managed on Postboi Cloud, local when `TURNSTILE_SECRET_KEY` is set |
 
 ## Error codes
 
