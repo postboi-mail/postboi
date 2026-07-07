@@ -44,4 +44,30 @@ Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The p
 default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
+## Or use the MailForm component
+
+`postboi/vue` ships the form boilerplate as a component — the [spam-protection](/spam)
+honeypot, hidden special fields from props, and (given your dashboard's `captcha` key)
+the managed invisible captcha:
+
+```vue
+<script setup>
+import { ref } from 'vue'
+import { MailForm } from 'postboi/vue'
+
+const email = ref('')
+</script>
+
+<template>
+	<MailForm action="/api/contact" subject="Contact Form" :reply_to="email" captcha="pk_…">
+		<input name="contact→name" placeholder="Name" required />
+		<input name="contact→email" type="email" v-model="email" required />
+		<textarea name="details→message" placeholder="Message"></textarea>
+		<button type="submit">Send</button>
+	</MailForm>
+</template>
+```
+
+See [Spam protection](/spam#form-components) for every prop.
+
 **Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nuxt-provider-postboi).

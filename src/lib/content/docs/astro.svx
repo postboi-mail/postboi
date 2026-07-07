@@ -41,4 +41,27 @@ so set `output: 'server'` with an adapter in `astro.config.mjs`. The provider an
 recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
+## Or use the MailForm component
+
+`postboi/astro` ships the form boilerplate as a component — the [spam-protection](/spam)
+honeypot, hidden special fields from props, and (given your dashboard's `captcha` key)
+the managed invisible captcha:
+
+```astro
+---
+import MailForm from 'postboi/astro'
+---
+
+<MailForm action="/api/contact" subject="Contact Form" enctype="multipart/form-data" captcha="pk_…">
+	<input name="contact→name" placeholder="Name" required />
+	<input name="contact→email" type="email" required
+		oninput="this.form._reply_to.value = this.value" />
+	<input type="hidden" name="_reply_to" />
+	<textarea name="details→message" placeholder="Message"></textarea>
+	<button type="submit">Send</button>
+</MailForm>
+```
+
+See [Spam protection](/spam#form-components) for every prop.
+
 **Runnable example:** [`examples/astro-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/astro-provider-postboi).

@@ -10,6 +10,68 @@ puzzles, no checkboxes, nothing for real visitors to do. Both run automatically 
 [FormData](/formdata) send, with every provider — and on Postboi Cloud the captcha is
 fully managed: no Cloudflare account, no keys, no env vars.
 
+## Form components
+
+The fastest way to get everything on this page: a ready-made form component for Svelte,
+React, Vue, and Astro. It renders the honeypot, turns props like `subject` and `reply_to`
+into the hidden [special fields](/formdata#special-fields), and — given the publishable
+`captcha` key from your [dashboard](https://postboi.email/dashboard/keys) — wires up the
+managed invisible captcha, including forms mounted on client-side navigations.
+
+```svelte
+<script>
+	import { enhance } from '$app/forms'
+	import MailForm from 'postboi/svelte'
+</script>
+
+<MailForm subject="Contact form" captcha="pk_…" {enhance}>
+	<input name="contact→name" required />
+	<button>Send</button>
+</MailForm>
+```
+
+```tsx
+// React — Next.js, Remix, …
+import { MailForm } from 'postboi/react'
+
+<MailForm action={action} subject="Contact form" captcha="pk_…">
+	<input name="contact→name" required />
+	<button>Send</button>
+</MailForm>
+```
+
+```vue
+<!-- Vue / Nuxt -->
+<script setup>
+import { MailForm } from 'postboi/vue'
+</script>
+
+<template>
+	<MailForm action="/api/contact" subject="Contact form" captcha="pk_…">
+		<input name="contact→name" required />
+		<button>Send</button>
+	</MailForm>
+</template>
+```
+
+```astro
+---
+import MailForm from 'postboi/astro'
+---
+
+<MailForm action="/api/contact" subject="Contact form" captcha="pk_…">
+	<input name="contact→name" required />
+	<button>Send</button>
+</MailForm>
+```
+
+Every component takes the same props: the special fields (`subject`, `to`, `from`,
+`reply_to`, `cc`, `bcc`), `captcha` (the `pk_…` key — omit it for honeypot-only),
+`honeypot` (`false` to disable), and any normal `<form>` attribute, which passes through
+(`method` defaults to `POST`). The Svelte one also accepts SvelteKit's `enhance` and a
+bindable `element`. No component? The rest of this page shows the plain-HTML pieces they
+render.
+
 ## The honeypot — zero config
 
 Add a visually hidden field named `🍯` to your form:

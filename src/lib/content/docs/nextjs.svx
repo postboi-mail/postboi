@@ -56,4 +56,39 @@ Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The p
 default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
+## Or use the MailForm component
+
+`postboi/react` ships the form boilerplate as a component — the [spam-protection](/spam)
+honeypot, hidden special fields from props, and (given your dashboard's `captcha` key)
+the managed invisible captcha:
+
+```tsx
+'use client'
+import { useActionState, useState } from 'react'
+import { MailForm } from 'postboi/react'
+import { submit } from './actions'
+
+export default function Page() {
+	const [email, setEmail] = useState('')
+	const [, action] = useActionState(submit, null)
+
+	return (
+		<MailForm action={action} subject="Contact Form" reply_to={email} captcha="pk_…">
+			<input name="contact→name" placeholder="Name" required />
+			<input
+				name="contact→email"
+				type="email"
+				value={email}
+				onChange={(e) => setEmail(e.target.value)}
+				required
+			/>
+			<textarea name="details→message" placeholder="Message" />
+			<button type="submit">Send</button>
+		</MailForm>
+	)
+}
+```
+
+See [Spam protection](/spam#form-components) for every prop.
+
 **Runnable example:** [`examples/nextjs-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nextjs-provider-postboi).
