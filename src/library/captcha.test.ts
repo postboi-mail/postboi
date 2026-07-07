@@ -136,7 +136,7 @@ describe("check_captcha — Turnstile", () => {
 	})
 })
 
-describe("check_captcha — managed (Postboi Cloud)", () => {
+describe("check_captcha — managed (the Postboi provider)", () => {
 	it("returns the stripped token for the send to carry, without verifying locally", async () => {
 		const data = form({ [TURNSTILE_FIELD]: "token_1", name: "Ada" })
 		const verdict = await check_captcha(data, {}, true)

@@ -51,7 +51,7 @@ export type CaptchaOptions = {
 /**
  * The outcome of {@link check_captcha}: pass, or a code + message for the caller to throw.
  * On a `managed` pass, `token` carries the (stripped) Turnstile token so the caller can
- * forward it to Postboi Cloud for server-side verification.
+ * forward it to the Postboi provider for server-side verification.
  */
 export type CaptchaVerdict =
 	| { ok: true; token?: string; managed?: boolean }
@@ -69,7 +69,7 @@ type SiteverifyResponse = { success?: boolean; "error-codes"?: Array<string> }
  *   (verification fails closed — an unreachable verifier must not wave submissions through)
  * - a token arrived but no secret is configured → `captcha_misconfigured`
  *
- * With `managed` (the Postboi Cloud provider) and no local secret, nothing is verified
+ * With `managed` (the Postboi provider) and no local secret, nothing is verified
  * here: the token is returned on the verdict instead, to ride along with the send for
  * server-side verification against the account's managed widget.
  */
@@ -113,7 +113,7 @@ export async function check_captcha(
 			ok: false,
 			code: "captcha_misconfigured",
 			message:
-				"Turnstile verification is expected but no secret key is configured — set TURNSTILE_SECRET_KEY, pass captcha: { turnstile: { secret_key } }, or send via Postboi Cloud for managed captcha.",
+				"Turnstile verification is expected but no secret key is configured — set TURNSTILE_SECRET_KEY, pass captcha: { turnstile: { secret_key } }, or send via the Postboi provider for managed captcha.",
 		}
 	}
 	if (!token) {

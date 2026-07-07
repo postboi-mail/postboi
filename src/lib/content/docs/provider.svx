@@ -1,6 +1,6 @@
 ---
-title: Postboi Cloud
-name: Postboi Cloud
+title: The Postboi provider
+name: The Postboi provider
 description: Zero-config sending — one command, one token, no provider account, no DNS.
 category: Getting started
 ---
@@ -14,7 +14,7 @@ command, authorise in the browser, and `mail()` works.
 
 <InstallationTabs exec args="init" />
 
-Pick **Postboi Cloud** when prompted. The CLI opens your browser to authorise the device,
+Pick **Postboi** when prompted. The CLI opens your browser to authorise the device,
 then writes a single env var — `POSTBOI_TOKEN`, your API key (keep it secret). Everything
 else is config, not environment: it offers to set defaults (`to`, `reply_to`, `cc`,
 `bcc` — and `from`, once you have custom domains to choose between) and writes them to a
@@ -31,7 +31,7 @@ import { mail } from "postboi"
 await mail({
 	to: "someone@example.com",
 	subject: "Hello",
-	body: "<p>Sent through Postboi Cloud</p>",
+	body: "<p>Sent through the Postboi provider</p>",
 })
 ```
 
@@ -40,7 +40,7 @@ which the token identifies. Env vars still override config for per-environment t
 (`POSTBOI_FROM` beats `default.from`), but nothing needs to live in the environment
 except the token.
 
-Cloud also includes **managed invisible captcha** for your forms — one script tag from
+The Postboi provider also includes **managed invisible captcha** for your forms — one script tag from
 the dashboard, no Cloudflare account, no keys. See [Spam protection](/spam).
 
 ## Your sending address
@@ -103,8 +103,8 @@ consequences of that:
 - **They're a snapshot.** Re-run `bunx postboi sync` after adding or removing a domain
   (your editor may want a TS-server restart to pick the change up).
 
-This only applies to Postboi Cloud (we can't know another provider's identities). If you
-mix Cloud with a bring-your-own provider in one project, remove `postboi sync` from your
+This only applies to the Postboi provider (we can't know another provider's identities). If you
+mix Postboi with a bring-your-own provider in one project, remove `postboi sync` from your
 prepare script — the narrowing applies to `from` everywhere.
 
 ## Limits

@@ -11,7 +11,7 @@ export const actions = {
 
 		try {
 			await mail({
-				// `from` is narrowed to your Postboi Cloud domains once you've run
+				// `from` is narrowed to your the Postboi provider domains once you've run
 				// `bunx postboi sync` — see "Typed from" in the README.
 				from: "Acme <hello@acme.example>",
 				to: email,

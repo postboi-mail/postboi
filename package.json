@@ -32,14 +32,14 @@
   "sideEffects": [
     "**/*.css"
   ],
-  "svelte": "./dist/cloud.js",
-  "types": "./dist/cloud.d.ts",
+  "svelte": "./dist/postboi.js",
+  "types": "./dist/postboi.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/cloud.d.ts",
-      "svelte": "./dist/cloud.js",
-      "default": "./dist/cloud.js"
+      "types": "./dist/postboi.d.ts",
+      "svelte": "./dist/postboi.js",
+      "default": "./dist/postboi.js"
     },
     "./zepto": {
       "types": "./dist/zepto.d.ts",

@@ -8,13 +8,13 @@ import "./register.js"
 // Re-export the core so `import { PostboiError, SkipSendError, ... } from "postboi"` keeps working
 // from the package root.
 export * from "./index.js"
-// The zero-config `mail()` and provider dispatch are general (not Cloud-specific) but belong
+// The zero-config `mail()` and provider dispatch are general (not Postboi-specific) but belong
 // on the package root, so re-export them here.
 export { mail } from "./mail.js"
 
-/** Options for the Postboi Cloud provider. */
-export type CloudOptions = CommonProviderOptions & {
-	/** Postboi Cloud token. Defaults to the `POSTBOI_TOKEN` environment variable. */
+/** Options for the Postboi provider. */
+export type PostboiOptions = CommonProviderOptions & {
+	/** The Postboi provider token. Defaults to the `POSTBOI_TOKEN` environment variable. */
 	token?: string
 	/** Override the API base URL. Defaults to `POSTBOI_API_URL` or `https://postboi.email`. */
 	base_url?: string
@@ -54,7 +54,7 @@ export interface SendParams {
 type SendResponse = { id: string }
 
 /**
- * Postboi Cloud — the zero-config provider, and the package's default export.
+ * The Postboi provider — the zero-config provider, and the package's default export.
  *
  * Run `bunx postboi init` to authenticate and write `POSTBOI_TOKEN` to your environment,
  * then just construct it with no arguments:
@@ -80,7 +80,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	#token: string | undefined
 	#url: string
 
-	constructor({ token, base_url, ...options }: CloudOptions = {}) {
+	constructor({ token, base_url, ...options }: PostboiOptions = {}) {
 		// Defaults can come from the environment (POSTBOI_FROM, …); anything passed
 		// explicitly via `default` wins.
 		super({ ...options, default: { ...env_defaults(), ...options.default } })

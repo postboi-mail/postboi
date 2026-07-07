@@ -22,8 +22,8 @@ import {
 	start_device_auth,
 	poll_device_auth,
 	fetch_domains,
-	CloudAuthError,
-} from "./cloud.js"
+	PostboiAuthError,
+} from "./postboi.js"
 import {
 	render_types,
 	render_runtime,
@@ -326,10 +326,10 @@ describe("cloud device flow", () => {
 			start_device_auth("https://postboi.email", async () => {
 				throw new Error("ECONNREFUSED")
 			})
-		).rejects.toBeInstanceOf(CloudAuthError)
+		).rejects.toBeInstanceOf(PostboiAuthError)
 		await expect(
 			start_device_auth("https://postboi.email", async () => json({}, 500))
-		).rejects.toBeInstanceOf(CloudAuthError)
+		).rejects.toBeInstanceOf(PostboiAuthError)
 	})
 
 	it("poll_device_auth polls until claimed and returns the claim", async () => {
@@ -362,7 +362,7 @@ describe("cloud device flow", () => {
 				{ ...start, expires_in: 600, interval: 2 },
 				{ fetch: async () => json({ error: "expired" }, 410), sleep: async () => {} }
 			)
-		).rejects.toBeInstanceOf(CloudAuthError)
+		).rejects.toBeInstanceOf(PostboiAuthError)
 	})
 
 	it("poll_device_auth times out at the deadline", async () => {

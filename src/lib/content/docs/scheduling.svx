@@ -44,7 +44,7 @@ Scheduling is done by the provider, so it only works where the provider offers i
 
 | Provider      | How it's sent                                                        |
 | ------------- | -------------------------------------------------------------------- |
-| Postboi Cloud | Up to 30 days ahead; reschedule or cancel from the dashboard — see [Postboi Cloud](/cloud). |
+| the Postboi provider | Up to 30 days ahead; reschedule or cancel from the dashboard — see [the Postboi provider](/provider). |
 | Resend        | Passed through as `scheduled_at`.                                    |
 | Brevo         | Passed through as `scheduledAt`.                                     |
 | Mailgun       | Sent as `o:deliverytime`.                                           |

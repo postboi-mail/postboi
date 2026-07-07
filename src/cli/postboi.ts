@@ -3,14 +3,14 @@ import { spawn } from "node:child_process"
 import { setTimeout as delay } from "node:timers/promises"
 
 /**
- * Postboi Cloud device-auth flow for `postboi init`:
+ * The Postboi provider device-auth flow for `postboi init`:
  *
  *   1. `start_device_auth` asks the API for a one-time code and a claim URL
  *   2. the user signs in at that URL and authorises the device
  *   3. `poll_device_auth` exchanges the code for an API token, exactly once
  *
  * The token is then written to the project's env file(s) as `POSTBOI_TOKEN` — no other
- * configuration is needed for `mail()` to send through Postboi Cloud.
+ * configuration is needed for `mail()` to send through the Postboi provider.
  */
 
 const DEFAULT_BASE = "https://postboi.email"
@@ -28,7 +28,7 @@ export interface DeviceStart {
 }
 
 /** A failure in the device flow with a message safe to print as-is. */
-export class CloudAuthError extends Error {}
+export class PostboiAuthError extends Error {}
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -41,14 +41,18 @@ export async function start_device_auth(
 		response = await fetch_fn(`${base}/api/cli/start`, { method: "POST" })
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
-		throw new CloudAuthError(`Could not reach ${base} (${reason}). Are you online?`)
+		throw new PostboiAuthError(`Could not reach ${base} (${reason}). Are you online?`)
 	}
 	if (!response.ok) {
-		throw new CloudAuthError(`Postboi Cloud responded with ${response.status} — try again shortly.`)
+		throw new PostboiAuthError(
+			`the Postboi provider responded with ${response.status} — try again shortly.`
+		)
 	}
 	const data = (await response.json()) as Partial<DeviceStart>
 	if (typeof data.code !== "string" || typeof data.url !== "string") {
-		throw new CloudAuthError("Unexpected response from Postboi Cloud — update postboi and retry.")
+		throw new PostboiAuthError(
+			"Unexpected response from the Postboi provider — update postboi and retry."
+		)
 	}
 	return {
 		code: data.code,
@@ -86,7 +90,9 @@ export async function poll_device_auth(
 		}
 		if (response) {
 			if (response.status === 404 || response.status === 410) {
-				throw new CloudAuthError("This sign-in code is no longer valid — run `postboi init` again.")
+				throw new PostboiAuthError(
+					"This sign-in code is no longer valid — run `postboi init` again."
+				)
 			}
 			if (response.ok) {
 				const data = (await response.json()) as {
@@ -105,20 +111,20 @@ export async function poll_device_auth(
 		await sleep(start.interval * 1000)
 	}
 
-	throw new CloudAuthError("Timed out waiting for the browser — run `postboi init` again.")
+	throw new PostboiAuthError("Timed out waiting for the browser — run `postboi init` again.")
 }
 
 /** A domain on the account. `status` is `"verified"` when it can deliver; anything else
  * (`"pending"`, …) means DNS verification hasn't completed. */
-export interface CloudDomain {
+export interface PostboiDomain {
 	domain: string
 	status: string
 }
 
 /** The account's sending identity, as reported by `GET /v1/domains`. */
-export interface CloudAccount {
+export interface PostboiAccount {
 	send_address?: string
-	domains: Array<CloudDomain>
+	domains: Array<PostboiDomain>
 	/** Publishable managed-captcha key (pk_…), baked into node_modules by `postboi sync`. */
 	captcha_key?: string
 }
@@ -131,7 +137,7 @@ export async function fetch_domains(
 	base: string,
 	token: string,
 	fetch_fn: FetchLike = fetch
-): Promise<CloudAccount | undefined> {
+): Promise<PostboiAccount | undefined> {
 	try {
 		const response = await fetch_fn(`${base}/v1/domains`, {
 			headers: { Authorization: `Bearer ${token}` },
@@ -139,7 +145,7 @@ export async function fetch_domains(
 		if (!response.ok) return undefined
 		const data = (await response.json()) as {
 			send_address?: unknown
-			domains?: Array<Partial<CloudDomain>>
+			domains?: Array<Partial<PostboiDomain>>
 			captcha_key?: unknown
 		}
 		if (!Array.isArray(data.domains)) return undefined

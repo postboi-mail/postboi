@@ -7,7 +7,7 @@ Postmark, SendGrid, Mailgun, SES, SMTP, and the rest.
 The point of this example: **[`postboi.config.ts`](./postboi.config.ts) is the only file that
 changes between providers.** The routes and every `mail()` call are provider-agnostic — swap
 the `provider` key and the API key in `.env`, and everything else stays exactly the same.
-(For the Postboi Cloud version with a typed `from`, see
+(For the Postboi provider version with a typed `from`, see
 [`sveltekit-provider-postboi`](../sveltekit-provider-postboi).)
 
 It demonstrates the two ways to send:

@@ -1,5 +1,5 @@
 export const metadata = {
-	title: "Next.js × Postboi Cloud",
+	title: "Next.js × Postboi",
 	description: "Contact form powered by postboi",
 }
 

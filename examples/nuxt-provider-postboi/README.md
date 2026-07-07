@@ -1,7 +1,7 @@
-# Nuxt (Vue) × Postboi Cloud
+# Nuxt (Vue) × Postboi
 
 A contact form that turns a submission into a tidy HTML email, sent with
-[postboi](https://docs.postboi.email) on Postboi Cloud. A hidden `_reply_to`
+[postboi](https://docs.postboi.email) on the Postboi provider. A hidden `_reply_to`
 field (bound to the address the visitor typed) means you can reply straight from
 your inbox.
 
@@ -27,9 +27,9 @@ Then open http://localhost:3000.
 - **`server/api/contact.post.ts`** — reads the submitted `FormData` and hands it
   to `mail({ body })`. postboi renders the fields into an HTML table; `group→field`
   names become grouped sections.
-- **`postboi.config.ts`** — picks the provider (Postboi Cloud) and the default
+- **`postboi.config.ts`** — picks the provider (the Postboi provider) and the default
   recipient for notifications.
 
 The `POSTBOI_TOKEN` in `.env` routes mail through
-[Postboi Cloud](https://postboi.email). Swap the provider in `postboi.config.ts`
+[the Postboi provider](https://postboi.email). Swap the provider in `postboi.config.ts`
 for any of the [supported providers](https://docs.postboi.email/providers).

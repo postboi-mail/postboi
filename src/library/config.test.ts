@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { configure, config, get_config, load_config, reset_config } from "$library/config.js"
 import Mock from "$library/mock.js"
-import { mail } from "$library/cloud.js"
+import { mail } from "$library/postboi.js"
 
 const fetch = vi.fn()
 global.fetch = fetch

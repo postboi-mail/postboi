@@ -20,10 +20,10 @@ bun run schedule
 ```
 
 Both use the top-level `mail()`, which picks up the provider from
-[`postboi.config.ts`](./postboi.config.ts) — Postboi Cloud by default. Swap `provider`
+[`postboi.config.ts`](./postboi.config.ts) — the Postboi provider by default. Swap `provider`
 there for any of the [supported providers](https://docs.postboi.email/providers) and set that
 provider's API key in `.env` instead.
 
-> Scheduling only takes effect on providers that support it (Postboi Cloud, Resend, Brevo,
+> Scheduling only takes effect on providers that support it (the Postboi provider, Resend, Brevo,
 > Mailgun, SendGrid). On the others, `scheduled_at` is ignored and the message sends
 > immediately.

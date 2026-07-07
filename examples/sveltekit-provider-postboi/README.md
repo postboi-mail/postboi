@@ -1,7 +1,7 @@
-# SvelteKit × Postboi Cloud
+# SvelteKit × Postboi
 
 A minimal contact form wired to [Postboi](https://github.com/darbymanning/postboi), running
-on [Postboi Cloud](https://postboi.email) so it can also show off the **typed `from`**.
+on [the Postboi provider](https://postboi.email) so it can also show off the **typed `from`**.
 
 It demonstrates the two ways to send:
 
@@ -16,7 +16,7 @@ the notification goes straight back to them — not to your `from` address.
 
 ## Set up
 
-One command does the lot — authenticates you to Postboi Cloud, writes `POSTBOI_TOKEN` to
+One command does the lot — authenticates you to the Postboi provider, writes `POSTBOI_TOKEN` to
 your `.env`, generates the typed `from` (see below), and adds a `postboi sync` step to your
 `prepare` script so those types survive reinstalls:
 
@@ -67,17 +67,17 @@ Same provider (from `postboi.config.ts`), just full control over the message.
 
 ## Typed `from`
 
-Because this example runs on Postboi Cloud, `bunx postboi sync` narrows `from` to your
+Because this example runs on the Postboi provider, `bunx postboi sync` narrows `from` to your
 account's verified sending addresses — everywhere it appears: the config default, the kit
 action, and every top-level `mail()` call. Pick a domain you don't own and it won't compile:
 
 ```ts
 import { mail } from "postboi"
 
-// ✅ one of your Cloud domains
+// ✅ one of your Postboi domains
 await mail({ from: "Acme <hello@acme.example>", to: "you@example.com", subject: "Hi", body: "…" })
 
-// @ts-expect-error — not one of your verified Cloud domains
+// @ts-expect-error — not one of your verified Postboi domains
 await mail({ from: "hello@totally-not-your-domain.example", to: "you@example.com", subject: "Hi", body: "…" })
 ```
 
@@ -87,11 +87,11 @@ works once you've run `bunx postboi init`.
 
 > Prefer a plain API-key provider (Resend, Postmark, SES, SMTP, …)? See
 > [`sveltekit-provider-custom`](../sveltekit-provider-custom) — same code, you just pick the
-> provider in one config file. Cloud is used here specifically to demo the typed `from`.
+> provider in one config file. Postboi is used here specifically to demo the typed `from`.
 
 ## How it works
 
-- [`postboi.config.ts`](./postboi.config.ts) — selects Postboi Cloud and sets the `from` /
+- [`postboi.config.ts`](./postboi.config.ts) — selects the Postboi provider and sets the `from` /
   `to` defaults applied to every send.
 - [`src/routes/+page.server.ts`](./src/routes/+page.server.ts) — the contact form's backend:
   `export const actions = { default: mail }`.

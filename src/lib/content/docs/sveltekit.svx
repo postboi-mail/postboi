@@ -62,13 +62,13 @@ The submitted `FormData` becomes a tidy HTML table in the email body. See
 The hidden `🍯` field is the built-in honeypot: bots fill it, humans can't see it, and a
 filled honeypot skips the send while the action still returns `{ success: true }` — the
 bot learns nothing. Want more? [Spam protection](/spam) covers the invisible captcha too —
-fully managed on Postboi Cloud (one script tag, no keys), or bring your own Turnstile with
+fully managed on the Postboi provider (one script tag, no keys), or bring your own Turnstile with
 a single env var.
 
 ## Or use the Captcha component
 
 `postboi/svelte` ships that honeypot — plus the [managed invisible captcha](/spam) on
-Postboi Cloud — as a single prop-free component. Your form stays a native `<form>`
+the Postboi provider — as a single prop-free component. Your form stays a native `<form>`
 (`use:enhance` and form libraries keep working); just drop it inside:
 
 ```svelte

@@ -39,9 +39,9 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 		import("./microsoft365.js").then((m) => m.default as unknown as ProviderConstructor),
 	smtp: () => import("./smtp.js").then((m) => m.default as unknown as ProviderConstructor),
 	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
-	// Postboi Cloud. Not in the registry (its only credential is POSTBOI_TOKEN, which the
+	// The Postboi provider. Not in the registry (its only credential is POSTBOI_TOKEN, which the
 	// provider reads itself) — a token in the environment routes send() here automatically.
-	postboi: () => import("./cloud.js").then((m) => m.default as unknown as ProviderConstructor),
+	postboi: () => import("./postboi.js").then((m) => m.default as unknown as ProviderConstructor),
 	// Credential-free no-op — handy as a safe local default (`provider: "mock"`) that records
 	// instead of sending. Deliberately absent from the registry so `postboi init` won't offer it.
 	mock: () => import("./mock.js").then((m) => m.default as unknown as ProviderConstructor),
@@ -70,7 +70,7 @@ async function resolve_provider(): Promise<ProviderBase<unknown>> {
 		}
 	}
 	// A POSTBOI_TOKEN alone is enough to send: with nothing else configured, dispatch to
-	// Postboi Cloud — the zero-config path `bunx postboi init` sets up.
+	// The Postboi provider — the zero-config path `bunx postboi init` sets up.
 	const key =
 		read_env("POSTBOI_PROVIDER") ??
 		config.provider ??

@@ -1,6 +1,6 @@
-# Express × Postboi Cloud
+# Express × Postboi
 
-A contact form that turns submissions into a tidy HTML email via [postboi](https://docs.postboi.email) on [Postboi Cloud](https://postboi.email). A hidden `_reply_to` field — mirrored from the submitted email address with a one-line `oninput` handler — means replies land straight in the sender's inbox. No extra dependencies: Express's built-in `express.urlencoded()` parses the form onto `req.body`, and `mail({ body })` takes that object directly.
+A contact form that turns submissions into a tidy HTML email via [postboi](https://docs.postboi.email) on [the Postboi provider](https://postboi.email). A hidden `_reply_to` field — mirrored from the submitted email address with a one-line `oninput` handler — means replies land straight in the sender's inbox. No extra dependencies: Express's built-in `express.urlencoded()` parses the form onto `req.body`, and `mail({ body })` takes that object directly.
 
 > Because there are no file uploads, a plain (urlencoded) form needs no multipart parser. If you add a file input, switch the form to `enctype="multipart/form-data"` and parse it with [`multer`](https://github.com/expressjs/multer) (or busboy) — `req.body` still flows into `mail({ body })` the same way.
 

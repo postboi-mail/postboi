@@ -1,6 +1,6 @@
-# Cloudflare Workers × Postboi Cloud
+# Cloudflare Workers × Postboi
 
-A contact form that turns into a tidy HTML email via [postboi](https://docs.postboi.email/) on [Postboi Cloud](https://postboi.email), running on a Cloudflare Worker. A hidden `_reply_to` field — mirrored from the submitted email with a one-line `oninput` — means your replies reach the person who wrote in.
+A contact form that turns into a tidy HTML email via [postboi](https://docs.postboi.email/) on [the Postboi provider](https://postboi.email), running on a Cloudflare Worker. A hidden `_reply_to` field — mirrored from the submitted email with a one-line `oninput` — means your replies reach the person who wrote in.
 
 The wrinkle worth noticing: Workers have no filesystem and no ambient env, so there's no `postboi.config.ts` to auto-load. Instead you construct the provider explicitly with the token from the `env` binding — `new Postboi({ token: env.POSTBOI_TOKEN })` — and call `mail.send({ body })`.
 
@@ -23,4 +23,4 @@ npm run deploy
 - **`src/index.ts`** — the `fetch` handler renders the form and, on POST to `/contact`, builds `new Postboi({ token: env.POSTBOI_TOKEN })` and calls `mail.send({ body: request.formData(), to })` (`body` takes the promise directly).
 - **`wrangler.jsonc`** — Worker config, with `nodejs_compat` turned on.
 
-Full docs live at https://docs.postboi.email and Postboi Cloud is at https://postboi.email.
+Full docs live at https://docs.postboi.email and the Postboi provider is at https://postboi.email.

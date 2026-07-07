@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Postboi, { mail, is_error, PostboiError } from "$library/cloud.js"
+import Postboi, { mail, is_error, PostboiError } from "$library/postboi.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -23,7 +23,7 @@ const sent_json = () => JSON.parse(sent_init().body as string)
 beforeEach(() => fetch.mockReset())
 afterEach(() => vi.unstubAllEnvs())
 
-describe("Postboi Cloud (zero-config)", () => {
+describe("the Postboi provider (zero-config)", () => {
 	it("auto-reads POSTBOI_TOKEN from the environment", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "pb_live_123")
 		fetch.mockResolvedValue(respond({ json: { id: "abc" } }))
@@ -219,7 +219,7 @@ describe("top-level mail() — provider-agnostic dispatch", () => {
 		expect(results).toHaveLength(2)
 	})
 
-	it("falls back to Postboi Cloud when only POSTBOI_TOKEN is set", async () => {
+	it("falls back to the Postboi provider when only POSTBOI_TOKEN is set", async () => {
 		vi.stubEnv("POSTBOI_PROVIDER", "")
 		vi.stubEnv("POSTBOI_TOKEN", "pb_zero_config")
 		vi.stubEnv("POSTBOI_FROM", "from@test.com")

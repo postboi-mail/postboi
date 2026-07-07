@@ -1,5 +1,5 @@
 import { fail, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
-import { mail as zero_config_mail } from "./cloud.js"
+import { mail as zero_config_mail } from "./postboi.js"
 import { is_error, is_spam, type SendOptions } from "./index.js"
 
 // Re-export the core so `import { PostboiError, is_error, ... } from "postboi/kit"` works.

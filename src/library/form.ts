@@ -45,7 +45,7 @@ export function ensure_captcha_script(key: string, origin: string = CAPTCHA_ORIG
  * its rendered marker element, tag it `data-captcha` for the loader, and inject the
  * loader script. The key comes from the `pk` prop when given, otherwise from
  * {@link captcha_key} — the value `bunx postboi sync` bakes into this package, which is
- * what makes `<Captcha />` prop-free on Postboi Cloud. With no key at all it stays a
+ * what makes `<Captcha />` prop-free on the Postboi provider. With no key at all it stays a
  * honeypot and says so, rather than failing silently.
  */
 export function activate_captcha(
@@ -62,7 +62,7 @@ export function activate_captcha(
 	const key = pk ?? captcha_key
 	if (!key) {
 		console.warn(
-			"postboi: <Captcha> has no publishable key — run `bunx postboi sync` (Postboi Cloud) or pass pk. The honeypot still works; the managed captcha is off."
+			"postboi: <Captcha> has no publishable key — run `bunx postboi sync` (the Postboi provider) or pass pk. The honeypot still works; the managed captcha is off."
 		)
 		return
 	}

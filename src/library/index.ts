@@ -28,7 +28,7 @@ export type MailAttachment = { name: string; content: string; mime_type: string 
 export type Email = MailAddress | string
 
 /**
- * Type registry filled in by the generated types (Postboi Cloud only — `bunx postboi sync`
+ * Type registry filled in by the generated types (the Postboi provider only — `bunx postboi sync`
  * writes them into this package's own `register.d.ts` in node_modules). When it declares a
  * `from` member, every `from` field in the API narrows to your permitted sending addresses.
  */
@@ -90,7 +90,7 @@ export interface Duration {
 export interface SendOptions {
 	to?: Array<Email> | Email
 	/**
-	 * The sender. On Postboi Cloud this must be your account's sending address or an address
+	 * The sender. On the Postboi provider this must be your account's sending address or an address
 	 * at a domain on your account — anything else is rejected at send time with
 	 * `from_not_allowed`. If the *type* rejects an address you know is valid, the generated
 	 * types are stale — run `bunx postboi sync` to regenerate them.
@@ -149,7 +149,7 @@ export interface SendOptions {
 	/**
 	 * Schedule the message for future delivery. Accepts a `Date`, an ISO 8601 string, or a
 	 * relative {@link Duration} added to now — e.g. `{ days: 1, hours: 5 }`. Forwarded to
-	 * providers with native scheduling (Resend, Brevo, SendGrid, Mailgun, Postboi Cloud);
+	 * providers with native scheduling (Resend, Brevo, SendGrid, Mailgun, the Postboi provider);
 	 * ignored by providers without it, which send immediately.
 	 */
 	scheduled_at?: Date | string | Duration
@@ -221,7 +221,7 @@ export interface PreparedMessage {
 	scheduled_at?: Date
 	/**
 	 * Managed-captcha forwarding. Present when the body was FormData and the provider does
-	 * managed verification (Postboi Cloud): `token` is the widget's Turnstile token when one
+	 * managed verification (the Postboi provider): `token` is the widget's Turnstile token when one
 	 * arrived. Providers without managed captcha never see this set.
 	 */
 	captcha?: { token?: string }
@@ -246,7 +246,7 @@ export type BatchResult<TResponse> =
  */
 export type Defaults = {
 	to?: Array<Email> | Email
-	/** Default sender — see {@link SendOptions.from} for the Postboi Cloud rules. */
+	/** Default sender — see {@link SendOptions.from} for the Postboi provider rules. */
 	from?: FromAddress
 	cc?: Array<Email> | Email
 	bcc?: Array<Email> | Email
@@ -409,12 +409,12 @@ export abstract class ProviderBase<TResponse = unknown> {
 
 	/**
 	 * Whether a sender address must be resolvable client-side. Providers whose API can
-	 * default it from the authenticated account (Postboi Cloud) set this to false.
+	 * default it from the authenticated account (the Postboi provider) set this to false.
 	 */
 	protected readonly requires_from: boolean = true
 
 	/**
-	 * Whether the provider's API verifies Turnstile tokens itself (Postboi Cloud's managed
+	 * Whether the provider's API verifies Turnstile tokens itself (the Postboi provider's managed
 	 * captcha). When true and no local secret is configured, FormData sends forward the
 	 * token on {@link PreparedMessage.captcha} instead of verifying client-side.
 	 */
@@ -1072,7 +1072,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 * Run the spam checks (honeypot + Turnstile) over a FormData body, stripping their fields
 	 * from `form`. Throws {@link SpamError} on a tripped honeypot (an intentional skip) or a
 	 * {@link PostboiError} with code `captcha_failed` / `captcha_misconfigured` otherwise.
-	 * On a managed-captcha pass (Postboi Cloud), returns the token to forward with the send.
+	 * On a managed-captcha pass (the Postboi provider), returns the token to forward with the send.
 	 */
 	protected async enforce_captcha(
 		form: FormData,

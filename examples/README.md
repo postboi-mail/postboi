@@ -12,16 +12,16 @@ top-level `mail()`. The provider lives entirely in `postboi.config.ts`.
 
 ## SvelteKit
 
-- [`sveltekit-provider-postboi`](./sveltekit-provider-postboi) — SvelteKit on Postboi Cloud.
+- [`sveltekit-provider-postboi`](./sveltekit-provider-postboi) — SvelteKit on the Postboi provider.
   Shows both the one-line `postboi/kit` action and a hand-built top-level `mail()` call, plus
-  the typed `from` that Cloud enables.
+  the typed `from` that Postboi enables.
 - [`sveltekit-provider-custom`](./sveltekit-provider-custom) — the same app on any
   bring-your-own provider (Resend, Postmark, SendGrid, Mailgun, SES, SMTP, …). Shows that
   `postboi.config.ts` is the only file that changes between providers.
 
 ## Other frameworks
 
-All on Postboi Cloud, each using its framework's server handler to call `mail({ body })`:
+All on the Postboi provider, each using its framework's server handler to call `mail({ body })`:
 
 - [`nextjs-provider-postboi`](./nextjs-provider-postboi) — Next.js App Router, via a Server Action.
 - [`astro-provider-postboi`](./astro-provider-postboi) — Astro, via an API route.

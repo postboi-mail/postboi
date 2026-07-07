@@ -2,7 +2,7 @@
 
 /**
  * `<Captcha>` for React — Next.js, Remix, or plain React. Drop-in spam protection for a
- * native `<form>`: renders the 🍯 honeypot field and, on Postboi Cloud, activates the
+ * native `<form>`: renders the 🍯 honeypot field and, on the Postboi provider, activates the
  * managed invisible captcha on the surrounding form. The publishable key is baked in by
  * `bunx postboi sync`, so no props are needed.
  *

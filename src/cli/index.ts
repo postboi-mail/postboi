@@ -44,8 +44,8 @@ import {
 	poll_device_auth,
 	open_browser,
 	fetch_domains,
-	type CloudDomain,
-} from "./cloud.js"
+	type PostboiDomain,
+} from "./postboi.js"
 import {
 	write_types,
 	write_runtime,
@@ -80,8 +80,8 @@ ${banner()}
 ${dim(`  v${version()}`)}
 
 ${bold("Usage")}
-  ${cyan("bunx postboi init")}     Set up Postboi Cloud or a provider of your own
-  ${cyan("bunx postboi sync")}     Refresh the generated from types from your Cloud domains
+  ${cyan("bunx postboi init")}     Set up the Postboi provider or a provider of your own
+  ${cyan("bunx postboi sync")}     Refresh the generated from types from your Postboi domains
 
 ${bold("Options")}
   -h, --help        Show this help
@@ -407,12 +407,14 @@ async function sync(): Promise<void> {
 	const account = await fetch_domains(cloud_base(), token)
 	if (!account) {
 		bake(config_key, config_file ?? "config")
-		console.log(yellow("postboi sync: could not fetch domains from Postboi Cloud — skipped."))
+		console.log(
+			yellow("postboi sync: could not fetch domains from the Postboi provider — skipped.")
+		)
 		return
 	}
 
 	const captcha_key = account.captcha_key ?? config_key
-	bake(captcha_key, account.captcha_key ? "Postboi Cloud" : (config_file ?? "config"))
+	bake(captcha_key, account.captcha_key ? "the Postboi provider" : (config_file ?? "config"))
 	// Keep the committed config as the tokenless source of truth for the key.
 	if (account.captcha_key && config_file && config_source && account.captcha_key !== config_key) {
 		const next = upsert_captcha_key(config_source, account.captcha_key)
@@ -442,7 +444,7 @@ async function sync(): Promise<void> {
 }
 
 /**
- * Postboi Cloud onboarding: authorise this device in the browser, write the resulting
+ * The Postboi provider onboarding: authorise this device in the browser, write the resulting
  * `POSTBOI_TOKEN`, then a `postboi.config.ts` for defaults and hooks. No provider account, no DNS.
  */
 async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void> {
@@ -461,7 +463,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	// generated `from` types; the captcha key gets baked in for the <Captcha /> components.
 	// Best-effort: an older API just means no domain info.
 	const cloud_account = await fetch_domains(base, token)
-	const domains: Array<CloudDomain> = cloud_account?.domains ?? []
+	const domains: Array<PostboiDomain> = cloud_account?.domains ?? []
 	if (domains.length > 0) {
 		const list = domains
 			.map((d) => `${d.domain} ${d.status === "verified" ? green("✓") : yellow("⌛")}`)
@@ -507,7 +509,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	ensure_install(files)
 
 	// The committed home for defaults, hooks, and the publishable captcha key. A
-	// POSTBOI_TOKEN alone already routes send() to Cloud, but `provider: "postboi"` makes
+	// POSTBOI_TOKEN alone already routes send() to Postboi, but `provider: "postboi"` makes
 	// it explicit.
 	write_config("postboi", config_defaults, {}, cloud_account?.captcha_key)
 
@@ -594,7 +596,7 @@ async function init(): Promise<void> {
 	try {
 		const mode = await prompts.select<"cloud" | "byo">(bold("How do you want to send?"), [
 			{
-				label: "Postboi Cloud",
+				label: "Postboi",
 				value: "cloud",
 				hint: "zero config — sign in and start sending",
 			},

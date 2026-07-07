@@ -7,7 +7,7 @@ category: Guides
 
 Public contact forms attract bots. Postboi ships two invisible layers of protection — no
 puzzles, no checkboxes, nothing for real visitors to do. Both run automatically on every
-[FormData](/formdata) send, with every provider — and on Postboi Cloud the captcha is
+[FormData](/formdata) send, with every provider — and on the Postboi provider the captcha is
 fully managed: no Cloudflare account, no keys, no env vars.
 
 ## The Captcha component
@@ -73,7 +73,7 @@ key to [`postboi.config.ts`](/config) (`captcha: { key: "pk_…" }` — it's pub
 committing is safe), and `bunx postboi sync` — already in your `prepare` script — bakes
 it from there into the installed package on every install. Tokenless environments (CI)
 keep the captcha because the committed config is the source of truth; a `POSTBOI_TOKEN`
-just lets `sync` refresh the key (and the generated `from` types) from Postboi Cloud.
+just lets `sync` refresh the key (and the generated `from` types) from the Postboi provider.
 Upgrading from an earlier init? Run `bunx postboi sync` once with your token and it
 writes the key into your config for you. If the component warns that no key is baked,
 re-run `bunx postboi sync` (and restart the dev server), or pass one explicitly with
@@ -126,9 +126,9 @@ try {
 Spam skips are intentional, so they never fire the [`on.error` hook](/hooks) — your Sentry
 stays quiet.
 
-## Managed captcha — Postboi Cloud, zero keys
+## Managed captcha — the Postboi provider, zero keys
 
-On [Postboi Cloud](/cloud), invisible captcha is fully managed: no Cloudflare account, no
+On [the Postboi provider](/provider), invisible captcha is fully managed: no Cloudflare account, no
 keys to create, no env vars. Grab the snippet from your
 [dashboard](https://postboi.email/dashboard/keys), drop it on the page, and mark the form:
 
@@ -185,7 +185,7 @@ TURNSTILE_SECRET_KEY=0x4AAAAAAA...
 Done. The widget injects a `cf-turnstile-response` token into the form, and Postboi
 verifies it with Cloudflare before every FormData send. The token is stripped from the
 email, and invalid or missing tokens are rejected with a `PostboiError`
-(`code: "captcha_failed"`). A configured secret always wins — set one on Postboi Cloud and
+(`code: "captcha_failed"`). A configured secret always wins — set one on the Postboi provider and
 verification happens locally instead of via managed captcha.
 
 > **Setting `TURNSTILE_SECRET_KEY` enforces Turnstile on every FormData send.** That's
@@ -223,7 +223,7 @@ export default config({
 | ----------- | ------------------------------------ | -------------------------------------------------------------------------- |
 | `key`       | your publishable `pk_…` key          | written by `postboi init`; feeds the `<Captcha />` bake                    |
 | `honeypot`  | field name, or `false` to disable    | `"🍯"`                                                                     |
-| `turnstile` | `{ secret_key }`, `true`, or `false` | auto — managed on Postboi Cloud, local when `TURNSTILE_SECRET_KEY` is set |
+| `turnstile` | `{ secret_key }`, `true`, or `false` | auto — managed on the Postboi provider, local when `TURNSTILE_SECRET_KEY` is set |
 
 ## Error codes
 
