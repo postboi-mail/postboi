@@ -52,6 +52,26 @@ describe("postboi/kit action()", () => {
 		expect(result).toMatchObject({ status: 422 })
 	})
 
+	it("returns { success: true } on a tripped honeypot without sending (bots learn nothing)", async () => {
+		const provider = new Mock({ default: { from: "from@test.com", to: "to@test.com" } })
+		const result = await action(provider)(event({ "🍯": "cheap pills", message: "spam" }))
+
+		expect(result).toEqual({ success: true })
+		expect(provider.sent).toHaveLength(0)
+	})
+
+	it("returns fail(400) when Turnstile verification fails", async () => {
+		vi.stubEnv("TURNSTILE_SECRET_KEY", "secret_1")
+		fetch.mockResolvedValue(respond({ success: false, "error-codes": ["invalid-input-response"] }))
+
+		const provider = new Mock({ default: { from: "from@test.com", to: "to@test.com" } })
+		const result = await action(provider)(event({ "cf-turnstile-response": "bad" }))
+
+		expect(result).toMatchObject({ status: 400 })
+		expect((result as { data: { error: string } }).data.error).toMatch(/captcha/i)
+		expect(provider.sent).toHaveLength(0)
+	})
+
 	it("merges server-set fields, keeping FormData as the body", async () => {
 		const provider = new Mock({ default: { from: "from@test.com" } })
 		await action(provider, { fields: { to: "forced@test.com", subject: "Forced" } })(

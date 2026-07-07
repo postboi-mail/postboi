@@ -32,6 +32,7 @@ describe("package exports", () => {
 			"config.ts",
 			"env.ts",
 			"mail.ts",
+			"captcha.ts", // spam protection, reached via the root export
 			"register.ts", // generated-types placeholder, reached via the root export
 		])
 		const providers = readdirSync(`${root}src/library`).filter(

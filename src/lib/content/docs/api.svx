@@ -46,6 +46,10 @@ interface SendOptions {
 	idempotency_key?: string
 	headers?: Record<string, string>
 	tags?: string[]
+	captcha?: {
+		honeypot?: string | false // honeypot field name (default "🍯"), false disables
+		turnstile?: { secret_key?: string } | boolean // default: on when TURNSTILE_SECRET_KEY is set
+	}
 }
 ```
 
@@ -54,6 +58,7 @@ to either — so you can pass a template renderer's output straight through; see
 [Email templates](/templates). `formatter`
 controls how grouped-field labels are rendered. `headers` and `tags` are forwarded to each
 provider's native concept — see [Custom headers & tags](/providers#custom-headers--tags).
+`captcha` adjusts the built-in [spam protection](/spam) for a single send.
 
 ## Common constructor options
 
@@ -68,11 +73,12 @@ Every provider also accepts these, on top of its own credentials:
 	retry_delay?: number // base backoff in ms, doubles each attempt (default 500)
 	auto_text?: boolean // derive a plain-text body from the HTML (default false)
 	hooks?: Hooks // see Hooks
+	captcha?: CaptchaOptions // see Spam protection
 }
 ```
 
-See [Errors & retries](/errors) for retry behaviour and [Hooks](/hooks) for the
-`hooks` shape.
+See [Errors & retries](/errors) for retry behaviour, [Hooks](/hooks) for the
+`hooks` shape, and [Spam protection](/spam) for `captcha`.
 
 ## Email type
 

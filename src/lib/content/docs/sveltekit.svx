@@ -40,6 +40,14 @@ when you want the email itself to appear from a specific address.
 <form method="POST" use:enhance enctype="multipart/form-data">
 	<input type="hidden" name="_subject" value="Contact Form" />
 	<input type="hidden" name="_reply_to" value={email} />
+	<input
+		type="text"
+		name="🍯"
+		tabindex="-1"
+		autocomplete="off"
+		aria-hidden="true"
+		style="position: absolute; left: -9999px; height: 0; width: 0; opacity: 0"
+	/>
 	<input name="contact→name" placeholder="Name" required />
 	<input name="contact→email" type="email" placeholder="Email" required bind:value={email} />
 	<textarea name="details→message" placeholder="Message"></textarea>
@@ -50,6 +58,11 @@ when you want the email itself to appear from a specific address.
 
 The submitted `FormData` becomes a tidy HTML table in the email body. See
 [FormData](/formdata) for how the table is built.
+
+The hidden `🍯` field is the built-in honeypot: bots fill it, humans can't see it, and a
+filled honeypot skips the send while the action still returns `{ success: true }` — the
+bot learns nothing. See [Spam protection](/spam), including one-env-var Cloudflare
+Turnstile when you want more.
 
 A full, runnable version of this form lives in
 [`examples/sveltekit-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit-provider-postboi).

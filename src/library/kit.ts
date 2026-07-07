@@ -1,6 +1,6 @@
 import { fail, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
 import { mail as zero_config_mail } from "./cloud.js"
-import { is_error, type SendOptions } from "./index.js"
+import { is_error, is_spam, type SendOptions } from "./index.js"
 
 // Re-export the core so `import { PostboiError, is_error, ... } from "postboi/kit"` works.
 export * from "./index.js"
@@ -66,6 +66,8 @@ export function action(a?: Mailer | ActionOptions, b: ActionOptions = {}): FormA
 			await dispatch({ ...options.fields, body })
 			return { success: true }
 		} catch (error) {
+			// A tripped honeypot pretends to succeed — no email is sent, and the bot learns nothing.
+			if (is_spam(error)) return { success: true }
 			return fail(status, { error: is_error(error) ? error.message : String(error) })
 		}
 	}

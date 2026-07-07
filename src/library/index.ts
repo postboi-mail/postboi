@@ -1,8 +1,11 @@
 import { title, html_to_text, pooled_map } from "./utils.js"
 import { get_config, merge_hooks } from "./config.js"
+import { check_captcha, type CaptchaOptions } from "./captcha.js"
 
 // Global configuration (`postboi.config.ts`) is part of the public surface from the package root.
 export { configure, config, type PostboiConfig } from "./config.js"
+// Spam protection (honeypot + Turnstile) is part of the public surface too.
+export { HONEYPOT_FIELD, TURNSTILE_FIELD, type CaptchaOptions } from "./captcha.js"
 
 /**
  * A concrete email address used by providers.
@@ -148,6 +151,12 @@ export interface SendOptions {
 	 * ignored by providers without it, which send immediately.
 	 */
 	scheduled_at?: Date | string | Duration
+	/**
+	 * Per-send spam-protection overrides (see {@link CaptchaOptions}). Only applies to
+	 * FormData (or form-fields object) bodies. By default the `🍯` honeypot check is on, and
+	 * Turnstile verification runs whenever `TURNSTILE_SECRET_KEY` is set.
+	 */
+	captcha?: CaptchaOptions
 }
 
 /** A single recipient's template variables (`{key}` → value). */
@@ -254,6 +263,8 @@ export type CommonProviderOptions = {
 	auto_text?: boolean
 	/** Lifecycle hooks run around every send (see {@link Hooks}). */
 	hooks?: Hooks
+	/** Spam-protection settings applied to every FormData send (see {@link CaptchaOptions}). */
+	captcha?: CaptchaOptions
 }
 
 /** Options shared by providers that authenticate with a single API key/token. */
@@ -302,15 +313,33 @@ export class PostboiError extends Error {
  * **not** trigger the `on.error` hook.
  */
 export class SkipSendError extends PostboiError {
-	constructor(message = "Email send was skipped by a before.send hook") {
-		super({ provider: "skip", message, code: "skipped" })
+	constructor(message = "Email send was skipped by a before.send hook", code: string = "skipped") {
+		super({ provider: "skip", message, code })
 		this.name = "SkipSendError"
+	}
+}
+
+/**
+ * Thrown when a FormData body trips the spam checks — the honeypot field (`🍯` by default)
+ * was filled. A {@link SkipSendError} with `code: "spam"`, so like any intentional skip it
+ * never reaches the `on.error` hook. `postboi/kit` turns it into a silent
+ * `{ success: true }` so bots can't tell they were caught.
+ */
+export class SpamError extends SkipSendError {
+	constructor(message = "Submission flagged as spam") {
+		super(message, "spam")
+		this.name = "SpamError"
 	}
 }
 
 /** Type guard: is a caught value a normalized {@link PostboiError}? */
 export function is_error(error: unknown): error is PostboiError {
 	return error instanceof PostboiError
+}
+
+/** Type guard: is a caught value the spam-check {@link SpamError}? */
+export function is_spam(error: unknown): error is SpamError {
+	return error instanceof SpamError
 }
 
 /**
@@ -382,6 +411,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 	#retry_delay: number
 	#auto_text: boolean
 	#hooks: Hooks
+	#captcha: CaptchaOptions
 
 	constructor(options: CommonProviderOptions = {}) {
 		// Global config (postboi.config.ts / package.json) sit underneath per-instance
@@ -393,6 +423,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 		this.#retry_delay = options.retry_delay ?? s.retry_delay ?? 500
 		this.#auto_text = options.auto_text ?? s.auto_text ?? false
 		this.#hooks = merge_hooks(s.hooks, options.hooks)
+		this.#captcha = { ...s.captcha, ...options.captcha }
 	}
 
 	/** Map a prepared message into the provider's HTTP request. */
@@ -535,6 +566,8 @@ export abstract class ProviderBase<TResponse = unknown> {
 						message: error instanceof Error ? error.message : String(error),
 						raw: error,
 					})
+		// Intentional skips (before.send cancellations, spam) are not failures — no on.error.
+		if (e instanceof SkipSendError) return e
 		await this.#observe(() =>
 			this.#hooks.on?.error?.({
 				provider: this.provider,
@@ -1021,6 +1054,22 @@ export abstract class ProviderBase<TResponse = unknown> {
 	}
 
 	/**
+	 * Run the spam checks (honeypot + Turnstile) over a FormData body, stripping their fields
+	 * from `form`. Throws {@link SpamError} on a tripped honeypot (an intentional skip) or a
+	 * {@link PostboiError} with code `captcha_failed` / `captcha_misconfigured` otherwise.
+	 */
+	protected async enforce_captcha(form: FormData, overrides?: CaptchaOptions): Promise<void> {
+		const verdict = await check_captcha(form, { ...this.#captcha, ...overrides })
+		if (verdict.ok) return
+		if (verdict.code === "spam") throw new SpamError(verdict.message)
+		throw new PostboiError({
+			provider: this.provider,
+			message: verdict.message,
+			code: verdict.code,
+		})
+	}
+
+	/**
 	 * Apply defaults, render FormData, split out the HTML/text bodies and validate that a
 	 * sender and recipient are present. Returns a {@link PreparedMessage} for `build_request`.
 	 */
@@ -1033,6 +1082,8 @@ export abstract class ProviderBase<TResponse = unknown> {
 		// extracted header fields plus a rendered HTML table (honouring any formatter).
 		const form = this.to_form_data(body)
 		if (form) {
+			// Spam checks run first, and strip their plumbing fields so they never reach the email.
+			await this.enforce_captcha(form, options.captcha)
 			const { options: extracted, attachments } = await this.parse_form_data(
 				form,
 				options.formatter
