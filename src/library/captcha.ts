@@ -25,6 +25,13 @@ const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/sit
 /** Spam-protection settings, configurable globally, per provider instance, or per send. */
 export type CaptchaOptions = {
 	/**
+	 * The account's **publishable** managed-captcha key (`pk_…`). Not used at send time —
+	 * this is the committed home for the key that `bunx postboi sync` bakes into the
+	 * installed package for the `<Captcha />` components, so tokenless builds (CI) keep the
+	 * captcha. Written by `bunx postboi init`; safe to commit.
+	 */
+	key?: string
+	/**
 	 * Honeypot field name checked in FormData bodies. Defaults to `"🍯"` — add a visually
 	 * hidden input with that name to your form and any submission that fills it is treated
 	 * as spam (skipped, never sent). Pass a string to use a different field name, or `false`

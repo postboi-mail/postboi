@@ -68,15 +68,16 @@ import Captcha from 'postboi/astro'
 </form>
 ```
 
-**Where does the key come from?** `bunx postboi sync` — already in your `prepare` script
-if you set up with `bunx postboi init` — bakes your account's publishable key into the
-installed package alongside the generated `from` types. No props, no env vars, nothing to
-commit. Re-run `bunx postboi sync` (and restart the dev server) if the component warns
-that no key is baked, or pass one explicitly with `pk="pk_…"` (from your
-[dashboard](https://postboi.email/dashboard/keys)) — handy off Postboi Cloud or in
-environments where `sync` can't run. Make sure `POSTBOI_TOKEN` is available at **build**
-time (it usually is — it's the same env your server sends with) so CI builds bake the key
-too.
+**Where does the key come from?** `bunx postboi init` commits your account's publishable
+key to [`postboi.config.ts`](/config) (`captcha: { key: "pk_…" }` — it's publishable, so
+committing is safe), and `bunx postboi sync` — already in your `prepare` script — bakes
+it from there into the installed package on every install. Tokenless environments (CI)
+keep the captcha because the committed config is the source of truth; a `POSTBOI_TOKEN`
+just lets `sync` refresh the key (and the generated `from` types) from Postboi Cloud.
+Upgrading from an earlier init? Run `bunx postboi sync` once with your token and it
+writes the key into your config for you. If the component warns that no key is baked,
+re-run `bunx postboi sync` (and restart the dev server), or pass one explicitly with
+`pk="pk_…"` from your [dashboard](https://postboi.email/dashboard/keys).
 
 Props, all optional: `pk` (key override), `origin` (loader origin), and `honeypot`
 (`false` to render no honeypot field). Without any key the component is honeypot-only and
@@ -211,15 +212,17 @@ import { config } from 'postboi'
 
 export default config({
 	captcha: {
+		key: 'pk_…', // your publishable key, committed here by `postboi init`
 		honeypot: 'nickname', // rename the honeypot field (default: "🍯")
 		turnstile: false // or { secret_key }, or true to require it
 	}
 })
 ```
 
-| Option      | Values                               | Default                                                                       |
-| ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
-| `honeypot`  | field name, or `false` to disable    | `"🍯"`                                                                        |
+| Option      | Values                               | Default                                                                    |
+| ----------- | ------------------------------------ | -------------------------------------------------------------------------- |
+| `key`       | your publishable `pk_…` key          | written by `postboi init`; feeds the `<Captcha />` bake                    |
+| `honeypot`  | field name, or `false` to disable    | `"🍯"`                                                                     |
 | `turnstile` | `{ secret_key }`, `true`, or `false` | auto — managed on Postboi Cloud, local when `TURNSTILE_SECRET_KEY` is set |
 
 ## Error codes

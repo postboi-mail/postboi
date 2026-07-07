@@ -35,7 +35,7 @@ It auto-loads on the first `mail()` (Node/Bun).
 | `default`  | `from` / `to` / `cc` / `bcc` / `reply_to` applied when a send omits them           |
 | `options`  | non-secret provider constructor options (Mailgun domain, SES region, SMTP host…)  |
 | `hooks`    | lifecycle [hooks](/hooks) run around every send                                   |
-| `captcha`  | [spam protection](/spam) settings (honeypot field name, Turnstile)                |
+| `captcha`  | [spam protection](/spam): the publishable `key` for `<Captcha />`, honeypot name, Turnstile |
 | _behaviour_ | `retries`, `retry_delay`, `timeout`, `auto_text`                                  |
 
 Keep **secrets out of this file** — API keys and tokens belong in the environment. To vary

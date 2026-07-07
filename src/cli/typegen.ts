@@ -46,25 +46,24 @@ ${union.map((m) => `\t\t\t| ${m}`).join("\n")}
 }
 
 /**
- * The full generated `register.d.ts` source, or null when there's nothing to generate.
- * The `captcha_key` declaration mirrors the shipped placeholder so imports keep
+ * The full generated `register.d.ts` source, or null when the account has nothing to send
+ * from. The `captcha_key` declaration mirrors the shipped placeholder so imports keep
  * type-checking, and the `export` makes this a module, so `declare module` *augments*
  * the package types instead of replacing them wholesale.
  */
 export function render_types(
 	send_address: string | undefined,
-	domains: Array<CloudDomain>,
-	captcha_key?: string
+	domains: Array<CloudDomain>
 ): string | null {
 	const register = register_block(send_address, domains)
-	if (!register && !captcha_key) return null
+	if (!register) return null
 	return `${HEADER}${register}export declare const captcha_key: string | undefined
 `
 }
 
 /** The generated `register.js` source: the baked publishable key. */
-export function render_runtime(captcha_key: string | undefined): string {
-	return `${HEADER}export const captcha_key = ${captcha_key ? JSON.stringify(captcha_key) : "undefined"}
+export function render_runtime(captcha_key: string): string {
+	return `${HEADER}export const captcha_key = ${JSON.stringify(captcha_key)}
 `
 }
 
@@ -76,20 +75,50 @@ function replace(target: string, source: string): void {
 }
 
 /**
- * Overwrite the installed package's placeholders with the generated types and runtime
- * key. Null when there's nothing to write — no addresses and no key, or postboi isn't
- * installed here yet.
+ * Overwrite the installed package's placeholder types with the generated `from` union.
+ * Null when there's nothing to write — no addresses, or postboi isn't installed here yet.
  */
 export function write_types(
 	send_address: string | undefined,
-	domains: Array<CloudDomain>,
-	captcha_key?: string
+	domains: Array<CloudDomain>
 ): string | null {
-	const source = render_types(send_address, domains, captcha_key)
+	const source = render_types(send_address, domains)
 	if (!source || !existsSync(TYPES_TARGET)) return null
 	replace(TYPES_TARGET, source)
-	if (existsSync(RUNTIME_TARGET)) replace(RUNTIME_TARGET, render_runtime(captcha_key))
 	return TYPES_TARGET
+}
+
+/**
+ * Bake the publishable captcha key into the installed package's runtime placeholder —
+ * what makes `<Captcha />` prop-free. Null with no key, or when postboi isn't installed
+ * here yet. Never bakes an empty value over a previous key.
+ */
+export function write_runtime(captcha_key: string | undefined): string | null {
+	if (!captcha_key || !existsSync(RUNTIME_TARGET)) return null
+	replace(RUNTIME_TARGET, render_runtime(captcha_key))
+	return RUNTIME_TARGET
+}
+
+/** Read the publishable key out of a `postboi.config.*` source (`captcha: { key }`). */
+export function config_captcha_key(source: string): string | undefined {
+	return /captcha\s*:\s*\{[^}]*?\bkey\s*:\s*["']([^"']+)["']/.exec(source)?.[1]
+}
+
+/**
+ * Surgically write the publishable key into a `postboi.config.*` source: replace an
+ * existing `captcha.key`, extend an existing `captcha` block, or add one just inside
+ * `config({`. Null when the file's shape isn't recognised — the caller prints a
+ * merge-it-yourself hint instead of clobbering a hand-edited config.
+ */
+export function upsert_captcha_key(source: string, key: string): string | null {
+	const literal = JSON.stringify(key)
+	const existing = /(captcha\s*:\s*\{[^}]*?\bkey\s*:\s*)(["'][^"']*["'])/
+	if (existing.test(source)) return source.replace(existing, `$1${literal}`)
+	const block = /(captcha\s*:\s*\{)/
+	if (block.test(source)) return source.replace(block, `$1 key: ${literal},`)
+	const open = /(\bconfig\s*\(\s*\{\s*\n)/
+	if (open.test(source)) return source.replace(open, `$1\tcaptcha: { key: ${literal} },\n`)
+	return null
 }
 
 /** How a chosen `from` relates to the account: sendable, pending verification, or foreign. */

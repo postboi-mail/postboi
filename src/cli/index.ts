@@ -46,7 +46,14 @@ import {
 	fetch_domains,
 	type CloudDomain,
 } from "./cloud.js"
-import { write_types, from_status, TYPES_TARGET } from "./typegen.js"
+import {
+	write_types,
+	write_runtime,
+	from_status,
+	config_captcha_key,
+	upsert_captcha_key,
+	TYPES_TARGET,
+} from "./typegen.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 
 const CONFIG_FILES = [
@@ -287,18 +294,34 @@ async function ask_defaults(
 function write_config(
 	provider_key: string,
 	defaults: Record<string, string>,
-	options: Record<string, string>
+	options: Record<string, string>,
+	captcha_key?: string
 ): void {
 	console.log()
 	const existing_config = CONFIG_FILES.find((f) => existsSync(f))
 	if (existing_config) {
-		// Don't clobber a hand-edited file — show what to merge in instead.
+		// Don't clobber a hand-edited file — show what to merge in instead. The captcha key
+		// is the exception: it has a safe surgical upsert, so try that first.
+		if (captcha_key) {
+			const source = readFileSync(existing_config, "utf8")
+			const next =
+				config_captcha_key(source) === captcha_key
+					? source
+					: upsert_captcha_key(source, captcha_key)
+			if (next && next !== source) {
+				writeFileSync(existing_config, next)
+				console.log(`${green("✓")} wrote your captcha key to ${bold(existing_config)}`)
+			}
+			if (next) captcha_key = undefined // handled — keep it out of the merge hint
+		}
 		console.log(`${yellow("!")} ${bold(existing_config)} already exists — add to it:`)
 		console.log(dim(`\n  provider: ${JSON.stringify(provider_key)},`))
 		if (Object.keys(defaults).length)
 			console.log(dim(`  ${render_block("default", defaults, "  ").trimEnd()}`))
 		if (Object.keys(options).length)
 			console.log(dim(`  ${render_block("options", options, "  ").trimEnd()}`))
+		if (captcha_key)
+			console.log(dim(`  ${render_block("captcha", { key: captcha_key }, "  ").trimEnd()}`))
 	} else {
 		// Match the project: .ts needs a TS toolchain; plain-JS projects get .js (ESM) or .mjs.
 		const type_module = (): boolean => {
@@ -313,7 +336,7 @@ function write_config(
 			: type_module()
 				? "postboi.config.js"
 				: "postboi.config.mjs"
-		writeFileSync(file, render_config(provider_key, defaults, options))
+		writeFileSync(file, render_config(provider_key, defaults, options, captcha_key))
 		console.log(`${green("✓")} wrote ${bold(file)}`)
 	}
 }
@@ -353,36 +376,62 @@ function ensure_prepare(): void {
 }
 
 /**
- * Regenerate `postboi.gen.d.ts` from the account's current domains. Safe as a predev/CI
- * hook: always exits 0, and quietly no-ops without a token or a reachable API.
+ * Regenerate the artifacts in node_modules: the `from` types from the account's current
+ * domains, and the baked captcha key for `<Captcha />`. Safe as a predev/CI hook: always
+ * exits 0, and quietly no-ops without a token or a reachable API. The committed
+ * `postboi.config.*` is the offline source of truth for the key, so tokenless builds
+ * (CI) keep the captcha — only the `from` types need the token.
  */
 async function sync(): Promise<void> {
 	await ensure_env_loaded()
-	const token = read_env("POSTBOI_TOKEN")
-	if (!token) {
-		console.log(dim("postboi sync: no POSTBOI_TOKEN — skipping (run `bunx postboi init`)."))
-		return
-	}
 	if (!existsSync(TYPES_TARGET)) {
 		console.log(dim("postboi sync: postboi isn't installed here — install it, then re-run."))
 		return
 	}
+
+	const config_file = CONFIG_FILES.find((f) => existsSync(f))
+	const config_source = config_file ? readFileSync(config_file, "utf8") : undefined
+	const config_key = config_source ? config_captcha_key(config_source) : undefined
+	const bake = (key: string | undefined, source: string) => {
+		if (write_runtime(key)) {
+			console.log(`${green("✓")} captcha key baked for <Captcha /> ${dim(`(from ${source})`)}`)
+		}
+	}
+
+	const token = read_env("POSTBOI_TOKEN")
+	if (!token) {
+		bake(config_key, config_file ?? "config")
+		console.log(dim("postboi sync: no POSTBOI_TOKEN — skipping the generated from types."))
+		return
+	}
 	const account = await fetch_domains(cloud_base(), token)
 	if (!account) {
+		bake(config_key, config_file ?? "config")
 		console.log(yellow("postboi sync: could not fetch domains from Postboi Cloud — skipped."))
 		return
 	}
-	const file = write_types(
-		account.send_address ?? read_env("POSTBOI_FROM"),
-		account.domains,
-		account.captcha_key
-	)
+
+	const captcha_key = account.captcha_key ?? config_key
+	bake(captcha_key, account.captcha_key ? "Postboi Cloud" : (config_file ?? "config"))
+	// Keep the committed config as the tokenless source of truth for the key.
+	if (account.captcha_key && config_file && config_source && account.captcha_key !== config_key) {
+		const next = upsert_captcha_key(config_source, account.captcha_key)
+		if (next) {
+			writeFileSync(config_file, next)
+			console.log(`${green("✓")} wrote the captcha key to ${bold(config_file)} — commit it`)
+		} else {
+			console.log(
+				`${yellow("!")} add \`captcha: { key: ${JSON.stringify(account.captcha_key)} }\` to ${bold(config_file)} so tokenless builds keep the captcha`
+			)
+		}
+	}
+
+	const file = write_types(account.send_address ?? read_env("POSTBOI_FROM"), account.domains)
 	if (!file) {
 		console.log(dim("postboi sync: no sending addresses on this account yet."))
 		return
 	}
 	console.log(`${green("✓")} wrote ${bold(file)}`)
-	if (account.captcha_key) console.log(`  ${green("✓")} captcha key baked for <Captcha />`)
 	for (const d of account.domains) {
 		console.log(
 			d.status === "verified"
@@ -457,23 +506,22 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	await offer_host_push(prompts, files, values)
 	ensure_install(files)
 
-	// The committed home for defaults and hooks. A POSTBOI_TOKEN alone already routes send()
-	// to Cloud, but `provider: "postboi"` makes it explicit.
-	write_config("postboi", config_defaults, {})
+	// The committed home for defaults, hooks, and the publishable captcha key. A
+	// POSTBOI_TOKEN alone already routes send() to Cloud, but `provider: "postboi"` makes
+	// it explicit.
+	write_config("postboi", config_defaults, {}, cloud_account?.captcha_key)
 
 	// Lives inside node_modules — nothing to commit, no diffs, `bunx postboi sync` refreshes it.
-	const types_file = write_types(send_address, domains, cloud_account?.captcha_key)
+	const types_file = write_types(send_address, domains)
 	if (types_file) {
 		console.log(
 			`${green("✓")} typed ${bold("from")} to your addresses ${dim(`(generated into ${types_file})`)}`
 		)
-		if (cloud_account?.captcha_key) {
-			console.log(
-				`${green("✓")} baked your captcha key — drop ${bold("<Captcha />")} into any form`
-			)
-		}
-		ensure_prepare()
 	}
+	if (write_runtime(cloud_account?.captcha_key)) {
+		console.log(`${green("✓")} baked your captcha key — drop ${bold("<Captcha />")} into any form`)
+	}
+	if (types_file || cloud_account?.captcha_key) ensure_prepare()
 
 	console.log(`\n${green(bold("Done!"))} Just send:\n`)
 	console.log(

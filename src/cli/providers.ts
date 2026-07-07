@@ -37,18 +37,21 @@ export function render_block(name: string, entries: Record<string, string>, inde
 	return `${indent}${name}: {\n${lines.join("\n")}\n${indent}},\n`
 }
 
-/** Build a `postboi.config.ts` carrying the provider, defaults and non-secret options. */
+/** Build a `postboi.config.ts` carrying the provider, defaults, non-secret options, and
+ * the publishable captcha key (committed so tokenless CI builds can still bake it). */
 export function render_config(
 	provider: string,
 	defaults: Record<string, string>,
-	options: Record<string, string>
+	options: Record<string, string>,
+	captcha_key?: string
 ): string {
+	const captcha = captcha_key ? render_block("captcha", { key: captcha_key }) : ""
 	return `import { config } from "postboi"
 
 // Project-wide config, picked up automatically by send(). Commit this — keep secrets in env.
 export default config({
 	provider: ${JSON.stringify(provider)},
-${render_block("default", defaults)}${render_block("options", options)}	hooks: {
+${render_block("default", defaults)}${render_block("options", options)}${captcha}	hooks: {
 		// before: { send: ({ message }) => { /* mutate the message, or throw to cancel */ } },
 		// after: { send: ({ response }) => { /* log a successful send */ } },
 		// on: { error: ({ error }) => { /* report to Sentry, etc. */ } },
