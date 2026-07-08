@@ -423,7 +423,10 @@ async function sync(): Promise<void> {
 			for (const target of detect_env_targets(readdirSync("."))) {
 				if (!existsSync(target.file)) continue
 				const content = readFileSync(target.file, "utf8")
-				writeFileSync(target.file, upsert_env(content, "POSTBOI_WEBHOOK_SECRET", next, target.format))
+				writeFileSync(
+					target.file,
+					upsert_env(content, "POSTBOI_WEBHOOK_SECRET", next, target.format)
+				)
 				wrote = true
 			}
 			if (wrote) console.log(`${green("✓")} synced ${bold("POSTBOI_WEBHOOK_SECRET")}`)
