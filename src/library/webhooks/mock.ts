@@ -97,6 +97,7 @@ export async function mock_request(
 			headers: sample.headers ?? { "content-type": "application/json" },
 			body: sample.body,
 		}),
-		secret,
+		// Asymmetric schemes generate their own keypair and hand back the public key.
+		secret: sample.secret ?? secret,
 	}
 }

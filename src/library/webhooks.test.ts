@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 
 import {
 	receive,
@@ -298,5 +298,126 @@ describe("mock_event", () => {
 			url: "https://example.com/pricing",
 		})
 		expect(event.client?.name).toBe("Apple Mail")
+	})
+})
+
+describe("receive — every provider round-trips through mock_request", () => {
+	const cases: Array<[string, Array<"delivered" | "opened" | "clicked" | "bounced">]> = [
+		["postboi", ["delivered", "opened", "clicked", "bounced"]],
+		["resend", ["delivered", "opened", "clicked", "bounced"]],
+		["sendgrid", ["delivered", "opened", "clicked", "bounced"]],
+		["mailgun", ["delivered", "opened", "clicked", "bounced"]],
+		["postmark", ["delivered", "opened", "clicked", "bounced"]],
+		["brevo", ["delivered", "opened", "clicked", "bounced"]],
+		["mailersend", ["delivered", "opened", "clicked", "bounced"]],
+		// Mandrill has no delivered event — send/deferral/bounce/open/click only.
+		["mandrill", ["opened", "clicked", "bounced"]],
+		["sparkpost", ["delivered", "opened", "clicked", "bounced"]],
+		["mailjet", ["delivered", "opened", "clicked", "bounced"]],
+		["mailtrap", ["delivered", "opened", "clicked", "bounced"]],
+		["zepto", ["delivered", "opened", "clicked", "bounced"]],
+		["elasticemail", ["delivered", "opened", "clicked", "bounced"]],
+		// Plunk's documented payload is minimal — no click URL surfaced.
+		["plunk", ["delivered", "opened", "bounced"]],
+		["ses", ["delivered", "opened", "clicked", "bounced"]],
+		["scaleway", ["delivered", "bounced"]],
+	]
+
+	it.each(cases)("%s", async (provider, types) => {
+		for (const type of types) {
+			const { request, secret } = await mock_request({ provider, type })
+			const events = await receive(request, { provider: provider as never, secret })
+			expect(events.length, `${provider}/${type} events`).toBeGreaterThanOrEqual(1)
+			const event = events[0]
+			expect(event.type, `${provider}/${type} type`).toBe(type)
+			expect(event.provider).toBe(provider)
+			expect(event.email, `${provider}/${type} email`).toBe("recipient@example.com")
+			expect(event.message_id, `${provider}/${type} message_id`).toBeTruthy()
+			if (type === "clicked") {
+				expect(event.url, `${provider} clicked url`).toBe("https://example.com/pricing")
+			}
+			if (type === "bounced") {
+				expect(event.bounce?.category, `${provider} bounce category`).toBeTruthy()
+			}
+		}
+	})
+
+	// Zepto normalizes delivered/opened/clicked/bounced fine, but only if the adapter maps
+	// them; the parameterized case above covers it. MailPace needs Ed25519 — feature-gated.
+	it("mailpace (Ed25519, when the runtime supports it)", async (ctx) => {
+		try {
+			await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"])
+		} catch {
+			ctx.skip()
+			return
+		}
+		for (const type of ["delivered", "bounced"] as const) {
+			const { request, secret } = await mock_request({ provider: "mailpace", type })
+			const events = await receive(request, { provider: "mailpace", secret })
+			expect(events[0]).toMatchObject({ type, provider: "mailpace" })
+		}
+	})
+
+	it("signed providers reject a wrong secret", async () => {
+		for (const provider of ["sendgrid", "mailgun", "mailersend", "mandrill", "mailtrap"]) {
+			const { request } = await mock_request({ provider, type: "delivered" })
+			const error = await receive(request, {
+				provider: provider as never,
+				secret: "wrong-secret",
+			}).catch((e) => e)
+			expect(error, `${provider} wrong secret`).toBeInstanceOf(WebhookVerificationError)
+		}
+	})
+
+	it("shared-secret providers reject a wrong token", async () => {
+		for (const provider of ["postmark", "brevo", "mailjet", "ses", "elasticemail"]) {
+			const { request } = await mock_request({ provider, type: "delivered" })
+			const error = await receive(request, {
+				provider: provider as never,
+				secret: "not-the-token",
+			}).catch((e) => e)
+			expect(error, `${provider} wrong token`).toBeInstanceOf(WebhookVerificationError)
+			expect(error.code).toBe("invalid_signature")
+		}
+	})
+
+	it("confirms SNS subscription handshakes and returns no events", async () => {
+		const fetch_spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"))
+		try {
+			const secret = "sns-token"
+			const request = new Request(`https://example.com/webhooks?token=${secret}`, {
+				method: "POST",
+				body: JSON.stringify({
+					Type: "SubscriptionConfirmation",
+					SubscribeURL: "https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription&Token=x",
+				}),
+			})
+			const events = await receive(request, { provider: "ses", secret })
+			expect(events).toEqual([])
+			expect(fetch_spy).toHaveBeenCalledWith(
+				"https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription&Token=x"
+			)
+		} finally {
+			fetch_spy.mockRestore()
+		}
+	})
+
+	it("never confirms a subscribe URL outside amazonaws.com", async () => {
+		const fetch_spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"))
+		try {
+			const secret = "sns-token"
+			const request = new Request(`https://example.com/webhooks?token=${secret}`, {
+				method: "POST",
+				body: JSON.stringify({
+					Type: "SubscriptionConfirmation",
+					SubscribeURL: "https://evil.example.com/steal",
+				}),
+			})
+			const events = await receive(request, { provider: "ses", secret })
+			expect(events).toEqual([])
+			expect(fetch_spy).not.toHaveBeenCalled()
+		} finally {
+			fetch_spy.mockRestore()
+		}
 	})
 })

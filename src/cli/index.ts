@@ -557,8 +557,10 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 			required: field.default === undefined,
 			default: field.default,
 		})
-		if (field.secret) values[field.env] = value
-		else if (value) config_options[field.arg] = value
+		if (field.secret) {
+			// Optional secrets (default "") left blank are omitted, not written empty.
+			if (value) values[field.env] = value
+		} else if (value) config_options[field.arg] = value
 	}
 
 	// 2b. Optional default fields (committed to config, not env)

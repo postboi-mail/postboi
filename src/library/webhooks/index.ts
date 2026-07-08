@@ -116,12 +116,16 @@ export interface WebhookAdapter {
 /** A loaded adapter module: the adapter plus its mock-payload builder (for tests). */
 export interface AdapterModule {
 	default: WebhookAdapter
-	/** Build a realistic signed sample request for `mock_request`. */
+	/**
+	 * Build a realistic signed sample request for `mock_request`. Asymmetric schemes
+	 * (SendGrid ECDSA, MailPace Ed25519) generate a keypair and return the verification
+	 * key as `secret`, overriding the one passed in.
+	 */
 	mock?: (options: {
 		type: WebhookEventType
 		secret: string
 		url: string
-	}) => Promise<{ body: string; headers?: Record<string, string>; url?: string }>
+	}) => Promise<{ body: string; headers?: Record<string, string>; url?: string; secret?: string }>
 }
 
 /**
@@ -131,6 +135,21 @@ export interface AdapterModule {
 export const MODULES: Record<string, () => Promise<AdapterModule>> = {
 	postboi: () => import("./postboi.js"),
 	resend: () => import("./resend.js"),
+	sendgrid: () => import("./sendgrid.js"),
+	mailgun: () => import("./mailgun.js"),
+	postmark: () => import("./postmark.js"),
+	brevo: () => import("./brevo.js"),
+	mailersend: () => import("./mailersend.js"),
+	mandrill: () => import("./mandrill.js"),
+	sparkpost: () => import("./sparkpost.js"),
+	mailjet: () => import("./mailjet.js"),
+	mailtrap: () => import("./mailtrap.js"),
+	mailpace: () => import("./mailpace.js"),
+	zepto: () => import("./zepto.js"),
+	elasticemail: () => import("./elasticemail.js"),
+	plunk: () => import("./plunk.js"),
+	ses: () => import("./ses.js"),
+	scaleway: () => import("./scaleway.js"),
 }
 
 /** Options for {@link receive}. */

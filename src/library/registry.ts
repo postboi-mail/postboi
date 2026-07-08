@@ -37,7 +37,16 @@ export const PROVIDERS = [
 		import: "postboi/resend",
 		class: "Resend",
 		url: "https://resend.com/api-keys",
-		fields: [{ env: "RESEND_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "RESEND_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "RESEND_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook signing secret (whsec_…, optional)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "postmark",
@@ -45,7 +54,16 @@ export const PROVIDERS = [
 		import: "postboi/postmark",
 		class: "Postmark",
 		url: "https://account.postmarkapp.com/servers",
-		fields: [{ env: "POSTMARK_SERVER_TOKEN", arg: "api_key", label: "Server token", secret: true }],
+		fields: [
+			{ env: "POSTMARK_SERVER_TOKEN", arg: "api_key", label: "Server token", secret: true },
+			{
+				env: "POSTMARK_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional; also add ?token=… to the webhook URL)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "sendgrid",
@@ -53,7 +71,16 @@ export const PROVIDERS = [
 		import: "postboi/sendgrid",
 		class: "SendGrid",
 		url: "https://app.sendgrid.com/settings/api_keys",
-		fields: [{ env: "SENDGRID_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "SENDGRID_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "SENDGRID_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook verification key (public key, optional)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "mailgun",
@@ -64,6 +91,14 @@ export const PROVIDERS = [
 		fields: [
 			{ env: "MAILGUN_API_KEY", arg: "api_key", label: "API key", secret: true },
 			{ env: "MAILGUN_DOMAIN", arg: "domain", label: "Sending domain (e.g. mg.example.com)" },
+
+			{
+				env: "MAILGUN_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook signing key (optional)",
+				secret: true,
+				default: "",
+			},
 		],
 	},
 	{
@@ -72,7 +107,16 @@ export const PROVIDERS = [
 		import: "postboi/brevo",
 		class: "Brevo",
 		url: "https://app.brevo.com/settings/keys/api",
-		fields: [{ env: "BREVO_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "BREVO_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "BREVO_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional; also add ?token=… to the webhook URL)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "cloudflare",
@@ -91,7 +135,16 @@ export const PROVIDERS = [
 		import: "postboi/mailersend",
 		class: "MailerSend",
 		url: "https://app.mailersend.com/api-tokens",
-		fields: [{ env: "MAILERSEND_API_KEY", arg: "api_key", label: "API token", secret: true }],
+		fields: [
+			{ env: "MAILERSEND_API_KEY", arg: "api_key", label: "API token", secret: true },
+			{
+				env: "MAILERSEND_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook signing secret (optional)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "sparkpost",
@@ -99,7 +152,16 @@ export const PROVIDERS = [
 		import: "postboi/sparkpost",
 		class: "SparkPost",
 		url: "https://app.sparkpost.com/account/api-keys",
-		fields: [{ env: "SPARKPOST_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "SPARKPOST_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "SPARKPOST_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "mandrill",
@@ -107,7 +169,16 @@ export const PROVIDERS = [
 		import: "postboi/mandrill",
 		class: "Mandrill",
 		url: "https://mandrillapp.com/settings",
-		fields: [{ env: "MANDRILL_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "MANDRILL_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "MANDRILL_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook key (optional)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "plunk",
@@ -115,7 +186,16 @@ export const PROVIDERS = [
 		import: "postboi/plunk",
 		class: "Plunk",
 		url: "https://app.useplunk.com/settings/api",
-		fields: [{ env: "PLUNK_API_KEY", arg: "api_key", label: "Secret API key", secret: true }],
+		fields: [
+			{ env: "PLUNK_API_KEY", arg: "api_key", label: "Secret API key", secret: true },
+			{
+				env: "PLUNK_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional; also add ?token=… to the webhook URL)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "mailtrap",
@@ -123,7 +203,16 @@ export const PROVIDERS = [
 		import: "postboi/mailtrap",
 		class: "Mailtrap",
 		url: "https://mailtrap.io/api-tokens",
-		fields: [{ env: "MAILTRAP_TOKEN", arg: "api_key", label: "API token", secret: true }],
+		fields: [
+			{ env: "MAILTRAP_TOKEN", arg: "api_key", label: "API token", secret: true },
+			{
+				env: "MAILTRAP_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook signing secret (optional)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "mailpace",
@@ -131,7 +220,16 @@ export const PROVIDERS = [
 		import: "postboi/mailpace",
 		class: "MailPace",
 		url: "https://app.mailpace.com",
-		fields: [{ env: "MAILPACE_SERVER_TOKEN", arg: "api_key", label: "Server token", secret: true }],
+		fields: [
+			{ env: "MAILPACE_SERVER_TOKEN", arg: "api_key", label: "Server token", secret: true },
+			{
+				env: "MAILPACE_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook public key (optional)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "scaleway",
@@ -143,6 +241,14 @@ export const PROVIDERS = [
 			{ env: "SCALEWAY_SECRET_KEY", arg: "secret_key", label: "Secret key", secret: true },
 			{ env: "SCALEWAY_PROJECT_ID", arg: "project_id", label: "Project ID" },
 			{ env: "SCALEWAY_REGION", arg: "region", label: "Region", default: "fr-par" },
+
+			{
+				env: "SCALEWAY_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional; also add ?token=… to the webhook URL)",
+				secret: true,
+				default: "",
+			},
 		],
 	},
 	{
@@ -160,6 +266,14 @@ export const PROVIDERS = [
 				secret: true,
 			},
 			{ env: "AWS_REGION", arg: "region", label: "Region", default: "us-east-1" },
+
+			{
+				env: "SES_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "SNS webhook token (optional; also add ?token=… to the SNS endpoint URL)",
+				secret: true,
+				default: "",
+			},
 		],
 	},
 	{
@@ -202,6 +316,14 @@ export const PROVIDERS = [
 		fields: [
 			{ env: "MJ_APIKEY_PUBLIC", arg: "api_key", label: "API key", secret: true },
 			{ env: "MJ_APIKEY_PRIVATE", arg: "api_secret", label: "Secret key", secret: true },
+
+			{
+				env: "MAILJET_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional; also add ?token=… to the webhook URL)",
+				secret: true,
+				default: "",
+			},
 		],
 	},
 	{
@@ -210,7 +332,16 @@ export const PROVIDERS = [
 		import: "postboi/elasticemail",
 		class: "ElasticEmail",
 		url: "https://app.elasticemail.com/marketing/settings/new/manage-api",
-		fields: [{ env: "ELASTICEMAIL_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "ELASTICEMAIL_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "ELASTICEMAIL_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional; also add ?token=… to the notification URL)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "zepto",
@@ -218,7 +349,16 @@ export const PROVIDERS = [
 		import: "postboi/zepto",
 		class: "Postboi",
 		url: "https://www.zoho.com/zeptomail/",
-		fields: [{ env: "ZEPTO_TOKEN", arg: "api_key", label: "Send Mail token", secret: true }],
+		fields: [
+			{ env: "ZEPTO_TOKEN", arg: "api_key", label: "Send Mail token", secret: true },
+			{
+				env: "ZEPTO_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook token (optional; also add ?token=… to the webhook URL)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 ] as const satisfies ReadonlyArray<ProviderMeta>
 
