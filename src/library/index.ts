@@ -152,6 +152,14 @@ export interface SendOptions {
 	 */
 	headers?: Record<string, string>
 	/**
+	 * An HTTPS URL recipients can use to unsubscribe. Sets the RFC 8058 one-click
+	 * unsubscribe headers (`List-Unsubscribe` + `List-Unsubscribe-Post`) — required by
+	 * Gmail and Yahoo for bulk senders. Your endpoint must accept the one-click `POST`.
+	 * Rides the custom-headers plumbing, so it works on every headers-capable provider;
+	 * explicit `headers` with the same names win.
+	 */
+	unsubscribe_url?: string
+	/**
 	 * Tags / categories for analytics and filtering, forwarded to providers that support
 	 * tagging. Each provider maps them to its native concept (categories, tags, or a single
 	 * category — see the README). Ignored by providers without a tagging concept.
@@ -1157,6 +1165,16 @@ export abstract class ProviderBase<TResponse = unknown> {
 		let text = options.text
 		if (text === undefined && this.#auto_text && html) text = html_to_text(html)
 
+		// RFC 8058 one-click unsubscribe rides the custom-headers plumbing; explicit headers win.
+		let headers = options.headers
+		if (options.unsubscribe_url) {
+			headers = {
+				"List-Unsubscribe": `<${options.unsubscribe_url}>`,
+				"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+				...headers,
+			}
+		}
+
 		let scheduled_at: Date | undefined
 		if (options.scheduled_at !== undefined) {
 			scheduled_at = this.resolve_scheduled_at(options.scheduled_at)
@@ -1180,7 +1198,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 			text,
 			attachments: options.attachments,
 			idempotency_key: options.idempotency_key,
-			headers: options.headers,
+			headers,
 			tags: options.tags,
 			scheduled_at,
 			tracking: options.tracking,

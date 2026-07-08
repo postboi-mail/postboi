@@ -320,3 +320,46 @@ describe("tracking flags", () => {
 		expect(sent_json()).not.toHaveProperty("tracking")
 	})
 })
+
+describe("unsubscribe_url", () => {
+	it("sets the RFC 8058 one-click headers", async () => {
+		await new Resend({ api_key: "k", default: { from: "f@test.com" } }).send({
+			to: "a@test.com",
+			body: "<p>x</p>",
+			unsubscribe_url: "https://example.com/unsubscribe?u=1",
+		})
+		expect(sent_json().headers).toEqual({
+			"List-Unsubscribe": "<https://example.com/unsubscribe?u=1>",
+			"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+		})
+	})
+
+	it("merges under custom headers, which win on conflict", async () => {
+		await new Resend({ api_key: "k", default: { from: "f@test.com" } }).send({
+			to: "a@test.com",
+			body: "<p>x</p>",
+			unsubscribe_url: "https://example.com/unsubscribe",
+			headers: {
+				"X-Campaign": "spring",
+				"List-Unsubscribe": "<mailto:unsub@example.com>",
+			},
+		})
+		expect(sent_json().headers).toEqual({
+			"X-Campaign": "spring",
+			"List-Unsubscribe": "<mailto:unsub@example.com>",
+			"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+		})
+	})
+
+	it("maps through provider header formats (Postmark array)", async () => {
+		await new Postmark({ api_key: "k", default: { from: "f@test.com" } }).send({
+			to: "a@test.com",
+			body: "<p>x</p>",
+			unsubscribe_url: "https://example.com/u",
+		})
+		expect(sent_json().Headers).toEqual([
+			{ Name: "List-Unsubscribe", Value: "<https://example.com/u>" },
+			{ Name: "List-Unsubscribe-Post", Value: "List-Unsubscribe=One-Click" },
+		])
+	})
+})
