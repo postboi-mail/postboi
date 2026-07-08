@@ -1,0 +1,57 @@
+---
+title: Scheduling
+name: Scheduling
+description: Send later with scheduled_at — a relative duration, a Date, or an ISO 8601 string.
+category: Guides
+---
+
+Pass `scheduled_at` to send a message at a future time instead of right away.
+
+The easiest way is a **relative duration** — an object of units added to the send time. Fields
+combine, so `{ days: 1, hours: 5 }` is 29 hours from now:
+
+```typescript
+import { mail } from 'postboi'
+
+await mail({
+	to: 'contact@example.com',
+	subject: 'Your weekly digest',
+	body: '<p>Here is what you missed.</p>',
+	scheduled_at: { days: 1, hours: 5 }
+})
+```
+
+Every unit is optional: `seconds`, `minutes`, `hours`, `days`, `weeks`, `months`, `years`.
+Months and years are calendar-aware (a real "+1 month").
+
+You can also pass an absolute `Date`, or an ISO 8601 string (include an explicit timezone
+offset or `Z`, otherwise it's read as UTC):
+
+```typescript
+await mail({
+	to: 'contact@example.com',
+	subject: 'Launch day',
+	body: '<p>We are live.</p>',
+	scheduled_at: '2026-07-10T14:30:00Z'
+})
+```
+
+An invalid or unparseable `scheduled_at` throws before anything is sent.
+
+## Provider support
+
+Scheduling is done by the provider, so it only works where the provider offers it:
+
+| Provider      | How it's sent                                                        |
+| ------------- | -------------------------------------------------------------------- |
+| the Postboi provider | Up to 30 days ahead; reschedule or cancel from the dashboard — see [the Postboi provider](/provider). |
+| Resend        | Passed through as `scheduled_at`.                                    |
+| Brevo         | Passed through as `scheduledAt`.                                     |
+| Mailgun       | Sent as `o:deliverytime`.                                           |
+| SendGrid      | Sent as `send_at`.                                                  |
+
+Every other provider **ignores** `scheduled_at` and sends immediately — so don't lean on it
+with a provider that doesn't support it.
+
+Scheduling composes with [bulk sending](/bulk): give each message in the array its own
+`scheduled_at`.

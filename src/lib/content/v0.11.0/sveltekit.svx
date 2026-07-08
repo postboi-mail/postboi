@@ -1,0 +1,108 @@
+---
+title: SvelteKit
+name: SvelteKit
+description: Wire a contact form to Postboi with a one-line SvelteKit action.
+category: Frameworks
+---
+
+`postboi/kit` reads `FormData`, sends it, and returns `{ success: true }` — or
+`fail(400, { error })` on failure. A contact-form action is a single line.
+
+```typescript
+// +page.server.ts
+import { mail } from 'postboi/kit'
+
+export const actions = { default: mail }
+```
+
+## The form
+
+Point a `multipart/form-data` form at the action. Field names use the
+[`fieldset→field`](/formdata#grouped-fields) syntax to group related fields, and
+`_subject` (and friends) set the email's [special fields](/formdata#special-fields).
+
+Wire up a hidden `_reply_to` field bound to the sender's email. Then, when the
+notification lands in your inbox, hitting **Reply** goes straight back to the person who
+filled in the form — not to your no-reply `from` address.
+
+For most contact forms, a reply-to address is all you need: keep `from` as your default
+sending address and let reply-to carry the conversation. Only set a per-message `from`
+when you want the email itself to appear from a specific address.
+
+```svelte
+<!-- +page.svelte -->
+<script lang="ts">
+	import { enhance } from '$app/forms'
+
+	let email = $state('')
+</script>
+
+<form method="POST" use:enhance enctype="multipart/form-data">
+	<input type="hidden" name="_subject" value="Contact Form" />
+	<input type="hidden" name="_reply_to" value={email} />
+	<input
+		type="text"
+		name="🍯"
+		tabindex="-1"
+		autocomplete="off"
+		aria-hidden="true"
+		style="position: absolute; left: -9999px; height: 0; width: 0; opacity: 0"
+	/>
+	<input name="contact→name" placeholder="Name" required />
+	<input name="contact→email" type="email" placeholder="Email" required bind:value={email} />
+	<textarea name="details→message" placeholder="Message"></textarea>
+	<input type="file" name="details→attachments" multiple />
+	<button type="submit">Send</button>
+</form>
+```
+
+The submitted `FormData` becomes a tidy HTML table in the email body. See
+[FormData](/formdata) for how the table is built.
+
+The hidden `🍯` field is the built-in honeypot: bots fill it, humans can't see it, and a
+filled honeypot skips the send while the action still returns `{ success: true }` — the
+bot learns nothing. Want more? [Spam protection](/spam) covers the invisible captcha too —
+fully managed on the Postboi provider (one script tag, no keys), or bring your own Turnstile with
+a single env var.
+
+## Or use the Captcha component
+
+`postboi/svelte` ships that honeypot — plus the [managed invisible captcha](/spam) on
+the Postboi provider — as a single prop-free component. Your form stays a native `<form>`
+(`use:enhance` and form libraries keep working); just drop it inside:
+
+```svelte
+<script lang="ts">
+	import { enhance } from '$app/forms'
+	import Captcha from 'postboi/svelte'
+</script>
+
+<form method="POST" use:enhance enctype="multipart/form-data">
+	<!-- your fields… -->
+	<Captcha />
+	<button type="submit">Send</button>
+</form>
+```
+
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
+
+A full, runnable version of this form lives in
+[`examples/sveltekit-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit-provider-postboi).
+
+## Using a configured instance
+
+Got a configured provider instance (or no ambient env vars)? Wrap it with `action()`. You
+can pass `status` for the failure code and `fields` for defaults merged into every send.
+
+```typescript
+import Resend from 'postboi/resend'
+import { action } from 'postboi/kit'
+import { RESEND_API_KEY, EMAIL_FROM_ADDRESS } from '$env/static/private'
+
+const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: EMAIL_FROM_ADDRESS } })
+
+export const actions = {
+	default: action(mail, { status: 422, fields: { to: 'team@example.com' } })
+}
+```

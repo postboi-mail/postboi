@@ -1,0 +1,48 @@
+---
+title: Hono
+name: Hono
+description: Send email from a Hono handler with the top-level mail().
+category: Frameworks
+---
+
+Hono speaks the Web-standard `Request`/`Response`, so there's no framework magic: read the
+request's `FormData` and hand it straight to [`mail()`](/api). Postboi extracts the
+[special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
+
+```typescript
+// src/index.ts
+import { Hono } from 'hono'
+import { mail } from 'postboi'
+
+const app = new Hono()
+
+app.post('/contact', async (c) => {
+	await mail({ body: c.req.formData() })
+	return c.redirect('/?sent=1', 303)
+})
+
+export default app
+```
+
+Point a `multipart/form-data` form at `/contact`. Include hidden `_subject` and `_reply_to`
+fields, and mirror the email into `_reply_to` with a one-line `oninput` so replying reaches
+the sender:
+
+```html
+<form method="post" action="/contact" enctype="multipart/form-data">
+	<input type="hidden" name="_subject" value="Contact Form" />
+	<input type="hidden" name="_reply_to" />
+	<input name="contact→name" placeholder="Name" required />
+	<input name="contact→email" type="email" required
+		oninput="this.form._reply_to.value = this.value" />
+	<textarea name="details→message" placeholder="Message"></textarea>
+	<button type="submit">Send</button>
+</form>
+```
+
+Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The same handler
+works on any Web-standard runtime (Bun, Deno, Workers, Node with an adapter). The provider
+and default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+[the Postboi provider](/provider), or pick any [provider](/providers).
+
+**Runnable example:** [`examples/hono-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/hono-provider-postboi).
