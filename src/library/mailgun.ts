@@ -64,6 +64,7 @@ export default class Mailgun extends ProviderBase<SendResponse> {
 			for (const tag of message.tags) form.append("o:tag", tag)
 		}
 		if (message.scheduled_at) form.append("o:deliverytime", message.scheduled_at.toUTCString())
+		this.#tracking(form, message)
 
 		if (message.attachments) {
 			const files = Array.isArray(message.attachments) ? message.attachments : [message.attachments]
@@ -71,6 +72,13 @@ export default class Mailgun extends ProviderBase<SendResponse> {
 		}
 
 		return this.#request(form)
+	}
+
+	// Only the flags the user set are appended, so Mailgun's domain defaults cover the rest.
+	#tracking(form: FormData, message: PreparedMessage): void {
+		const { opens, clicks } = message.tracking ?? {}
+		if (opens !== undefined) form.append("o:tracking-opens", opens ? "yes" : "no")
+		if (clicks !== undefined) form.append("o:tracking-clicks", clicks ? "yes" : "no")
 	}
 
 	#request(form: FormData): RequestSpec {
@@ -106,6 +114,7 @@ export default class Mailgun extends ProviderBase<SendResponse> {
 		}
 		if (template.tags) for (const tag of template.tags) form.append("o:tag", tag)
 		if (template.scheduled_at) form.append("o:deliverytime", template.scheduled_at.toUTCString())
+		this.#tracking(form, template)
 
 		const vars: Record<string, RecipientVars> = {}
 		for (const r of recipients) vars[this.parse_addresses(r.to)[0].address] = r.data

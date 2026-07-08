@@ -4,6 +4,7 @@ import type {
 	ProviderError,
 	RequestSpec,
 	BatchRecipient,
+	Tracking,
 } from "./index.js"
 import { ProviderBase } from "./index.js"
 
@@ -40,6 +41,10 @@ export interface SendParams {
 	categories?: Array<string>
 	attachments?: Array<Attachment>
 	send_at?: number
+	tracking_settings?: {
+		open_tracking?: { enable: boolean }
+		click_tracking?: { enable: boolean; enable_text: boolean }
+	}
 }
 
 type SendResponse = { message_id?: string }
@@ -94,9 +99,22 @@ export default class SendGrid extends ProviderBase<SendResponse> {
 					}))
 				: undefined,
 			send_at: message.scheduled_at ? Math.floor(message.scheduled_at.getTime() / 1000) : undefined,
+			tracking_settings: this.#tracking(message.tracking),
 		}
 
 		return this.#request(params)
+	}
+
+	// Only the flags the user set are emitted, so SendGrid's own defaults cover the rest.
+	#tracking(tracking?: Tracking): SendParams["tracking_settings"] {
+		if (tracking?.opens === undefined && tracking?.clicks === undefined) return undefined
+		return {
+			open_tracking: tracking.opens === undefined ? undefined : { enable: tracking.opens },
+			click_tracking:
+				tracking.clicks === undefined
+					? undefined
+					: { enable: tracking.clicks, enable_text: tracking.clicks },
+		}
 	}
 
 	#request(params: SendParams): RequestSpec {
@@ -137,6 +155,7 @@ export default class SendGrid extends ProviderBase<SendResponse> {
 			send_at: template.scheduled_at
 				? Math.floor(template.scheduled_at.getTime() / 1000)
 				: undefined,
+			tracking_settings: this.#tracking(template.tracking),
 		}
 		return this.#request(params)
 	}

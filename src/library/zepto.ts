@@ -27,6 +27,8 @@ export interface SendParams {
 	subject: string
 	htmlbody: string
 	textbody?: string
+	track_opens?: boolean
+	track_clicks?: boolean
 }
 
 type SendResponse = {
@@ -89,6 +91,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			subject: message.subject,
 			htmlbody: message.html ?? "",
 			textbody: message.text,
+			// Only the flags the user set are emitted; ZeptoMail's Mail Agent defaults cover the rest.
+			track_opens: message.tracking?.opens,
+			track_clicks: message.tracking?.clicks,
 			attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						name: a.name,

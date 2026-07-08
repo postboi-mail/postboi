@@ -45,6 +45,8 @@ export interface SendParams {
 	tags?: Array<string>
 	attachments?: Array<Attachment>
 	scheduled_at?: string
+	/** Per-send open/click tracking overrides; the account's settings apply when omitted. */
+	tracking?: { opens?: boolean; clicks?: boolean }
 	/** Managed-captcha Turnstile token from the form, verified server-side by the API. */
 	captcha_token?: string
 	/** True when the send originated from a form submission — the only sends captcha gates. */
@@ -118,6 +120,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 					}))
 				: undefined,
 			scheduled_at: message.scheduled_at?.toISOString(),
+			tracking: message.tracking,
 			captcha_token: message.captcha?.token,
 			form: message.captcha ? true : undefined,
 		}

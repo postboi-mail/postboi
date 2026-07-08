@@ -10,6 +10,9 @@ import Mandrill from "$library/mandrill.js"
 import Mailtrap from "$library/mailtrap.js"
 import Scaleway from "$library/scaleway.js"
 import MailPace from "$library/mailpace.js"
+import Mailjet from "$library/mailjet.js"
+import ElasticEmail from "$library/elasticemail.js"
+import Zepto from "$library/zepto.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -205,5 +208,115 @@ describe("send(array) — bulk", () => {
 		const mail = new Resend({ api_key: "k", default: { from: "f@test.com" } })
 		const result = await mail.send({ to: "a@test.com", body: "x" })
 		expect(result).toEqual({ id: "single" })
+	})
+})
+
+describe("tracking flags", () => {
+	const send = { to: "a@test.com", body: "<p>x</p>" }
+
+	it("Postmark: TrackOpens and TrackLinks HtmlAndText/None", async () => {
+		const mail = () => new Postmark({ api_key: "k", default: { from: "f@test.com" } })
+		await mail().send({ ...send, tracking: { opens: true, clicks: true } })
+		expect(sent_json()).toMatchObject({ TrackOpens: true, TrackLinks: "HtmlAndText" })
+
+		await mail().send({ ...send, tracking: { clicks: false } })
+		const body = sent_json()
+		expect(body.TrackLinks).toBe("None")
+		expect(body).not.toHaveProperty("TrackOpens")
+	})
+
+	it("SendGrid: tracking_settings with only the flags that were set", async () => {
+		const mail = () => new SendGrid({ api_key: "k", default: { from: "f@test.com" } })
+		await mail().send({ ...send, tracking: { opens: true, clicks: false } })
+		expect(sent_json().tracking_settings).toEqual({
+			open_tracking: { enable: true },
+			click_tracking: { enable: false, enable_text: false },
+		})
+
+		await mail().send({ ...send, tracking: { opens: false } })
+		const settings = sent_json().tracking_settings
+		expect(settings.open_tracking).toEqual({ enable: false })
+		expect(settings).not.toHaveProperty("click_tracking")
+	})
+
+	it("Mailgun: o:tracking-opens / o:tracking-clicks form fields", async () => {
+		await new Mailgun({ api_key: "k", domain: "d.com", default: { from: "f@test.com" } }).send({
+			...send,
+			tracking: { opens: true, clicks: false },
+		})
+		const form = sent_form()
+		expect(form.get("o:tracking-opens")).toBe("yes")
+		expect(form.get("o:tracking-clicks")).toBe("no")
+	})
+
+	it("Mandrill: message.track_opens / track_clicks", async () => {
+		await new Mandrill({ api_key: "k", default: { from: "f@test.com" } }).send({
+			...send,
+			tracking: { opens: true, clicks: true },
+		})
+		expect(sent_json().message).toMatchObject({ track_opens: true, track_clicks: true })
+	})
+
+	it("SparkPost: options.open_tracking / click_tracking", async () => {
+		await new SparkPost({ api_key: "k", default: { from: "f@test.com" } }).send({
+			...send,
+			tracking: { opens: false, clicks: true },
+		})
+		expect(sent_json().options).toEqual({ open_tracking: false, click_tracking: true })
+	})
+
+	it("Mailjet: per-message TrackOpens / TrackClicks enabled/disabled", async () => {
+		fetch.mockResolvedValue(
+			respond({
+				json: {
+					Messages: [
+						{ Status: "success", To: [{ Email: "a@test.com", MessageID: 1, MessageUUID: "u" }] },
+					],
+				},
+			})
+		)
+		await new Mailjet({
+			api_key: "k",
+			api_secret: "s",
+			default: { from: "f@test.com" },
+		}).send({ ...send, tracking: { opens: true, clicks: false } })
+		expect(sent_json().Messages[0]).toMatchObject({
+			TrackOpens: "enabled",
+			TrackClicks: "disabled",
+		})
+	})
+
+	it("Elastic Email: Options.TrackOpens / TrackClicks", async () => {
+		await new ElasticEmail({ api_key: "k", default: { from: "f@test.com" } }).send({
+			...send,
+			tracking: { opens: true, clicks: true },
+		})
+		expect(sent_json().Options).toEqual({ TrackOpens: true, TrackClicks: true })
+	})
+
+	it("ZeptoMail: track_opens / track_clicks", async () => {
+		await new Zepto({ api_key: "k", default: { from: "f@test.com" } }).send({
+			...send,
+			tracking: { opens: false, clicks: false },
+		})
+		expect(sent_json()).toMatchObject({ track_opens: false, track_clicks: false })
+	})
+
+	it("emits nothing when tracking is not set", async () => {
+		await new SendGrid({ api_key: "k", default: { from: "f@test.com" } }).send(send)
+		expect(sent_json()).not.toHaveProperty("tracking_settings")
+
+		await new Postmark({ api_key: "k", default: { from: "f@test.com" } }).send(send)
+		const body = sent_json()
+		expect(body).not.toHaveProperty("TrackOpens")
+		expect(body).not.toHaveProperty("TrackLinks")
+	})
+
+	it("Resend: tracking is domain-level, flags are ignored", async () => {
+		await new Resend({ api_key: "k", default: { from: "f@test.com" } }).send({
+			...send,
+			tracking: { opens: true, clicks: true },
+		})
+		expect(sent_json()).not.toHaveProperty("tracking")
 	})
 })

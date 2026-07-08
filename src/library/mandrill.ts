@@ -38,6 +38,8 @@ export interface SendParams {
 		to: Array<Recipient>
 		headers?: Record<string, string>
 		tags?: Array<string>
+		track_opens?: boolean
+		track_clicks?: boolean
 		attachments?: Array<Attachment>
 		merge?: boolean
 		merge_language?: "mailchimp" | "handlebars"
@@ -108,6 +110,8 @@ export default class Mandrill extends ProviderBase<SendResponse> {
 				to: recipients,
 				headers: Object.keys(headers).length ? headers : undefined,
 				tags: message.tags,
+				track_opens: message.tracking?.opens,
+				track_clicks: message.tracking?.clicks,
 				attachments: message.attachments
 					? (await this.parse_attachments(message.attachments)).map((a) => ({
 							type: a.mime_type,
@@ -169,6 +173,8 @@ export default class Mandrill extends ProviderBase<SendResponse> {
 				to,
 				headers: Object.keys(headers).length ? headers : undefined,
 				tags: template.tags,
+				track_opens: template.tracking?.opens,
+				track_clicks: template.tracking?.clicks,
 				merge: true,
 				merge_language: "mailchimp",
 				merge_vars: recipients.map((r) => ({

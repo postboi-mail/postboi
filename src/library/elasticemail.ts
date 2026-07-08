@@ -31,16 +31,23 @@ interface Content {
 	Attachments?: Array<Attachment>
 }
 
+interface SendOptions {
+	TrackOpens?: boolean
+	TrackClicks?: boolean
+}
+
 /** Body for the single-send transactional endpoint (recipients split into To/CC/BCC). */
 interface TransactionalParams {
 	Recipients: { To: Array<string>; CC?: Array<string>; BCC?: Array<string> }
 	Content: Content
+	Options?: SendOptions
 }
 
 /** Body for the bulk endpoint: a flat recipient list, each with its own merge `Fields`. */
 interface BulkParams {
 	Recipients: Array<{ Email: string; Fields?: Record<string, string> }>
 	Content: Content
+	Options?: SendOptions
 }
 
 type SendResponse = { message_id: string; transaction_id: string }
@@ -90,6 +97,13 @@ export default class ElasticEmail extends ProviderBase<SendResponse> {
 		}
 	}
 
+	// Only the flags the user set are emitted, so Elastic Email's account defaults cover the rest.
+	#options(message: PreparedMessage): SendOptions | undefined {
+		const { opens, clicks } = message.tracking ?? {}
+		if (opens === undefined && clicks === undefined) return undefined
+		return { TrackOpens: opens, TrackClicks: clicks }
+	}
+
 	#request(path: string, params: TransactionalParams | BulkParams): RequestSpec {
 		return {
 			url: `https://api.elasticemail.com/v4/${path}`,
@@ -104,6 +118,7 @@ export default class ElasticEmail extends ProviderBase<SendResponse> {
 		return this.#request("emails/transactional", {
 			Recipients: { To: list(message.to)!, CC: list(message.cc), BCC: list(message.bcc) },
 			Content: await this.#content(message),
+			Options: this.#options(message),
 		})
 	}
 
@@ -121,6 +136,7 @@ export default class ElasticEmail extends ProviderBase<SendResponse> {
 				Fields: r.data,
 			})),
 			Content: await this.#content(template),
+			Options: this.#options(template),
 		})
 	}
 

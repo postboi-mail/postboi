@@ -56,6 +56,17 @@ export type FormFields = Record<string, string | Array<string>>
 export type BodyInput = string | FormData | FormFields
 
 /**
+ * Per-send open/click tracking flags for {@link SendOptions.tracking}. Leave a flag unset
+ * to keep the provider's own default for it.
+ */
+export interface Tracking {
+	/** Track opens for this message (tracking-pixel injection, where the provider supports it). */
+	opens?: boolean
+	/** Track link clicks for this message (link rewriting, where the provider supports it). */
+	clicks?: boolean
+}
+
+/**
  * A relative delay for {@link SendOptions.scheduled_at}, added to the send time. Every field is
  * optional and they combine — `{ days: 1, hours: 5 }` is 26 hours from now. Days/weeks/hours/…
  * are fixed spans; months and years are calendar-aware (a real "+1 month").
@@ -154,6 +165,14 @@ export interface SendOptions {
 	 */
 	scheduled_at?: Date | string | Duration
 	/**
+	 * Per-send open/click tracking, forwarded to providers with per-message tracking
+	 * controls (Postmark, SendGrid, Mailgun, Mandrill, SparkPost, Mailjet, Elastic Email,
+	 * ZeptoMail, the Postboi provider). Only the flags you set are forwarded, so the
+	 * provider's own defaults apply to the rest. Ignored by providers whose tracking is
+	 * account- or domain-level (e.g. Resend).
+	 */
+	tracking?: Tracking
+	/**
 	 * Per-send spam-protection overrides (see {@link CaptchaOptions}). Only applies to
 	 * FormData (or form-fields object) bodies. By default the `🍯` honeypot check is on, and
 	 * Turnstile verification runs whenever `TURNSTILE_SECRET_KEY` is set.
@@ -219,6 +238,8 @@ export interface PreparedMessage {
 	tags?: Array<string>
 	/** Normalized future delivery time; provider-format conversion happens in build_request. */
 	scheduled_at?: Date
+	/** Per-send tracking flags; provider-format conversion happens in build_request. */
+	tracking?: Tracking
 	/**
 	 * Managed-captcha forwarding. Present when the body was FormData and the provider does
 	 * managed verification (the Postboi provider): `token` is the widget's Turnstile token when one
@@ -1162,6 +1183,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 			headers: options.headers,
 			tags: options.tags,
 			scheduled_at,
+			tracking: options.tracking,
 			captcha,
 		}
 	}

@@ -31,6 +31,8 @@ export interface SendParams {
 	MessageStream: string
 	Headers?: Array<{ Name: string; Value: string }>
 	Tag?: string
+	TrackOpens?: boolean
+	TrackLinks?: "HtmlAndText" | "None"
 	Attachments?: Array<Attachment>
 }
 
@@ -77,6 +79,13 @@ export default class Postmark extends ProviderBase<SendResponse> {
 			MessageStream: this.#message_stream,
 			// Postmark supports a single Tag; use the first if several are provided.
 			Tag: message.tags?.[0],
+			TrackOpens: message.tracking?.opens,
+			TrackLinks:
+				message.tracking?.clicks === undefined
+					? undefined
+					: message.tracking.clicks
+						? "HtmlAndText"
+						: "None",
 			Headers: message.headers
 				? Object.entries(message.headers).map(([Name, Value]) => ({ Name, Value }))
 				: undefined,

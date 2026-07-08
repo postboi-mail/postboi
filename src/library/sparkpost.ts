@@ -25,6 +25,10 @@ interface Recipient {
 }
 
 export interface SendParams {
+	options?: {
+		open_tracking?: boolean
+		click_tracking?: boolean
+	}
 	content: {
 		from: { email: string; name?: string }
 		subject: string
@@ -83,6 +87,7 @@ export default class SparkPost extends ProviderBase<SendResponse> {
 		}
 
 		const params: SendParams = {
+			options: this.#tracking(message),
 			content: {
 				from: this.email_name(this.parse_email_address(message.from)),
 				subject: message.subject,
@@ -102,6 +107,16 @@ export default class SparkPost extends ProviderBase<SendResponse> {
 		}
 
 		return this.#request(params)
+	}
+
+	// Only the flags the user set are emitted, so SparkPost's account defaults cover the rest.
+	#tracking(message: PreparedMessage): SendParams["options"] {
+		const { opens, clicks } = message.tracking ?? {}
+		if (opens === undefined && clicks === undefined) return undefined
+		return {
+			open_tracking: opens,
+			click_tracking: clicks,
+		}
 	}
 
 	#request(params: SendParams): RequestSpec {
@@ -126,6 +141,7 @@ export default class SparkPost extends ProviderBase<SendResponse> {
 		const sub = (s: string | undefined) =>
 			s === undefined ? undefined : this.translate_placeholders(s, (k) => `{{${k}}}`)
 		const params: SendParams = {
+			options: this.#tracking(template),
 			content: {
 				from: this.email_name(this.parse_email_address(template.from)),
 				subject: sub(template.subject)!,

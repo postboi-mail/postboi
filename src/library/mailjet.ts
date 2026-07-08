@@ -36,6 +36,8 @@ interface Message {
 	HTMLPart?: string
 	TextPart?: string
 	Headers?: Record<string, string>
+	TrackOpens?: "account_default" | "disabled" | "enabled"
+	TrackClicks?: "account_default" | "disabled" | "enabled"
 	Attachments?: Array<Attachment>
 }
 
@@ -92,6 +94,19 @@ export default class Mailjet extends ProviderBase<SendResponse> {
 			HTMLPart: message.html,
 			TextPart: message.text,
 			Headers: message.headers,
+			// Only the flags the user set are emitted; Mailjet's account defaults cover the rest.
+			TrackOpens:
+				message.tracking?.opens === undefined
+					? undefined
+					: message.tracking.opens
+						? "enabled"
+						: "disabled",
+			TrackClicks:
+				message.tracking?.clicks === undefined
+					? undefined
+					: message.tracking.clicks
+						? "enabled"
+						: "disabled",
 			Attachments: message.attachments
 				? (await this.parse_attachments(message.attachments)).map((a) => ({
 						ContentType: a.mime_type,
