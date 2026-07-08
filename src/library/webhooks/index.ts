@@ -163,7 +163,10 @@ export interface ReceiveOptions {
 	provider?: ProviderKey | "postboi" | WebhookAdapter
 	/**
 	 * The signing secret / verification key. Defaults to the provider's
-	 * `<PROVIDER>_WEBHOOK_SECRET` environment variable.
+	 * `<PROVIDER>_WEBHOOK_SECRET` environment variable. For Svix-style providers
+	 * (the Postboi provider, Resend) this may be several whitespace- or comma-separated
+	 * secrets — any that verifies passes, so one handler can serve multiple endpoints
+	 * or ride out a secret rotation.
 	 */
 	secret?: string
 	/**

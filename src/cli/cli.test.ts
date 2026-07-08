@@ -438,6 +438,7 @@ describe("cloud domains & generated from types", () => {
 			send_address: "joe@send.postboi.email",
 			domains: [...domains, { domain: "half-baked.com", status: "pending" }],
 			captcha_key: undefined,
+			webhook_secrets: [],
 		})
 	})
 
@@ -446,6 +447,13 @@ describe("cloud domains & generated from types", () => {
 			json({ send_address: "a@b.c", domains: [], captcha_key: "pk_123" })
 		)
 		expect(account?.captcha_key).toBe("pk_123")
+	})
+
+	it("fetch_domains collects webhook secrets, dropping non-strings", async () => {
+		const account = await fetch_domains("https://x", "t", async () =>
+			json({ send_address: "a@b.c", domains: [], webhook_secrets: ["whsec_a", 5, "whsec_b"] })
+		)
+		expect(account?.webhook_secrets).toEqual(["whsec_a", "whsec_b"])
 	})
 
 	it("fetch_domains degrades to undefined on errors and unknown shapes", async () => {

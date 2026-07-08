@@ -260,6 +260,23 @@ describe("receive — postboi", () => {
 		const [event] = await receive(request, { provider: "postboi", secret })
 		expect(event.bounce).toEqual({ category: "hard", detail: "mailbox unavailable" })
 	})
+
+	it("accepts a space/comma-separated secret list — any candidate verifies", async () => {
+		const { request, secret } = await mock_request({ provider: "postboi", type: "opened" })
+		// The real secret buried among decoys, both separators in play — rotation and
+		// multiple endpoints on one handler both land here.
+		const list = `${generate_svix_secret()} ${secret},${generate_svix_secret()}`
+		const events = await receive(request, { provider: "postboi", secret: list })
+		expect(events[0].type).toBe("opened")
+	})
+
+	it("rejects when none of the listed secrets match", async () => {
+		const { request } = await mock_request({ provider: "postboi", type: "opened" })
+		const list = `${generate_svix_secret()} ${generate_svix_secret()}`
+		const error = await receive(request, { provider: "postboi", secret: list }).catch((e) => e)
+		expect(error).toBeInstanceOf(WebhookVerificationError)
+		expect(error.code).toBe("invalid_signature")
+	})
 })
 
 describe("receive — provider handling", () => {

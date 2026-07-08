@@ -127,6 +127,8 @@ export interface PostboiAccount {
 	domains: Array<PostboiDomain>
 	/** Publishable managed-captcha key (pk_…), baked into node_modules by `postboi sync`. */
 	captcha_key?: string
+	/** Every webhook endpoint's whsec_ secret — written to POSTBOI_WEBHOOK_SECRET together. */
+	webhook_secrets: Array<string>
 }
 
 /**
@@ -147,6 +149,7 @@ export async function fetch_domains(
 			send_address?: unknown
 			domains?: Array<Partial<PostboiDomain>>
 			captcha_key?: unknown
+			webhook_secrets?: unknown
 		}
 		if (!Array.isArray(data.domains)) return undefined
 		return {
@@ -158,6 +161,9 @@ export async function fetch_domains(
 					status: typeof d.status === "string" ? d.status : "pending",
 				})),
 			captcha_key: typeof data.captcha_key === "string" ? data.captcha_key : undefined,
+			webhook_secrets: Array.isArray(data.webhook_secrets)
+				? data.webhook_secrets.filter((s): s is string => typeof s === "string")
+				: [],
 		}
 	} catch {
 		return undefined

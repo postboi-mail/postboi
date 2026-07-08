@@ -413,6 +413,23 @@ async function sync(): Promise<void> {
 		return
 	}
 
+	// Keep POSTBOI_WEBHOOK_SECRET in step with the dashboard's endpoints — only touch env
+	// files that already exist (never create one from a predev hook), and only when the
+	// value actually changed, so this stays a quiet no-op on a synced project.
+	if (account.webhook_secrets.length) {
+		const next = account.webhook_secrets.join(" ")
+		if (read_env("POSTBOI_WEBHOOK_SECRET") !== next) {
+			let wrote = false
+			for (const target of detect_env_targets(readdirSync("."))) {
+				if (!existsSync(target.file)) continue
+				const content = readFileSync(target.file, "utf8")
+				writeFileSync(target.file, upsert_env(content, "POSTBOI_WEBHOOK_SECRET", next, target.format))
+				wrote = true
+			}
+			if (wrote) console.log(`${green("✓")} synced ${bold("POSTBOI_WEBHOOK_SECRET")}`)
+		}
+	}
+
 	const captcha_key = account.captcha_key ?? config_key
 	bake(captcha_key, account.captcha_key ? "the Postboi provider" : (config_file ?? "config"))
 	// Keep the committed config as the tokenless source of truth for the key.
@@ -472,6 +489,11 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	}
 
 	const values: Record<string, string> = { POSTBOI_TOKEN: token }
+
+	// Every endpoint secret in one var; receive() accepts the whole set, so webhooks are
+	// wired without the user copying a whsec_ from the dashboard. `postboi sync` refreshes it.
+	if (cloud_account?.webhook_secrets.length)
+		values.POSTBOI_WEBHOOK_SECRET = cloud_account.webhook_secrets.join(" ")
 
 	// Reject a from we know the API would bounce (from_not_allowed) and re-ask; a pending
 	// domain is accepted with a warning — it's theirs, the DNS just hasn't landed yet.

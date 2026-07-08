@@ -97,27 +97,28 @@ export async function svix_adapter_verify(
 			code: "invalid_signature",
 		})
 	}
-	const verdict = await svix_verify({
-		secret: ctx.secret,
-		id,
-		timestamp,
-		body: ctx.body,
-		signatures,
-	})
-	if (verdict === "stale_timestamp") {
+	// The secret may hold several whitespace/comma-separated candidates — one per
+	// endpoint pointed at this handler, or an old+new pair during rotation. A whsec_
+	// secret is base64 (no spaces or commas), so the split never bisects a real key.
+	// Any candidate matching is a pass; only if all fail do we report the reason.
+	const candidates = ctx.secret.split(/[\s,]+/).filter(Boolean)
+	const verdicts = await Promise.all(
+		candidates.map((secret) => svix_verify({ secret, id, timestamp, body: ctx.body, signatures }))
+	)
+	if (verdicts.includes("ok")) return
+	// The timestamp check is secret-independent, so a stale timestamp fails every candidate.
+	if (verdicts.every((verdict) => verdict === "stale_timestamp")) {
 		throw new WebhookVerificationError({
 			provider,
 			message: `${provider} webhook timestamp is outside the accepted tolerance (replay protection)`,
 			code: "stale_timestamp",
 		})
 	}
-	if (verdict !== "ok") {
-		throw new WebhookVerificationError({
-			provider,
-			message: `${provider} webhook signature did not match`,
-			code: "invalid_signature",
-		})
-	}
+	throw new WebhookVerificationError({
+		provider,
+		message: `${provider} webhook signature did not match`,
+		code: "invalid_signature",
+	})
 }
 
 /** Build the `client`/`ip` engagement fields from a raw user-agent and address. */
