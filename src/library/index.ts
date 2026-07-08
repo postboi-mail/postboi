@@ -142,8 +142,8 @@ export interface SendOptions {
 	/** Attachments to include. Accepts a single File or an array of File objects. */
 	attachments?: File | Array<File>
 	/**
-	 * Idempotency key forwarded to providers that support it (e.g. Resend), so a retried
-	 * request does not send a duplicate email.
+	 * Idempotency key forwarded to providers that support it (the Postboi provider, Resend),
+	 * so a retried request does not send a duplicate email.
 	 */
 	idempotency_key?: string
 	/**
@@ -262,7 +262,8 @@ export type RequestSpec = {
 	url: string
 	method?: string
 	headers: Record<string, string>
-	body: BodyInit
+	/** Omit for bodyless requests (GET/DELETE). */
+	body?: BodyInit
 }
 
 /** The normalized result of cancelling a scheduled email. */
@@ -975,7 +976,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 * ISO 8601 string is parsed, and a relative {@link Duration} is added to the current time
 	 * (months/years via calendar arithmetic, the rest as fixed spans).
 	 */
-	private resolve_scheduled_at(value: Date | string | Duration): Date {
+	protected resolve_scheduled_at(value: Date | string | Duration): Date {
 		if (value instanceof Date) return value
 		if (typeof value === "string") return new Date(value)
 		const date = new Date()

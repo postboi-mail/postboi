@@ -174,6 +174,146 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.form).toBeUndefined()
 		expect(body.captcha_token).toBeUndefined()
 	})
+
+	it("forwards idempotency_key as the Idempotency-Key header", async () => {
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+		await new Postboi({ token: "t" }).send({
+			to: "to@test.com",
+			body: "x",
+			idempotency_key: "order-42",
+		})
+		expect(sent_init().headers).toMatchObject({ "Idempotency-Key": "order-42" })
+	})
+
+	it("sends personalized data batches as one POST /v1/send/batch", async () => {
+		fetch.mockResolvedValue(respond({ json: { ids: ["m1", "m2"] } }))
+
+		const results = await new Postboi({ token: "t" }).send({
+			to: ["a@test.com", "b@test.com"],
+			subject: "Hey {name}",
+			body: "<p>Hi {name}</p>",
+			data: {
+				"a@test.com": { name: "Ada" },
+				"b@test.com": { name: "Linus" },
+			},
+		})
+
+		expect(fetch).toHaveBeenCalledTimes(1)
+		expect(sent_url()).toBe("https://postboi.email/v1/send/batch")
+		const body = sent_json()
+		expect(body).toHaveLength(2)
+		expect(body[0].subject).toBe("Hey Ada")
+		expect(body[1].html).toBe("<p>Hi Linus</p>")
+		expect(results).toEqual([
+			{ ok: true, index: 0, response: { id: "m1" } },
+			{ ok: true, index: 1, response: { id: "m2" } },
+		])
+	})
+})
+
+describe("the Postboi provider — account API", () => {
+	const provider = () => new Postboi({ token: "t" })
+
+	it("message() retrieves status and content", async () => {
+		fetch.mockResolvedValue(respond({ json: { id: "m1", status: "sent", open_count: 2 } }))
+		const message = await provider().message("m1")
+		expect(sent_url()).toBe("https://postboi.email/v1/messages/m1")
+		expect(sent_init().method).toBe("GET")
+		expect(sent_init().body).toBeUndefined()
+		expect(message.status).toBe("sent")
+	})
+
+	it("reschedule() PATCHes scheduled_at, resolving durations", async () => {
+		vi.useFakeTimers()
+		vi.setSystemTime(new Date("2026-07-01T00:00:00Z"))
+		fetch.mockResolvedValue(
+			respond({ json: { id: "m1", scheduled_at: "2026-07-02T00:00:00.000Z" } })
+		)
+
+		const moved = await provider().reschedule("m1", { days: 1 })
+		expect(sent_url()).toBe("https://postboi.email/v1/messages/m1")
+		expect(sent_init().method).toBe("PATCH")
+		expect(sent_json()).toEqual({ scheduled_at: "2026-07-02T00:00:00.000Z" })
+		expect(moved.scheduled_at).toBe("2026-07-02T00:00:00.000Z")
+		vi.useRealTimers()
+	})
+
+	it("lists() unwraps the lists array", async () => {
+		fetch.mockResolvedValue(respond({ json: { lists: [{ id: "l1", name: "News" }] } }))
+		const lists = await provider().lists()
+		expect(sent_url()).toBe("https://postboi.email/v1/lists")
+		expect(lists).toEqual([{ id: "l1", name: "News" }])
+	})
+
+	it("creates, renames and deletes lists", async () => {
+		fetch.mockResolvedValue(respond({ json: { id: "l1", name: "News" } }))
+		await provider().create_list("News")
+		expect(sent_url()).toBe("https://postboi.email/v1/lists")
+		expect(sent_json()).toEqual({ name: "News" })
+
+		await provider().rename_list("l1", "Newsletter")
+		expect(sent_init().method).toBe("PATCH")
+		expect(sent_json()).toEqual({ name: "Newsletter" })
+
+		await provider().delete_list("l1")
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1")
+		expect(sent_init().method).toBe("DELETE")
+	})
+
+	it("adds and removes list recipients", async () => {
+		fetch.mockResolvedValue(respond({ json: { added: 2 } }))
+		const added = await provider().add_recipients("l1", [
+			{ email: "a@test.com", name: "Ada", data: { name: "Ada" } },
+			{ email: "b@test.com" },
+		])
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1/recipients")
+		expect(sent_json()).toHaveLength(2)
+		expect(added).toEqual({ added: 2 })
+
+		await provider().remove_recipient("l1", "a+b@test.com")
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1/recipients?email=a%2Bb%40test.com")
+		expect(sent_init().method).toBe("DELETE")
+	})
+
+	it("broadcast() maps body → html and normalizes addresses", async () => {
+		fetch.mockResolvedValue(respond({ json: { ids: ["m1"], recipients: 1, scheduled_at: "now" } }))
+		await provider().broadcast("l1", {
+			from: "Ada <ada@test.com>",
+			subject: "Hey {name}",
+			body: "<p>Hi {name}</p>",
+		})
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1/send")
+		const body = sent_json()
+		expect(body.from).toEqual({ email: "ada@test.com", name: "Ada" })
+		expect(body.html).toBe("<p>Hi {name}</p>")
+		expect(body.body).toBeUndefined()
+	})
+
+	it("manages suppressions", async () => {
+		fetch.mockResolvedValue(respond({ json: { suppressions: [{ email: "x@test.com" }] } }))
+		const rows = await provider().suppressions()
+		expect(sent_url()).toBe("https://postboi.email/v1/suppressions")
+		expect(rows).toEqual([{ email: "x@test.com" }])
+
+		await provider().suppress("x@test.com")
+		expect(sent_json()).toEqual({ email: "x@test.com" })
+
+		await provider().unsuppress("x@test.com")
+		expect(sent_url()).toBe("https://postboi.email/v1/suppressions?email=x%40test.com")
+		expect(sent_init().method).toBe("DELETE")
+	})
+
+	it("normalizes API errors from account methods", async () => {
+		fetch.mockResolvedValue(
+			respond({ ok: false, status: 404, json: { message: "No message.", code: "not_found" } })
+		)
+		const error = await provider()
+			.message("missing")
+			.catch((e) => e)
+		expect(error).toBeInstanceOf(PostboiError)
+		expect(error.code).toBe("not_found")
+		expect(error.status).toBe(404)
+	})
 })
 
 describe("top-level mail() — provider-agnostic dispatch", () => {

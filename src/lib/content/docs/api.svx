@@ -25,6 +25,34 @@ mail.is_error(error: unknown): error is PostboiError
 See [Providers](/providers) for each provider's credential option names. The zero-config
 equivalents are `mail()` and `cancel()` from the package root.
 
+### Postboi provider methods
+
+[The Postboi provider](/provider) adds account methods on top of the common surface:
+
+```typescript
+import Postboi from 'postboi'
+const mail = new Postboi() // reads POSTBOI_TOKEN
+
+// messages
+await mail.message(id) // status + content — see The Postboi provider
+await mail.reschedule(id, when) // Date | ISO string | Duration — see Scheduling
+
+// lists & broadcasts — see The Postboi provider
+await mail.lists()
+await mail.create_list(name)
+await mail.list(id) // includes recipients
+await mail.rename_list(id, name)
+await mail.delete_list(id)
+await mail.add_recipients(id, { email, name?, data? } | [...])
+await mail.remove_recipient(id, email)
+await mail.broadcast(id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
+
+// suppressions — see The Postboi provider
+await mail.suppressions()
+await mail.suppress(email)
+await mail.unsuppress(email)
+```
+
 ## SendOptions
 
 ```typescript

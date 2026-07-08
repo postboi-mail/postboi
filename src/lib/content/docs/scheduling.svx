@@ -44,7 +44,7 @@ Scheduling is done by the provider, so it only works where the provider offers i
 
 | Provider      | How it's sent                                                        |
 | ------------- | -------------------------------------------------------------------- |
-| the Postboi provider | Up to 30 days ahead; reschedule or cancel from the dashboard — see [the Postboi provider](/provider). |
+| the Postboi provider | Up to 30 days ahead; reschedule with `reschedule(id, when)` or cancel, from code or the dashboard — see [the Postboi provider](/provider). |
 | Resend        | Passed through as `scheduled_at`.                                    |
 | Brevo         | Passed through as `scheduledAt`.                                     |
 | Mailgun       | Sent as `o:deliverytime`.                                           |
@@ -86,3 +86,15 @@ await cancel(id)
 Providers **without** a cancellation API reject with a `PostboiError` code
 `cancel_not_supported` — loudly, so a send you believe is cancelled never quietly goes
 out. (The `postboi/mock` provider records cancellations on `.canceled` for tests.)
+
+## Rescheduling
+
+On the Postboi provider a scheduled message can also be **moved** instead of cancelled,
+any time until it sends. `reschedule` accepts the same formats as `scheduled_at`:
+
+```typescript
+import Postboi from 'postboi'
+
+const mail = new Postboi()
+await mail.reschedule(id, { days: 2 }) // or a Date / ISO 8601 string
+```

@@ -135,6 +135,81 @@ its delivery status — bounces and complaints are tracked automatically. High b
 complaint rates pause sending to protect deliverability for everyone; the dashboard shows
 when that happens.
 
+You can also look a message up from code with the id `mail()` returned:
+
+```ts
+import Postboi from "postboi"
+
+const mail = new Postboi()
+const message = await mail.message(id)
+// { id, status: 'sent', to, subject, opened_at, open_count, … }
+```
+
+And a scheduled message can be moved (until it sends) — `reschedule` takes the same
+formats as `scheduled_at`:
+
+```ts
+await mail.reschedule(id, { days: 2 }) // or a Date / ISO 8601 string
+```
+
+## Batching & idempotency
+
+[Personalized batches](/bulk#personalized-batches) go out as **one request** to the
+batch endpoint (up to 100 recipients per call) instead of one per recipient:
+
+```ts
+await mail.send({
+	to: ["ada@example.com", "linus@example.com"],
+	subject: "Hey {name}",
+	body: "<p>Hi {name}</p>",
+	data: {
+		"ada@example.com": { name: "Ada" },
+		"linus@example.com": { name: "Linus" },
+	},
+})
+```
+
+Single sends accept an [`idempotency_key`](/errors#retries): retrying a send with the
+same key returns the original message id instead of delivering a duplicate — pair it
+with `retries` for safe automatic retry.
+
+## Lists & broadcasts
+
+The dashboard's recipient lists are available from code, so a newsletter signup can go
+straight onto a list and a broadcast can go out without leaving your app:
+
+```ts
+const { id: list_id } = await mail.create_list("Newsletter")
+
+await mail.add_recipients(list_id, [
+	{ email: "ada@example.com", name: "Ada", data: { plan: "Pro" } },
+	{ email: "linus@example.com" },
+])
+
+await mail.broadcast(list_id, {
+	subject: "Hey {name}",
+	body: "<p>News for our {plan} users…</p>",
+	scheduled_at: { hours: 1 }, // optional — omit to queue immediately
+})
+```
+
+`{key}` placeholders are filled per recipient from their `data` (plus `{name}` and
+`{email}` from the recipient row), and every broadcast automatically carries the
+one-click unsubscribe headers Gmail and Yahoo require for bulk mail. The rest of the
+surface: `lists()`, `list(id)` (with recipients), `rename_list(id, name)`,
+`delete_list(id)`, and `remove_recipient(list_id, email)`.
+
+## Suppressions
+
+Hard bounces, complaints and unsubscribes land on your account's suppression list, and
+sends to those addresses are dropped automatically. Inspect and manage it from code:
+
+```ts
+const rows = await mail.suppressions() // [{ email, reason, detail?, created_at }]
+await mail.suppress("noisy@example.com") // add by hand
+await mail.unsuppress("fixed@example.com") // allow sending again
+```
+
 ## Notes
 
 - `scheduled_at` schedules a send up to 30 days ahead. Scheduled messages appear in the
