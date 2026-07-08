@@ -29,6 +29,7 @@ TAG="v$VERSION"
 echo "▶ releasing $TAG"
 
 # --- validate (before the irreversible steps) --------------------------------
+npm run lint    # oxfmt + eslint — the tag push's CI gates on this too
 npm test
 npm run build   # prepack runs publint on the packed output
 
