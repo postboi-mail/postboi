@@ -1,0 +1,79 @@
+---
+title: Next.js
+name: Next.js
+description: Send email from a Next.js Server Action with the top-level mail().
+category: Frameworks
+---
+
+Postboi is framework-agnostic — read the request's `FormData` in a Server Action and hand it
+straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#special-fields)
+and renders the rest into a tidy HTML table.
+
+```tsx
+// app/actions.ts
+'use server'
+import { mail } from 'postboi'
+
+export async function submit(_prev: unknown, body: FormData) {
+	await mail({ body })
+	return { ok: true }
+}
+```
+
+Point a client-component form at it. Include hidden `_subject` and `_reply_to` fields, and
+mirror the visitor's email into `_reply_to` (with `useState`) so replying reaches the sender:
+
+```tsx
+// app/page.tsx
+'use client'
+import { useActionState, useState } from 'react'
+import { submit } from './actions'
+
+export default function Page() {
+	const [email, setEmail] = useState('')
+	const [state, action] = useActionState(submit, null)
+
+	return (
+		<form action={action}>
+			<input type="hidden" name="_subject" value="Contact Form" />
+			<input type="hidden" name="_reply_to" value={email} />
+			<input name="contact→name" placeholder="Name" required />
+			<input
+				name="contact→email"
+				type="email"
+				value={email}
+				onChange={(e) => setEmail(e.target.value)}
+				required
+			/>
+			<textarea name="details→message" placeholder="Message" />
+			<button type="submit">Send</button>
+		</form>
+	)
+}
+```
+
+Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The provider and
+default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+[the Postboi provider](/provider), or pick any [provider](/providers).
+
+## Or use the Captcha component
+
+`postboi/react` ships the [spam protection](/spam) — honeypot plus, on the Postboi provider,
+the managed invisible captcha — as a single prop-free component. Your form stays a
+native `<form>`; just drop it inside:
+
+```tsx
+'use client'
+import { Captcha } from 'postboi/react'
+
+<form action={action}>
+	{/* your fields… */}
+	<Captcha />
+	<button type="submit">Send</button>
+</form>
+```
+
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
+
+**Runnable example:** [`examples/nextjs-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nextjs-provider-postboi).

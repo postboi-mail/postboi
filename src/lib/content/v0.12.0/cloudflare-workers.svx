@@ -1,0 +1,44 @@
+---
+title: Cloudflare Workers
+name: Cloudflare Workers
+description: Send email from a Worker — no filesystem, so construct Postboi with the token binding.
+category: Frameworks
+---
+
+Workers have no filesystem (so no `postboi.config.ts` to auto-load) and no ambient
+`process.env`. Construct the provider explicitly with the token from the `env` binding, then
+read the request's `FormData` and hand it to `send()`. Postboi extracts the
+[special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
+
+```typescript
+// src/index.ts
+import Postboi from 'postboi'
+
+interface Env {
+	POSTBOI_TOKEN: string
+}
+
+export default {
+	async fetch(request: Request, env: Env): Promise<Response> {
+		const url = new URL(request.url)
+
+		if (request.method === 'POST' && url.pathname === '/contact') {
+			const mail = new Postboi({ token: env.POSTBOI_TOKEN })
+			await mail.send({ body: request.formData(), to: 'team@example.com' })
+			return Response.redirect(new URL('/?sent=1', url).toString(), 303)
+		}
+
+		return new Response(/* the contact form */)
+	},
+}
+```
+
+Point a `multipart/form-data` form at `/contact`. Include hidden `_subject` and `_reply_to`
+fields, and mirror the email into `_reply_to` with a one-line `oninput` so replying reaches
+the sender. Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax.
+
+Set the token as a secret (`wrangler secret put POSTBOI_TOKEN`, or `.dev.vars` for local
+dev), and turn on `nodejs_compat` in `wrangler.jsonc`. Swap the provider by constructing a
+different one — see [Providers](/providers).
+
+**Runnable example:** [`examples/cloudflare-workers-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/cloudflare-workers-provider-postboi).
