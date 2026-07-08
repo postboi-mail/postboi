@@ -1,4 +1,4 @@
-import { mail } from "postboi"
+import { mail, cancel } from "postboi"
 
 // `scheduled_at` takes a relative duration ({ days, hours, … }), a Date, or an ISO 8601
 // string. Providers that support scheduling (the Postboi provider, Resend, Brevo, Mailgun, SendGrid)
@@ -11,3 +11,8 @@ const result = await mail({
 })
 
 console.log("scheduled", result)
+
+// Plans changed? Cancel it with the id the send returned. Providers without a
+// cancellation API (most of them) reject with code "cancel_not_supported".
+const { id } = result as { id: string }
+console.log("canceled", await cancel(id))

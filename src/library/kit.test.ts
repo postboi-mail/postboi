@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { action, mail } from "$library/kit.js"
+import { action, mail, webhook } from "$library/kit.js"
 import Mock from "$library/mock.js"
 
 const fetch = vi.fn()
@@ -101,5 +101,61 @@ describe("postboi/kit action()", () => {
 		expect(result).toMatchObject({ status: 400 })
 		expect((result as { data: { error: string } }).data.error).toMatch(/postboi init/)
 		expect(fetch).not.toHaveBeenCalled()
+	})
+})
+
+describe("postboi/kit webhook()", () => {
+	const kit_event = (request: Request) => ({ request }) as never
+
+	it("verifies, normalizes and calls the handler once per event", async () => {
+		const { mock_request } = await import("$library/webhooks/index.js")
+		const { request, secret } = await mock_request({ provider: "resend", type: "opened" })
+
+		const seen: Array<string> = []
+		const handler = webhook(
+			(event) => {
+				seen.push(`${event.type}:${event.email}:${event.client?.name}`)
+			},
+			{ provider: "resend", secret }
+		)
+		const response = await handler(kit_event(request))
+
+		expect(response.status).toBe(200)
+		expect(await response.json()).toEqual({ received: 1 })
+		expect(seen).toEqual(["opened:recipient@example.com:Apple Mail"])
+	})
+
+	it("returns 401 on a bad signature so the provider knows it was rejected", async () => {
+		const { mock_request } = await import("$library/webhooks/index.js")
+		const { request } = await mock_request({ provider: "resend", type: "delivered" })
+
+		const handler = webhook(() => {}, { provider: "resend", secret: "whsec_d3JvbmchIQ==" })
+		const response = await handler(kit_event(request))
+		expect(response.status).toBe(401)
+	})
+
+	it("returns 400 on an unparseable payload", async () => {
+		const request = new Request("https://example.com/webhooks", {
+			method: "POST",
+			body: "not json",
+		})
+		const handler = webhook(() => {}, { provider: "resend", verify: false })
+		const response = await handler(kit_event(request))
+		expect(response.status).toBe(400)
+	})
+
+	it("returns 500 when the handler throws, so the provider retries", async () => {
+		const { mock_request } = await import("$library/webhooks/index.js")
+		const { request, secret } = await mock_request({ provider: "resend", type: "delivered" })
+
+		const handler = webhook(
+			() => {
+				throw new Error("database down")
+			},
+			{ provider: "resend", secret }
+		)
+		const response = await handler(kit_event(request))
+		expect(response.status).toBe(500)
+		expect(await response.json()).toEqual({ error: "database down" })
 	})
 })

@@ -88,3 +88,8 @@ native concept, and quietly ignored where unsupported:
 - **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill,
   MailPace, SES (`EmailTags`), Resend (`{name,value}` pairs). Postmark and Mailtrap use the
   **first** tag only.
+
+The same forwarded-where-supported convention applies to
+[`scheduled_at`](/scheduling), [`tracking`](/tracking) and
+[`unsubscribe_url`](/tracking#one-click-unsubscribe) — and most providers' delivery
+events can be received and normalized too, see [Webhooks](/webhooks).

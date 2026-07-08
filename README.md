@@ -22,6 +22,9 @@ Postboi is a framework-agnostic email library optimised for SvelteKit. Works wit
 - 🎯 **Grouped fields** - organize form fields with `fieldset→field` syntax
 - 📎 **Attachments** - attach files directly from form inputs or file objects
 - 🎨 **Bring your own templates** - `body` takes any HTML, and the optional `postboi/maizzle` helper renders [Maizzle](https://docs.postboi.email/templates) templates straight into it
+- 📬 **Webhooks** - receive delivery events ([delivered / opened / clicked / bounced](https://docs.postboi.email/webhooks)) normalized across providers, signatures verified — including _which client and device_ opened the mail
+- 📈 **Per-send tracking & one-click unsubscribe** - `tracking: { opens, clicks }` and `unsubscribe_url` ([RFC 8058 headers](https://docs.postboi.email/tracking)) on any provider that supports them
+- ⏰ **Schedule & cancel** - `scheduled_at` for future sends, `cancel(id)` to [call them off](https://docs.postboi.email/scheduling)
 - 🍯 **Invisible spam protection** - a zero-config [honeypot](https://docs.postboi.email/spam), plus invisible captcha — fully managed on the Postboi provider, or bring your own Turnstile key
 - 🧩 **`<Captcha />` component** - one prop-free tag inside your own form, for [Svelte, React, Vue and Astro](https://docs.postboi.email/spam#the-captcha-component) — `postboi sync` bakes in the key
 - 🛡️ **Type-safe** - full TypeScript support with normalized error handling

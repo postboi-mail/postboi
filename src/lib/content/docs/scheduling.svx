@@ -55,3 +55,34 @@ with a provider that doesn't support it.
 
 Scheduling composes with [bulk sending](/bulk): give each message in the array its own
 `scheduled_at`.
+
+## Cancelling a scheduled send
+
+Keep the id `mail()` returned and pass it to `cancel()`:
+
+```typescript
+import { mail, cancel } from 'postboi'
+
+const { id } = await mail({
+	to: 'contact@example.com',
+	subject: 'Reminder',
+	body: '<p>See you tomorrow.</p>',
+	scheduled_at: { days: 1 }
+})
+
+// Plans changed:
+await cancel(id)
+```
+
+`cancel()` resolves the same provider `mail()` uses; on a provider instance it's
+`provider.cancel(id)`.
+
+| Provider      | How it cancels                                  |
+| ------------- | ----------------------------------------------- |
+| the Postboi provider | `POST /v1/messages/:id/cancel` — also available from the dashboard. |
+| Resend        | `POST /emails/:id/cancel`.                      |
+| Brevo         | `DELETE /v3/smtp/email/:id`.                    |
+
+Providers **without** a cancellation API reject with a `PostboiError` code
+`cancel_not_supported` — loudly, so a send you believe is cancelled never quietly goes
+out. (The `postboi/mock` provider records cancellations on `.canceled` for tests.)

@@ -1,6 +1,9 @@
-import { fail, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
+import { fail, json, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
 import { mail as zero_config_mail } from "./postboi.js"
 import { is_error, is_spam, type SendOptions } from "./index.js"
+// Type-only — the webhooks module itself is loaded lazily inside the handler, so
+// action-only users never pull the adapters or crypto into their bundle.
+import type { WebhookEvent, ReceiveOptions } from "./webhooks/index.js"
 
 // Re-export the core so `import { PostboiError, is_error, ... } from "postboi/kit"` works.
 export * from "./index.js"
@@ -86,3 +89,53 @@ export function action(a?: Mailer | ActionOptions, b: ActionOptions = {}): FormA
  * It sends via whichever provider `POSTBOI_PROVIDER` names (set by `bunx postboi init`).
  */
 export const mail: FormAction = action()
+
+/**
+ * Build a SvelteKit request handler that receives provider delivery-event webhooks:
+ * verifies the signature, normalizes the payload, and calls your handler once per event.
+ *
+ * Responses are what providers expect: `200 {received}` on success, `401` on a failed
+ * signature, `400` on an unparseable payload, and `500` when your handler throws — so
+ * the provider retries. SNS subscription handshakes (SES, Scaleway) confirm themselves.
+ *
+ * @example
+ * ```ts
+ * // src/routes/webhooks/email/+server.ts
+ * import { webhook } from "postboi/kit"
+ *
+ * export const POST = webhook(async (event) => {
+ * 	if (event.type === "opened") {
+ * 		console.log(`${event.email} opened in ${event.client?.name} on ${event.client?.device}`)
+ * 	}
+ * })
+ * ```
+ */
+export function webhook(
+	handler: (event: WebhookEvent) => void | Promise<void>,
+	options?: ReceiveOptions
+): (event: RequestEvent) => Promise<Response> {
+	return async ({ request }) => {
+		const { receive, WebhookVerificationError } = await import("./webhooks/index.js")
+
+		let events: Array<WebhookEvent>
+		try {
+			events = await receive(request, options)
+		} catch (error) {
+			if (error instanceof WebhookVerificationError) {
+				return json({ error: error.message }, { status: 401 })
+			}
+			const message = is_error(error) ? error.message : String(error)
+			return json({ error: message }, { status: 400 })
+		}
+
+		try {
+			for (const event of events) await handler(event)
+		} catch (error) {
+			// A throwing handler returns 500 so the provider redelivers the event.
+			const message = error instanceof Error ? error.message : String(error)
+			return json({ error: message }, { status: 500 })
+		}
+
+		return json({ received: events.length })
+	}
+}

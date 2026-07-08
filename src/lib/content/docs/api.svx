@@ -18,10 +18,12 @@ const mail = new Resend({
 })
 
 await mail.send(options: SendOptions): Promise<SendResponse>
+await mail.cancel(id: string): Promise<{ id: string }> // scheduled sends — see Scheduling
 mail.is_error(error: unknown): error is PostboiError
 ```
 
-See [Providers](/providers) for each provider's credential option names.
+See [Providers](/providers) for each provider's credential option names. The zero-config
+equivalents are `mail()` and `cancel()` from the package root.
 
 ## SendOptions
 
@@ -45,7 +47,10 @@ interface SendOptions {
 	attachments?: File | File[]
 	idempotency_key?: string
 	headers?: Record<string, string>
+	unsubscribe_url?: string // sets RFC 8058 List-Unsubscribe headers — see Tracking & unsubscribe
 	tags?: string[]
+	scheduled_at?: Date | string | Duration // see Scheduling
+	tracking?: { opens?: boolean; clicks?: boolean } // see Tracking & unsubscribe
 	captcha?: {
 		honeypot?: string | false // honeypot field name (default "🍯"), false disables
 		turnstile?: { secret_key?: string } | boolean // default: on when TURNSTILE_SECRET_KEY is set
@@ -71,7 +76,7 @@ Every provider also accepts these, on top of its own credentials:
 	timeout?: number // per-request timeout in ms (default 30000)
 	retries?: number // retries on 429/5xx and network errors (default 0)
 	retry_delay?: number // base backoff in ms, doubles each attempt (default 500)
-	auto_text?: boolean // derive a plain-text body from the HTML (default false)
+	auto_text?: boolean // derive a plain-text body from the HTML (default true)
 	hooks?: Hooks // see Hooks
 	captcha?: CaptchaOptions // see Spam protection
 }
@@ -111,3 +116,20 @@ interface PostboiError {
 	raw: unknown // the original provider payload
 }
 ```
+
+## postboi/webhooks
+
+Receive delivery events, normalized across providers — see [Webhooks](/webhooks).
+
+```typescript
+import { receive, mock_event, mock_request, parse_user_agent } from 'postboi/webhooks'
+
+await receive(request: Request, options?: {
+	provider?: ProviderKey | WebhookAdapter // default: same resolution as mail()
+	secret?: string // default: <PROVIDER>_WEBHOOK_SECRET
+	verify?: boolean // false skips verification (explicit opt-out)
+}): Promise<WebhookEvent[]>
+```
+
+On SvelteKit, `webhook(handler, options?)` from `postboi/kit` wraps `receive` as a
+ready-made `+server.ts` request handler.

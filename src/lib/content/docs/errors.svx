@@ -29,6 +29,22 @@ try {
 }
 ```
 
+### Common codes
+
+Beyond provider-specific codes passed through on `.code`, postboi itself uses a few:
+
+| Code | Meaning |
+| ---- | ------- |
+| `skipped` / `spam` | The send was intentionally cancelled — a `before.send` hook or the [honeypot](/spam). |
+| `no_provider` / `unknown_provider` / `missing_env` | Zero-config resolution failed — see [Quick start](/quick-start). |
+| `cancel_not_supported` | [`cancel()`](/scheduling#cancelling-a-scheduled-send) on a provider without a cancellation API. |
+| `webhooks_not_supported` | [`receive()`](/webhooks) for a provider that emits no delivery events. |
+| `invalid_payload` | A webhook body that doesn't parse. |
+
+Webhook verification failures throw a `WebhookVerificationError` (a `PostboiError`
+subclass) with codes `invalid_signature`, `missing_secret`, `stale_timestamp` or
+`unsupported_runtime` — return a 401 when you catch one.
+
 ## Retries
 
 Every provider accepts `retries`, `retry_delay`, and `timeout`:
