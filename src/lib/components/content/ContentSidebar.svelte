@@ -390,9 +390,10 @@
 
 <aside class="flex h-full min-h-0 flex-col bg-background" aria-label={navigationLabel + " sidebar"}>
 	{#if showBranding}
-		<div class="mb-4 flex items-center gap-2 p-4 pb-0 lg:p-0">
+		<!-- lg:pt-2/pl-1 on top of the shell's p-4 lands the logo at 24px/20px — same spot as the app sidebar. -->
+		<div class="mb-4 flex items-center gap-2 p-4 pb-0 lg:p-0 lg:pt-2 lg:pl-1">
 			<a href={resolve("/")} class="flex items-center" aria-label={brandingConfig.name}>
-				<BrandLogo defaultRaw={logoRaw} wink={!page.error} class="[&_svg]:size-9" />
+				<BrandLogo defaultRaw={logoRaw} wink={!page.error} class="[&_svg]:size-10" />
 			</a>
 			<span
 				class="rounded-full border border-border px-2 py-0.5 text-xs font-medium tracking-normal text-foreground-muted"
