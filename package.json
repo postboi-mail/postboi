@@ -122,6 +122,10 @@
       "types": "./dist/mock.d.ts",
       "default": "./dist/mock.js"
     },
+    "./webhooks": {
+      "types": "./dist/webhooks/index.d.ts",
+      "default": "./dist/webhooks/index.js"
+    },
     "./maizzle": {
       "types": "./dist/maizzle.d.ts",
       "default": "./dist/maizzle.js"
