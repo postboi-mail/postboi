@@ -48,7 +48,7 @@ export interface PostboiConfig {
 	retries?: number
 	/** Base retry backoff in milliseconds (doubles each attempt). */
 	retry_delay?: number
-	/** Derive a plain-text body from the HTML body when `text` is omitted. */
+	/** Derive a plain-text body from the HTML body when `text` is omitted. On by default. */
 	auto_text?: boolean
 	/** Lifecycle hooks run around every send (the main reason to use a config file). */
 	hooks?: Hooks

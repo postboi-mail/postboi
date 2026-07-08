@@ -125,7 +125,8 @@ export interface SendOptions {
 	/**
 	 * Optional plain-text alternative body. When provided alongside `body`, providers
 	 * that support multipart emails will send both the HTML and plain-text versions.
-	 * If omitted and the provider is constructed with `auto_text`, one is derived from the HTML.
+	 * If omitted, one is derived from the HTML (`auto_text`, on by default — construct
+	 * the provider with `auto_text: false` to send HTML-only).
 	 */
 	text?: string
 	formatter?:
@@ -299,7 +300,11 @@ export type CommonProviderOptions = {
 	retries?: number
 	/** Base backoff delay in milliseconds between retries (doubles each attempt). Defaults to 500. */
 	retry_delay?: number
-	/** Derive a plain-text body from the HTML body when `text` is omitted. Defaults to false. */
+	/**
+	 * Derive a plain-text body from the HTML body when `text` is omitted, so every email
+	 * ships a multipart alternative — better spam scores and text-only clients. Defaults
+	 * to true; set false to send HTML-only.
+	 */
 	auto_text?: boolean
 	/** Lifecycle hooks run around every send (see {@link Hooks}). */
 	hooks?: Hooks
@@ -468,7 +473,7 @@ export abstract class ProviderBase<TResponse = unknown> {
 		this.#timeout = options.timeout ?? s.timeout ?? 30000
 		this.#retries = options.retries ?? s.retries ?? 0
 		this.#retry_delay = options.retry_delay ?? s.retry_delay ?? 500
-		this.#auto_text = options.auto_text ?? s.auto_text ?? false
+		this.#auto_text = options.auto_text ?? s.auto_text ?? true
 		this.#hooks = merge_hooks(s.hooks, options.hooks)
 		this.#captcha = { ...s.captcha, ...options.captcha }
 	}
