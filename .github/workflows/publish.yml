@@ -26,14 +26,13 @@ jobs:
         with:
           bun-version: latest
 
+      # Trusted publishing needs npm >= 11.5.1 — Node 24 bundles 11.16+, so no npm
+      # upgrade step (in-place `npm install -g npm@latest` corrupts its own install
+      # across major bumps, e.g. 11 → 12 lost sigstore and broke provenance).
       - name: Install Node
         uses: actions/setup-node@v5
         with:
           node-version: 24
-
-      # Trusted publishing needs npm >= 11.5.1
-      - name: Update npm
-        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
