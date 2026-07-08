@@ -10,6 +10,7 @@ import type {
 	Email,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
+import type { CancelResponse } from "./index.js"
 
 /** A normalized snapshot of an email captured by the mock provider. */
 export interface SentMessage {
@@ -56,6 +57,9 @@ export default class Mock extends ProviderBase<SendResponse> {
 	/** Every message captured by this instance, in send order. */
 	readonly sent: Array<SentMessage> = []
 
+	/** Ids passed to `cancel`, in call order. */
+	readonly canceled: Array<string> = []
+
 	constructor({ fail, ...options }: Options = {}) {
 		super(options)
 		this.#fail = fail ?? false
@@ -66,9 +70,19 @@ export default class Mock extends ProviderBase<SendResponse> {
 		return this.sent.at(-1)
 	}
 
-	/** Forget all captured messages. */
+	/** Forget all captured messages and cancellations. */
 	clear(): void {
 		this.sent.length = 0
+		this.canceled.length = 0
+	}
+
+	/** Record a cancellation instead of calling a provider API. */
+	async cancel(id: string): Promise<CancelResponse> {
+		if (this.#fail) {
+			throw new PostboiError({ provider: "mock", message: "Simulated failure from mock provider" })
+		}
+		this.canceled.push(id)
+		return { id }
 	}
 
 	send<const T extends ReadonlyArray<Email>>(

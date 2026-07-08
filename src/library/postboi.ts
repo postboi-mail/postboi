@@ -1,4 +1,10 @@
-import type { PreparedMessage, CommonProviderOptions, ProviderError, RequestSpec } from "./index.js"
+import type {
+	PreparedMessage,
+	CommonProviderOptions,
+	ProviderError,
+	RequestSpec,
+	CancelResponse,
+} from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 import { read_env, env_defaults } from "./env.js"
 
@@ -8,9 +14,9 @@ import "./register.js"
 // Re-export the core so `import { PostboiError, SkipSendError, ... } from "postboi"` keeps working
 // from the package root.
 export * from "./index.js"
-// The zero-config `mail()` and provider dispatch are general (not Postboi-specific) but belong
-// on the package root, so re-export them here.
-export { mail } from "./mail.js"
+// The zero-config `mail()`/`cancel()` and provider dispatch are general (not Postboi-specific)
+// but belong on the package root, so re-export them here.
+export { mail, cancel } from "./mail.js"
 
 /** Options for the Postboi provider. */
 export type PostboiOptions = CommonProviderOptions & {
@@ -80,7 +86,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	// FormData sends need no local secret key.
 	protected override readonly managed_captcha = true
 	#token: string | undefined
-	#url: string
+	#host: string
 
 	constructor({ token, base_url, ...options }: PostboiOptions = {}) {
 		// Defaults can come from the environment (POSTBOI_FROM, …); anything passed
@@ -88,10 +94,10 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		super({ ...options, default: { ...env_defaults(), ...options.default } })
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
 		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://postboi.email"
-		this.#url = `${host.replace(/\/$/, "")}/v1/send`
+		this.#host = host.replace(/\/$/, "")
 	}
 
-	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
+	#require_token(): string {
 		if (!this.#token) {
 			throw new PostboiError({
 				provider: this.provider,
@@ -100,6 +106,25 @@ export default class Postboi extends ProviderBase<SendResponse> {
 				code: "no_token",
 			})
 		}
+		return this.#token
+	}
+
+	/** Cancel a scheduled message via the Postboi API. */
+	async cancel(id: string): Promise<CancelResponse> {
+		const token = this.#require_token()
+		const response = await this.request({
+			url: `${this.#host}/v1/messages/${encodeURIComponent(id)}/cancel`,
+			headers: { Authorization: `Bearer ${token}` },
+			body: "",
+		})
+		const data = await this.read_json(response)
+		const error = this.error_for(response, data, "cancel")
+		if (error) throw error
+		return { id }
+	}
+
+	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
+		const token = this.#require_token()
 
 		const params: SendParams = {
 			from: message.from ? this.email_name(this.parse_email_address(message.from)) : undefined,
@@ -126,9 +151,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		}
 
 		return {
-			url: this.#url,
+			url: `${this.#host}/v1/send`,
 			headers: {
-				Authorization: `Bearer ${this.#token}`,
+				Authorization: `Bearer ${token}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(params),

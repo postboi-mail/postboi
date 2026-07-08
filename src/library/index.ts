@@ -264,6 +264,9 @@ export type RequestSpec = {
 	body: BodyInit
 }
 
+/** The normalized result of cancelling a scheduled email. */
+export type CancelResponse = { id: string }
+
 /** The per-message outcome of a bulk `send(messages)` call. */
 export type BatchResult<TResponse> =
 	| { ok: true; index: number; response: TResponse }
@@ -514,6 +517,22 @@ export abstract class ProviderBase<TResponse = unknown> {
 			return this.send_data_batch(options)
 		}
 		return this.with_hooks(options, (message) => this.deliver(message))
+	}
+
+	/**
+	 * Cancel a scheduled email using the id `send` returned. Supported by providers with a
+	 * cancellation API (Resend, Brevo, the Postboi provider — and the mock, which records it);
+	 * every other provider rejects with a {@link PostboiError} code `cancel_not_supported`,
+	 * loudly, so a send you believe is cancelled never quietly goes out.
+	 */
+	cancel(_id: string): Promise<CancelResponse> {
+		return Promise.reject(
+			new PostboiError({
+				provider: this.provider,
+				message: `${this.provider} cannot cancel scheduled emails`,
+				code: "cancel_not_supported",
+			})
+		)
 	}
 
 	/** Build the request, send it, and read/validate the success payload for one message. */

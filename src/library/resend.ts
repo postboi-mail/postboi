@@ -4,6 +4,7 @@ import type {
 	ProviderError,
 	RequestSpec,
 	BatchRecipient,
+	CancelResponse,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 
@@ -122,6 +123,19 @@ export default class Resend extends ProviderBase<SendResponse> {
 				ids[i] ??
 				new PostboiError({ provider: this.provider, message: "Missing batch result for recipient" })
 		)
+	}
+
+	/** Cancel a scheduled email — https://resend.com/docs/api-reference/emails/cancel-email */
+	async cancel(id: string): Promise<CancelResponse> {
+		const response = await this.request({
+			url: `https://api.resend.com/emails/${encodeURIComponent(id)}/cancel`,
+			headers: { Authorization: `Bearer ${this.#api_key}` },
+			body: "",
+		})
+		const data = await this.read_json(response)
+		const error = this.error_for(response, data, "cancel")
+		if (error) throw error
+		return { id }
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {

@@ -208,6 +208,15 @@ describe("Mock provider", () => {
 		expect(m.sent[0].to).toEqual([{ address: "keep@test.com" }])
 	})
 
+	it("records cancellations on .canceled", async () => {
+		const m = new Mock()
+		await m.cancel("mock-1")
+		await m.cancel("mock-2")
+		expect(m.canceled).toEqual(["mock-1", "mock-2"])
+		m.clear()
+		expect(m.canceled).toHaveLength(0)
+	})
+
 	it("simulates failures when constructed with fail: true", async () => {
 		const failing = new Mock({ fail: true })
 		const error = await failing

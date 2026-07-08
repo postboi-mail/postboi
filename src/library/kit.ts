@@ -4,6 +4,8 @@ import { is_error, is_spam, type SendOptions } from "./index.js"
 
 // Re-export the core so `import { PostboiError, is_error, ... } from "postboi/kit"` works.
 export * from "./index.js"
+// The zero-config `cancel()` too (`mail` here is the form action below, not the sender).
+export { cancel } from "./mail.js"
 
 /** Anything that can send — a configured provider instance, or the zero-config `mail`. */
 interface Mailer {

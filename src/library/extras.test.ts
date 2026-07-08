@@ -363,3 +363,37 @@ describe("unsubscribe_url", () => {
 		])
 	})
 })
+
+describe("cancel", () => {
+	it("Resend: POSTs the cancel endpoint and returns the id", async () => {
+		fetch.mockResolvedValue(respond({ json: { object: "email", id: "abc" } }))
+		const mail = new Resend({ api_key: "re_key", default: { from: "f@test.com" } })
+		const result = await mail.cancel("abc")
+		expect(fetch.mock.calls.at(-1)![0]).toBe("https://api.resend.com/emails/abc/cancel")
+		expect((fetch.mock.calls.at(-1)![1] as RequestInit).method).toBe("POST")
+		expect(result).toEqual({ id: "abc" })
+	})
+
+	it("Resend: throws a normalized error on failure", async () => {
+		fetch.mockResolvedValue(
+			respond({ ok: false, status: 404, json: { message: "not found", name: "not_found" } })
+		)
+		const mail = new Resend({ api_key: "re_key", default: { from: "f@test.com" } })
+		await expect(mail.cancel("missing")).rejects.toMatchObject({
+			name: "PostboiError",
+			provider: "resend",
+			code: "not_found",
+			status: 404,
+		})
+	})
+
+	it("unsupporting providers reject with cancel_not_supported", async () => {
+		const mail = new Postmark({ api_key: "k", default: { from: "f@test.com" } })
+		await expect(mail.cancel("x")).rejects.toMatchObject({
+			name: "PostboiError",
+			provider: "postmark",
+			code: "cancel_not_supported",
+		})
+		expect(fetch).not.toHaveBeenCalled()
+	})
+})

@@ -4,6 +4,7 @@ import type {
 	BatchData,
 	Email,
 	BatchResult,
+	CancelResponse,
 	ProviderBase,
 } from "./index.js"
 import { PostboiError } from "./index.js"
@@ -139,4 +140,21 @@ export async function mail(
 	const provider = await resolve_provider()
 	if (Array.isArray(options)) return provider.send(options, batch)
 	return provider.send(options as SendOptions)
+}
+
+/**
+ * Cancel a scheduled email without constructing anything — resolves the same provider
+ * `mail()` uses and calls its `cancel`. Providers without a cancellation API reject
+ * with code `cancel_not_supported`.
+ *
+ * @example
+ * ```ts
+ * import { mail, cancel } from "postboi"
+ * const { id } = await mail({ to: "a@example.com", body: "<p>Hi</p>", scheduled_at: { days: 1 } })
+ * await cancel(id)
+ * ```
+ */
+export async function cancel(id: string): Promise<CancelResponse> {
+	const provider = await resolve_provider()
+	return provider.cancel(id)
 }
