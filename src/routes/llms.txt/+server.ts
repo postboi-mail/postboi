@@ -16,10 +16,11 @@ type ContentEntry = {
 	fallbackTitle: string
 }
 
-const summary = `${siteConfig.name} is ${siteConfig.description}`
+const summary = `${siteConfig.name} — ${siteConfig.description}`
 
 const detailParagraphs = [
 	"LLM-friendly Markdown for every page is available at `/raw/<slug>`; this is the source content without navigation chrome.",
+	"The complete documentation as a single file is available at `/llms-full.txt`.",
 	"Use `/sitemap.xml` for URL discovery and `/robots.txt` for crawl guidance.",
 ]
 

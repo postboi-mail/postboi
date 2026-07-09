@@ -12,6 +12,7 @@ type SitemapEntry = {
 const staticPages: SitemapEntry[] = [
 	{ path: "/", changefreq: "weekly", priority: "1.0" },
 	{ path: "/llms.txt", changefreq: "weekly", priority: "0.4" },
+	{ path: "/llms-full.txt", changefreq: "weekly", priority: "0.4" },
 ]
 
 const buildTimestamp = new Date().toISOString()

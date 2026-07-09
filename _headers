@@ -1,0 +1,5 @@
+# Raw Markdown mirrors are for LLM/agent consumption — keep them fetchable but out of
+# search indexes so they don't compete with the HTML pages. (The +server.ts sets the
+# same header, but prerendered responses are served as static assets and lose it.)
+/raw/*
+  X-Robots-Tag: noindex

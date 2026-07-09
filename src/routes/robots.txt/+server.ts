@@ -1,9 +1,8 @@
 import type { RequestHandler } from "./$types"
 import { siteConfig } from "$lib"
-import { contentSections } from "$lib/config/navigation"
 
-const rawDisallow = contentSections.map((section) => `Disallow: /${section.id}/raw/`)
-const directives = ["User-agent: *", "Allow: /", ...rawDisallow]
+// /raw/ pages stay crawlable for AI agents; Google is kept out via X-Robots-Tag in _headers.
+const directives = ["User-agent: *", "Allow: /"]
 
 const toSitemapUrl = (origin: string) => new URL("/sitemap.xml", origin).href
 
