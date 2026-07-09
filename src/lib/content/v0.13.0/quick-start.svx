@@ -23,9 +23,6 @@ defaults, and installs `postboi` if it isn't already there.
 - **Writes everything else** — the provider, defaults, and non-secret options like a
   Mailgun domain or SES region — to a committed [`postboi.config.ts`](/config).
 - Installs `postboi` if it isn't installed yet.
-- Offers to install the **postboi agent skill** into `.claude/skills/` — a condensed
-  cheat-sheet that teaches AI coding agents the library's conventions. It ships inside
-  the package, and `postboi sync` keeps an installed copy current across upgrades.
 
 The split means the best case (Resend, Postmark, SendGrid, Brevo, …) is **a single env
 var** — the API key — with the rest in version control.

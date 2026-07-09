@@ -1,0 +1,81 @@
+---
+title: Tracking & unsubscribe
+name: Tracking & unsubscribe
+description: Per-send open/click tracking flags, and one-click unsubscribe headers Gmail and Yahoo require.
+category: Guides
+---
+
+## Open & click tracking
+
+Turn tracking on or off **per send** with `tracking` — no dashboard digging, and the same
+option whatever the provider:
+
+```typescript
+import { mail } from 'postboi'
+
+await mail({
+	to: 'contact@example.com',
+	subject: 'Your receipt',
+	body: '<p>Thanks for your order.</p>',
+	tracking: { opens: true, clicks: false }
+})
+```
+
+Only the flags you set are forwarded, so the provider's own defaults keep applying to
+anything you leave out. The resulting open/click events arrive via
+[webhooks](/webhooks) — including *which client and device* opened the mail.
+
+### Provider support
+
+| Provider | Mapped to |
+| -------- | --------- |
+| the Postboi provider | Per-send tracking override |
+| Postmark | `TrackOpens` / `TrackLinks` |
+| SendGrid | `tracking_settings` |
+| Mailgun | `o:tracking-opens` / `o:tracking-clicks` |
+| Mandrill | `track_opens` / `track_clicks` |
+| SparkPost | `options.open_tracking` / `options.click_tracking` |
+| Mailjet | `TrackOpens` / `TrackClicks` |
+| Elastic Email | `Options.TrackOpens` / `Options.TrackClicks` |
+| ZeptoMail | `track_opens` / `track_clicks` |
+
+Providers whose tracking is configured at the **domain level** (Resend) or account level
+ignore the per-send flags — configure tracking in their dashboard instead. Every other
+provider without a tracking concept ignores the flags entirely, matching how
+`scheduled_at` behaves.
+
+## One-click unsubscribe
+
+Bulk senders to Gmail and Yahoo are required to support **RFC 8058 one-click
+unsubscribe**. One option sets both headers on any headers-capable provider:
+
+```typescript
+await mail({
+	to: 'subscriber@example.com',
+	subject: 'March newsletter',
+	body: newsletter_html,
+	unsubscribe_url: 'https://example.com/unsubscribe?u=123&list=news'
+})
+```
+
+That adds:
+
+```
+List-Unsubscribe: <https://example.com/unsubscribe?u=123&list=news>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+```
+
+Your endpoint must accept the one-click `POST` (no confirmation page — mail clients POST
+it directly). If you set your own `List-Unsubscribe` header explicitly in `headers`, it
+wins over the generated one.
+
+## Plain-text bodies are automatic
+
+Every HTML send also ships a derived plain-text alternative by default (`auto_text`) —
+better spam scores, and text-only clients get something readable. Provide `text` yourself
+to control it, or opt out globally:
+
+```typescript
+// postboi.config.ts
+export default config({ auto_text: false })
+```

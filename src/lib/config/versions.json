@@ -1,6 +1,132 @@
 {
-	"latest": "0.13.0",
+	"latest": "0.14.0",
 	"archived": [
+		{
+			"version": "0.13.0",
+			"slug": "v0.13.0",
+			"nav": [
+				{
+					"slug": "getting-started",
+					"name": "Getting started",
+					"items": [
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "provider",
+							"name": "The Postboi provider"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
+					]
+				},
+				{
+					"slug": "frameworks",
+					"name": "Frameworks",
+					"items": [
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit"
+						},
+						{
+							"slug": "nextjs",
+							"name": "Next.js"
+						},
+						{
+							"slug": "astro",
+							"name": "Astro"
+						},
+						{
+							"slug": "nuxt",
+							"name": "Nuxt (Vue)"
+						},
+						{
+							"slug": "remix",
+							"name": "Remix"
+						},
+						{
+							"slug": "hono",
+							"name": "Hono"
+						},
+						{
+							"slug": "express",
+							"name": "Express"
+						},
+						{
+							"slug": "cloudflare-workers",
+							"name": "Cloudflare Workers"
+						}
+					]
+				},
+				{
+					"slug": "guides",
+					"name": "Guides",
+					"items": [
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "spam",
+							"name": "Spam protection"
+						},
+						{
+							"slug": "templates",
+							"name": "Email templates"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						},
+						{
+							"slug": "scheduling",
+							"name": "Scheduling"
+						},
+						{
+							"slug": "tracking",
+							"name": "Tracking & unsubscribe"
+						},
+						{
+							"slug": "webhooks",
+							"name": "Webhooks"
+						}
+					]
+				},
+				{
+					"slug": "reference",
+					"name": "Reference",
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
+				}
+			]
+		},
 		{
 			"version": "0.12.0",
 			"slug": "v0.12.0",
@@ -9,47 +135,121 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "provider", "name": "The Postboi provider" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "provider",
+							"name": "The Postboi provider"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "frameworks",
 					"name": "Frameworks",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit" },
-						{ "slug": "nextjs", "name": "Next.js" },
-						{ "slug": "astro", "name": "Astro" },
-						{ "slug": "nuxt", "name": "Nuxt (Vue)" },
-						{ "slug": "remix", "name": "Remix" },
-						{ "slug": "hono", "name": "Hono" },
-						{ "slug": "express", "name": "Express" },
-						{ "slug": "cloudflare-workers", "name": "Cloudflare Workers" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit"
+						},
+						{
+							"slug": "nextjs",
+							"name": "Next.js"
+						},
+						{
+							"slug": "astro",
+							"name": "Astro"
+						},
+						{
+							"slug": "nuxt",
+							"name": "Nuxt (Vue)"
+						},
+						{
+							"slug": "remix",
+							"name": "Remix"
+						},
+						{
+							"slug": "hono",
+							"name": "Hono"
+						},
+						{
+							"slug": "express",
+							"name": "Express"
+						},
+						{
+							"slug": "cloudflare-workers",
+							"name": "Cloudflare Workers"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "spam", "name": "Spam protection" },
-						{ "slug": "templates", "name": "Email templates" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" },
-						{ "slug": "scheduling", "name": "Scheduling" },
-						{ "slug": "tracking", "name": "Tracking & unsubscribe" },
-						{ "slug": "webhooks", "name": "Webhooks" }
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "spam",
+							"name": "Spam protection"
+						},
+						{
+							"slug": "templates",
+							"name": "Email templates"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						},
+						{
+							"slug": "scheduling",
+							"name": "Scheduling"
+						},
+						{
+							"slug": "tracking",
+							"name": "Tracking & unsubscribe"
+						},
+						{
+							"slug": "webhooks",
+							"name": "Webhooks"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -61,45 +261,113 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "provider", "name": "The Postboi provider" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "provider",
+							"name": "The Postboi provider"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "frameworks",
 					"name": "Frameworks",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit" },
-						{ "slug": "nextjs", "name": "Next.js" },
-						{ "slug": "astro", "name": "Astro" },
-						{ "slug": "nuxt", "name": "Nuxt (Vue)" },
-						{ "slug": "remix", "name": "Remix" },
-						{ "slug": "hono", "name": "Hono" },
-						{ "slug": "express", "name": "Express" },
-						{ "slug": "cloudflare-workers", "name": "Cloudflare Workers" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit"
+						},
+						{
+							"slug": "nextjs",
+							"name": "Next.js"
+						},
+						{
+							"slug": "astro",
+							"name": "Astro"
+						},
+						{
+							"slug": "nuxt",
+							"name": "Nuxt (Vue)"
+						},
+						{
+							"slug": "remix",
+							"name": "Remix"
+						},
+						{
+							"slug": "hono",
+							"name": "Hono"
+						},
+						{
+							"slug": "express",
+							"name": "Express"
+						},
+						{
+							"slug": "cloudflare-workers",
+							"name": "Cloudflare Workers"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "spam", "name": "Spam protection" },
-						{ "slug": "templates", "name": "Email templates" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" },
-						{ "slug": "scheduling", "name": "Scheduling" }
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "spam",
+							"name": "Spam protection"
+						},
+						{
+							"slug": "templates",
+							"name": "Email templates"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						},
+						{
+							"slug": "scheduling",
+							"name": "Scheduling"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -111,45 +379,113 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "cloud", "name": "Postboi Cloud" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "cloud",
+							"name": "Postboi Cloud"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "frameworks",
 					"name": "Frameworks",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit" },
-						{ "slug": "nextjs", "name": "Next.js" },
-						{ "slug": "astro", "name": "Astro" },
-						{ "slug": "nuxt", "name": "Nuxt (Vue)" },
-						{ "slug": "remix", "name": "Remix" },
-						{ "slug": "hono", "name": "Hono" },
-						{ "slug": "express", "name": "Express" },
-						{ "slug": "cloudflare-workers", "name": "Cloudflare Workers" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit"
+						},
+						{
+							"slug": "nextjs",
+							"name": "Next.js"
+						},
+						{
+							"slug": "astro",
+							"name": "Astro"
+						},
+						{
+							"slug": "nuxt",
+							"name": "Nuxt (Vue)"
+						},
+						{
+							"slug": "remix",
+							"name": "Remix"
+						},
+						{
+							"slug": "hono",
+							"name": "Hono"
+						},
+						{
+							"slug": "express",
+							"name": "Express"
+						},
+						{
+							"slug": "cloudflare-workers",
+							"name": "Cloudflare Workers"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "spam", "name": "Spam protection" },
-						{ "slug": "templates", "name": "Email templates" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" },
-						{ "slug": "scheduling", "name": "Scheduling" }
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "spam",
+							"name": "Spam protection"
+						},
+						{
+							"slug": "templates",
+							"name": "Email templates"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						},
+						{
+							"slug": "scheduling",
+							"name": "Scheduling"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -161,44 +497,109 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "cloud", "name": "Postboi Cloud" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "cloud",
+							"name": "Postboi Cloud"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "frameworks",
 					"name": "Frameworks",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit" },
-						{ "slug": "nextjs", "name": "Next.js" },
-						{ "slug": "astro", "name": "Astro" },
-						{ "slug": "nuxt", "name": "Nuxt (Vue)" },
-						{ "slug": "remix", "name": "Remix" },
-						{ "slug": "hono", "name": "Hono" },
-						{ "slug": "express", "name": "Express" },
-						{ "slug": "cloudflare-workers", "name": "Cloudflare Workers" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit"
+						},
+						{
+							"slug": "nextjs",
+							"name": "Next.js"
+						},
+						{
+							"slug": "astro",
+							"name": "Astro"
+						},
+						{
+							"slug": "nuxt",
+							"name": "Nuxt (Vue)"
+						},
+						{
+							"slug": "remix",
+							"name": "Remix"
+						},
+						{
+							"slug": "hono",
+							"name": "Hono"
+						},
+						{
+							"slug": "express",
+							"name": "Express"
+						},
+						{
+							"slug": "cloudflare-workers",
+							"name": "Cloudflare Workers"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "templates", "name": "Email templates" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" },
-						{ "slug": "scheduling", "name": "Scheduling" }
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "templates",
+							"name": "Email templates"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						},
+						{
+							"slug": "scheduling",
+							"name": "Scheduling"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -210,43 +611,105 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "cloud", "name": "Postboi Cloud" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "cloud",
+							"name": "Postboi Cloud"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "frameworks",
 					"name": "Frameworks",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit" },
-						{ "slug": "nextjs", "name": "Next.js" },
-						{ "slug": "astro", "name": "Astro" },
-						{ "slug": "nuxt", "name": "Nuxt (Vue)" },
-						{ "slug": "remix", "name": "Remix" },
-						{ "slug": "hono", "name": "Hono" },
-						{ "slug": "express", "name": "Express" },
-						{ "slug": "cloudflare-workers", "name": "Cloudflare Workers" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit"
+						},
+						{
+							"slug": "nextjs",
+							"name": "Next.js"
+						},
+						{
+							"slug": "astro",
+							"name": "Astro"
+						},
+						{
+							"slug": "nuxt",
+							"name": "Nuxt (Vue)"
+						},
+						{
+							"slug": "remix",
+							"name": "Remix"
+						},
+						{
+							"slug": "hono",
+							"name": "Hono"
+						},
+						{
+							"slug": "express",
+							"name": "Express"
+						},
+						{
+							"slug": "cloudflare-workers",
+							"name": "Cloudflare Workers"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" },
-						{ "slug": "scheduling", "name": "Scheduling" }
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						},
+						{
+							"slug": "scheduling",
+							"name": "Scheduling"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -258,29 +721,67 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "cloud", "name": "Postboi Cloud" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "cloud",
+							"name": "Postboi Cloud"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit form actions" },
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit form actions"
+						},
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -292,29 +793,67 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "cloud", "name": "Postboi Cloud" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "cloud",
+							"name": "Postboi Cloud"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit form actions" },
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit form actions"
+						},
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -326,29 +865,67 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "cloud", "name": "Postboi Cloud" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "cloud",
+							"name": "Postboi Cloud"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit form actions" },
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit form actions"
+						},
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -360,29 +937,67 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "cloud", "name": "Postboi Cloud" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "cloud",
+							"name": "Postboi Cloud"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit form actions" },
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit form actions"
+						},
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -394,28 +1009,63 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit form actions" },
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "config", "name": "Global config" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit form actions"
+						},
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		},
@@ -427,28 +1077,63 @@
 					"slug": "getting-started",
 					"name": "Getting started",
 					"items": [
-						{ "slug": "", "name": "Introduction" },
-						{ "slug": "quick-start", "name": "Quick start" },
-						{ "slug": "manual-setup", "name": "Manual setup" }
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
 					]
 				},
 				{
 					"slug": "guides",
 					"name": "Guides",
 					"items": [
-						{ "slug": "sveltekit", "name": "SvelteKit form actions" },
-						{ "slug": "formdata", "name": "FormData" },
-						{ "slug": "providers", "name": "Providers" },
-						{ "slug": "settings", "name": "Global settings" },
-						{ "slug": "hooks", "name": "Hooks" },
-						{ "slug": "errors", "name": "Errors & retries" },
-						{ "slug": "bulk", "name": "Bulk sending" }
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit form actions"
+						},
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "settings",
+							"name": "Global settings"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						}
 					]
 				},
 				{
 					"slug": "reference",
 					"name": "Reference",
-					"items": [{ "slug": "api", "name": "API reference" }]
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
 				}
 			]
 		}

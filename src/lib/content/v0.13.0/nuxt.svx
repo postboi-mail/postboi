@@ -1,0 +1,70 @@
+---
+title: Nuxt (Vue)
+name: Nuxt (Vue)
+description: Send email from a Nuxt server route with the top-level mail().
+category: Frameworks
+---
+
+Postboi is framework-agnostic — read the request's `FormData` in a Nitro server route and
+hand it straight to [`mail()`](/api). Postboi extracts the
+[special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
+
+```typescript
+// server/api/contact.post.ts
+import { mail } from 'postboi'
+
+export default defineEventHandler(async (event) => {
+	await mail({ body: readFormData(event) })
+	return sendRedirect(event, '/?sent=1', 303)
+})
+```
+
+`defineEventHandler`, `readFormData`, and `sendRedirect` are Nuxt auto-imports. Point a
+`multipart/form-data` form at the route. Include hidden `_subject` and `_reply_to` fields,
+and bind `_reply_to` to the email (`v-model` + `:value`) so replying reaches the sender:
+
+```vue
+<script setup lang="ts">
+const email = ref('')
+</script>
+
+<template>
+	<form method="post" action="/api/contact" enctype="multipart/form-data">
+		<input type="hidden" name="_subject" value="Contact Form" />
+		<input type="hidden" name="_reply_to" :value="email" />
+		<input name="contact→name" placeholder="Name" required />
+		<input name="contact→email" type="email" v-model="email" required />
+		<textarea name="details→message" placeholder="Message"></textarea>
+		<button type="submit">Send</button>
+	</form>
+</template>
+```
+
+Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The provider and
+default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+[the Postboi provider](/provider), or pick any [provider](/providers).
+
+## Or use the Captcha component
+
+`postboi/vue` ships the [spam protection](/spam) — honeypot plus, on the Postboi provider, the
+managed invisible captcha — as a single prop-free component. Your form stays a native
+`<form>`; just drop it inside:
+
+```vue
+<script setup>
+import { Captcha } from 'postboi/vue'
+</script>
+
+<template>
+	<form method="post" action="/api/contact" enctype="multipart/form-data">
+		<!-- your fields… -->
+		<Captcha />
+		<button type="submit">Send</button>
+	</form>
+</template>
+```
+
+The publishable key is baked in by `bunx postboi sync` — see
+[Spam protection](/spam#the-captcha-component).
+
+**Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/nuxt-provider-postboi).
