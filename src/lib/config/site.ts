@@ -46,8 +46,8 @@ export const siteConfig = {
 	ogImage: "/og-image.jpg",
 	/** External profile links used by docs actions and metadata. */
 	links: {
-		github: "https://github.com/darbymanning/postboi",
-		twitter: "https://github.com/darbymanning/postboi",
+		github: "https://github.com/postboi-mail/postboi",
+		twitter: "https://github.com/postboi-mail/postboi",
 		site: "https://postboi.email",
 	},
 	/** Package metadata used in installation snippets and docs helpers. */

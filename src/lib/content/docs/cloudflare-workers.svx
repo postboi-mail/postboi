@@ -41,4 +41,4 @@ Set the token as a secret (`wrangler secret put POSTBOI_TOKEN`, or `.dev.vars` f
 dev), and turn on `nodejs_compat` in `wrangler.jsonc`. Swap the provider by constructing a
 different one — see [Providers](/providers).
 
-**Runnable example:** [`examples/cloudflare-workers-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/cloudflare-workers-provider-postboi).
+**Runnable example:** [`examples/cloudflare-workers-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/cloudflare-workers-provider-postboi).

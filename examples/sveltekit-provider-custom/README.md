@@ -1,6 +1,6 @@
 # SvelteKit × bring-your-own provider
 
-A minimal contact form wired to [Postboi](https://github.com/darbymanning/postboi) that runs
+A minimal contact form wired to [Postboi](https://github.com/postboi-mail/postboi) that runs
 on **any** of the [~20 supported providers](https://docs.postboi.email/providers) — Resend,
 Postmark, SendGrid, Mailgun, SES, SMTP, and the rest.
 

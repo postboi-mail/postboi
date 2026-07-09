@@ -1,6 +1,6 @@
 # Postboi examples
 
-Runnable examples for [Postboi](https://github.com/darbymanning/postboi).
+Runnable examples for [Postboi](https://github.com/postboi-mail/postboi).
 
 The framework apps all do the same thing — a `multipart/form-data` contact form whose
 submission becomes a tidy HTML email, with reply-to set to the sender's email so hitting

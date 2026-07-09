@@ -11,7 +11,7 @@ The library release is scripted. The docs snapshot is a short manual step becaus
 
 - A **trusted publisher** configured on npmjs.com so the Publish workflow can
   publish without a token: package settings for `postboi` → _Trusted Publisher_
-  → GitHub Actions, with organization/user `darbymanning`, repository
+  → GitHub Actions, with organization/user `postboi-mail`, repository
   `postboi`, and workflow filename `publish.yml`.
 
 No local `npm login` or `gh auth login` needed — publishing and the GitHub
@@ -93,7 +93,7 @@ both the tag and the release itself.
 
 ### C. Verify
 
-- The [Publish run](https://github.com/darbymanning/postboi/actions/workflows/publish.yml) is green.
+- The [Publish run](https://github.com/postboi-mail/postboi/actions/workflows/publish.yml) is green.
 - `npm view postboi version` shows `X.Y.Z`.
 - The GitHub release exists at `vX.Y.Z`.
 - The docs site shows the new version as latest and archived versions still load.

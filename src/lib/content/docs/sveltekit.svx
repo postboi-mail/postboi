@@ -88,7 +88,7 @@ The publishable key is baked in by `bunx postboi sync` — see
 [Spam protection](/spam#the-captcha-component).
 
 A full, runnable version of this form lives in
-[`examples/sveltekit-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/sveltekit-provider-postboi).
+[`examples/sveltekit-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi).
 
 ## Using a configured instance
 

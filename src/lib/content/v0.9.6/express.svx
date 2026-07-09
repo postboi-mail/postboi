@@ -37,4 +37,4 @@ and parse it with a multipart parser like [`multer`](https://github.com/expressj
 The provider and default recipient come from [`postboi.config.js`](/config) — a
 `POSTBOI_TOKEN` routes to [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
-**Runnable example:** [`examples/express-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/express-provider-postboi).
+**Runnable example:** [`examples/express-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/express-provider-postboi).

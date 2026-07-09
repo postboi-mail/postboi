@@ -67,4 +67,4 @@ import { Captcha } from 'postboi/react'
 The publishable key is baked in by `bunx postboi sync` — see
 [Spam protection](/spam#the-captcha-component).
 
-**Runnable example:** [`examples/remix-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/remix-provider-postboi).
+**Runnable example:** [`examples/remix-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/remix-provider-postboi).

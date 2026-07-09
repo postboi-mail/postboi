@@ -43,5 +43,5 @@ git push origin main
 git push origin "$TAG"
 
 echo "✓ tagged $TAG — the Publish workflow is publishing postboi@$VERSION and creating the GitHub release"
-echo "  watch it: https://github.com/darbymanning/postboi/actions/workflows/publish.yml"
+echo "  watch it: https://github.com/postboi-mail/postboi/actions/workflows/publish.yml"
 echo "  next: snapshot the docs for the outgoing version (see RELEASING.md)"

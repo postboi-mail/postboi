@@ -62,4 +62,4 @@ import Captcha from 'postboi/astro'
 The publishable key is baked in by `bunx postboi sync` — see
 [Spam protection](/spam#the-captcha-component).
 
-**Runnable example:** [`examples/astro-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/astro-provider-postboi).
+**Runnable example:** [`examples/astro-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/astro-provider-postboi).

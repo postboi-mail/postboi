@@ -45,4 +45,4 @@ works on any Web-standard runtime (Bun, Deno, Workers, Node with an adapter). Th
 and default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
 [Postboi Cloud](/cloud), or pick any [provider](/providers).
 
-**Runnable example:** [`examples/hono-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/hono-provider-postboi).
+**Runnable example:** [`examples/hono-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/hono-provider-postboi).

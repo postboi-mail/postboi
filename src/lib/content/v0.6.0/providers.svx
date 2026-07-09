@@ -32,7 +32,7 @@ calling code.
 | ZeptoMail      | `postboi/zepto`      | `api_key`                            |
 | Mock (testing) | `postboi/mock`       | _none_                               |
 
-Want another provider? Quit being a baby and [open a PR](https://github.com/darbymanning/postboi).
+Want another provider? Quit being a baby and [open a PR](https://github.com/postboi-mail/postboi).
 
 ## Using a provider directly
 

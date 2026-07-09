@@ -1,9 +1,9 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/darbymanning/postboi/refs/heads/main/static/logo.svg" alt="Postboi" width="250" />
+  <img src="https://raw.githubusercontent.com/postboi-mail/postboi/refs/heads/main/static/logo.svg" alt="Postboi" width="250" />
 
 **I got ninety-nine problems, but mail ain't one**
 
-[![CI](https://github.com/darbymanning/postboi/actions/workflows/ci.yml/badge.svg)](https://github.com/darbymanning/postboi/actions/workflows/ci.yml)
+[![CI](https://github.com/postboi-mail/postboi/actions/workflows/ci.yml/badge.svg)](https://github.com/postboi-mail/postboi/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/postboi)](https://www.npmjs.com/package/postboi)
 
 </div>

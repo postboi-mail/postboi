@@ -1,6 +1,6 @@
 # SvelteKit × Postboi
 
-A minimal contact form wired to [Postboi](https://github.com/darbymanning/postboi), running
+A minimal contact form wired to [Postboi](https://github.com/postboi-mail/postboi), running
 on [the Postboi provider](https://postboi.email) so it can also show off the **typed `from`**.
 
 It demonstrates the two ways to send:

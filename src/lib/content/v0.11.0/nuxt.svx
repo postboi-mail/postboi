@@ -67,4 +67,4 @@ import { Captcha } from 'postboi/vue'
 The publishable key is baked in by `bunx postboi sync` — see
 [Spam protection](/spam#the-captcha-component).
 
-**Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/darbymanning/postboi/tree/main/examples/nuxt-provider-postboi).
+**Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/nuxt-provider-postboi).
