@@ -72,8 +72,14 @@ Two invisible layers, automatic on every FormData send. Easiest: drop the prop-f
 Manual honeypot — a visually hidden input named `🍯` (default name; **don't** use `display: none`, bots detect it):
 
 ```html
-<input type="text" name="🍯" tabindex="-1" autocomplete="off" aria-hidden="true"
-	style="position: absolute; left: -9999px; height: 0; width: 0; opacity: 0" />
+<input
+	type="text"
+	name="🍯"
+	tabindex="-1"
+	autocomplete="off"
+	aria-hidden="true"
+	style="position: absolute; left: -9999px; height: 0; width: 0; opacity: 0"
+/>
 ```
 
 A filled honeypot skips the send: `postboi/kit` still returns `{ success: true }` (bot learns nothing); direct `mail()` throws a `SpamError` — catch with `is_spam(error)` and pretend success. Bring-your-own Cloudflare Turnstile: set `TURNSTILE_SECRET_KEY` and add the widget; note that setting the secret **enforces** the captcha on every FormData send (opt a send out with `captcha: { turnstile: false }`). Details: `/raw/spam`.
@@ -123,13 +129,13 @@ No filesystem, no ambient env — so `postboi.config.ts` can't auto-load. Either
 
 ## Quick reference
 
-| Task | Import |
-| --- | --- |
-| Zero-config send / cancel | `mail`, `cancel` from `postboi` |
-| Explicit provider | `postboi/resend`, `postboi/ses`, `postboi/smtp`, … (`/raw/providers` for all 20 + env var names) |
-| SvelteKit action & webhook handler | `mail`, `action`, `webhook` from `postboi/kit` |
-| Webhooks anywhere | `receive`, `mock_event`, `mock_request` from `postboi/webhooks` |
-| Captcha component | `postboi/svelte`, `postboi/react`, `postboi/vue`, `postboi/astro` |
-| Maizzle templates | `postboi/maizzle` |
-| Tests | `postboi/mock` |
-| Spam helpers | `is_spam`, `SkipSendError` from `postboi` |
+| Task                               | Import                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Zero-config send / cancel          | `mail`, `cancel` from `postboi`                                                                  |
+| Explicit provider                  | `postboi/resend`, `postboi/ses`, `postboi/smtp`, … (`/raw/providers` for all 20 + env var names) |
+| SvelteKit action & webhook handler | `mail`, `action`, `webhook` from `postboi/kit`                                                   |
+| Webhooks anywhere                  | `receive`, `mock_event`, `mock_request` from `postboi/webhooks`                                  |
+| Captcha component                  | `postboi/svelte`, `postboi/react`, `postboi/vue`, `postboi/astro`                                |
+| Maizzle templates                  | `postboi/maizzle`                                                                                |
+| Tests                              | `postboi/mock`                                                                                   |
+| Spam helpers                       | `is_spam`, `SkipSendError` from `postboi`                                                        |

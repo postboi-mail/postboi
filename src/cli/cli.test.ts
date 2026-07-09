@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { Readable, Writable } from "node:stream"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import {
 	PROVIDERS,
 	DEFAULT_FIELDS,
@@ -31,6 +34,7 @@ import {
 	upsert_captcha_key,
 	from_status,
 } from "./typegen.js"
+import { bundled_skill, offer_skill, refresh_skill } from "./skill.js"
 
 describe("provider registry", () => {
 	it("lists the configurable providers with complete metadata", () => {
@@ -531,5 +535,51 @@ describe("cloud domains & generated from types", () => {
 			level: "unknown",
 			domain: "send.postboi.email",
 		})
+	})
+})
+
+describe("agent skill", () => {
+	const prompter = (lines: Array<string>) =>
+		create_prompts({
+			input: Readable.from(lines.map((l) => `${l}\n`)),
+			output: new Writable({ write: (_chunk, _enc, cb) => cb() }),
+		})
+	const target = () => join(mkdtempSync(join(tmpdir(), "postboi-skill-")), "SKILL.md")
+
+	it("ships inside the package", () => {
+		expect(bundled_skill()).toContain("name: postboi")
+	})
+
+	it("installs on confirm (default yes)", async () => {
+		const t = target()
+		const p = prompter([""])
+		await offer_skill(p, t)
+		p.close()
+		expect(readFileSync(t, "utf8")).toBe(bundled_skill())
+	})
+
+	it("writes nothing on decline", async () => {
+		const t = target()
+		const p = prompter(["n"])
+		await offer_skill(p, t)
+		p.close()
+		expect(existsSync(t)).toBe(false)
+	})
+
+	it("refreshes a stale copy without prompting", async () => {
+		const t = target()
+		writeFileSync(t, "old skill")
+		const p = prompter([]) // EOF — a prompt here would throw PromptCancelledError
+		await offer_skill(p, t)
+		p.close()
+		expect(readFileSync(t, "utf8")).toBe(bundled_skill())
+	})
+
+	it("refresh_skill never creates the file, and no-ops when current", () => {
+		const t = target()
+		expect(refresh_skill(t)).toBe(false)
+		expect(existsSync(t)).toBe(false)
+		writeFileSync(t, bundled_skill()!)
+		expect(refresh_skill(t)).toBe(false)
 	})
 })

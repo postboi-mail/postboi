@@ -54,6 +54,7 @@ import {
 	upsert_captcha_key,
 	TYPES_TARGET,
 } from "./typegen.js"
+import { offer_skill, refresh_skill } from "./skill.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 
 const CONFIG_FILES = [
@@ -388,6 +389,7 @@ async function sync(): Promise<void> {
 		console.log(dim("postboi sync: postboi isn't installed here — install it, then re-run."))
 		return
 	}
+	refresh_skill()
 
 	const config_file = CONFIG_FILES.find((f) => existsSync(f))
 	const config_source = config_file ? readFileSync(config_file, "utf8") : undefined
@@ -550,6 +552,8 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	}
 	if (types_file || cloud_account?.captcha_key) ensure_prepare()
 
+	await offer_skill(prompts)
+
 	console.log(`\n${green(bold("Done!"))} Just send:\n`)
 	console.log(
 		dim('import { mail } from "postboi"\n\nawait mail({ to: "…", subject: "…", body: "…" })') + "\n"
@@ -602,6 +606,9 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 
 	// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
 	write_config(provider.key, config_defaults, config_options)
+
+	// 7c. Offer the bundled agent skill
+	await offer_skill(prompts)
 
 	// 8. Done — show how to use it
 	console.log(`\n${green(bold("Done!"))} Now just send — no setup, no instance:\n`)
