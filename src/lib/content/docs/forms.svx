@@ -83,6 +83,13 @@ Endpoints are also rate-limited per form — 10 submissions a minute, 500 a day 
 of your plan's limits, so a bot can't drain your quota (or your overage bill) through a
 public URL.
 
+## Open & click tracking
+
+Tick **Track opens & clicks** on a form and its notification emails opt into
+[engagement tracking](/tracking): opens and link clicks show up on the message in your
+log, exactly like a tracked API send. Left unticked, the form follows your account's
+tracking default.
+
 ## Posting with fetch
 
 Prefer to stay on the page? Ask for JSON and you get `{ ok: true }` instead of a redirect

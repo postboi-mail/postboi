@@ -126,6 +126,13 @@ const versionScopedLinks = () => (tree, file) => {
 	visit(tree)
 }
 
+// Brand accents (see BRANDING notes in CLAUDE.md): attribute names highlight in the hero
+// yellow on dark; light mode uses the brand orange — the yellow is too pale on light.
+const brand = {
+	yellow: "#fdc005",
+	orange: "#f47600", // oklch(0.7 0.19 55), the light-mode accent
+}
+
 // A Shiki port of Aura Soft Dark (https://github.com/daltonmenezes/aura-theme) — the Aura
 // palette mapped onto TextMate scopes. Used for code blocks in both light and dark mode.
 const aura = {
@@ -211,7 +218,7 @@ const auraSoftDark = {
 			scope: ["entity.name.tag", "punctuation.definition.tag", "meta.tag"],
 			settings: { foreground: aura.purple },
 		},
-		{ scope: ["entity.other.attribute-name"], settings: { foreground: aura.green } },
+		{ scope: ["entity.other.attribute-name"], settings: { foreground: brand.yellow } },
 		{
 			scope: ["support.type.property-name", "meta.object-literal.key", "variable.other.property"],
 			settings: { foreground: aura.fg },
@@ -313,7 +320,7 @@ const ayuLight = {
 			scope: ["entity.name.tag", "punctuation.definition.tag", "meta.tag"],
 			settings: { foreground: ayu.cyan },
 		},
-		{ scope: ["entity.other.attribute-name"], settings: { foreground: ayu.gold } },
+		{ scope: ["entity.other.attribute-name"], settings: { foreground: brand.orange } },
 		{
 			scope: ["support.type.property-name", "meta.object-literal.key", "variable.other.property"],
 			settings: { foreground: ayu.fg },
