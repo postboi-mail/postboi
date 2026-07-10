@@ -68,6 +68,7 @@ export const contentSections: ContentSectionConfig[] = [
 				name: "Guides",
 				items: [
 					{ slug: "formdata", name: "FormData" },
+					{ slug: "forms", name: "Hosted forms" },
 					{ slug: "spam", name: "Spam protection" },
 					{ slug: "templates", name: "Email templates" },
 					{ slug: "providers", name: "Providers" },

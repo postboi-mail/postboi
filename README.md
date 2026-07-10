@@ -21,6 +21,7 @@ Postboi is a framework-agnostic email library optimised for SvelteKit. Works wit
 - 📝 **Smart FormData parsing** - automatically converts FormData to HTML tables
 - 🎯 **Grouped fields** - organize form fields with `fieldset→field` syntax
 - 📎 **Attachments** - attach files directly from form inputs or file objects
+- 📮 **Hosted forms** - no backend? point any HTML form at a [hosted endpoint](https://docs.postboi.email/forms) and submissions land in your inbox, spam-checked
 - 🎨 **Bring your own templates** - `body` takes any HTML, and the optional `postboi/maizzle` helper renders [Maizzle](https://docs.postboi.email/templates) templates straight into it
 - 📬 **Webhooks** - receive delivery events ([delivered / opened / clicked / bounced](https://docs.postboi.email/webhooks)) normalized across providers, signatures verified — including _which client and device_ opened the mail
 - 📈 **Per-send tracking & one-click unsubscribe** - `tracking: { opens, clicks }` and `unsubscribe_url` ([RFC 8058 headers](https://docs.postboi.email/tracking)) on any provider that supports them
