@@ -6,7 +6,7 @@ category: Guides
 ---
 
 Pass an array to `mail()` and each message becomes its own request, sent with bounded
-concurrency. The call **never throws** — you get one result per message.
+concurrency. The call **never throws**: you get one result per message.
 
 ```typescript
 const results = await mail([
@@ -52,11 +52,11 @@ const results = await mail({
 })
 ```
 
-When `to` is a literal array, the `data` keys are **type-checked against it** — a typo'd or
+When `to` is a literal array, the `data` keys are **type-checked against it**: a typo'd or
 missing-from-`to` address is a compile error. (Recipients written as `{ address }` objects or
 a non-literal `string[]` can't be inferred, so their keys relax to any string.)
 
-Providers with a native batch API send the whole thing as **one request** — [the Postboi
+Providers with a native batch API send the whole thing as **one request**: [the Postboi
 provider](/provider) (up to 100 recipients per batch), Resend, Postmark and MailerSend
 pack the rendered messages; Mailgun, SparkPost, Mandrill, SendGrid and Brevo map your
 `{name}` tags onto their server-side merge fields. Every other provider falls back to

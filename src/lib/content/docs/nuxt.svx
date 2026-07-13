@@ -5,7 +5,7 @@ description: Send email from a Nuxt server route with the top-level mail().
 category: Frameworks
 ---
 
-Postboi is framework-agnostic — read the request's `FormData` in a Nitro server route and
+Postboi is framework-agnostic: read the request's `FormData` in a Nitro server route and
 hand it straight to [`mail()`](/api). Postboi extracts the
 [special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
 
@@ -41,13 +41,13 @@ const email = ref('')
 ```
 
 Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The provider and
-default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+default recipient come from [`postboi.config.ts`](/config): a `POSTBOI_TOKEN` routes to
 [the Postboi provider](/provider), or pick any [provider](/providers).
 
 ## Or use the Captcha component
 
-`postboi/vue` ships the [spam protection](/spam) — honeypot plus, on the Postboi provider, the
-managed invisible captcha — as a single prop-free component. Your form stays a native
+`postboi/vue` ships the [spam protection](/spam) (honeypot plus, on the Postboi provider, the
+managed invisible captcha) as a single prop-free component. Your form stays a native
 `<form>`; just drop it inside:
 
 ```vue
@@ -64,7 +64,7 @@ import { Captcha } from 'postboi/vue'
 </template>
 ```
 
-The publishable key is baked in by `bunx postboi sync` — see
+The publishable key is baked in by `bunx postboi sync`. See
 [Spam protection](/spam#the-captcha-component).
 
 **Runnable example:** [`examples/nuxt-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/nuxt-provider-postboi).

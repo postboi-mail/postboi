@@ -5,7 +5,7 @@ description: Send email from an Astro API route with the top-level mail().
 category: Frameworks
 ---
 
-Postboi is framework-agnostic — read the request's `FormData` in an API route and hand it
+Postboi is framework-agnostic: read the request's `FormData` in an API route and hand it
 straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#special-fields)
 and renders the rest into a tidy HTML table.
 
@@ -38,13 +38,13 @@ the sender:
 
 Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. API routes need SSR,
 so set `output: 'server'` with an adapter in `astro.config.mjs`. The provider and default
-recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+recipient come from [`postboi.config.ts`](/config): a `POSTBOI_TOKEN` routes to
 [the Postboi provider](/provider), or pick any [provider](/providers).
 
 ## Or use the Captcha component
 
-`postboi/astro` ships the [spam protection](/spam) — honeypot plus, on the Postboi provider,
-the managed invisible captcha — as a single prop-free component. Your form stays a
+`postboi/astro` ships the [spam protection](/spam) (honeypot plus, on the Postboi provider,
+the managed invisible captcha) as a single prop-free component. Your form stays a
 native `<form>`; just drop it inside:
 
 ```astro
@@ -59,7 +59,7 @@ import Captcha from 'postboi/astro'
 </form>
 ```
 
-The publishable key is baked in by `bunx postboi sync` — see
+The publishable key is baked in by `bunx postboi sync`. See
 [Spam protection](/spam#the-captcha-component).
 
 **Runnable example:** [`examples/astro-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/astro-provider-postboi).

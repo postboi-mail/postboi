@@ -1,13 +1,13 @@
 ---
 title: Global config
 name: Global config
-description: Set hooks, defaults, and behaviour once with postboi.config.ts — applied to every send.
+description: Set hooks, defaults, and behaviour once with postboi.config.ts, applied to every send.
 category: Guides
 ---
 
 Set your provider, defaults, and behaviour once and have them apply to every send. A
 **`postboi.config.ts`** at your project root is the committed home for everything except
-secrets — `bunx postboi init` writes it for you. It's also the only place [hooks](/hooks)
+secrets. `bunx postboi init` writes it for you. It's also the only place [hooks](/hooks)
 can live, since they're functions.
 
 ```typescript
@@ -38,15 +38,15 @@ It auto-loads on the first `mail()` (Node/Bun).
 | `captcha`  | [spam protection](/spam): the publishable `key` for `<Captcha />`, honeypot name, Turnstile |
 | _behaviour_ | `retries`, `retry_delay`, `timeout`, `auto_text`                                  |
 
-Keep **secrets out of this file** — API keys and tokens belong in the environment. To vary
+Keep **secrets out of this file**: API keys and tokens belong in the environment. To vary
 the provider per environment, see [Per-environment config](/manual-setup#per-environment-config).
 
 ## Precedence
 
-Lowest to highest — later sources win:
+Lowest to highest (later sources win):
 
 1. `postboi.config.ts`
-2. environment variables — `POSTBOI_PROVIDER`, `POSTBOI_*` defaults, and each provider's own
+2. environment variables: `POSTBOI_PROVIDER`, `POSTBOI_*` defaults, and each provider's own
    field vars (e.g. `MAILGUN_DOMAIN`)
 3. options passed explicitly to `mail()` or a provider constructor
 

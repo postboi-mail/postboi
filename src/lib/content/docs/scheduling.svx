@@ -1,13 +1,13 @@
 ---
 title: Scheduling
 name: Scheduling
-description: Send later with scheduled_at — a relative duration, a Date, or an ISO 8601 string.
+description: Send later with scheduled_at: a relative duration, a Date, or an ISO 8601 string.
 category: Guides
 ---
 
 Pass `scheduled_at` to send a message at a future time instead of right away.
 
-The easiest way is a **relative duration** — an object of units added to the send time. Fields
+The easiest way is a **relative duration**: an object of units added to the send time. Fields
 combine, so `{ days: 1, hours: 5 }` is 29 hours from now:
 
 ```typescript
@@ -44,13 +44,13 @@ Scheduling is done by the provider, so it only works where the provider offers i
 
 | Provider      | How it's sent                                                        |
 | ------------- | -------------------------------------------------------------------- |
-| the Postboi provider | Up to 30 days ahead; reschedule with `reschedule(id, when)` or cancel, from code or the dashboard — see [the Postboi provider](/provider). |
+| the Postboi provider | Up to 30 days ahead; reschedule with `reschedule(id, when)` or cancel, from code or the dashboard. See [the Postboi provider](/provider). |
 | Resend        | Passed through as `scheduled_at`.                                    |
 | Brevo         | Passed through as `scheduledAt`.                                     |
 | Mailgun       | Sent as `o:deliverytime`.                                           |
 | SendGrid      | Sent as `send_at`.                                                  |
 
-Every other provider **ignores** `scheduled_at` and sends immediately — so don't lean on it
+Every other provider **ignores** `scheduled_at` and sends immediately, so don't lean on it
 with a provider that doesn't support it.
 
 Scheduling composes with [bulk sending](/bulk): give each message in the array its own
@@ -79,12 +79,12 @@ await cancel(id)
 
 | Provider      | How it cancels                                  |
 | ------------- | ----------------------------------------------- |
-| the Postboi provider | `POST /v1/messages/:id/cancel` — also available from the dashboard. |
+| the Postboi provider | `POST /v1/messages/:id/cancel` (also available from the dashboard). |
 | Resend        | `POST /emails/:id/cancel`.                      |
 | Brevo         | `DELETE /v3/smtp/email/:id`.                    |
 
 Providers **without** a cancellation API reject with a `PostboiError` code
-`cancel_not_supported` — loudly, so a send you believe is cancelled never quietly goes
+`cancel_not_supported`, loudly, so a send you believe is cancelled never quietly goes
 out. (The `postboi/mock` provider records cancellations on `.canceled` for tests.)
 
 ## Rescheduling

@@ -6,13 +6,13 @@ category: Guides
 ---
 
 Each provider is its own entry point, so you only bundle the one you import. Every provider
-exposes the same `send()` and `is_error()` methods — swap providers without changing your
+exposes the same `send()` and `is_error()` methods: swap providers without changing your
 calling code.
 
 The **environment variables** are what [`postboi init`](/quick-start) writes and the
 zero-config [`mail()`](/api) reads; the **constructor options** are the same values passed
 explicitly when you [construct a provider directly](#using-a-provider-directly). Non-secret
-bits (a Mailgun domain, an SES region) can instead live in [`postboi.config.ts`](/config) —
+bits (a Mailgun domain, an SES region) can instead live in [`postboi.config.ts`](/config);
 keep the secrets in the environment.
 
 | Provider       | Import               | Environment variables                                   | Constructor options                  |
@@ -61,12 +61,12 @@ await mail.send({
 ```
 
 Every provider also accepts `default`, `timeout`, `retries`, `retry_delay`, `auto_text`,
-and `hooks` on top of its own credentials — see
+and `hooks` on top of its own credentials. See
 [Common constructor options](/api#common-constructor-options).
 
 ## Mock provider
 
-`postboi/mock` records messages in-memory instead of sending them — same normalisation as a
+`postboi/mock` records messages in-memory instead of sending them, with the same normalisation as a
 real provider. Perfect for tests.
 
 ```typescript
@@ -91,5 +91,5 @@ native concept, and quietly ignored where unsupported:
 
 The same forwarded-where-supported convention applies to
 [`scheduled_at`](/scheduling), [`tracking`](/tracking) and
-[`unsubscribe_url`](/tracking#one-click-unsubscribe) — and most providers' delivery
+[`unsubscribe_url`](/tracking#one-click-unsubscribe), and most providers' delivery
 events can be received and normalized too, see [Webhooks](/webhooks).

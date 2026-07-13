@@ -42,7 +42,7 @@ the sender:
 
 Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The same handler
 works on any Web-standard runtime (Bun, Deno, Workers, Node with an adapter). The provider
-and default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+and default recipient come from [`postboi.config.ts`](/config): a `POSTBOI_TOKEN` routes to
 [the Postboi provider](/provider), or pick any [provider](/providers).
 
 **Runnable example:** [`examples/hono-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/hono-provider-postboi).

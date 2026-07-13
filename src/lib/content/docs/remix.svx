@@ -5,7 +5,7 @@ description: Send email from a Remix route action with the top-level mail().
 category: Frameworks
 ---
 
-Postboi is framework-agnostic — read the request's `FormData` in a route `action` and hand it
+Postboi is framework-agnostic: read the request's `FormData` in a route `action` and hand it
 straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#special-fields)
 and renders the rest into a tidy HTML table.
 
@@ -44,13 +44,13 @@ export default function Index() {
 ```
 
 Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The provider and
-default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+default recipient come from [`postboi.config.ts`](/config). A `POSTBOI_TOKEN` routes to
 [the Postboi provider](/provider), or pick any [provider](/providers).
 
 ## Or use the Captcha component
 
-`postboi/react` ships the [spam protection](/spam) — honeypot plus, on the Postboi provider,
-the managed invisible captcha — as a single prop-free component. It renders inside your
+`postboi/react` ships the [spam protection](/spam) (honeypot plus, on the Postboi provider,
+the managed invisible captcha) as a single prop-free component. It renders inside your
 existing form, so Remix's `<Form>` keeps working:
 
 ```tsx
@@ -64,7 +64,7 @@ import { Captcha } from 'postboi/react'
 </Form>
 ```
 
-The publishable key is baked in by `bunx postboi sync` — see
+The publishable key is baked in by `bunx postboi sync`. See
 [Spam protection](/spam#the-captcha-component).
 
 **Runnable example:** [`examples/remix-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/remix-provider-postboi).

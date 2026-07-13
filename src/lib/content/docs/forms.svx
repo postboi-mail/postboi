@@ -1,12 +1,12 @@
 ---
 title: Hosted forms
 name: Hosted forms
-description: Turn any HTML form into email — point it at a hosted endpoint, no backend required.
+description: Turn any HTML form into email. Point it at a hosted endpoint, no backend required.
 category: Guides
 ---
 
 Everything else in these docs assumes you have a server for the library to run on. Hosted
-forms are for when you don't: static sites, landing pages, docs, portfolios — anything
+forms are for when you don't: static sites, landing pages, docs, portfolios, anything
 that's just HTML. Point a plain `<form>` at a Postboi endpoint and submissions arrive in
 your inbox as the same tidy email the library renders. No backend, no JavaScript, no
 `npm install`.
@@ -17,7 +17,7 @@ In the [dashboard](https://postboi.email/dashboard/forms), create a form: give i
 pick which team member's inbox receives submissions, and you get an endpoint URL like
 `https://postboi.email/f/form_k3v9x2m1p8q4`.
 
-Submissions can only be delivered to a **team member's sign-in email** — an address
+Submissions can only be delivered to a **team member's sign-in email**, an address
 verified at sign-in (magic link or SSO), so a public endpoint can never be pointed at
 someone else's inbox. If that member leaves the team, the form stops delivering until
 you point it at a current member.
@@ -38,12 +38,12 @@ you point it at a current member.
 </form>
 ```
 
-That's the whole integration. On submit, the visitor lands on a hosted thank-you page —
+That's the whole integration. On submit, the visitor lands on a hosted thank-you page,
 or set a **redirect URL** (https) on the form in the dashboard to send them back to your
 own site.
 
 The email arrives with fields rendered as a table, and an `email` field is automatically
-used as the **Reply-To** — hitting Reply in your inbox goes straight back to the sender.
+used as the **Reply-To**: hitting Reply in your inbox goes straight back to the sender.
 File inputs (`<input type="file">` with `enctype="multipart/form-data"`) become
 attachments, up to 5&nbsp;MB per submission.
 
@@ -55,7 +55,7 @@ The endpoint speaks the library's [FormData dialect](/formdata):
 | --------------- | ------------------------------------------------------------------- |
 | `_subject`      | Sets the email's subject line                                       |
 | `_reply_to`     | Sets Reply-To explicitly (wins over an `email` field)               |
-| `🍯`            | The honeypot — include it hidden; filled submissions are dropped    |
+| `🍯`            | The honeypot: include it hidden; filled submissions are dropped    |
 | `fieldset→field`| Groups fields into titled sections in the email                     |
 
 ```html
@@ -65,21 +65,21 @@ The endpoint speaks the library's [FormData dialect](/formdata):
 <textarea name="details→message"></textarea>
 ```
 
-`_to`, `_from`, `_cc` and `_bcc` are ignored — the recipient is fixed by the form's
+`_to`, `_from`, `_cc` and `_bcc` are ignored: the recipient is fixed by the form's
 configuration, so a bot can't repoint the mail.
 
 ## Spam protection
 
 Two layers, same as the library's [spam protection](/spam):
 
-- **Honeypot** — include the hidden `🍯` field and bot submissions are silently dropped.
+- **Honeypot**: include the hidden `🍯` field and bot submissions are silently dropped.
   The bot even receives a success response, so it learns nothing.
-- **Managed captcha** — enable *Require captcha* on the form and add the captcha
+- **Managed captcha**: enable *Require captcha* on the form and add the captcha
   `<script>` tag (from the dashboard) to the page. Postboi renders an invisible
   Turnstile challenge and verifies every submission server-side. No Cloudflare account
   needed.
 
-Endpoints are also rate-limited per form — 10 submissions a minute, 500 a day — on top
+Endpoints are also rate-limited per form (10 submissions a minute, 500 a day) on top
 of your plan's limits, so a bot can't drain your quota (or your overage bill) through a
 public URL.
 
@@ -93,7 +93,7 @@ tracking default.
 ## Posting with fetch
 
 Prefer to stay on the page? Ask for JSON and you get `{ ok: true }` instead of a redirect
-(CORS is open — static sites post from their own origins):
+(CORS is open, so static sites can post from their own origins):
 
 ```ts
 const response = await fetch(form.action, {
@@ -104,7 +104,7 @@ const response = await fetch(form.action, {
 const result = await response.json() // { ok: true, id: "msg_…" }
 ```
 
-A JSON request body works too — `POST` with `content-type: application/json` and a flat
+A JSON request body works too: `POST` with `content-type: application/json` and a flat
 object of fields.
 
 Errors come back as `{ ok: false, code, message }` with a matching HTTP status:
@@ -123,9 +123,9 @@ Errors come back as `{ ok: false, code, message }` with a matching HTTP status:
 
 - Form submissions are ordinary sends: they appear in the dashboard's
   [message log](https://postboi.email/dashboard/messages/sent) and count towards your
-  plan's volume — the free tier's 3,000/mo covers a lot of contact form.
+  plan's volume. The free tier's 3,000/mo covers a lot of contact form.
 - Pause a form from the dashboard and its endpoint stops accepting immediately (410);
   resume it any time. Deleting a form kills the URL for good.
 - If you *do* have a server, the library's [FormData handling](/formdata) gives you the
-  same email with more control — and on SvelteKit the whole thing is a
+  same email with more control, and on SvelteKit the whole thing is a
   [one-line form action](/sveltekit).

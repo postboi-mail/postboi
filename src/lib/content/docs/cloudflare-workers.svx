@@ -1,7 +1,7 @@
 ---
 title: Cloudflare Workers
 name: Cloudflare Workers
-description: Send email from a Worker — no filesystem, so construct Postboi with the token binding.
+description: Send email from a Worker. No filesystem, so construct Postboi with the token binding.
 category: Frameworks
 ---
 
@@ -39,6 +39,6 @@ the sender. Field names use the [`fieldset→field`](/formdata#grouped-fields) s
 
 Set the token as a secret (`wrangler secret put POSTBOI_TOKEN`, or `.dev.vars` for local
 dev), and turn on `nodejs_compat` in `wrangler.jsonc`. Swap the provider by constructing a
-different one — see [Providers](/providers).
+different one. See [Providers](/providers).
 
 **Runnable example:** [`examples/cloudflare-workers-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/cloudflare-workers-provider-postboi).

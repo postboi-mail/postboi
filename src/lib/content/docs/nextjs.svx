@@ -5,7 +5,7 @@ description: Send email from a Next.js Server Action with the top-level mail().
 category: Frameworks
 ---
 
-Postboi is framework-agnostic — read the request's `FormData` in a Server Action and hand it
+Postboi is framework-agnostic: read the request's `FormData` in a Server Action and hand it
 straight to [`mail()`](/api). Postboi extracts the [special fields](/formdata#special-fields)
 and renders the rest into a tidy HTML table.
 
@@ -53,13 +53,13 @@ export default function Page() {
 ```
 
 Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax. The provider and
-default recipient come from [`postboi.config.ts`](/config) — a `POSTBOI_TOKEN` routes to
+default recipient come from [`postboi.config.ts`](/config): a `POSTBOI_TOKEN` routes to
 [the Postboi provider](/provider), or pick any [provider](/providers).
 
 ## Or use the Captcha component
 
-`postboi/react` ships the [spam protection](/spam) — honeypot plus, on the Postboi provider,
-the managed invisible captcha — as a single prop-free component. Your form stays a
+`postboi/react` ships the [spam protection](/spam) (honeypot plus, on the Postboi provider,
+the managed invisible captcha) as a single prop-free component. Your form stays a
 native `<form>`; just drop it inside:
 
 ```tsx
@@ -73,7 +73,7 @@ import { Captcha } from 'postboi/react'
 </form>
 ```
 
-The publishable key is baked in by `bunx postboi sync` — see
+The publishable key is baked in by `bunx postboi sync`. See
 [Spam protection](/spam#the-captcha-component).
 
 **Runnable example:** [`examples/nextjs-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/nextjs-provider-postboi).

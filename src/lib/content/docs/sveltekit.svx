@@ -5,7 +5,7 @@ description: Wire a contact form to Postboi with a one-line SvelteKit action.
 category: Frameworks
 ---
 
-`postboi/kit` reads `FormData`, sends it, and returns `{ success: true }` — or
+`postboi/kit` reads `FormData`, sends it, and returns `{ success: true }`, or
 `fail(400, { error })` on failure. A contact-form action is a single line.
 
 ```typescript
@@ -23,7 +23,7 @@ Point a `multipart/form-data` form at the action. Field names use the
 
 Wire up a hidden `_reply_to` field bound to the sender's email. Then, when the
 notification lands in your inbox, hitting **Reply** goes straight back to the person who
-filled in the form — not to your no-reply `from` address.
+filled in the form, not to your no-reply `from` address.
 
 For most contact forms, a reply-to address is all you need: keep `from` as your default
 sending address and let reply-to carry the conversation. Only set a per-message `from`
@@ -60,15 +60,15 @@ The submitted `FormData` becomes a tidy HTML table in the email body. See
 [FormData](/formdata) for how the table is built.
 
 The hidden `🍯` field is the built-in honeypot: bots fill it, humans can't see it, and a
-filled honeypot skips the send while the action still returns `{ success: true }` — the
-bot learns nothing. Want more? [Spam protection](/spam) covers the invisible captcha too —
+filled honeypot skips the send while the action still returns `{ success: true }`: the
+bot learns nothing. Want more? [Spam protection](/spam) covers the invisible captcha too:
 fully managed on the Postboi provider (one script tag, no keys), or bring your own Turnstile with
 a single env var.
 
 ## Or use the Captcha component
 
-`postboi/svelte` ships that honeypot — plus the [managed invisible captcha](/spam) on
-the Postboi provider — as a single prop-free component. Your form stays a native `<form>`
+`postboi/svelte` ships that honeypot (plus the [managed invisible captcha](/spam) on
+the Postboi provider) as a single prop-free component. Your form stays a native `<form>`
 (`use:enhance` and form libraries keep working); just drop it inside:
 
 ```svelte
@@ -84,7 +84,7 @@ the Postboi provider — as a single prop-free component. Your form stays a nati
 </form>
 ```
 
-The publishable key is baked in by `bunx postboi sync` — see
+The publishable key is baked in by `bunx postboi sync`. See
 [Spam protection](/spam#the-captcha-component).
 
 A full, runnable version of this form lives in

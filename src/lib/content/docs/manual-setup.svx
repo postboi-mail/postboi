@@ -1,7 +1,7 @@
 ---
 title: Manual setup
 name: Manual setup
-description: Skip the CLI and wire Postboi up by hand — install, set a provider, and send.
+description: Skip the CLI and wire Postboi up by hand. Install, set a provider, and send.
 category: Getting started
 ---
 
@@ -20,7 +20,7 @@ hand? It's three steps.
 	<Step title="Set your provider and credentials">
 		Pick the provider and non-secret config in a committed
 		[`postboi.config.ts`](/config); keep the secret(s) in your env file. Each provider
-		reads its own credential env var — see [Providers](/providers) for the full list.
+		reads its own credential env var. See [Providers](/providers) for the full list.
 
 ```ts
 // postboi.config.ts  (commit this)
@@ -33,14 +33,14 @@ export default config({
 ```
 
 ```bash
-# .env  (gitignore this — secrets only)
+# .env  (gitignore this: secrets only)
 RESEND_API_KEY=re_xxxxxxxx
 ```
 
 	</Step>
 
 	<Step title="Send">
-		No provider import, no constructor — credentials come from the environment.
+		No provider import, no constructor: credentials come from the environment.
 
 ```typescript
 import { mail } from 'postboi'
@@ -67,7 +67,7 @@ the committed config file.** Both are read by `mail()` on every call.
 | Non-secret provider options (Mailgun domain, SES region, SMTP host/port) | `postboi.config.ts` | as `options: { … }`                          |
 | Secrets (API keys, tokens, passwords)            | env file / host secrets       | e.g. `RESEND_API_KEY`, `MAILGUN_API_KEY`                  |
 
-Everything in the config file can still be **overridden by an env var** — handy for
+Everything in the config file can still be **overridden by an env var**, handy for
 per-environment values without editing committed config (see below). The override names are
 `POSTBOI_PROVIDER`, `POSTBOI_FROM` / `POSTBOI_TO` / …, and each provider's own field vars
 (e.g. `MAILGUN_DOMAIN`). Env always wins.
@@ -77,10 +77,10 @@ per-environment values without editing committed config (see below). The overrid
 Two portable patterns, in order of preference.
 
 **1. Override the provider with an env var.** Keep a safe default in the committed file and
-flip it on the host. This works on every runtime — Node, Bun, and edge — with no magic:
+flip it on the host. This works on every runtime (Node, Bun, and edge) with no magic:
 
 ```ts
-// postboi.config.ts — safe default for local dev
+// postboi.config.ts: safe default for local dev
 export default config({ provider: 'mock' }) // sends nothing locally
 ```
 
@@ -96,7 +96,7 @@ always wins over the file.
 **2. Use SvelteKit's `dev` flag in a hook.** The config file is imported directly by
 Node, so it can't read `$app/environment`. Configure from SvelteKit's
 [`init` hook](https://svelte.dev/docs/kit/hooks#Shared-hooks-init) instead, where the flag
-is available — it runs once at startup and works on every adapter, including Workers:
+is available: it runs once at startup and works on every adapter, including Workers:
 
 ```ts
 // src/hooks.server.ts
@@ -109,7 +109,7 @@ export const init: ServerInit = () => {
 }
 ```
 
-> Avoid `process.env.NODE_ENV` in the config file — a self-hosted Node deploy that
+> Avoid `process.env.NODE_ENV` in the config file: a self-hosted Node deploy that
 > forgets to set it falls into the wrong branch silently. Prefer the two patterns above.
 
 ## On SvelteKit
@@ -124,4 +124,4 @@ export const actions = { default: mail }
 ```
 
 > On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider
-> directly — see [Using a provider directly](/providers#using-a-provider-directly).
+> directly. See [Using a provider directly](/providers#using-a-provider-directly).

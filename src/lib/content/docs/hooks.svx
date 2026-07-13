@@ -1,17 +1,17 @@
 ---
 title: Hooks
 name: Hooks
-description: Run awaitable callbacks around every send — observe, rewrite, cancel, and report.
+description: Run awaitable callbacks around every send to observe, rewrite, cancel, and report.
 category: Guides
 ---
 
 Pass `hooks` to any provider to run awaitable callbacks around every send. `before.send` can
-observe, rewrite, or cancel a message; the rest are best-effort observers — an error they
+observe, rewrite, or cancel a message; the rest are best-effort observers: an error they
 throw is swallowed, so logging and telemetry can never break a send. In a bulk
 [`mail(array)`](/bulk), hooks run once per message.
 
 > Setting the same hooks on every instance? Define them **once** in
-> [`postboi.config.ts`](/config) and they apply everywhere — including the
+> [`postboi.config.ts`](/config) and they apply everywhere, including the
 > zero-config `mail()`.
 
 ```typescript
@@ -19,19 +19,19 @@ const mail = new Resend({
 	api_key: RESEND_API_KEY,
 	default: { from: 'no-reply@example.com' },
 	hooks: {
-		// observe, mutate, or throw to cancel — runs before the request
+		// observe, mutate, or throw to cancel (runs before the request)
 		before: {
 			send({ message }) {
 				if (process.env.NODE_ENV !== 'production') return { ...message, to: 'qa@example.com' }
 			}
 		},
-		// success — analytics / audit
+		// success: analytics / audit
 		after: {
 			send({ provider, message, duration_ms }) {
 				track('email.sent', { provider, to: message.to, duration_ms })
 			}
 		},
-		// any failure — report it
+		// any failure: report it
 		on: {
 			error({ error, message }) {
 				Sentry.captureException(error, {
@@ -39,7 +39,7 @@ const mail = new Resend({
 					extra: { to: message?.to }
 				})
 			},
-			// each retry — observe provider flakiness
+			// each retry: observe provider flakiness
 			retry({ provider, attempt, status }) {
 				console.warn(`${provider} retry ${attempt} (${status})`)
 			}
@@ -52,10 +52,10 @@ const mail = new Resend({
 
 | Hook          | When it runs        | Can it change the send?                    |
 | ------------- | ------------------- | ------------------------------------------ |
-| `before.send` | before the request  | yes — return a new message, or throw       |
-| `after.send`  | after a success     | no — observer only                         |
-| `on.error`    | on any failure      | no — observer only                         |
-| `on.retry`    | before each retry   | no — observer only                         |
+| `before.send` | before the request  | yes: return a new message, or throw        |
+| `after.send`  | after a success     | no (observer only)                         |
+| `on.error`    | on any failure      | no (observer only)                         |
+| `on.retry`    | before each retry   | no (observer only)                         |
 
 ## Cancelling a send
 

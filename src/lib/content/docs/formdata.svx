@@ -6,10 +6,10 @@ category: Guides
 ---
 
 Pass a `FormData` object as the `body` and Postboi converts it into a tidy HTML table. This
-is what powers the [SvelteKit form actions](/sveltekit) — but you can pass `FormData`
+is what powers the [SvelteKit form actions](/sveltekit), but you can pass `FormData`
 to any `mail()` call.
 
-`body` also accepts a **plain object** of fields — like Express/multer's `req.body` — which
+`body` also accepts a **plain object** of fields (like Express/multer's `req.body`), which
 is normalised and parsed the same way:
 
 ```typescript
@@ -29,21 +29,21 @@ These keys are extracted from the body and applied to the send options instead o
 in the table:
 
 - `_to`, `_from`, `_subject`, `_reply_to`
-- `_cc`, `_bcc` — comma-separated or repeated
+- `_cc`, `_bcc`: comma-separated or repeated
 
 Values can be base64-encoded; they'll be decoded automatically.
 
 Set `_reply_to` to the submitter's email so replies go back to them instead of your
-`from` address — see the [SvelteKit form](/sveltekit#the-form) for the hidden-field
+`from` address. See the [SvelteKit form](/sveltekit#the-form) for the hidden-field
 pattern. Typically that's all a contact form needs: a reply-to is enough for replies to
 reach the right person, with no per-message `from` or verified domain required.
 
-Addresses may include a display name — `"ACME Inc <hello@example.com>"` arrives as **ACME
+Addresses may include a display name: `"ACME Inc <hello@example.com>"` arrives as **ACME
 Inc**. That works anywhere an address does: `_from`, `_reply_to`, `default.from`, and the
 CLI's `Default from` prompt.
 
 Two more fields are stripped before rendering: the `🍯` honeypot and Turnstile's
-`cf-turnstile-response` token — they drive the built-in [spam protection](/spam) and never
+`cf-turnstile-response` token. They drive the built-in [spam protection](/spam) and never
 appear in your emails.
 
 ## Grouped fields
@@ -57,7 +57,7 @@ Use the `fieldset→field` syntax to group related fields into sections:
 <input name="order→quantity" />
 ```
 
-This produces sectioned tables in the email body — one section per fieldset (`contact`,
+This produces sectioned tables in the email body: one section per fieldset (`contact`,
 `order`), with a row per field.
 
 ## Attachments
@@ -72,4 +72,4 @@ Attachments work from file inputs (`details→files`) or via `attachments: File 
 ## Customising the labels
 
 The [`formatter`](/api#sendoptions) option on `mail()` controls how fieldset and field
-labels are rendered — pass `null` or `false` to a part to leave those labels untouched.
+labels are rendered. Pass `null` or `false` to a part to leave those labels untouched.

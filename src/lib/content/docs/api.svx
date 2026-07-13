@@ -18,7 +18,7 @@ const mail = new Resend({
 })
 
 await mail.send(options: SendOptions): Promise<SendResponse>
-await mail.cancel(id: string): Promise<{ id: string }> // scheduled sends — see Scheduling
+await mail.cancel(id: string): Promise<{ id: string }> // scheduled sends (see Scheduling)
 mail.is_error(error: unknown): error is PostboiError
 ```
 
@@ -34,10 +34,10 @@ import Postboi from 'postboi'
 const mail = new Postboi() // reads POSTBOI_TOKEN
 
 // messages
-await mail.message(id) // status + content — see The Postboi provider
-await mail.reschedule(id, when) // Date | ISO string | Duration — see Scheduling
+await mail.message(id) // status + content (see The Postboi provider)
+await mail.reschedule(id, when) // Date | ISO string | Duration (see Scheduling)
 
-// lists & broadcasts — see The Postboi provider
+// lists & broadcasts (see The Postboi provider)
 await mail.lists()
 await mail.create_list(name)
 await mail.list(id) // includes recipients
@@ -47,7 +47,7 @@ await mail.add_recipients(id, { email, name?, data? } | [...])
 await mail.remove_recipient(id, email)
 await mail.broadcast(id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
 
-// suppressions — see The Postboi provider
+// suppressions (see The Postboi provider)
 await mail.suppressions()
 await mail.suppress(email)
 await mail.unsuppress(email)
@@ -75,7 +75,7 @@ interface SendOptions {
 	attachments?: File | File[]
 	idempotency_key?: string
 	headers?: Record<string, string>
-	unsubscribe_url?: string // sets RFC 8058 List-Unsubscribe headers — see Tracking & unsubscribe
+	unsubscribe_url?: string // sets RFC 8058 List-Unsubscribe headers (see Tracking & unsubscribe)
 	tags?: string[]
 	scheduled_at?: Date | string | Duration // see Scheduling
 	tracking?: { opens?: boolean; clicks?: boolean } // see Tracking & unsubscribe
@@ -87,10 +87,10 @@ interface SendOptions {
 ```
 
 `body` accepts a string of HTML, a [`FormData`](/formdata) object, or a promise resolving
-to either — so you can pass a template renderer's output straight through; see
+to either, so you can pass a template renderer's output straight through; see
 [Email templates](/templates). `formatter`
 controls how grouped-field labels are rendered. `headers` and `tags` are forwarded to each
-provider's native concept — see [Custom headers & tags](/providers#custom-headers--tags).
+provider's native concept. See [Custom headers & tags](/providers#custom-headers--tags).
 `captcha` adjusts the built-in [spam protection](/spam) for a single send.
 
 ## Common constructor options
@@ -147,7 +147,7 @@ interface PostboiError {
 
 ## postboi/webhooks
 
-Receive delivery events, normalized across providers — see [Webhooks](/webhooks).
+Receive delivery events, normalized across providers. See [Webhooks](/webhooks).
 
 ```typescript
 import { receive, mock_event, mock_request, parse_user_agent } from 'postboi/webhooks'

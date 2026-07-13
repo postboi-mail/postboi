@@ -7,8 +7,8 @@ category: Guides
 
 ## Open & click tracking
 
-Turn tracking on or off **per send** with `tracking` — no dashboard digging, and the same
-option whatever the provider:
+Turn tracking on or off **per send** with `tracking` (no dashboard digging, and the same
+option whatever the provider):
 
 ```typescript
 import { mail } from 'postboi'
@@ -23,7 +23,7 @@ await mail({
 
 Only the flags you set are forwarded, so the provider's own defaults keep applying to
 anything you leave out. The resulting open/click events arrive via
-[webhooks](/webhooks) — including *which client and device* opened the mail.
+[webhooks](/webhooks), including *which client and device* opened the mail.
 
 ### Provider support
 
@@ -40,7 +40,7 @@ anything you leave out. The resulting open/click events arrive via
 | ZeptoMail | `track_opens` / `track_clicks` |
 
 Providers whose tracking is configured at the **domain level** (Resend) or account level
-ignore the per-send flags — configure tracking in their dashboard instead. Every other
+ignore the per-send flags. Configure tracking in their dashboard instead. Every other
 provider without a tracking concept ignores the flags entirely, matching how
 `scheduled_at` behaves.
 
@@ -65,13 +65,13 @@ List-Unsubscribe: <https://example.com/unsubscribe?u=123&list=news>
 List-Unsubscribe-Post: List-Unsubscribe=One-Click
 ```
 
-Your endpoint must accept the one-click `POST` (no confirmation page — mail clients POST
+Your endpoint must accept the one-click `POST` (no confirmation page: mail clients POST
 it directly). If you set your own `List-Unsubscribe` header explicitly in `headers`, it
 wins over the generated one.
 
 ## Plain-text bodies are automatic
 
-Every HTML send also ships a derived plain-text alternative by default (`auto_text`) —
+Every HTML send also ships a derived plain-text alternative by default (`auto_text`):
 better spam scores, and text-only clients get something readable. Provide `text` yourself
 to control it, or opt out globally:
 

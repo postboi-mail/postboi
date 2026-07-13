@@ -1,14 +1,14 @@
 ---
 title: Webhooks
 name: Webhooks
-description: Receive delivery events — delivered, opened, clicked, bounced — normalized across every provider, with signatures verified.
+description: Receive delivery events (delivered, opened, clicked, bounced) normalized across every provider, with signatures verified.
 category: Guides
 ---
 
-Sending is half the story. Providers also *report back* — delivery confirmations, opens,
-clicks, bounces, spam complaints — via webhooks. `postboi/webhooks` receives those the
+Sending is half the story. Providers also *report back* (delivery confirmations, opens,
+clicks, bounces, spam complaints) via webhooks. `postboi/webhooks` receives those the
 same way postboi sends: **one normalized shape, any provider**. Point your provider's
-webhook at an endpoint, hand postboi the request, and get typed events out — signature
+webhook at an endpoint, hand postboi the request, and get typed events out, signature
 verification included.
 
 ```typescript
@@ -40,7 +40,7 @@ const events = await receive(request, { provider: 'resend', secret: RESEND_WEBHO
 
 ## SvelteKit
 
-On SvelteKit, use the ready-made handler from `postboi/kit` — it verifies, normalizes,
+On SvelteKit, use the ready-made handler from `postboi/kit`: it verifies, normalizes,
 calls your handler once per event, and answers the provider correctly (200 on success,
 401 on a bad signature, 400 on a bad payload, 500 when your handler throws so the
 provider retries):
@@ -70,9 +70,9 @@ interface WebhookEvent {
 	timestamp?: Date
 	subject?: string
 	tags?: Array<string>
-	url?: string          // clicked events — the link
+	url?: string          // clicked events: the link
 	bounce?: { category: 'hard' | 'soft' | 'suppressed' | 'unknown'; detail?: string }
-	client?: EmailClient  // opened/clicked — see below
+	client?: EmailClient  // opened/clicked, see below
 	ip?: string
 	raw: unknown          // the untouched provider payload
 }
@@ -81,7 +81,7 @@ interface WebhookEvent {
 ## Who opened it, and on what
 
 On opens and clicks, most providers report the recipient's user-agent. postboi parses it
-**locally** (a pure function — no lookup service, nothing leaves your server) into:
+**locally** (a pure function: no lookup service, nothing leaves your server) into:
 
 ```typescript
 interface EmailClient {
@@ -107,22 +107,22 @@ Providers fall into three camps:
 
 | Provider | Scheme | Secret to set |
 | -------- | ------ | ------------- |
-| the Postboi provider | Signed (standard-webhooks HMAC) | `POSTBOI_WEBHOOK_SECRET` — the `whsec_…` from the dashboard |
-| Resend | Signed (Svix HMAC) | `RESEND_WEBHOOK_SECRET` — the `whsec_…` from the dashboard |
-| SendGrid | Signed (ECDSA P-256) | `SENDGRID_WEBHOOK_SECRET` — the Signed Event Webhook *public key* |
-| Mailgun | Signed (HMAC timestamp+token) | `MAILGUN_WEBHOOK_SECRET` — the webhook signing key |
+| the Postboi provider | Signed (standard-webhooks HMAC) | `POSTBOI_WEBHOOK_SECRET`, the `whsec_…` from the dashboard |
+| Resend | Signed (Svix HMAC) | `RESEND_WEBHOOK_SECRET`, the `whsec_…` from the dashboard |
+| SendGrid | Signed (ECDSA P-256) | `SENDGRID_WEBHOOK_SECRET`, the Signed Event Webhook *public key* |
+| Mailgun | Signed (HMAC timestamp+token) | `MAILGUN_WEBHOOK_SECRET`, the webhook signing key |
 | MailerSend | Signed (HMAC of body) | `MAILERSEND_WEBHOOK_SECRET` |
 | Mailtrap | Signed (HMAC of body) | `MAILTRAP_WEBHOOK_SECRET` |
 | Mandrill | Signed (HMAC of URL + params) | `MANDRILL_WEBHOOK_SECRET`; behind a proxy also set `MANDRILL_WEBHOOK_URL` to the exact configured URL |
-| MailPace | Signed (Ed25519) | `MAILPACE_WEBHOOK_SECRET` — the public verification key |
-| Postmark, Brevo, SparkPost, Mailjet, ZeptoMail, Elastic Email, Plunk | Shared secret | `<PROVIDER>_WEBHOOK_SECRET` — a token you make up; put the same value in the webhook URL as `?token=…` (or the provider's auth-header option) |
+| MailPace | Signed (Ed25519) | `MAILPACE_WEBHOOK_SECRET`, the public verification key |
+| Postmark, Brevo, SparkPost, Mailjet, ZeptoMail, Elastic Email, Plunk | Shared secret | `<PROVIDER>_WEBHOOK_SECRET`, a token you make up; put the same value in the webhook URL as `?token=…` (or the provider's auth-header option) |
 | Amazon SES, Scaleway | Shared secret over SNS | `SES_WEBHOOK_SECRET` / `SCALEWAY_WEBHOOK_SECRET` as `?token=…` on the subscription URL; SNS subscription handshakes confirm automatically |
 
-SMTP, Microsoft 365 and Cloudflare don't emit delivery-event webhooks — `receive()`
+SMTP, Microsoft 365 and Cloudflare don't emit delivery-event webhooks, so `receive()`
 throws `webhooks_not_supported` for them.
 
 To skip verification deliberately (a local experiment, a payload replay), pass
-`{ verify: false }` — it's always an explicit opt-out, never a fallback.
+`{ verify: false }`: it's always an explicit opt-out, never a fallback.
 
 ## Testing without a provider
 
@@ -143,7 +143,7 @@ const events = await receive(request, { provider: 'resend', secret })
 
 ## Custom providers
 
-`receive()` accepts a custom adapter for anything postboi doesn't cover — implement
+`receive()` accepts a custom adapter for anything postboi doesn't cover: implement
 `verify` and `normalize` and pass it as `provider`:
 
 ```typescript
