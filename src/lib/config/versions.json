@@ -1,6 +1,144 @@
 {
-	"latest": "0.14.0",
+	"latest": "0.14.1",
 	"archived": [
+		{
+			"version": "0.14.0",
+			"slug": "v0.14.0",
+			"nav": [
+				{
+					"slug": "getting-started",
+					"name": "Getting started",
+					"items": [
+						{
+							"slug": "",
+							"name": "Introduction"
+						},
+						{
+							"slug": "quick-start",
+							"name": "Quick start"
+						},
+						{
+							"slug": "provider",
+							"name": "The Postboi provider"
+						},
+						{
+							"slug": "manual-setup",
+							"name": "Manual setup"
+						}
+					]
+				},
+				{
+					"slug": "frameworks",
+					"name": "Frameworks",
+					"items": [
+						{
+							"slug": "sveltekit",
+							"name": "SvelteKit",
+							"icon": true
+						},
+						{
+							"slug": "nextjs",
+							"name": "Next.js",
+							"icon": true
+						},
+						{
+							"slug": "astro",
+							"name": "Astro",
+							"icon": true
+						},
+						{
+							"slug": "nuxt",
+							"name": "Nuxt (Vue)",
+							"icon": true
+						},
+						{
+							"slug": "remix",
+							"name": "Remix",
+							"icon": true
+						},
+						{
+							"slug": "hono",
+							"name": "Hono",
+							"icon": true
+						},
+						{
+							"slug": "express",
+							"name": "Express",
+							"icon": true
+						},
+						{
+							"slug": "cloudflare-workers",
+							"name": "Cloudflare Workers",
+							"icon": true
+						}
+					]
+				},
+				{
+					"slug": "guides",
+					"name": "Guides",
+					"items": [
+						{
+							"slug": "formdata",
+							"name": "FormData"
+						},
+						{
+							"slug": "forms",
+							"name": "Hosted forms"
+						},
+						{
+							"slug": "spam",
+							"name": "Spam protection"
+						},
+						{
+							"slug": "templates",
+							"name": "Email templates"
+						},
+						{
+							"slug": "providers",
+							"name": "Providers"
+						},
+						{
+							"slug": "config",
+							"name": "Global config"
+						},
+						{
+							"slug": "hooks",
+							"name": "Hooks"
+						},
+						{
+							"slug": "errors",
+							"name": "Errors & retries"
+						},
+						{
+							"slug": "bulk",
+							"name": "Bulk sending"
+						},
+						{
+							"slug": "scheduling",
+							"name": "Scheduling"
+						},
+						{
+							"slug": "tracking",
+							"name": "Tracking & unsubscribe"
+						},
+						{
+							"slug": "webhooks",
+							"name": "Webhooks"
+						}
+					]
+				},
+				{
+					"slug": "reference",
+					"name": "Reference",
+					"items": [
+						{
+							"slug": "api",
+							"name": "API reference"
+						}
+					]
+				}
+			]
+		},
 		{
 			"version": "0.13.0",
 			"slug": "v0.13.0",
