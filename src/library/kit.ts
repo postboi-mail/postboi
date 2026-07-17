@@ -1,5 +1,7 @@
 import { fail, json, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
-import { mail as zero_config_mail } from "./postboi.js"
+// From ./mail.js directly, not the package root — the root statically re-exports the
+// Postboi provider class, which must stay a dynamic-only leaf (see LOADERS in mail.ts).
+import { mail as zero_config_mail } from "./mail.js"
 import { is_error, is_spam, type SendOptions } from "./index.js"
 // Type-only — the webhooks module itself is loaded lazily inside the handler, so
 // action-only users never pull the adapters or crypto into their bundle.

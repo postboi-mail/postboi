@@ -39,6 +39,7 @@ describe("package exports", () => {
 			"mail.ts",
 			"captcha.ts", // spam protection, reached via the root export
 			"register.ts", // generated-types placeholder, reached via the root export
+			"postboi_provider.ts", // the Postboi provider class, reached via the root export (kept a dynamic-only leaf for bundlers)
 		])
 		const providers = readdirSync(`${root}src/library`).filter(
 			(f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !internal.has(f)

@@ -42,7 +42,11 @@ const LOADERS: Record<string, () => Promise<ProviderConstructor>> = {
 	zepto: () => import("./zepto.js").then((m) => m.default as unknown as ProviderConstructor),
 	// The Postboi provider. Not in the registry (its only credential is POSTBOI_TOKEN, which the
 	// provider reads itself) — a token in the environment routes send() here automatically.
-	postboi: () => import("./postboi.js").then((m) => m.default as unknown as ProviderConstructor),
+	// NB: the leaf module, not the package root — a dynamic import of a module that is also
+	// statically imported (the root is, via `postboi/kit`) merges it into the consumer's entry
+	// chunk and adds an extra export SvelteKit's route validator rejects.
+	postboi: () =>
+		import("./postboi_provider.js").then((m) => m.default as unknown as ProviderConstructor),
 	// Credential-free no-op — handy as a safe local default (`provider: "mock"`) that records
 	// instead of sending. Deliberately absent from the registry so `postboi init` won't offer it.
 	mock: () => import("./mock.js").then((m) => m.default as unknown as ProviderConstructor),
