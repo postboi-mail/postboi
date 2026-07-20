@@ -44,8 +44,7 @@ await mail.list(name_or_id) // includes recipients + confirmation settings
 await mail.update_list(name_or_id, { name?, confirmation? })
 await mail.rename_list(name_or_id, name) // shorthand for update_list
 await mail.delete_list(name_or_id)
-await mail.add_recipients(name_or_id, recipients, { status? }) // upserts — see The Postboi provider
-await mail.set_recipient_status(name_or_id, email, status)
+await mail.add_recipients(name_or_id, recipients) // upserts — see The Postboi provider
 await mail.remove_recipient(name_or_id, email)
 await mail.broadcast(name_or_id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
 

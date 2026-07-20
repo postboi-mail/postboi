@@ -1,0 +1,237 @@
+---
+title: Spam protection
+name: Spam protection
+description: Invisible, zero-friction spam protection: a built-in honeypot plus managed Cloudflare Turnstile.
+category: Guides
+---
+
+Public contact forms attract bots. Postboi ships two invisible layers of protection: no
+puzzles, no checkboxes, nothing for real visitors to do. Both run automatically on every
+[FormData](/formdata) send, with every provider, and on the Postboi provider the captcha is
+fully managed: no Cloudflare account, no keys, no env vars.
+
+## The Captcha component
+
+The fastest way to get everything on this page: drop `<Captcha />` (no props) inside
+your own `<form>`. Your form stays a native form (bring any form library you like); the
+component renders the honeypot and activates the managed invisible captcha on the
+surrounding form, including forms mounted on client-side navigations.
+
+```svelte
+<script>
+	import { enhance } from '$app/forms'
+	import Captcha from 'postboi/svelte'
+</script>
+
+<form method="POST" use:enhance>
+	<input name="contact→name" required />
+	<Captcha />
+	<button>Send</button>
+</form>
+```
+
+```tsx
+// React: Next.js, Remix, …
+import { Captcha } from 'postboi/react'
+
+<form action={action}>
+	<input name="contact→name" required />
+	<Captcha />
+	<button>Send</button>
+</form>
+```
+
+```vue
+<!-- Vue / Nuxt -->
+<script setup>
+import { Captcha } from 'postboi/vue'
+</script>
+
+<template>
+	<form method="post" action="/api/contact">
+		<input name="contact→name" required />
+		<Captcha />
+		<button>Send</button>
+	</form>
+</template>
+```
+
+```astro
+---
+import Captcha from 'postboi/astro'
+---
+
+<form method="post" action="/api/contact">
+	<input name="contact→name" required />
+	<Captcha />
+	<button>Send</button>
+</form>
+```
+
+**Where does the key come from?** `bunx postboi init` commits your account's publishable
+key to [`postboi.config.ts`](/config) (`captcha: { key: "pk_…" }`, which is publishable, so
+committing is safe), and `bunx postboi sync`, already in your `prepare` script, bakes
+it from there into the installed package on every install. Tokenless environments (CI)
+keep the captcha because the committed config is the source of truth; a `POSTBOI_TOKEN`
+just lets `sync` refresh the key (and the generated `from` types) from the Postboi provider.
+Upgrading from an earlier init? Run `bunx postboi sync` once with your token and it
+writes the key into your config for you. If the component warns that no key is baked,
+re-run `bunx postboi sync` (and restart the dev server), or pass one explicitly with
+`pk="pk_…"` from your [dashboard](https://postboi.email/dashboard/keys).
+
+Props, all optional: `pk` (key override), `origin` (loader origin), and `honeypot`
+(`false` to render no honeypot field). Without any key the component is honeypot-only and
+logs a console warning. No component? The rest of this page shows the plain-HTML pieces
+it renders.
+
+## The honeypot: zero config
+
+Add a visually hidden field named `🍯` to your form:
+
+```html
+<input
+	type="text"
+	name="🍯"
+	tabindex="-1"
+	autocomplete="off"
+	aria-hidden="true"
+	style="position: absolute; left: -9999px; height: 0; width: 0; opacity: 0"
+/>
+```
+
+That's it. Humans never see the field, so it arrives empty. Bots auto-fill every input they
+find, and any submission with a filled `🍯` is treated as spam:
+
+- **No email is sent.**
+- The field never appears in your emails (it's stripped even when empty).
+- With `postboi/kit`, the action still returns `{ success: true }`: the bot sees a normal
+  successful submission and learns nothing.
+
+> Prefer a class over inline styles if you like, but avoid `display: none`: smarter bots
+> skip fields they can detect as hidden that way. Off-screen positioning is more effective.
+
+Calling `mail()` directly instead of using `postboi/kit`? A tripped honeypot throws a
+`SpamError` (`code: "spam"`), so you decide what to do, usually pretending success:
+
+```typescript
+import { mail, is_spam } from 'postboi'
+
+try {
+	await mail({ to: 'contact@example.com', body: request.formData() })
+} catch (error) {
+	if (!is_spam(error)) throw error // spam: fall through and pretend it worked
+}
+```
+
+Spam skips are intentional, so they never fire the [`on.error` hook](/hooks): your Sentry
+stays quiet.
+
+## Managed captcha: the Postboi provider, zero keys
+
+On [the Postboi provider](/provider), invisible captcha is fully managed: no Cloudflare account, no
+keys to create, no env vars. Grab the snippet from your
+[dashboard](https://postboi.email/dashboard/keys), drop it on the page, and mark the form:
+
+```html
+<script src="https://postboi.email/captcha.js" data-key="pk_…" async defer></script>
+
+<form method="POST" data-captcha>
+	<!-- your fields… -->
+	<button type="submit">Send</button>
+</form>
+```
+
+That's the whole setup. Behind the scenes, Postboi mints a
+[Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) widget for your
+account the first time the script runs (registering each hostname it sees, localhost
+included), renders an invisible challenge into every `form[data-captcha]`, and verifies
+the token server-side when the send arrives. The `data-key` is publishable: it's safe in
+your HTML; the widget secret never leaves Postboi.
+
+Once your account has a widget, form sends are **enforced**: a form submission arriving
+without a valid token (a bot POSTing straight to your action) is rejected with
+`captcha_failed`, which `postboi/kit` surfaces as `fail(400, { error })`. Sends you make
+from code (a string `body`) are never captcha-checked, so transactional email is
+unaffected. Got a form that shouldn't be verified? Opt it out per send:
+
+```typescript
+await mail({ body, captcha: { turnstile: false } })
+```
+
+## Bring your own Turnstile: one env var
+
+Using your own provider (Resend, Mailgun, …), or want your own Cloudflare account?
+Turnstile is still baked in. Two steps:
+
+**1. Add the widget to your form** ([get your keys here](https://dash.cloudflare.com/?to=/:account/turnstile)):
+
+```html
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+<form method="POST">
+	<!-- your fields… -->
+	<div class="cf-turnstile" data-sitekey="YOUR_SITE_KEY"></div>
+	<button type="submit">Send</button>
+</form>
+```
+
+**2. Set the secret key in your environment:**
+
+```bash
+# .env
+TURNSTILE_SECRET_KEY=0x4AAAAAAA...
+```
+
+Done. The widget injects a `cf-turnstile-response` token into the form, and Postboi
+verifies it with Cloudflare before every FormData send. The token is stripped from the
+email, and invalid or missing tokens are rejected with a `PostboiError`
+(`code: "captcha_failed"`). A configured secret always wins: set one on the Postboi provider and
+verification happens locally instead of via managed captcha.
+
+> **Setting `TURNSTILE_SECRET_KEY` enforces Turnstile on every FormData send.** That's
+> deliberate: if a bot could skip the widget and POST directly, the captcha would be
+> decorative. Opt individual sends out with `captcha: { turnstile: false }`.
+
+On runtimes without ambient env vars (Cloudflare Workers), pass the secret explicitly:
+
+```typescript
+await mail.send({ body, captcha: { turnstile: { secret_key: env.TURNSTILE_SECRET_KEY } } })
+```
+
+Testing? Cloudflare provides [dummy keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/):
+the `1x…` secret always passes, the `2x…` secret always fails.
+
+## Configuration
+
+Both layers work with zero config, but everything is adjustable: globally in
+`postboi.config.ts`, per provider instance, or per send (most specific wins):
+
+```typescript
+// postboi.config.ts
+import { config } from 'postboi'
+
+export default config({
+	captcha: {
+		key: 'pk_…', // your publishable key, committed here by `postboi init`
+		honeypot: 'nickname', // rename the honeypot field (default: "🍯")
+		turnstile: false // or { secret_key }, or true to require it
+	}
+})
+```
+
+| Option      | Values                               | Default                                                                    |
+| ----------- | ------------------------------------ | -------------------------------------------------------------------------- |
+| `key`       | your publishable `pk_…` key          | written by `postboi init`; feeds the `<Captcha />` bake                    |
+| `honeypot`  | field name, or `false` to disable    | `"🍯"`                                                                     |
+| `turnstile` | `{ secret_key }`, `true`, or `false` | auto: managed on the Postboi provider, local when `TURNSTILE_SECRET_KEY` is set |
+
+## Error codes
+
+| Code                    | Meaning                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| `spam`                  | The honeypot was filled (`SpamError`, an intentional skip)        |
+| `captcha_failed`        | Turnstile token missing, invalid, expired, or unverifiable         |
+| `captcha_misconfigured` | A token arrived but no secret key is configured                    |
+
+Verification **fails closed**: if Cloudflare can't be reached, the send is rejected rather
+than waved through.

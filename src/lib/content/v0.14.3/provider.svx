@@ -234,16 +234,6 @@ await mail.add_recipients("Newsletter", "ada@example.com")
 // → { added: 1, updated: 0, pending: 1, list: … } — Ada gets the confirmation email
 ```
 
-Recipients carry a **status** — `subscribed`, `pending`, `unsubscribed`, `bounced` or
-`complained`. Only subscribed recipients receive broadcasts and digests; unsubscribes,
-bounces and complaints flip the status automatically (the row stays, with history)
-rather than removing the recipient. Set it explicitly too:
-
-```ts
-await mail.add_recipients("Newsletter", "ada@example.com", { status: "pending" })
-await mail.set_recipient_status("Newsletter", "ada@example.com", "unsubscribed")
-```
-
 Two knobs, patchable via an object: `enabled` (send confirmation emails) and
 `default_status` (what new recipients start as). `confirmation: true` is shorthand for
 strict double opt-in (email + `"pending"`); a courtesy email without gating is

@@ -1,0 +1,95 @@
+---
+title: Providers
+name: Providers
+description: Every supported email provider, its import path, and constructor options.
+category: Guides
+---
+
+Each provider is its own entry point, so you only bundle the one you import. Every provider
+exposes the same `send()` and `is_error()` methods: swap providers without changing your
+calling code.
+
+The **environment variables** are what [`postboi init`](/quick-start) writes and the
+zero-config [`mail()`](/api) reads; the **constructor options** are the same values passed
+explicitly when you [construct a provider directly](#using-a-provider-directly). Non-secret
+bits (a Mailgun domain, an SES region) can instead live in [`postboi.config.ts`](/config);
+keep the secrets in the environment.
+
+| Provider       | Import               | Environment variables                                   | Constructor options                  |
+| -------------- | -------------------- | ------------------------------------------------------- | ------------------------------------ |
+| Amazon SES     | `postboi/ses`        | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `access_key_id`, `secret_access_key`, `region`, `session_token?` |
+| Brevo          | `postboi/brevo`      | `BREVO_API_KEY`                                         | `api_key`                            |
+| Cloudflare     | `postboi/cloudflare` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`        | `api_key`, `account_id`              |
+| Elastic Email  | `postboi/elasticemail` | `ELASTICEMAIL_API_KEY`                               | `api_key`                            |
+| MailerSend     | `postboi/mailersend` | `MAILERSEND_API_KEY`                                   | `api_key`                            |
+| Mailgun        | `postboi/mailgun`    | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`                    | `api_key`, `domain`, `region?`       |
+| Mailjet        | `postboi/mailjet`    | `MJ_APIKEY_PUBLIC`, `MJ_APIKEY_PRIVATE`                | `api_key`, `api_secret`              |
+| MailPace       | `postboi/mailpace`   | `MAILPACE_SERVER_TOKEN`                                | `api_key`                            |
+| Mailtrap       | `postboi/mailtrap`   | `MAILTRAP_TOKEN`                                       | `api_key`, `sandbox?`, `inbox_id?`   |
+| Mandrill       | `postboi/mandrill`   | `MANDRILL_API_KEY`                                     | `api_key`                            |
+| Microsoft 365  | `postboi/microsoft365` | `MS365_TENANT_ID`, `MS365_CLIENT_ID`, `MS365_CLIENT_SECRET` | `tenant_id`, `client_id`, `client_secret` |
+| Plunk          | `postboi/plunk`      | `PLUNK_API_KEY`                                        | `api_key`                            |
+| Postmark       | `postboi/postmark`   | `POSTMARK_SERVER_TOKEN`                                | `api_key`, `message_stream?`         |
+| Resend         | `postboi/resend`     | `RESEND_API_KEY`                                       | `api_key`                            |
+| Scaleway       | `postboi/scaleway`   | `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID`, `SCALEWAY_REGION` | `secret_key`, `project_id`, `region` |
+| SendGrid       | `postboi/sendgrid`   | `SENDGRID_API_KEY`                                     | `api_key`, `region?`                 |
+| SMTP (any)     | `postboi/smtp`       | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` | `host`, `port?`, `user?`, `pass?`, `secure?` |
+| SparkPost      | `postboi/sparkpost`  | `SPARKPOST_API_KEY`                                    | `api_key`, `region?`                 |
+| ZeptoMail      | `postboi/zepto`      | `ZEPTO_TOKEN`                                          | `api_key`                            |
+| Mock (testing) | `postboi/mock`       | _none_                                                  | _none_                               |
+
+Want another provider? Quit being a baby and [open a PR](https://github.com/postboi-mail/postboi).
+
+## Using a provider directly
+
+Useful when you want an explicit instance, or you're on a runtime without ambient env vars
+(e.g. Cloudflare Workers):
+
+```typescript
+import Resend from 'postboi/resend'
+
+const mail = new Resend({
+	api_key: process.env.RESEND_API_KEY!,
+	default: { from: 'no-reply@example.com' }
+})
+
+await mail.send({
+	to: 'someone@example.com',
+	subject: 'hello',
+	body: '<p>hello world</p>'
+})
+```
+
+Every provider also accepts `default`, `timeout`, `retries`, `retry_delay`, `auto_text`,
+and `hooks` on top of its own credentials. See
+[Common constructor options](/api#common-constructor-options).
+
+## Mock provider
+
+`postboi/mock` records messages in-memory instead of sending them, with the same normalisation as a
+real provider. Perfect for tests.
+
+```typescript
+import Mock from 'postboi/mock'
+
+const mail = new Mock({ default: { from: 'no-reply@example.com' } })
+await mail.send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
+
+expect(mail.sent).toHaveLength(1)
+```
+
+## Custom headers & tags
+
+`headers` and `tags` on [`send()`](/api#sendoptions) are forwarded to each provider's
+native concept, and quietly ignored where unsupported:
+
+- **headers** → Resend, Postmark, SendGrid, Mailgun (`h:`), Brevo, SparkPost, Mandrill,
+  Plunk, Mailtrap, Scaleway, Cloudflare, SES, Mailjet, Elastic Email.
+- **tags** → SendGrid (categories), Mailgun (`o:tag`), Brevo, MailerSend, Mandrill,
+  MailPace, SES (`EmailTags`), Resend (`{name,value}` pairs). Postmark and Mailtrap use the
+  **first** tag only.
+
+The same forwarded-where-supported convention applies to
+[`scheduled_at`](/scheduling), [`tracking`](/tracking) and
+[`unsubscribe_url`](/tracking#one-click-unsubscribe), and most providers' delivery
+events can be received and normalized too, see [Webhooks](/webhooks).
