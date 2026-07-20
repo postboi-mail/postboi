@@ -6,6 +6,8 @@ const config = {
 	preprocess: vitePreprocess(),
 	kit: {
 		adapter: adapter(),
+		// For the /remote page — SvelteKit remote functions are still experimental.
+		experimental: { remoteFunctions: true },
 	},
 }
 

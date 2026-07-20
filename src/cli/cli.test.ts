@@ -13,6 +13,7 @@ import {
 import { detect_env_targets, format_line, upsert_env, remove_env, is_gitignored } from "./env.js"
 import { detect_hosts, detect_adapter_host, push_spec, manual_hint } from "./deploy.js"
 import {
+	add_remote_exclude,
 	detect_package_manager,
 	has_dependency,
 	install_command,
@@ -581,5 +582,44 @@ describe("agent skill", () => {
 		expect(existsSync(t)).toBe(false)
 		writeFileSync(t, bundled_skill()!)
 		expect(refresh_skill(t)).toBe(false)
+	})
+})
+
+describe("add_remote_exclude", () => {
+	it("adds an optimizeDeps block to a plain defineConfig", () => {
+		const result = add_remote_exclude(
+			'import { defineConfig } from "vite"\n\nexport default defineConfig({\n\tplugins: [sveltekit()],\n})\n'
+		)
+		expect(result).toContain('optimizeDeps: { exclude: ["postboi/remote"] }')
+		expect(result).toContain("plugins: [sveltekit()]")
+	})
+
+	it("extends an existing exclude array", () => {
+		const result = add_remote_exclude(
+			'export default defineConfig({\n\toptimizeDeps: { exclude: ["@rollup/browser"] },\n})\n'
+		)
+		expect(result).toContain('exclude: ["postboi/remote", "@rollup/browser"]')
+	})
+
+	it("adds exclude to an existing flat optimizeDeps block", () => {
+		const result = add_remote_exclude(
+			'export default defineConfig({\n\toptimizeDeps: { include: ["kitto"] },\n})\n'
+		)
+		expect(result).toContain('exclude: ["postboi/remote"]')
+		expect(result).toContain('include: ["kitto"]')
+	})
+
+	it("reports an already-present exclude", () => {
+		expect(
+			add_remote_exclude('defineConfig({ optimizeDeps: { exclude: ["postboi/remote"] } })')
+		).toBe("present")
+	})
+
+	it("refuses shapes it can't edit safely", () => {
+		// nested optimizeDeps (esbuildOptions) and non-object-literal configs
+		expect(
+			add_remote_exclude("defineConfig({ optimizeDeps: { esbuildOptions: { plugins: [] } } })")
+		).toBe("unable")
+		expect(add_remote_exclude("export default { plugins: [] }")).toBe("unable")
 	})
 })

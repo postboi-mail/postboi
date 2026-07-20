@@ -74,6 +74,28 @@ import { mail } from "postboi/kit"
 export const actions = { default: mail }
 ```
 
+Or skip the server file entirely with [remote functions](https://svelte.dev/docs/kit/remote-functions)
+(experimental — set `kit.experimental.remoteFunctions: true`; `postboi init` adds the
+required `optimizeDeps: { exclude: ["postboi/remote"] }` to `vite.config` for you):
+
+```svelte
+<script>
+	import { mail } from "postboi/remote"
+</script>
+
+<form {...mail}>
+	<input {...mail.fields.contact.name.as("text")} required />
+	<input {...mail.fields.contact.email.as("email")} required />
+	<button disabled={!!mail.pending}>Send</button>
+</form>
+
+{#if mail.result?.success}<p>Thanks!</p>{/if}
+```
+
+Nested fields (`contact.name`) group in the email exactly like the classic `contact→name`
+syntax, spam protection and attachments included. For a custom provider or forced fields,
+build your own with `remote(...)` from `postboi/kit`.
+
 | Topic                                    | Docs                                                                       |
 | ---------------------------------------- | -------------------------------------------------------------------------- |
 | Quick start — the CLI (`postboi init`)   | [docs.postboi.email/quick-start](https://docs.postboi.email/quick-start)   |

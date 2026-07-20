@@ -88,7 +88,7 @@ interface SendOptions {
 	scheduled_at?: Date | string | Duration // see Scheduling
 	tracking?: { opens?: boolean; clicks?: boolean } // see Tracking & unsubscribe
 	captcha?: {
-		honeypot?: string | false // honeypot field name (default "_honey"; "🍯" also accepted), false disables
+		honeypot?: string | false // honeypot field name (default "🍯"), false disables
 		turnstile?: { secret_key?: string } | boolean // default: on when TURNSTILE_SECRET_KEY is set
 	}
 }

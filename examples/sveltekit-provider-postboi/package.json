@@ -14,7 +14,7 @@
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.53.0",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
-		"postboi": "^0.11.0",
+		"postboi": "^0.15.0",
 		"svelte": "^5.53.0",
 		"svelte-check": "^4.3.0",
 		"typescript": "^5.9.0",

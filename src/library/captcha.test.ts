@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { check_captcha, HONEYPOT_FIELD, TURNSTILE_FIELD } from "$library/captcha.js"
+import {
+	check_captcha,
+	HONEYPOT_FIELD,
+	TURNSTILE_FIELD,
+	TURNSTILE_REMOTE_FIELD,
+} from "$library/captcha.js"
 import { SpamError, is_spam, is_error, configure } from "$library/index.js"
 import { reset_config } from "$library/config.js"
 import Mock from "$library/mock.js"
@@ -46,6 +51,15 @@ describe("check_captcha — honeypot", () => {
 		expect(await check_captcha(form({ name: "Ada" }))).toEqual({ ok: true })
 	})
 
+	it("still flags the legacy 🍯 field, and strips it", async () => {
+		const spam = await check_captcha(form({ "🍯": "buy now" }))
+		expect(spam).toMatchObject({ ok: false, code: "spam" })
+
+		const data = form({ "🍯": "", name: "Ada" })
+		expect(await check_captcha(data)).toEqual({ ok: true })
+		expect(data.has("🍯")).toBe(false)
+	})
+
 	it("supports a custom field name", async () => {
 		const verdict = await check_captcha(form({ nectar: "spam" }), { honeypot: "nectar" })
 		expect(verdict).toMatchObject({ ok: false, code: "spam" })
@@ -79,6 +93,18 @@ describe("check_captcha — Turnstile", () => {
 
 		const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
 		expect(url).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify")
+		expect(JSON.parse(init.body as string)).toEqual({ secret: "secret_1", response: "token_1" })
+	})
+
+	it("accepts and strips the token under the remote alias (_captcha)", async () => {
+		vi.stubEnv("TURNSTILE_SECRET_KEY", "secret_1")
+		fetch.mockResolvedValue(siteverify({ success: true }))
+
+		const data = form({ [TURNSTILE_REMOTE_FIELD]: "token_1", name: "Ada" })
+		expect(await check_captcha(data)).toEqual({ ok: true })
+		expect(data.has(TURNSTILE_REMOTE_FIELD)).toBe(false)
+
+		const [, init] = fetch.mock.calls[0] as [string, RequestInit]
 		expect(JSON.parse(init.body as string)).toEqual({ secret: "secret_1", response: "token_1" })
 	})
 

@@ -23,7 +23,9 @@ import {
 } from "./deploy.js"
 import {
 	detect_package_manager,
+	add_remote_exclude,
 	has_dependency,
+	type PackageJson,
 	install_command,
 	is_bundled_framework,
 } from "./project.js"
@@ -358,6 +360,48 @@ function ensure_install(files: Array<string>): void {
 }
 
 /**
+ * SvelteKit only: make sure `postboi/remote` is excluded from Vite's dependency
+ * prebundle, which would otherwise serve the remote-function module empty. Harmless
+ * when remote functions aren't in use, so it's added preemptively.
+ */
+function ensure_remote_exclude(files: Array<string>): void {
+	const vite = files.find((f) => /^vite\.config\.(js|ts|mjs|mts)$/.test(f))
+	if (!vite) return
+	let pkg: PackageJson | undefined
+	try {
+		pkg = JSON.parse(readFileSync("package.json", "utf8"))
+	} catch {
+		return
+	}
+	if (!has_dependency(pkg, "@sveltejs/kit")) return
+
+	const source = readFileSync(vite, "utf8")
+	const result = add_remote_exclude(source)
+	if (result === "present") return
+	if (result === "unable") {
+		// Only nag when remote functions are actually enabled somewhere.
+		const configs = files.filter((f) => /^(svelte|vite)\.config\.(js|ts)$/.test(f))
+		const enabled = configs.some((f) => {
+			try {
+				return readFileSync(f, "utf8").includes("remoteFunctions")
+			} catch {
+				return false
+			}
+		})
+		if (enabled) {
+			console.log(
+				`${dim("Add")} ${bold('optimizeDeps: { exclude: ["postboi/remote"] }')} ${dim(`to ${vite} if you use postboi's remote form`)}`
+			)
+		}
+		return
+	}
+	writeFileSync(vite, result)
+	console.log(
+		`${green("✓")} excluded ${bold("postboi/remote")} from Vite prebundling ${dim(`(${vite} — needed for SvelteKit remote functions)`)}`
+	)
+}
+
+/**
  * Ensure a `prepare` script restores the generated types after every install — they live
  * inside node_modules, so a reinstall wipes them. Chains onto an existing prepare script
  * rather than replacing it; no-op when one already runs postboi.
@@ -557,6 +601,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		await offer_host_push(prompts, files, values)
 	}
 	ensure_install(files)
+	ensure_remote_exclude(files)
 
 	// The committed home for defaults, hooks, and the publishable captcha key. A
 	// POSTBOI_TOKEN alone already routes send() to Postboi, but `provider: "postboi"` makes
@@ -626,6 +671,7 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 
 	// 7. Make sure postboi itself is installed
 	ensure_install(files)
+	ensure_remote_exclude(files)
 
 	// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
 	write_config(provider.key, config_defaults, config_options)

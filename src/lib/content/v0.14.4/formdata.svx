@@ -42,10 +42,9 @@ Addresses may include a display name: `"ACME Inc <hello@example.com>"` arrives a
 Inc**. That works anywhere an address does: `_from`, `_reply_to`, `default.from`, and the
 CLI's `Default from` prompt.
 
-Two more fields are stripped before rendering: the `_honey` honeypot (the classic `🍯`
-name too) and Turnstile's token (`cf-turnstile-response`, or `_captcha` on SvelteKit
-remote forms). They drive the built-in [spam protection](/spam) and never appear in your
-emails.
+Two more fields are stripped before rendering: the `🍯` honeypot and Turnstile's
+`cf-turnstile-response` token. They drive the built-in [spam protection](/spam) and never
+appear in your emails.
 
 ## Grouped fields
 

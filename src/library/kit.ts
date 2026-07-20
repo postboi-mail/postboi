@@ -1,4 +1,12 @@
-import { fail, json, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
+import {
+	fail,
+	json,
+	type RequestEvent,
+	type ActionFailure,
+	type RemoteForm,
+	type RemoteFormInput,
+} from "@sveltejs/kit"
+import { form } from "$app/server"
 // From ./mail.js directly, not the package root — the root statically re-exports the
 // Postboi provider class, which must stay a dynamic-only leaf (see LOADERS in mail.ts).
 import { mail as zero_config_mail } from "./mail.js"
@@ -92,6 +100,84 @@ export function action(a?: Mailer | ActionOptions, b: ActionOptions = {}): FormA
  * It sends via whichever provider `POSTBOI_PROVIDER` names (set by `bunx postboi init`).
  */
 export const mail: FormAction = action()
+
+/** What a remote mail form resolves to: `mail.result` after a submission. */
+export type RemoteResult = { success: true } | { success: false; error: string }
+
+/** The remote mail form built by {@link remote} — spread it onto a `<form>` element. */
+export type RemoteMailForm = RemoteForm<RemoteFormInput, RemoteResult>
+
+/**
+ * Convert the structured data a remote `form` hands back into the FormData the send
+ * pipeline expects: nested objects rejoin with `→` (the fieldset grouping syntax the
+ * email renderer tables by), arrays become repeated fields, `File` values pass through
+ * untouched so they arrive as attachments.
+ */
+export function remote_form_data(
+	data: Record<string, unknown>,
+	form = new FormData(),
+	prefix = ""
+): FormData {
+	for (const [key, value] of Object.entries(data)) {
+		const name = prefix ? `${prefix}→${key}` : key
+		const values = Array.isArray(value) ? value : [value]
+		for (const item of values) {
+			if (item === undefined || item === null) continue
+			if (item instanceof File) form.append(name, item)
+			else if (typeof item === "object" && !Array.isArray(item)) {
+				remote_form_data(item as Record<string, unknown>, form, name)
+			} else form.append(name, String(item))
+		}
+	}
+	return form
+}
+
+/**
+ * Build a SvelteKit *remote function* form (experimental — needs
+ * `kit.experimental.remoteFunctions` in the consumer's config). The remote counterpart
+ * of {@link action}: call it in a `.remote.ts` file, export the result, and spread it
+ * onto a `<form>` — no `+page.server.ts`, no action wiring, progressive enhancement
+ * included. `postboi/remote` ships a ready-made zero-config instance.
+ *
+ * @example
+ * ```ts
+ * // src/lib/mail.remote.ts
+ * import { remote } from "postboi/kit"
+ * export const contact = remote({ fields: { to: "team@example.com" } })
+ * ```
+ * ```svelte
+ * <form {...contact}>
+ * 	<input {...contact.fields.contact.name.as("text")} required />
+ * 	<button disabled={!!contact.pending}>Send</button>
+ * </form>
+ * {#if contact.result?.success}<p>Thanks!</p>{/if}
+ * ```
+ *
+ * Field names follow the remote-form rules (JS paths — nesting instead of `→`):
+ * `fields.contact.name` renders in the email exactly like a classic `contact→name` field.
+ */
+export function remote(options?: Omit<ActionOptions, "status">): RemoteMailForm
+export function remote(mailer: Mailer, options?: Omit<ActionOptions, "status">): RemoteMailForm
+export function remote(
+	a?: Mailer | Omit<ActionOptions, "status">,
+	b: Omit<ActionOptions, "status"> = {}
+): RemoteMailForm {
+	const is_mailer = typeof (a as Mailer | undefined)?.send === "function"
+	const mailer = is_mailer ? (a as Mailer) : undefined
+	const options = is_mailer ? b : ((a as ActionOptions) ?? {})
+	const dispatch = mailer ? (o: SendOptions) => mailer.send(o) : zero_config_mail
+
+	return form("unchecked", async (data: RemoteFormInput) => {
+		try {
+			await dispatch({ ...options.fields, body: remote_form_data(data) })
+			return { success: true as const }
+		} catch (error) {
+			// A tripped honeypot pretends to succeed — no email is sent, and the bot learns nothing.
+			if (is_spam(error)) return { success: true as const }
+			return { success: false as const, error: is_error(error) ? error.message : String(error) }
+		}
+	})
+}
 
 /**
  * Build a SvelteKit request handler that receives provider delivery-event webhooks:

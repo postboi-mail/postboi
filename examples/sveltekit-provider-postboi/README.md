@@ -3,11 +3,14 @@
 A minimal contact form wired to [Postboi](https://github.com/postboi-mail/postboi), running
 on [the Postboi provider](https://postboi.email) so it can also show off the **typed `from`**.
 
-It demonstrates the two ways to send:
+It demonstrates the three ways to send:
 
 1. **Hand the whole form to the action** — `postboi/kit`'s `mail` action, literally one
    import. See [`src/routes/+page.server.ts`](./src/routes/+page.server.ts).
-2. **Build the message yourself** — call the top-level `mail()` from `postboi`. See
+2. **Skip the server file entirely** — `postboi/remote`'s `mail` remote function
+   (experimental), spread straight onto the `<form>`. See
+   [`src/routes/remote/+page.svelte`](./src/routes/remote/+page.svelte).
+3. **Build the message yourself** — call the top-level `mail()` from `postboi`. See
    [`src/routes/welcome/+page.server.ts`](./src/routes/welcome/+page.server.ts).
 
 The contact form posts `multipart/form-data`, which Postboi turns into a tidy HTML table in
@@ -36,7 +39,7 @@ Open http://localhost:5173 and submit the form.
 Already have a token? Skip `init`, drop it in `.env` (`cp .env.example .env`), and run
 `bunx postboi sync` to fetch your `from` types.
 
-## The two sends
+## The three sends
 
 **1 — the form action (`postboi/kit`)**, the whole backend in one line:
 
@@ -50,7 +53,25 @@ It reads the submitted `FormData`, sends it, and returns `{ success: true }` —
 `fail(400, { error })`. Special keys like `_subject` and `_reply_to` come from hidden fields
 in the form.
 
-**2 — the top-level `mail()`**, when you'd rather build the message yourself:
+**2 — the remote function (`postboi/remote`)** — no server file at all. The form spreads
+a remote function shipped by the library; SvelteKit generates the endpoint:
+
+```svelte
+<script>
+	import { mail } from "postboi/remote"
+</script>
+
+<form {...mail}>
+	<input {...mail.fields.contact.name.as("text")} required />
+	<button disabled={!!mail.pending}>Send</button>
+</form>
+```
+
+Nested field names (`contact.name`) group in the email exactly like `contact→name`.
+Needs `kit.experimental.remoteFunctions: true` ([svelte.config.js](./svelte.config.js)) and
+`optimizeDeps: { exclude: ["postboi/remote"] }` ([vite.config.ts](./vite.config.ts)).
+
+**3 — the top-level `mail()`**, when you'd rather build the message yourself:
 
 ```ts
 import { mail } from "postboi"

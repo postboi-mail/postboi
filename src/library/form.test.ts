@@ -23,6 +23,7 @@ describe("Captcha component plumbing", () => {
 		expect(honeypot_style).toContain("position:absolute")
 		expect(honeypot_style).not.toContain("display")
 		expect(honeypot_style_object.position).toBe("absolute")
-		expect(HONEYPOT_FIELD).toBe("🍯")
+		// Path-legal so SvelteKit remote forms accept it (their names must be valid JS paths).
+		expect(HONEYPOT_FIELD).toBe("_honey")
 	})
 })

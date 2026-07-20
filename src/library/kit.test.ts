@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { action, mail, webhook } from "$library/kit.js"
+import { action, mail, remote_form_data, webhook } from "$library/kit.js"
 import Mock from "$library/mock.js"
 
 const fetch = vi.fn()
@@ -157,5 +157,37 @@ describe("postboi/kit webhook()", () => {
 		const response = await handler(kit_event(request))
 		expect(response.status).toBe(500)
 		expect(await response.json()).toEqual({ error: "database down" })
+	})
+})
+
+describe("postboi/kit remote_form_data()", () => {
+	it("flattens nested objects with the → grouping syntax", async () => {
+		const data = remote_form_data({
+			_subject: "Contact Form",
+			contact: { name: "Ada", email: "ada@example.com" },
+			details: { message: "Hello" },
+		})
+		expect(data.get("_subject")).toBe("Contact Form")
+		expect(data.get("contact→name")).toBe("Ada")
+		expect(data.get("contact→email")).toBe("ada@example.com")
+		expect(data.get("details→message")).toBe("Hello")
+	})
+
+	it("keeps File values intact and repeats arrays", async () => {
+		const file = new File(["hi"], "hi.txt", { type: "text/plain" })
+		const data = remote_form_data({
+			details: { attachments: [file, file] },
+			tags: ["a", "b"],
+			skipped: undefined,
+		})
+		expect(data.getAll("details→attachments")).toEqual([file, file])
+		expect(data.getAll("tags")).toEqual(["a", "b"])
+		expect(data.has("skipped")).toBe(false)
+	})
+
+	it("stringifies the coerced number/boolean values remote forms produce", async () => {
+		const data = remote_form_data({ info: { height: 170, likes_dogs: true } })
+		expect(data.get("info→height")).toBe("170")
+		expect(data.get("info→likes_dogs")).toBe("true")
 	})
 })

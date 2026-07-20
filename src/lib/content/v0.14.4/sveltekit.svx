@@ -42,7 +42,7 @@ when you want the email itself to appear from a specific address.
 	<input type="hidden" name="_reply_to" value={email} />
 	<input
 		type="text"
-		name="_honey"
+		name="🍯"
 		tabindex="-1"
 		autocomplete="off"
 		aria-hidden="true"
@@ -59,7 +59,7 @@ when you want the email itself to appear from a specific address.
 The submitted `FormData` becomes a tidy HTML table in the email body. See
 [FormData](/formdata) for how the table is built.
 
-The hidden `_honey` field is the built-in honeypot: bots fill it, humans can't see it, and a
+The hidden `🍯` field is the built-in honeypot: bots fill it, humans can't see it, and a
 filled honeypot skips the send while the action still returns `{ success: true }`: the
 bot learns nothing. Want more? [Spam protection](/spam) covers the invisible captcha too:
 fully managed on the Postboi provider (one script tag, no keys), or bring your own Turnstile with
@@ -89,88 +89,6 @@ The publishable key is baked in by `bunx postboi sync`. See
 
 A full, runnable version of this form lives in
 [`examples/sveltekit-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi).
-
-## Remote functions
-
-SvelteKit's [remote functions](https://svelte.dev/docs/kit/remote-functions) (experimental)
-let a library ship the whole backend. `postboi/remote` exports a ready-made remote form —
-no `+page.server.ts`, no action, no endpoint. The component *is* the app:
-
-```svelte
-<!-- +page.svelte -->
-<script lang="ts">
-	import { mail } from 'postboi/remote'
-	import Captcha from 'postboi/svelte'
-
-	let email = $state('')
-</script>
-
-<form {...mail} enctype="multipart/form-data">
-	<input {...mail.fields._subject.as('hidden', 'Contact Form')} />
-	<input {...mail.fields._reply_to.as('hidden', email)} />
-	<Captcha />
-
-	<input {...mail.fields.contact.name.as('text')} placeholder="Name" required />
-	<input {...mail.fields.contact.email.as('email')} placeholder="Email" required bind:value={email} />
-	<textarea {...mail.fields.details.message.as('text')} placeholder="Message"></textarea>
-	<input {...mail.fields.details.attachments.as('file')} multiple />
-
-	<button disabled={!!mail.pending}>{mail.pending ? 'Sending…' : 'Send'}</button>
-</form>
-
-{#if mail.result?.success}
-	<p>Thanks — we'll be in touch!</p>
-{:else if mail.result}
-	<p>{mail.result.error}</p>
-{/if}
-```
-
-Two lines of setup, since the feature is experimental:
-
-```js
-// svelte.config.js — or inline in the sveltekit() vite plugin
-kit: { experimental: { remoteFunctions: true } }
-```
-
-```ts
-// vite.config.ts — remote modules must reach the SvelteKit transform,
-// not Vite's dependency prebundle. `bunx postboi init` adds this for you.
-optimizeDeps: { exclude: ['postboi/remote'] }
-```
-
-Worth knowing:
-
-- **Field names nest instead of using arrows.** Remote-form names must be valid JS paths,
-  so `fields.contact.name` replaces `contact→name` — the email's
-  [grouped table](/formdata#grouped-fields) comes out identical. Special fields
-  (`_subject`, `_reply_to`, …) work unchanged.
-- **No schema required.** A contact form is arbitrary fields by design, so the handler
-  accepts whatever the form sends — spam checks and parsing happen in the send pipeline,
-  same as the classic action. Want client-side validation? Compose kit's own preflight:
-  `<form {...mail.preflight(schema)}>` with any Standard Schema (Zod, Valibot).
-- **Enhancement is built in.** The spread progressively enhances the form — no
-  `use:enhance` import — and resets it after a successful submit. `mail.pending` counts
-  in-flight submissions, `mail.result` is the (ephemeral) return value. Custom submit
-  behaviour uses the form's own method: `<form {...mail.enhance(async (form) => { await
-  form.submit(); … })}>`. Without JavaScript the form still posts and renders the result,
-  exactly like a native action.
-- **Spam protection carries over.** `<Captcha />` renders the honeypot under a
-  remote-safe name, and the managed captcha detects remote forms automatically. A tripped
-  honeypot still reports `{ success: true }` to the bot.
-
-For a custom provider or forced fields, build your own in a `.remote.ts` file with
-`remote()` from `postboi/kit` — the remote counterpart of `action()`:
-
-```ts
-// src/lib/mail.remote.ts
-import { remote } from 'postboi/kit'
-import Resend from 'postboi/resend'
-import { RESEND_API_KEY } from '$env/static/private'
-
-const resend = new Resend({ api_key: RESEND_API_KEY, default: { from: 'no-reply@example.com' } })
-
-export const contact = remote(resend, { fields: { to: 'team@example.com' } })
-```
 
 ## Using a configured instance
 

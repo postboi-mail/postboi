@@ -1,6 +1,6 @@
 ---
 name: postboi
-description: Integrate the postboi email library — send email from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Use whenever a task involves postboi, or adding email sending / contact forms to a project that has postboi installed.
+description: Integrate the postboi email library — send email from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Covers SvelteKit remote functions (postboi/remote) and migrating hand-rolled email code to postboi. Use whenever a task involves postboi, adding email sending / contact forms, or replacing nodemailer/direct provider SDK calls in a project that has (or should have) postboi installed.
 ---
 
 # Postboi
@@ -52,7 +52,32 @@ Passing `FormData` as `body` renders a tidy HTML table. Conventions:
 - Special fields set send options instead of appearing in the table: `_to`, `_from`, `_subject`, `_reply_to`, `_cc`, `_bcc`. Standard pattern: a hidden `_reply_to` bound to the submitter's email so replies go to them.
 - File inputs become attachments; the form needs `enctype="multipart/form-data"`.
 
-### SvelteKit — one line
+### SvelteKit — pick the right one-liner
+
+**First check whether the project uses remote functions**: look for `remoteFunctions: true` in `svelte.config.*` (or in the `sveltekit()` call in `vite.config.*`), or any existing `*.remote.ts` files.
+
+**Remote functions in use → `postboi/remote`.** The library ships the whole backend; the component is the entire app. No `+page.server.ts`, no action:
+
+```svelte
+<script lang="ts">
+	import { mail } from "postboi/remote"
+	import Captcha from "postboi/svelte"
+</script>
+
+<form {...mail} enctype="multipart/form-data">
+	<input {...mail.fields._subject.as("hidden", "Contact Form")} />
+	<Captcha />
+	<input {...mail.fields.contact.name.as("text")} required />
+	<input {...mail.fields.contact.email.as("email")} required />
+	<button disabled={!!mail.pending}>Send</button>
+</form>
+
+{#if mail.result?.success}<p>Thanks!</p>{/if}
+```
+
+Remote-form rules: field names are **nested JS paths** (`fields.contact.name`), not `contact→name` — the rendered email is identical. No schema is needed (`mail` accepts arbitrary fields; spam checks run in the pipeline). Enhancement is built in — no `use:enhance`; the form auto-resets on success; `mail.pending` / `mail.result` carry state; it degrades to a full-page POST without JS. Requires `optimizeDeps: { exclude: ["postboi/remote"] }` in `vite.config` (`postboi init` adds it). Custom provider/forced fields: `remote(instance, { fields? })` from `postboi/kit`, exported from your own `.remote.ts` file.
+
+**Otherwise → the classic action from `postboi/kit`:**
 
 ```ts
 // +page.server.ts
@@ -61,20 +86,36 @@ import { mail } from "postboi/kit"
 export const actions = { default: mail }
 ```
 
-Returns `{ success: true }` or `fail(400, { error })`. To use an explicit provider instance or set defaults: `action(instance, { status?, fields? })` from `postboi/kit`. Full form example: `/raw/sveltekit`.
+Returns `{ success: true }` or `fail(400, { error })`. Explicit provider or defaults: `action(instance, { status?, fields? })`. Full form example: `/raw/sveltekit`.
 
 Other frameworks have the same pattern — see `/raw/nextjs`, `/raw/express`, `/raw/hono`, `/raw/remix`, `/raw/nuxt`, `/raw/astro`.
+
+### Migrating existing email code to postboi
+
+The lean path, in order. At every step the goal is **deleting code**, not wrapping it:
+
+1. **Hand-rolled provider SDK calls / nodemailer / raw fetch to a mail API** → replace with zero-config `mail()` from `postboi` (run `bunx postboi init` first). Delete the SDK dependency, the transport setup, and any hand-written HTML-escaping or field formatting — `body: FormData | fields` does the table rendering.
+2. **A SvelteKit action (or API route) that reads FormData and sends email** → replace the whole action with `export const actions = { default: mail }` from `postboi/kit`. Hidden `_subject` / `_reply_to` inputs replace server-side subject/reply-to code. Keep nothing of the old handler unless it did non-email work.
+3. **Classic postboi action → remote functions** (only if the project already enables them):
+   - `+page.server.ts` action → delete the file; import `{ mail } from "postboi/remote"` in the component.
+   - `<form method="POST" use:enhance enctype=…>` → `<form {...mail} enctype=…>` (drop the `use:enhance` import).
+   - `name="contact→email"` → `{...mail.fields.contact.email.as("email")}` (nesting replaces arrows).
+   - `<input type="hidden" name="_subject" value=…>` → `{...mail.fields._subject.as("hidden", …)}`.
+   - `let { form } = $props()` result handling → `mail.result` (`{ success: true }` or `{ success: false, error }`); pending UI → `mail.pending`.
+   - Manual honeypot input → keep `<Captcha />` or rename the raw input to `_honey` (remote forms reject `🍯` and other non-path names).
+   - Add `optimizeDeps: { exclude: ["postboi/remote"] }` to `vite.config` if `postboi init` hasn't already.
+4. **Never** hand-write what the library owns: FormData parsing, HTML tables, honeypot/captcha checks, provider error normalisation, webhook signature verification. If migrated code still contains any of those, the migration isn't finished.
 
 ## Spam protection
 
 Two invisible layers, automatic on every FormData send. Easiest: drop the prop-free `<Captcha />` component inside the form — `postboi/svelte`, `postboi/react`, `postboi/vue`, `postboi/astro`. It renders the honeypot and activates the managed invisible captcha (Postboi provider; key baked in by `bunx postboi sync`).
 
-Manual honeypot — a visually hidden input named `🍯` (default name; **don't** use `display: none`, bots detect it):
+Manual honeypot — a visually hidden input named `_honey` (default; the classic `🍯` is also accepted, but remote forms reject it — **don't** use `display: none`, bots detect it):
 
 ```html
 <input
 	type="text"
-	name="🍯"
+	name="_honey"
 	tabindex="-1"
 	autocomplete="off"
 	aria-hidden="true"
@@ -129,13 +170,14 @@ No filesystem, no ambient env — so `postboi.config.ts` can't auto-load. Either
 
 ## Quick reference
 
-| Task                               | Import                                                                                           |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Zero-config send / cancel          | `mail`, `cancel` from `postboi`                                                                  |
-| Explicit provider                  | `postboi/resend`, `postboi/ses`, `postboi/smtp`, … (`/raw/providers` for all 20 + env var names) |
-| SvelteKit action & webhook handler | `mail`, `action`, `webhook` from `postboi/kit`                                                   |
-| Webhooks anywhere                  | `receive`, `mock_event`, `mock_request` from `postboi/webhooks`                                  |
-| Captcha component                  | `postboi/svelte`, `postboi/react`, `postboi/vue`, `postboi/astro`                                |
-| Maizzle templates                  | `postboi/maizzle`                                                                                |
-| Tests                              | `postboi/mock`                                                                                   |
-| Spam helpers                       | `is_spam`, `SkipSendError` from `postboi`                                                        |
+| Task                                 | Import                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Zero-config send / cancel            | `mail`, `cancel` from `postboi`                                                                  |
+| Explicit provider                    | `postboi/resend`, `postboi/ses`, `postboi/smtp`, … (`/raw/providers` for all 20 + env var names) |
+| SvelteKit action & webhook handler   | `mail`, `action`, `webhook` from `postboi/kit`                                                   |
+| SvelteKit remote form (experimental) | `mail` from `postboi/remote`; factory `remote` from `postboi/kit`                                |
+| Webhooks anywhere                    | `receive`, `mock_event`, `mock_request` from `postboi/webhooks`                                  |
+| Captcha component                    | `postboi/svelte`, `postboi/react`, `postboi/vue`, `postboi/astro`                                |
+| Maizzle templates                    | `postboi/maizzle`                                                                                |
+| Tests                                | `postboi/mock`                                                                                   |
+| Spam helpers                         | `is_spam`, `SkipSendError` from `postboi`                                                        |

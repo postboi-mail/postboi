@@ -14,11 +14,24 @@ import { ensure_env_loaded, read_env } from "./env.js"
  * import cycle — ProviderBase maps the returned verdict onto the error classes.
  */
 
-/** The default honeypot field name. Sweet, self-documenting, and no bot expects it. */
-export const HONEYPOT_FIELD = "🍯"
+/**
+ * The default honeypot field name. Underscore-prefixed like the other special fields, and
+ * a name SvelteKit remote forms accept (their field names must be valid JS paths).
+ */
+export const HONEYPOT_FIELD = "_honey"
+
+/** The classic honeypot name — still checked, so forms rendered by older components stay protected. */
+export const HONEYPOT_LEGACY_FIELD = "🍯"
 
 /** The hidden input the Turnstile widget injects into its form. */
 export const TURNSTILE_FIELD = "cf-turnstile-response"
+
+/**
+ * Path-legal alias for the Turnstile token. The managed-captcha loader uses it (via
+ * Turnstile's `response-field-name`) on SvelteKit remote forms, where the default
+ * name's dashes are rejected by the form data parser.
+ */
+export const TURNSTILE_REMOTE_FIELD = "_captcha"
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
@@ -79,20 +92,23 @@ export async function check_captcha(
 	managed = false
 ): Promise<CaptchaVerdict> {
 	if (options.honeypot !== false) {
-		const name = options.honeypot ?? HONEYPOT_FIELD
-		const value = form.get(name)
-		form.delete(name)
-		if (typeof value === "string" && value.trim() !== "") {
-			return {
-				ok: false,
-				code: "spam",
-				message: "Submission flagged as spam: the honeypot field was filled.",
+		const names = options.honeypot ? [options.honeypot] : [HONEYPOT_FIELD, HONEYPOT_LEGACY_FIELD]
+		for (const name of names) {
+			const value = form.get(name)
+			form.delete(name)
+			if (typeof value === "string" && value.trim() !== "") {
+				return {
+					ok: false,
+					code: "spam",
+					message: "Submission flagged as spam: the honeypot field was filled.",
+				}
 			}
 		}
 	}
 
-	const raw_token = form.get(TURNSTILE_FIELD)
+	const raw_token = form.get(TURNSTILE_FIELD) ?? form.get(TURNSTILE_REMOTE_FIELD)
 	form.delete(TURNSTILE_FIELD)
+	form.delete(TURNSTILE_REMOTE_FIELD)
 	const token = typeof raw_token === "string" && raw_token ? raw_token : undefined
 
 	if (options.turnstile === false) return { ok: true }

@@ -31,7 +31,7 @@ you point it at a current member.
 	<textarea name="message" placeholder="Your message" required></textarea>
 
 	<!-- honeypot: hidden from humans; bots fill it and get dropped -->
-	<input name="_honey" style="position:absolute;left:-9999px;height:0;width:0;opacity:0"
+	<input name="🍯" style="position:absolute;left:-9999px;height:0;width:0;opacity:0"
 		tabindex="-1" autocomplete="off" aria-hidden="true">
 
 	<button>Send</button>
@@ -55,7 +55,7 @@ The endpoint speaks the library's [FormData dialect](/formdata):
 | --------------- | ------------------------------------------------------------------- |
 | `_subject`      | Sets the email's subject line                                       |
 | `_reply_to`     | Sets Reply-To explicitly (wins over an `email` field)               |
-| `_honey`        | The honeypot (classic `🍯` too): include it hidden; filled submissions are dropped |
+| `🍯`            | The honeypot: include it hidden; filled submissions are dropped    |
 | `fieldset→field`| Groups fields into titled sections in the email                     |
 
 ```html
@@ -72,7 +72,7 @@ configuration, so a bot can't repoint the mail.
 
 Two layers, same as the library's [spam protection](/spam):
 
-- **Honeypot**: include the hidden `_honey` field and bot submissions are silently dropped.
+- **Honeypot**: include the hidden `🍯` field and bot submissions are silently dropped.
   The bot even receives a success response, so it learns nothing.
 - **Managed captcha**: enable *Require captcha* on the form and add the captcha
   `<script>` tag (from the dashboard) to the page. Postboi renders an invisible

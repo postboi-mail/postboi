@@ -86,12 +86,12 @@ it renders.
 
 ## The honeypot: zero config
 
-Add a visually hidden field named `_honey` to your form:
+Add a visually hidden field named `🍯` to your form:
 
 ```html
 <input
 	type="text"
-	name="_honey"
+	name="🍯"
 	tabindex="-1"
 	autocomplete="off"
 	aria-hidden="true"
@@ -100,7 +100,7 @@ Add a visually hidden field named `_honey` to your form:
 ```
 
 That's it. Humans never see the field, so it arrives empty. Bots auto-fill every input they
-find, and any submission with a filled `_honey` is treated as spam:
+find, and any submission with a filled `🍯` is treated as spam:
 
 - **No email is sent.**
 - The field never appears in your emails (it's stripped even when empty).
@@ -213,7 +213,7 @@ import { config } from 'postboi'
 export default config({
 	captcha: {
 		key: 'pk_…', // your publishable key, committed here by `postboi init`
-		honeypot: 'nickname', // rename the honeypot field (default: "_honey")
+		honeypot: 'nickname', // rename the honeypot field (default: "🍯")
 		turnstile: false // or { secret_key }, or true to require it
 	}
 })
@@ -222,7 +222,7 @@ export default config({
 | Option      | Values                               | Default                                                                    |
 | ----------- | ------------------------------------ | -------------------------------------------------------------------------- |
 | `key`       | your publishable `pk_…` key          | written by `postboi init`; feeds the `<Captcha />` bake                    |
-| `honeypot`  | field name, or `false` to disable    | `"_honey"` (the classic `🍯` is also accepted)                             |
+| `honeypot`  | field name, or `false` to disable    | `"🍯"`                                                                     |
 | `turnstile` | `{ secret_key }`, `true`, or `false` | auto: managed on the Postboi provider, local when `TURNSTILE_SECRET_KEY` is set |
 
 ## Error codes

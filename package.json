@@ -135,6 +135,11 @@
       "svelte": "./dist/kit.js",
       "default": "./dist/kit.js"
     },
+    "./remote": {
+      "types": "./dist/mail.remote.d.ts",
+      "svelte": "./dist/mail.remote.js",
+      "default": "./dist/mail.remote.js"
+    },
     "./svelte": {
       "types": "./dist/Captcha.svelte.d.ts",
       "svelte": "./dist/Captcha.svelte",
