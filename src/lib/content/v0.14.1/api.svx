@@ -39,11 +39,11 @@ await mail.reschedule(id, when) // Date | ISO string | Duration (see Scheduling)
 
 // lists & broadcasts (see The Postboi provider)
 await mail.lists()
-await mail.create_list(name) // names are unique per account (409 name_taken)
+await mail.create_list(name)
 await mail.list(id) // includes recipients
 await mail.rename_list(id, name)
 await mail.delete_list(id)
-await mail.add_recipients(name_or_id, recipients) // upserts — see The Postboi provider
+await mail.add_recipients(id, { email, name?, data? } | [...])
 await mail.remove_recipient(id, email)
 await mail.broadcast(id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
 

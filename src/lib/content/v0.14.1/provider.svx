@@ -23,10 +23,6 @@ committed [`postboi.config.ts`](/config), the same file where you can add
 won't accept a default `from` at a domain that isn't on your account (listing the ones
 that are), and warns when the domain is still pending verification.
 
-Re-running `init` is safe: when a working `POSTBOI_TOKEN` is already in your environment
-it's reused rather than replaced, so you can walk through the CLI again any time to
-revisit your defaults.
-
 That's the whole setup:
 
 ```ts
@@ -180,31 +176,17 @@ with `retries` for safe automatic retry.
 ## Lists & broadcasts
 
 The dashboard's recipient lists are available from code, so a newsletter signup can go
-straight onto a list without leaving your app — one import, one call:
+straight onto a list and a broadcast can go out without leaving your app:
 
 ```ts
-import { add_recipients } from "postboi"
+const { id: list_id } = await mail.create_list("Newsletter")
 
-await add_recipients("Newsletter", "Ada Lovelace <ada@example.com>")
-```
-
-`add_recipients` upserts on both sides. The first argument is a list **name or id** —
-an unknown name creates the list — and re-adding an address updates its name and
-`data` instead of duplicating it. Recipients take the same shapes as `to`: a bare
-address, `"Name <a@b.c>"`, `{ email, name?, data? }`, or an array mixing all three.
-(List names are unique per account, so `create_list` rejects a taken name with code
-`name_taken`.)
-
-The same method lives on a provider instance, and its response carries the list's id
-for a follow-up broadcast:
-
-```ts
-const { list } = await mail.add_recipients("Newsletter", [
+await mail.add_recipients(list_id, [
 	{ email: "ada@example.com", name: "Ada", data: { plan: "Pro" } },
-	"Linus <linus@example.com>",
+	{ email: "linus@example.com" },
 ])
 
-await mail.broadcast(list.id, {
+await mail.broadcast(list_id, {
 	subject: "Hey {name}",
 	body: "<p>News for our {plan} users…</p>",
 	scheduled_at: { hours: 1 }, // optional: omit to queue immediately
