@@ -275,6 +275,22 @@ describe("the Postboi provider — account API", () => {
 		expect(sent_init().method).toBe("DELETE")
 	})
 
+	it("add_recipients takes to-style recipients and a list name", async () => {
+		fetch.mockResolvedValue(respond({ json: { added: 1, list: { id: "l1", name: "my list" } } }))
+		await provider().add_recipients("my list", "Acme Inc <hello@acme.example>")
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/my%20list/recipients")
+		expect(sent_json()).toEqual([{ email: "hello@acme.example", name: "Acme Inc" }])
+
+		await provider().add_recipients("l1", [
+			"a@test.com",
+			{ email: "b@test.com", data: { plan: "pro" } },
+		])
+		expect(sent_json()).toEqual([
+			{ email: "a@test.com" },
+			{ email: "b@test.com", data: { plan: "pro" } },
+		])
+	})
+
 	it("broadcast() maps body → html and normalizes addresses", async () => {
 		fetch.mockResolvedValue(respond({ json: { ids: ["m1"], recipients: 1, scheduled_at: "now" } }))
 		await provider().broadcast("l1", {

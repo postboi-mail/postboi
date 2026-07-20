@@ -99,6 +99,13 @@ export interface NewListRecipient {
 	data?: Record<string, string>
 }
 
+/**
+ * Anything `add_recipients` accepts as one recipient — the same shapes as `to`:
+ * `"a@b.c"`, `"Name <a@b.c>"`, `{ address, name }`, or a {@link NewListRecipient}
+ * when the recipient carries broadcast template `data`.
+ */
+export type ListRecipientInput = Email | NewListRecipient
+
 /** One suppressed address on the account. */
 export interface Suppression {
 	email: string
@@ -222,7 +229,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		return data.lists
 	}
 
-	/** Create a list. */
+	/** Create a list. Names are unique per account — a taken name rejects with `name_taken`. */
 	create_list(name: string): Promise<{ id: string; name: string; created_at: string }> {
 		return this.#api("/lists", { body: { name } })
 	}
@@ -242,12 +249,26 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		return this.#api(`/lists/${encodeURIComponent(id)}`, { method: "DELETE" })
 	}
 
-	/** Add one recipient or an array to a list. `data` are the `{key}` broadcast variables. */
+	/**
+	 * Add one recipient or an array to a list — upserting both sides: `list` is a name
+	 * or id (an unknown name creates the list), and re-adding an address updates its
+	 * name/`data` instead of duplicating it. Recipients take the same shapes as `to`:
+	 * `"a@b.c"`, `"Name <a@b.c>"`, or `{ email, name, data }` where `data` holds the
+	 * `{key}` broadcast variables.
+	 *
+	 * @example
+	 * ```ts
+	 * await mail.add_recipients("my list", "Acme Inc <hello@acme.example>")
+	 * ```
+	 */
 	add_recipients(
-		id: string,
-		recipients: NewListRecipient | Array<NewListRecipient>
-	): Promise<{ added: number }> {
-		return this.#api(`/lists/${encodeURIComponent(id)}/recipients`, { body: recipients })
+		list: string,
+		recipients: ListRecipientInput | Array<ListRecipientInput>
+	): Promise<{ added: number; list: { id: string; name: string } }> {
+		const rows = (Array.isArray(recipients) ? recipients : [recipients]).flatMap((entry) =>
+			typeof entry === "string" || !("email" in entry) ? this.email_name_list(entry) : [entry]
+		)
+		return this.#api(`/lists/${encodeURIComponent(list)}/recipients`, { body: rows })
 	}
 
 	/** Remove an address from a list. */

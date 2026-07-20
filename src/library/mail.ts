@@ -8,6 +8,10 @@ import type {
 	ProviderBase,
 } from "./index.js"
 import { PostboiError } from "./index.js"
+// Type-only — erased at compile time, so the provider module stays a dynamic-only leaf
+// (see the LOADERS note below).
+import type Postboi from "./postboi_provider.js"
+import type { ListRecipientInput } from "./postboi_provider.js"
 import { find_provider } from "./registry.js"
 import { load_config } from "./config.js"
 import { ensure_env_loaded, env_defaults, read_env } from "./env.js"
@@ -161,4 +165,37 @@ export async function mail(
 export async function cancel(id: string): Promise<CancelResponse> {
 	const provider = await resolve_provider()
 	return provider.cancel(id)
+}
+
+/**
+ * Add recipients to a Postboi list without constructing anything — the zero-config
+ * counterpart of `new Postboi().add_recipients()`. `list` is a list name or id, and an
+ * unknown name creates the list, so this is all a signup flow needs:
+ *
+ * @example
+ * ```ts
+ * import { add_recipients } from "postboi"
+ * await add_recipients("my list", "Acme Inc <hello@acme.example>")
+ * ```
+ *
+ * Recipients take the same shapes as `to` — an address, `"Name <a@b.c>"`,
+ * `{ email, name, data }`, or an array of these. Lists live on the Postboi API, so this
+ * rejects with code `lists_not_supported` when another provider is configured.
+ */
+export async function add_recipients(
+	list: string,
+	recipients: ListRecipientInput | Array<ListRecipientInput>
+): Promise<{ added: number; list: { id: string; name: string } }> {
+	const provider = await resolve_provider()
+	// Duck-typed rather than instanceof — importing the class here would defeat the
+	// dynamic-only leaf (see LOADERS).
+	if (!("add_recipients" in provider)) {
+		throw new PostboiError({
+			provider: "postboi",
+			code: "lists_not_supported",
+			message:
+				"Lists need the Postboi provider — set POSTBOI_TOKEN (run `bunx postboi init`), or call add_recipients on a `new Postboi()` instance.",
+		})
+	}
+	return (provider as Postboi).add_recipients(list, recipients)
 }
