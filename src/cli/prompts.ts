@@ -3,11 +3,12 @@ import * as readline from "node:readline/promises"
 import { stdin, stdout } from "node:process"
 import type { Readable, Writable } from "node:stream"
 
-/** styleText wrappers — colours degrade to plain text when the stream isn't a TTY. */
+/** styleText wrappers — colours degrade to plain text when the stream isn't a TTY.
+ * The TTY check is ours: Bun's styleText ignores the `stream` option and colours anyway. */
 const paint =
 	(format: Parameters<typeof styleText>[0]) =>
 	(text: string): string =>
-		styleText(format, text, { stream: stdout })
+		stdout.isTTY ? styleText(format, text, { stream: stdout }) : text
 
 export const bold = paint("bold")
 export const dim = paint("dim")

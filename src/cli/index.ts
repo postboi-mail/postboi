@@ -471,20 +471,37 @@ async function sync(): Promise<void> {
  */
 async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void> {
 	const base = cloud_base()
-	const start = await start_device_auth(base)
 
-	console.log(`\n${bold("Authorise this device in your browser:")}\n`)
-	console.log(`  ${cyan(start.url)}\n`)
-	if (open_browser(start.url)) console.log(dim("  (opening in your default browser)"))
-	console.log(dim("\nWaiting for authorisation…"))
+	// Re-running init shouldn't mint a new token every time — reuse an existing
+	// POSTBOI_TOKEN that still works, so the rest of the walkthrough (defaults,
+	// config) can be repeated freely. A dead/revoked token falls through to auth.
+	await ensure_env_loaded()
+	const existing_token = read_env("POSTBOI_TOKEN")
+	let cloud_account = existing_token ? await fetch_domains(base, existing_token) : undefined
+	const reused = cloud_account !== undefined
+	let token = existing_token ?? ""
+	let send_address = cloud_account?.send_address
 
-	const { token, send_address } = await poll_device_auth(base, start)
-	console.log(`${green("✓")} device authorised`)
+	if (reused) {
+		console.log(`${green("✓")} using your existing ${bold("POSTBOI_TOKEN")}`)
+	} else {
+		const start = await start_device_auth(base)
 
-	// The domain list drives the default-from hint, the post-input warning, and the
-	// generated `from` types; the captcha key gets baked in for the <Captcha /> components.
-	// Best-effort: an older API just means no domain info.
-	const cloud_account = await fetch_domains(base, token)
+		console.log(`\n${bold("Authorise this device in your browser:")}\n`)
+		console.log(`  ${cyan(start.url)}\n`)
+		if (open_browser(start.url)) console.log(dim("  (opening in your default browser)"))
+		console.log(dim("\nWaiting for authorisation…"))
+
+		const claim = await poll_device_auth(base, start)
+		token = claim.token
+		send_address = claim.send_address
+		console.log(`${green("✓")} device authorised`)
+
+		// The domain list drives the default-from hint, the post-input warning, and the
+		// generated `from` types; the captcha key gets baked in for the <Captcha /> components.
+		// Best-effort: an older API just means no domain info.
+		cloud_account = await fetch_domains(base, token)
+	}
 	const domains: Array<PostboiDomain> = cloud_account?.domains ?? []
 	if (domains.length > 0) {
 		const list = domains
@@ -493,12 +510,15 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		console.log(`${dim("Domains:")} ${list}`)
 	}
 
-	const values: Record<string, string> = { POSTBOI_TOKEN: token }
+	const values: Record<string, string> = {}
+	if (!reused) values.POSTBOI_TOKEN = token
 
 	// Every endpoint secret in one var; receive() accepts the whole set, so webhooks are
 	// wired without the user copying a whsec_ from the dashboard. `postboi sync` refreshes it.
-	if (cloud_account?.webhook_secrets.length)
-		values.POSTBOI_WEBHOOK_SECRET = cloud_account.webhook_secrets.join(" ")
+	if (cloud_account?.webhook_secrets.length) {
+		const secrets = cloud_account.webhook_secrets.join(" ")
+		if (read_env("POSTBOI_WEBHOOK_SECRET") !== secrets) values.POSTBOI_WEBHOOK_SECRET = secrets
+	}
 
 	// Reject a from we know the API would bounce (from_not_allowed) and re-ask; a pending
 	// domain is accepted with a warning — it's theirs, the DNS just hasn't landed yet.
@@ -529,10 +549,13 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	).map((f) => (f.arg === "from" ? { ...f, default: send_address, validate: validate_from } : f))
 	const config_defaults = await ask_defaults(prompts, fields)
 
-	const targets = await choose_env_targets(prompts, files)
-	write_env_values(targets, values)
-	await offer_gitignore(prompts, targets)
-	await offer_host_push(prompts, files, values)
+	// Nothing new to write on a re-run with an up-to-date env — skip the env-file dance.
+	if (Object.keys(values).length > 0) {
+		const targets = await choose_env_targets(prompts, files)
+		write_env_values(targets, values)
+		await offer_gitignore(prompts, targets)
+		await offer_host_push(prompts, files, values)
+	}
 	ensure_install(files)
 
 	// The committed home for defaults, hooks, and the publishable captcha key. A
