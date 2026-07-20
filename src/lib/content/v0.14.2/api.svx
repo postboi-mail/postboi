@@ -39,20 +39,13 @@ await mail.reschedule(id, when) // Date | ISO string | Duration (see Scheduling)
 
 // lists & broadcasts (see The Postboi provider)
 await mail.lists()
-await mail.create_list(name, { confirmation? }) // names are unique per account (409 name_taken)
-await mail.list(name_or_id) // includes recipients + confirmation settings
-await mail.update_list(name_or_id, { name?, confirmation? })
-await mail.rename_list(name_or_id, name) // shorthand for update_list
-await mail.delete_list(name_or_id)
+await mail.create_list(name) // names are unique per account (409 name_taken)
+await mail.list(id) // includes recipients
+await mail.rename_list(id, name)
+await mail.delete_list(id)
 await mail.add_recipients(name_or_id, recipients) // upserts — see The Postboi provider
-await mail.remove_recipient(name_or_id, email)
-await mail.broadcast(name_or_id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
-
-// notifications (see The Postboi provider)
-await mail.notifications(name_or_id)
-await mail.create_notification(name_or_id, { recipients, from?, subject?, body?, schedule })
-await mail.update_notification(name_or_id, id, changes) // partial
-await mail.delete_notification(name_or_id, id)
+await mail.remove_recipient(id, email)
+await mail.broadcast(id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
 
 // suppressions (see The Postboi provider)
 await mail.suppressions()

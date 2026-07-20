@@ -1,0 +1,134 @@
+---
+title: Email templates
+name: Email templates
+description: Pair Postboi with Maizzle for Tailwind-styled, email-safe HTML, or bring React Email, MJML, or anything else that renders to a string.
+category: Guides
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "$lib"
+</script>
+
+Postboi deliberately doesn't ship a templating language. `body` is just HTML (a string, or
+a **promise resolving to one**), so any tool that renders HTML works, and swapping
+templating stacks never touches your sending code.
+
+For anything fancier than [FormData tables](/formdata), our favourite pairing is
+**[Maizzle](https://maizzle.com)**, enough so that Postboi ships an optional
+[`postboi/maizzle`](#send-it) helper for it. Think of it as Postboi's answer to Resend +
+`react-email`: the same "design in components, send the result" workflow, except it works
+across all [supported providers](/providers), not just one.
+
+> We're not affiliated with Maizzle in any way. It's just neat.
+
+## Why Maizzle
+
+- **Tailwind CSS for email**: write utilities, get inlined, email-safe CSS out.
+- **Email-grade output**: table layouts, Outlook fallbacks, and battle-tested
+  transformers, so you're not hand-rolling `<td>` soup.
+- **Components included**: `Button`, `Container`, `Heading`, and friends, plus your own.
+- **A real dev loop**: `maizzle serve` gives you live-reloading previews in the browser.
+
+Since Maizzle 6, templates are authored as Vue single-file components. That's just the
+authoring format: rendering happens on the server and the output is plain HTML, so it
+slots into any app, SvelteKit included. No Vue ships anywhere near your frontend.
+
+## Set up
+
+Add Maizzle to your app:
+
+<InstallationTabs pkg="@maizzle/framework" />
+
+Or scaffold a standalone project with `npx maizzle new`, handy if emails live in their
+own repo, or you want the [Maizzle CLI](https://maizzle.com/docs/installation) workflow
+with live previews.
+
+## Write a template
+
+Templates live wherever you like. An `emails/` directory keeps things tidy. Declare the
+dynamic bits with `defineProps`:
+
+```vue
+<!-- emails/welcome.vue -->
+<script setup>
+defineProps({ name: String })
+</script>
+
+<template>
+	<Layout>
+		<Container class="max-w-xl">
+			<Heading class="text-2xl">Welcome, {{ name }}!</Heading>
+			<Text>Thanks for signing up. Your account is ready to go.</Text>
+			<Button href="https://example.com/get-started">Get started</Button>
+		</Container>
+	</Layout>
+</template>
+```
+
+## Send it
+
+Postboi ships a helper for exactly this: `postboi/maizzle` wraps Maizzle's
+[`render()`](https://maizzle.com/docs/api/utilities) and resolves to the transformed,
+inlined HTML. Because `body` accepts a promise, it drops straight in (Resend-style
+ergonomics, no intermediate `await`):
+
+```typescript
+import { mail } from 'postboi'
+import maizzle from 'postboi/maizzle'
+
+await mail({
+	to: 'ava@example.com',
+	subject: 'Welcome to Acme',
+	body: maizzle('./emails/welcome.vue', { name: 'Ava' })
+})
+```
+
+`@maizzle/framework` is an **optional peer dependency**: the helper needs it installed
+(see [Set up](#set-up)), but nothing else in Postboi does.
+
+The signature is `maizzle(template, props?, config?)`:
+
+- `template`: a path to a template file, or a raw SFC source string.
+- `props`: passed to the template's root component, mapping 1:1 to its `defineProps`.
+  Type them with a generic: `maizzle<WelcomeProps>('./emails/welcome.vue', { name: 'Ava' })`.
+- `config`: Maizzle config overrides forwarded to `render()`, e.g. `{ minify: true }`.
+
+Prefer to call Maizzle yourself? The helper is a thin convenience. `render()` works just
+as well:
+
+```typescript
+import { mail } from 'postboi'
+import { render } from '@maizzle/framework'
+
+const { html } = await render('./emails/welcome.vue', {
+	props: { name: 'Ava' }
+})
+
+await mail({
+	to: 'ava@example.com',
+	subject: 'Welcome to Acme',
+	body: html
+})
+```
+
+Pair it with [`auto_text`](/api#common-constructor-options) in your
+[global config](/config) to derive a plain-text alternative from the rendered HTML
+automatically.
+
+## Edge runtimes
+
+Maizzle's `render()` (and therefore `postboi/maizzle`) spins up a lightweight
+Vite-based renderer under the hood, so it needs Node or Bun: fine in SvelteKit, Next.js, or Express server routes, but not on edge runtimes like
+[Cloudflare Workers](/cloudflare-workers).
+
+There, pre-build instead: put literal tokens like `%name%` in your template copy, compile
+to static HTML at deploy time with `maizzle build` (or the
+[`build()`](https://maizzle.com/docs/api/utilities) API), then import the HTML as a string
+and `.replace()` the tokens at send time.
+
+## Prefer React Email or MJML?
+
+Same pattern, different renderer: anything that produces an HTML string (or a promise of
+one) drops straight into `body`. React Email's
+[`render()`](https://react.email/docs/utilities/render) resolves to an HTML string, so you
+can pass it through unawaited too; with MJML it's `mjml2html(template).html`.

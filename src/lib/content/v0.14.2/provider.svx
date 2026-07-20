@@ -195,18 +195,16 @@ address, `"Name <a@b.c>"`, `{ email, name?, data? }`, or an array mixing all thr
 (List names are unique per account, so `create_list` rejects a taken name with code
 `name_taken`.)
 
-Every list method accepts a name or an id — only `add_recipients` creates a missing
-list; everything else 404s on an unknown name. The response reports `added` (genuinely
-new addresses) and `updated` (existing ones refreshed), so calling it twice with the
-same address adds once:
+The same method lives on a provider instance, and its response carries the list's id
+for a follow-up broadcast:
 
 ```ts
-await mail.add_recipients("Newsletter", [
+const { list } = await mail.add_recipients("Newsletter", [
 	{ email: "ada@example.com", name: "Ada", data: { plan: "Pro" } },
 	"Linus <linus@example.com>",
-]) // → { added: 2, updated: 0, list: { id, name } }
+])
 
-await mail.broadcast("Newsletter", {
+await mail.broadcast(list.id, {
 	subject: "Hey {name}",
 	body: "<p>News for our {plan} users…</p>",
 	scheduled_at: { hours: 1 }, // optional: omit to queue immediately
@@ -218,55 +216,6 @@ await mail.broadcast("Newsletter", {
 one-click unsubscribe headers Gmail and Yahoo require for bulk mail. The rest of the
 surface: `lists()`, `list(id)` (with recipients), `rename_list(id, name)`,
 `delete_list(id)`, and `remove_recipient(list_id, email)`.
-
-## Confirmation (double opt-in)
-
-Lists can require **confirmation**: new recipients start `pending` and receive an
-email with a personal confirm link; they only receive broadcasts (and count as new
-subscribers for notifications) once they click it. Manage it from the list's
-Confirmation tab, or from code:
-
-```ts
-await mail.update_list("Newsletter", { confirmation: true }) // or on create:
-await mail.create_list("Digest", { confirmation: true })
-
-await mail.add_recipients("Newsletter", "ada@example.com")
-// → { added: 1, updated: 0, pending: 1, list: … } — Ada gets the confirmation email
-```
-
-Two knobs, patchable via an object: `enabled` (send confirmation emails) and
-`default_status` (what new recipients start as). `confirmation: true` is shorthand for
-strict double opt-in (email + `"pending"`); a courtesy email without gating is
-`{ enabled: true, default_status: "subscribed" }`; off again is `confirmation: false`.
-The object also takes `subject`, `body` (HTML with `{key}` variables plus `{list}` and
-`{confirm_url}` — put it in a link) and `from`. Settings come back on `list()`, and
-recipient rows carry a `status` of `"subscribed"` or `"pending"`.
-
-## Notifications
-
-Each list can carry **notifications** — digests of new subscribers emailed to whoever
-should know, on a schedule or the moment someone joins. The dashboard's Notifications
-tab manages them visually; the same objects are available from code:
-
-```ts
-await mail.create_notification("Newsletter", {
-	recipients: "Darby <darby@uilo.co>",
-	schedule: "subscribe", // fire when someone new joins
-})
-
-await mail.create_notification("Newsletter", {
-	recipients: ["darby@uilo.co", "team@uilo.co"],
-	schedule: { frequency: "weekly", days: [1, 4], send_time: "09:00", timezone: "Europe/London" },
-})
-```
-
-`schedule` takes a bare frequency (`"daily"`, `"weekly"`, `"monthly"`, `"subscribe"`)
-or an object with `days` (JS weekday numbers, weekly), `month_day` (monthly),
-`send_time` and an IANA `timezone` — defaults are Mondays, 09:00, UTC. Subject and
-body default to a starter template; bodies are HTML with `{key}` variables plus
-`{#if}`/`{#each}` blocks over `new_subscribers`. The rest of the surface:
-`notifications(list)`, `update_notification(list, id, changes)` (partial — absent
-fields keep their values), and `delete_notification(list, id)`.
 
 ## Suppressions
 
