@@ -276,7 +276,9 @@ describe("the Postboi provider — account API", () => {
 	})
 
 	it("add_recipients takes to-style recipients and a list name", async () => {
-		fetch.mockResolvedValue(respond({ json: { added: 1, list: { id: "l1", name: "my list" } } }))
+		fetch.mockResolvedValue(
+			respond({ json: { added: 1, updated: 0, list: { id: "l1", name: "my list" } } })
+		)
 		await provider().add_recipients("my list", "Acme Inc <hello@acme.example>")
 		expect(sent_url()).toBe("https://postboi.email/v1/lists/my%20list/recipients")
 		expect(sent_json()).toEqual([{ email: "hello@acme.example", name: "Acme Inc" }])
@@ -289,6 +291,62 @@ describe("the Postboi provider — account API", () => {
 			{ email: "a@test.com" },
 			{ email: "b@test.com", data: { plan: "pro" } },
 		])
+	})
+
+	it("update_list toggles confirmation and renames; create_list takes options", async () => {
+		fetch.mockResolvedValue(
+			respond({ json: { id: "l1", name: "my list", confirmation: { enabled: true } } })
+		)
+		await provider().update_list("my list", { confirmation: true })
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/my%20list")
+		expect(sent_init().method).toBe("PATCH")
+		expect(sent_json()).toEqual({ confirmation: true })
+
+		await provider().update_list("l1", {
+			name: "News",
+			confirmation: { enabled: true, from: "Bot <bot@test.com>" },
+		})
+		expect(sent_json()).toEqual({
+			name: "News",
+			confirmation: { enabled: true, from: { email: "bot@test.com", name: "Bot" } },
+		})
+
+		await provider().create_list("Fresh", { confirmation: true })
+		expect(sent_url()).toBe("https://postboi.email/v1/lists")
+		expect(sent_json()).toEqual({ name: "Fresh", confirmation: true })
+	})
+
+	it("manages notifications: create with shorthand schedule, list, update, delete", async () => {
+		fetch.mockResolvedValue(
+			respond({ json: { id: "ntf_1", schedule: { frequency: "subscribe" } } })
+		)
+		await provider().create_notification("my list", {
+			recipients: "Darby <darby@uilo.co>",
+			schedule: "subscribe",
+		})
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/my%20list/notifications")
+		expect(sent_json()).toEqual({
+			recipients: [{ email: "darby@uilo.co", name: "Darby" }],
+			schedule: "subscribe",
+		})
+
+		fetch.mockResolvedValue(respond({ json: { notifications: [{ id: "ntf_1" }] } }))
+		const rows = await provider().notifications("my list")
+		expect(sent_init().method).toBe("GET")
+		expect(rows).toEqual([{ id: "ntf_1" }])
+
+		fetch.mockResolvedValue(respond({ json: { id: "ntf_1" } }))
+		await provider().update_notification("l1", "ntf_1", {
+			schedule: { frequency: "weekly", days: [1, 4], send_time: "17:30" },
+		})
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1/notifications/ntf_1")
+		expect(sent_init().method).toBe("PATCH")
+		expect(sent_json().schedule).toEqual({ frequency: "weekly", days: [1, 4], send_time: "17:30" })
+		expect(sent_json().recipients).toBeUndefined()
+
+		fetch.mockResolvedValue(respond({ json: { id: "ntf_1", deleted: true } }))
+		await provider().delete_notification("l1", "ntf_1")
+		expect(sent_init().method).toBe("DELETE")
 	})
 
 	it("broadcast() maps body → html and normalizes addresses", async () => {

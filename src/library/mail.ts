@@ -185,7 +185,12 @@ export async function cancel(id: string): Promise<CancelResponse> {
 export async function add_recipients(
 	list: string,
 	recipients: ListRecipientInput | Array<ListRecipientInput>
-): Promise<{ added: number; list: { id: string; name: string } }> {
+): Promise<{
+	added: number
+	updated: number
+	pending: number
+	list: { id: string; name: string }
+}> {
 	const provider = await resolve_provider()
 	// Duck-typed rather than instanceof — importing the class here would defeat the
 	// dynamic-only leaf (see LOADERS).

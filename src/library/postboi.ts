@@ -26,4 +26,11 @@ export type {
 	Suppression,
 	BroadcastOptions,
 	BroadcastResponse,
+	NotificationScheduleInput,
+	NotificationSchedule,
+	NotificationOptions,
+	NotificationDetails,
+	ConfirmationSettings,
+	ListConfirmationInput,
+	ListChanges,
 } from "./postboi_provider.js"

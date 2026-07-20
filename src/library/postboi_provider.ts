@@ -7,6 +7,7 @@ import type {
 	BatchRecipient,
 	Duration,
 	Email,
+	FromAddress,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 import { read_env, env_defaults } from "./env.js"
@@ -77,20 +78,27 @@ export interface ListSummary {
 	name: string
 	/** Recipient count. */
 	recipients: number
+	/** Whether double opt-in confirmation is on. */
+	confirmation: boolean
 	created_at: string
 	updated_at: string
 }
 
-/** One recipient on a list. `data` holds the `{key}` broadcast template variables. */
+/** One recipient on a list. `data` holds the `{key}` broadcast template variables.
+ * `status` is "pending" while a double-opt-in confirmation is outstanding. */
 export interface ListRecipient {
 	id: string
 	email: string
 	name?: string
 	data?: Record<string, string>
+	status?: "subscribed" | "pending"
 }
 
 /** A list with its recipients, as returned by `GET /v1/lists/:id`. */
-export type ListDetails = Omit<ListSummary, "recipients"> & { recipients: Array<ListRecipient> }
+export type ListDetails = Omit<ListSummary, "recipients" | "confirmation"> & {
+	recipients: Array<ListRecipient>
+	confirmation: ConfirmationSettings
+}
 
 /** A recipient to add to a list. `data` holds the `{key}` broadcast template variables. */
 export interface NewListRecipient {
@@ -116,8 +124,8 @@ export interface Suppression {
 
 /** The message broadcast to every recipient on a list. */
 export interface BroadcastOptions {
-	/** Omitted = the account's sending address. */
-	from?: Email
+	/** Omitted = the account's sending address. Narrowed by `bunx postboi sync`. */
+	from?: FromAddress
 	reply_to?: Email
 	subject: string
 	/** HTML body. `{key}` placeholders are filled from each recipient's `data` server-side. */
@@ -133,6 +141,100 @@ export interface BroadcastResponse {
 	ids: Array<string>
 	recipients: number
 	scheduled_at: string
+}
+
+/**
+ * When a notification sends. A bare frequency string is shorthand — `"weekly"`
+ * defaults to Mondays, `"subscribe"` fires whenever someone new joins the list.
+ * Times default to 09:00 UTC; pass `send_time`/`timezone` to pin them.
+ */
+export type NotificationScheduleInput =
+	| "daily"
+	| "weekly"
+	| "monthly"
+	| "subscribe"
+	| {
+			frequency: "daily" | "weekly" | "monthly" | "subscribe"
+			/** Weekly: JS weekday numbers (0 = Sunday). */
+			days?: Array<number>
+			/** Monthly: 1-31, clamped to shorter months. */
+			month_day?: number
+			/** "HH:MM", 24h. */
+			send_time?: string
+			/** IANA zone name, e.g. "Europe/London". */
+			timezone?: string
+	  }
+
+/** A notification's stored schedule, fully resolved. */
+export interface NotificationSchedule {
+	frequency: "daily" | "weekly" | "monthly" | "subscribe"
+	days: Array<number>
+	month_day: number
+	send_time: string
+	timezone: string
+}
+
+/** What `create_notification` accepts; subject/body default to the starter template. */
+export interface NotificationOptions {
+	/** Who receives the digest — the same shapes as `to`. */
+	recipients: Email | Array<Email>
+	/** Sender — your send address or a verified domain. Omit for the account default;
+	 * narrowed to your permitted addresses by `bunx postboi sync`. */
+	from?: FromAddress
+	subject?: string
+	/** HTML template body — `{key}` variables plus `{#if}`/`{#each}` blocks. */
+	body?: string
+	schedule: NotificationScheduleInput
+}
+
+/** A list's confirmation configuration. `enabled` = send confirmation emails;
+ * `default_status` = what new recipients start as ("pending" means they must
+ * confirm before receiving anything). `from` null = the account's send address. */
+export interface ConfirmationSettings {
+	enabled: boolean
+	default_status: "pending" | "subscribed"
+	subject: string
+	body: string
+	from: string | null
+}
+
+/**
+ * The `confirmation` option on create_list/update_list. The boolean shorthand:
+ * `true` = classic double opt-in (email + pending), `false` = plain instant
+ * subscribe. The object patches the knobs separately — e.g. a courtesy email
+ * without gating is `{ enabled: true, default_status: "subscribed" }`. `from` is
+ * narrowed by `bunx postboi sync`; null reverts it to the account's send address.
+ */
+export type ListConfirmationInput =
+	| boolean
+	| {
+			enabled?: boolean
+			default_status?: "pending" | "subscribed"
+			subject?: string
+			body?: string
+			from?: FromAddress | null
+	  }
+
+/** What update_list accepts — rename and/or confirmation, both optional. */
+export interface ListChanges {
+	name?: string
+	confirmation?: ListConfirmationInput
+}
+
+/** A notification as returned by the API. `next_run_at` is null while a
+ * subscribe-triggered notification waits for its next signup. */
+export interface NotificationDetails {
+	id: string
+	recipients: Array<{ email: string; name?: string }>
+	subject: string
+	body: string
+	/** Display-form sender, or null for the account's send address. */
+	from: string | null
+	schedule: NotificationSchedule
+	last_run_at: string | null
+	next_run_at: string | null
+	created_at: string
+	updated_at: string
 }
 
 /**
@@ -229,30 +331,69 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		return data.lists
 	}
 
-	/** Create a list. Names are unique per account — a taken name rejects with `name_taken`. */
-	create_list(name: string): Promise<{ id: string; name: string; created_at: string }> {
-		return this.#api("/lists", { body: { name } })
+	/** Create a list. Names are unique per account — a taken name rejects with `name_taken`.
+	 * Pass `confirmation` to enable double opt-in from the start. */
+	create_list(
+		name: string,
+		options: { confirmation?: ListConfirmationInput } = {}
+	): Promise<{ id: string; name: string; confirmation: ConfirmationSettings; created_at: string }> {
+		return this.#api("/lists", {
+			body: { name, confirmation: this.#confirmation_body(options.confirmation) },
+		})
 	}
 
-	/** One list, with its recipients. */
-	list(id: string): Promise<ListDetails> {
-		return this.#api(`/lists/${encodeURIComponent(id)}`, { method: "GET" })
+	/** Normalize a confirmation input's `from` (an Email shape) for the wire. */
+	#confirmation_body(input: ListConfirmationInput | undefined): unknown {
+		if (input === undefined || typeof input === "boolean") return input
+		return {
+			...input,
+			from:
+				input.from !== undefined && input.from !== null
+					? this.email_name(this.parse_email_address(input.from))
+					: input.from,
+		}
 	}
 
-	/** Rename a list. */
-	rename_list(id: string, name: string): Promise<{ id: string; name: string }> {
-		return this.#api(`/lists/${encodeURIComponent(id)}`, { method: "PATCH", body: { name } })
+	/**
+	 * Update a list — rename it and/or change its confirmation (double opt-in)
+	 * settings. `list` is a name or id.
+	 *
+	 * @example
+	 * ```ts
+	 * await mail.update_list("Newsletter", { confirmation: true })
+	 * await mail.update_list("Newsletter", { confirmation: { from: "Bot <hi@acme.example>" } })
+	 * ```
+	 */
+	update_list(
+		list: string,
+		changes: ListChanges
+	): Promise<{ id: string; name: string; confirmation: ConfirmationSettings }> {
+		return this.#api(`/lists/${encodeURIComponent(list)}`, {
+			method: "PATCH",
+			body: { ...changes, confirmation: this.#confirmation_body(changes.confirmation) },
+		})
 	}
 
-	/** Delete a list and its recipients. */
-	delete_list(id: string): Promise<{ id: string; deleted: boolean }> {
-		return this.#api(`/lists/${encodeURIComponent(id)}`, { method: "DELETE" })
+	/** One list, with its recipients. `list` is a name or id. */
+	list(list: string): Promise<ListDetails> {
+		return this.#api(`/lists/${encodeURIComponent(list)}`, { method: "GET" })
+	}
+
+	/** Rename a list — shorthand for `update_list(list, { name })`. */
+	rename_list(list: string, name: string): Promise<{ id: string; name: string }> {
+		return this.update_list(list, { name })
+	}
+
+	/** Delete a list and its recipients. `list` is a name or id. */
+	delete_list(list: string): Promise<{ id: string; deleted: boolean }> {
+		return this.#api(`/lists/${encodeURIComponent(list)}`, { method: "DELETE" })
 	}
 
 	/**
 	 * Add one recipient or an array to a list — upserting both sides: `list` is a name
 	 * or id (an unknown name creates the list), and re-adding an address updates its
-	 * name/`data` instead of duplicating it. Recipients take the same shapes as `to`:
+	 * name/`data` instead of duplicating it — `added` counts genuinely new addresses,
+	 * `updated` the refreshed existing ones. Recipients take the same shapes as `to`:
 	 * `"a@b.c"`, `"Name <a@b.c>"`, or `{ email, name, data }` where `data` holds the
 	 * `{key}` broadcast variables.
 	 *
@@ -264,27 +405,34 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	add_recipients(
 		list: string,
 		recipients: ListRecipientInput | Array<ListRecipientInput>
-	): Promise<{ added: number; list: { id: string; name: string } }> {
+	): Promise<{
+		added: number
+		updated: number
+		/** How many of `added` started pending (the list requires confirmation). */
+		pending: number
+		list: { id: string; name: string }
+	}> {
 		const rows = (Array.isArray(recipients) ? recipients : [recipients]).flatMap((entry) =>
 			typeof entry === "string" || !("email" in entry) ? this.email_name_list(entry) : [entry]
 		)
 		return this.#api(`/lists/${encodeURIComponent(list)}/recipients`, { body: rows })
 	}
 
-	/** Remove an address from a list. */
-	remove_recipient(id: string, email: string): Promise<{ email: string; deleted: boolean }> {
+	/** Remove an address from a list. `list` is a name or id. */
+	remove_recipient(list: string, email: string): Promise<{ email: string; deleted: boolean }> {
 		return this.#api(
-			`/lists/${encodeURIComponent(id)}/recipients?email=${encodeURIComponent(email)}`,
+			`/lists/${encodeURIComponent(list)}/recipients?email=${encodeURIComponent(email)}`,
 			{ method: "DELETE" }
 		)
 	}
 
 	/**
-	 * Broadcast one message to every recipient on a list. `{key}` placeholders are filled
-	 * from each recipient's `data`, and one-click unsubscribe headers are added for you.
+	 * Broadcast one message to every recipient on a list — `list` is a name or id.
+	 * `{key}` placeholders are filled from each recipient's `data`, and one-click
+	 * unsubscribe headers are added for you.
 	 */
-	broadcast(id: string, options: BroadcastOptions): Promise<BroadcastResponse> {
-		return this.#api(`/lists/${encodeURIComponent(id)}/send`, {
+	broadcast(list: string, options: BroadcastOptions): Promise<BroadcastResponse> {
+		return this.#api(`/lists/${encodeURIComponent(list)}/send`, {
 			body: {
 				from: options.from ? this.email_name(this.parse_email_address(options.from)) : undefined,
 				reply_to: options.reply_to
@@ -297,6 +445,68 @@ export default class Postboi extends ProviderBase<SendResponse> {
 					? this.resolve_scheduled_at(options.scheduled_at).toISOString()
 					: undefined,
 			},
+		})
+	}
+
+	/** A list's notifications — its recurring digests. `list` is a name or id. */
+	async notifications(list: string): Promise<Array<NotificationDetails>> {
+		const data = await this.#api<{ notifications: Array<NotificationDetails> }>(
+			`/lists/${encodeURIComponent(list)}/notifications`,
+			{ method: "GET" }
+		)
+		return data.notifications
+	}
+
+	/**
+	 * Create a notification on a list — a digest of new subscribers emailed on a
+	 * schedule, or immediately when someone new joins (`schedule: "subscribe"`).
+	 * Subject and body default to the starter template.
+	 *
+	 * @example
+	 * ```ts
+	 * await mail.create_notification("Newsletter", {
+	 * 	recipients: "Darby <darby@uilo.co>",
+	 * 	schedule: { frequency: "weekly", days: [1], send_time: "09:00", timezone: "Europe/London" },
+	 * })
+	 * ```
+	 */
+	create_notification(list: string, options: NotificationOptions): Promise<NotificationDetails> {
+		return this.#api(`/lists/${encodeURIComponent(list)}/notifications`, {
+			body: {
+				...options,
+				recipients: this.email_name_list(options.recipients),
+				from:
+					options.from !== undefined
+						? this.email_name(this.parse_email_address(options.from))
+						: undefined,
+			},
+		})
+	}
+
+	/** Update a notification — absent fields keep their stored values. */
+	update_notification(
+		list: string,
+		id: string,
+		options: Partial<NotificationOptions> & { from?: FromAddress | null }
+	): Promise<NotificationDetails> {
+		return this.#api(`/lists/${encodeURIComponent(list)}/notifications/${encodeURIComponent(id)}`, {
+			method: "PATCH",
+			body: {
+				...options,
+				recipients:
+					options.recipients !== undefined ? this.email_name_list(options.recipients) : undefined,
+				from:
+					options.from !== undefined && options.from !== null
+						? this.email_name(this.parse_email_address(options.from))
+						: options.from,
+			},
+		})
+	}
+
+	/** Delete a notification. */
+	delete_notification(list: string, id: string): Promise<{ id: string; deleted: boolean }> {
+		return this.#api(`/lists/${encodeURIComponent(list)}/notifications/${encodeURIComponent(id)}`, {
+			method: "DELETE",
 		})
 	}
 
