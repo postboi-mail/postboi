@@ -84,14 +84,17 @@ export interface ListSummary {
 	updated_at: string
 }
 
-/** One recipient on a list. `data` holds the `{key}` broadcast template variables.
- * `status` is "pending" while a double-opt-in confirmation is outstanding. */
+/** A recipient's lifecycle state. Only subscribed recipients receive broadcasts and
+ * digests; unsubscribes and bounces flip the status instead of removing the row. */
+export type RecipientStatus = "subscribed" | "pending" | "unsubscribed" | "bounced" | "complained"
+
+/** One recipient on a list. `data` holds the `{key}` broadcast template variables. */
 export interface ListRecipient {
 	id: string
 	email: string
 	name?: string
 	data?: Record<string, string>
-	status?: "subscribed" | "pending"
+	status?: RecipientStatus
 }
 
 /** A list with its recipients, as returned by `GET /v1/lists/:id`. */
@@ -404,18 +407,39 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	 */
 	add_recipients(
 		list: string,
-		recipients: ListRecipientInput | Array<ListRecipientInput>
+		recipients: ListRecipientInput | Array<ListRecipientInput>,
+		options: {
+			/** Starting status for these recipients — overrides the list's default. */
+			status?: "subscribed" | "pending"
+		} = {}
 	): Promise<{
 		added: number
 		updated: number
-		/** How many of `added` started pending (the list requires confirmation). */
+		/** How many of `added` started pending. */
 		pending: number
 		list: { id: string; name: string }
 	}> {
 		const rows = (Array.isArray(recipients) ? recipients : [recipients]).flatMap((entry) =>
 			typeof entry === "string" || !("email" in entry) ? this.email_name_list(entry) : [entry]
 		)
-		return this.#api(`/lists/${encodeURIComponent(list)}/recipients`, { body: rows })
+		const query = options.status ? `?status=${options.status}` : ""
+		return this.#api(`/lists/${encodeURIComponent(list)}/recipients${query}`, { body: rows })
+	}
+
+	/**
+	 * Set a recipient's status by hand — e.g. `"unsubscribed"` keeps them on the
+	 * list (with history) but out of every future broadcast and digest, and
+	 * `"subscribed"` brings them back. `list` is a name or id.
+	 */
+	set_recipient_status(
+		list: string,
+		email: string,
+		status: RecipientStatus
+	): Promise<{ email: string; status: RecipientStatus }> {
+		return this.#api(`/lists/${encodeURIComponent(list)}/recipients`, {
+			method: "PATCH",
+			body: { email, status },
+		})
 	}
 
 	/** Remove an address from a list. `list` is a name or id. */

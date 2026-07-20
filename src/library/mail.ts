@@ -184,7 +184,8 @@ export async function cancel(id: string): Promise<CancelResponse> {
  */
 export async function add_recipients(
 	list: string,
-	recipients: ListRecipientInput | Array<ListRecipientInput>
+	recipients: ListRecipientInput | Array<ListRecipientInput>,
+	options: { status?: "subscribed" | "pending" } = {}
 ): Promise<{
 	added: number
 	updated: number
@@ -202,5 +203,5 @@ export async function add_recipients(
 				"Lists need the Postboi provider — set POSTBOI_TOKEN (run `bunx postboi init`), or call add_recipients on a `new Postboi()` instance.",
 		})
 	}
-	return (provider as Postboi).add_recipients(list, recipients)
+	return (provider as Postboi).add_recipients(list, recipients, options)
 }

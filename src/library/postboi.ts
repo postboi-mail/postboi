@@ -20,6 +20,7 @@ export type {
 	MessageDetails,
 	ListSummary,
 	ListRecipient,
+	RecipientStatus,
 	ListDetails,
 	NewListRecipient,
 	ListRecipientInput,
