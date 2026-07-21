@@ -16,8 +16,9 @@ Postboi is a framework-agnostic email library optimised for SvelteKit. Works wit
 
 ### Features
 
+- ☁️ **Send with no provider account** - `postboi init`, sign in, send. The [Postboi provider](https://docs.postboi.email/provider) brings managed sending, domains, lists & broadcasts, suppressions and a message log — one token, no DNS, no card
 - 👨‍💻 **Zero configuration** - works out of the box with minimal setup
-- 🔌 **Provider-based** - swap email providers without changing your code
+- 🔌 **Provider-based** - or bring your own (Resend, SES, Mailgun, Postmark, …) and swap it without changing your code
 - 📝 **Smart FormData parsing** - automatically converts FormData to HTML tables
 - 🎯 **Grouped fields** - organize form fields with `fieldset→field` syntax
 - 📎 **Attachments** - attach files directly from form inputs or file objects
@@ -32,15 +33,54 @@ Postboi is a framework-agnostic email library optimised for SvelteKit. Works wit
 
 ## Quick start
 
-Run the CLI to choose a provider, input credentials, optionally set defaults.
-
 ```bash
 bunx postboi init
 ```
 
-It writes your provider, defaults, and non-secret options to a committed
-`postboi.config.ts`, keeping only secrets (API keys) in your env file — so the best case is
-a single env var:
+Pick **Postboi** at the first prompt and you're sending in under a minute. The CLI opens
+your browser, authorises the device, and writes a single env var — no provider account,
+no API keys to copy, no DNS, no card:
+
+```bash
+# .env  (gitignored — the only secret)
+POSTBOI_TOKEN=…
+```
+
+```typescript
+import { mail } from "postboi"
+
+await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+```
+
+That's the whole setup. Mail goes out from your `you@send.postboi.email` address (set
+`reply_to` to get replies) until you verify a domain of your own in the
+[dashboard](https://postboi.email/dashboard). `init` also:
+
+- writes defaults, hooks and the publishable captcha key to a committed
+  [`postboi.config.ts`](https://docs.postboi.email/config) — everything but the token lives in version control
+- **types `from`** to the addresses your account can actually send from, so a wrong one is
+  a type error instead of a runtime `from_not_allowed`
+- wires **managed captcha** (`<Captcha />` works with no keys) and your **webhook secrets**
+
+Beyond `mail()`, the token unlocks [message status](https://docs.postboi.email/provider#delivery-status),
+[recipient lists, broadcasts and double opt-in](https://docs.postboi.email/provider#lists--broadcasts),
+[suppressions](https://docs.postboi.email/provider#suppressions), and
+[batching with idempotency keys](https://docs.postboi.email/provider#batching--idempotency) — same import,
+no extra SDK:
+
+```typescript
+import { add_recipients } from "postboi"
+
+await add_recipients("Newsletter", "Ada Lovelace <ada@example.com>")
+```
+
+Full details: [The Postboi provider](https://docs.postboi.email/provider).
+
+### Bring your own provider
+
+Prefer Resend, SES, Mailgun, Postmark…? Pick **Bring your own provider** instead and the
+CLI collects that provider's credentials. Secrets go to your env file, everything else to
+the committed config — best case, still a single env var:
 
 ```typescript
 // postboi.config.ts  (committed)
@@ -57,13 +97,8 @@ export default config({
 RESEND_API_KEY=re_xxxxxxxx
 ```
 
-Then send from anywhere — no provider import, no constructor, config is picked up automatically:
-
-```typescript
-import { mail } from "postboi"
-
-await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
-```
+Every example below is identical either way: `mail()` picks up whichever provider is
+configured — no provider import, no constructor.
 
 On SvelteKit, a form action is a one-liner:
 
@@ -99,6 +134,7 @@ build your own with `remote(...)` from `postboi/kit`.
 | Topic                                    | Docs                                                                       |
 | ---------------------------------------- | -------------------------------------------------------------------------- |
 | Quick start — the CLI (`postboi init`)   | [docs.postboi.email/quick-start](https://docs.postboi.email/quick-start)   |
+| The Postboi provider                     | [docs.postboi.email/provider](https://docs.postboi.email/provider)         |
 | Manual setup (no CLI)                    | [docs.postboi.email/manual-setup](https://docs.postboi.email/manual-setup) |
 | SvelteKit form actions                   | [docs.postboi.email/sveltekit](https://docs.postboi.email/sveltekit)       |
 | FormData → HTML tables                   | [docs.postboi.email/formdata](https://docs.postboi.email/formdata)         |

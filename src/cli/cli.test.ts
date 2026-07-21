@@ -1,8 +1,16 @@
 import { describe, it, expect } from "vitest"
 import { Readable, Writable } from "node:stream"
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	readlinkSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import {
 	PROVIDERS,
 	DEFAULT_FIELDS,
@@ -576,12 +584,37 @@ describe("agent skill", () => {
 		expect(readFileSync(t, "utf8")).toBe(bundled_skill())
 	})
 
-	it("refresh_skill never creates the file, and no-ops when current", () => {
+	it("refresh_skill never creates the file, and no-ops once linked", () => {
 		const t = target()
 		expect(refresh_skill(t)).toBe(false)
 		expect(existsSync(t)).toBe(false)
 		writeFileSync(t, bundled_skill()!)
+		expect(refresh_skill(t)).toBe(true) // an old copy is upgraded to a link
 		expect(refresh_skill(t)).toBe(false)
+	})
+
+	it("installs a link, so a new release lands with no diff", async () => {
+		const t = target()
+		const p = prompter([""])
+		await offer_skill(p, t)
+		p.close()
+		expect(lstatSync(t).isSymbolicLink()).toBe(true)
+		expect(readlinkSync(t).startsWith("..")).toBe(true) // relative — survives a clone
+	})
+
+	it("links via node_modules/postboi, not the version-pinned store path", async () => {
+		const root = mkdtempSync(join(tmpdir(), "postboi-proj-"))
+		const pkg = join(root, "node_modules", "postboi", "skills", "postboi")
+		mkdirSync(pkg, { recursive: true })
+		writeFileSync(join(pkg, "SKILL.md"), bundled_skill()!)
+		const t = join(root, ".claude", "skills", "postboi", "SKILL.md")
+		mkdirSync(dirname(t), { recursive: true })
+		const p = prompter([""])
+		await offer_skill(p, t)
+		p.close()
+		expect(readlinkSync(t)).toBe(
+			join("..", "..", "..", "node_modules", "postboi", "skills", "postboi", "SKILL.md")
+		)
 	})
 })
 
