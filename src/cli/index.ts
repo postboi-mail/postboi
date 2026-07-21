@@ -57,6 +57,7 @@ import {
 	TYPES_TARGET,
 } from "./typegen.js"
 import { offer_skill, refresh_skill } from "./skill.js"
+import { api_command } from "./api.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 
 const CONFIG_FILES = [
@@ -85,6 +86,16 @@ ${dim(`  v${version()}`)}
 ${bold("Usage")}
   ${cyan("bunx postboi init")}     Set up the Postboi provider or a provider of your own
   ${cyan("bunx postboi sync")}     Refresh the generated from types from your Postboi domains
+
+${bold("Account")} ${dim("(Postboi provider — full reference: https://api.postboi.email)")}
+  ${cyan("bunx postboi whoami")}          The account behind your token
+  ${cyan("bunx postboi lists")}           Lists ${dim("· add <name> · delete <ref>")}
+  ${cyan("bunx postboi recipients")}      A list's recipients ${dim("· <list> add <email>… · <list> remove <email>")}
+  ${cyan("bunx postboi domains")}         Sending domains ${dim("· add <domain> · check <ref> · delete <ref>")}
+  ${cyan("bunx postboi webhooks")}        Webhooks ${dim("· add <url> · delete <id> · deliveries <id>")}
+  ${cyan("bunx postboi members")}         Members ${dim("· invite <email> · remove <ref> · revoke <ref>")}
+  ${cyan("bunx postboi messages")}        Recent messages ${dim("· [status]")}
+  ${cyan("bunx postboi suppressions")}    Suppressed addresses ${dim("· add <email> · remove <email>")}
 
 ${bold("Options")}
   -h, --help        Show this help
@@ -721,6 +732,7 @@ async function main(): Promise<void> {
 	if (command === "-V" || command === "--version") return console.log(version())
 	if (command === "init") return init()
 	if (command === "sync") return sync()
+	if (command && (await api_command(command, argv.slice(3)))) return
 	help()
 	if (command && command !== "-h" && command !== "--help") {
 		console.log(red(`Unknown command: ${command}`))
