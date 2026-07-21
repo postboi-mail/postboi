@@ -1,0 +1,303 @@
+---
+title: The Postboi provider
+name: The Postboi provider
+description: Zero-config sending. One command, one token, no provider account, no DNS.
+category: Getting started
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "$lib"
+</script>
+
+The zero-config way to send. No provider account, no DNS records, no card: run one
+command, authorise in the browser, and `mail()` works.
+
+<InstallationTabs exec args="init" />
+
+Pick **Postboi** when prompted. The CLI opens your browser to authorise the device,
+then writes a single env var: `POSTBOI_TOKEN`, your API key (keep it secret). Everything
+else is config, not environment: it offers to set defaults (`to`, `reply_to`, `cc`,
+`bcc`, and `from`, once you have custom domains to choose between) and writes them to a
+committed [`postboi.config.ts`](/config), the same file where you can add
+[hooks](/hooks) later. The CLI knows your domains and their verification status, so it
+won't accept a default `from` at a domain that isn't on your account (listing the ones
+that are), and warns when the domain is still pending verification.
+
+Re-running `init` is safe: when a working `POSTBOI_TOKEN` is already in your environment
+it's reused rather than replaced, so you can walk through the CLI again any time to
+revisit your defaults.
+
+That's the whole setup:
+
+```ts
+import { mail } from "postboi"
+
+await mail({
+	to: "someone@example.com",
+	subject: "Hello",
+	body: "<p>Sent through the Postboi provider</p>",
+})
+```
+
+`from` is optional: when omitted entirely, the API uses your account's sending address,
+which the token identifies. Env vars still override config for per-environment tweaks
+(`POSTBOI_FROM` beats `default.from`), but nothing needs to live in the environment
+except the token.
+
+The Postboi provider also includes **managed invisible captcha** for your forms: one script tag from
+the dashboard, no Cloudflare account, no keys. See [Spam protection](/spam).
+
+## Your sending address
+
+Free-tier mail goes out from `you@send.postboi.email`, derived from your signup email.
+It's a real, deliverable address on our reputation-managed sending domain, but it isn't
+an inbox, so set `reply_to` if you want responses:
+
+```ts
+await mail({
+	to: "someone@example.com",
+	reply_to: "you@yourdomain.com",
+	subject: "Hello",
+	body: "<p>Replies come to you</p>",
+})
+```
+
+You can rename the address (once a day) from the [dashboard](https://postboi.email/dashboard).
+
+## Sending from your own domain
+
+Verify a domain in the dashboard: add a domain, publish the three DKIM CNAME records it
+shows you, and hit **Check**. Once verified, any address at that domain is a valid `from`:
+
+```ts
+await mail({
+	from: "hello@yourdomain.com",
+	to: "someone@example.com",
+	subject: "Hello",
+	body: "<p>From your own domain</p>",
+})
+```
+
+## Type-safe `from`
+
+`postboi init` (and `bunx postboi sync`) generate types from your account's sending
+address and domains, narrowing `from` so TypeScript rejects addresses you can't send
+from, before the API does it at runtime:
+
+```ts
+await mail({ from: "foo@unknown-domain.com", ... })
+// ^ Type error: must be your send.postboi.email address or an address
+//   at one of your domains. Run `bunx postboi sync` to regenerate.
+```
+
+Display-name form works too (`"Joe Bloggs <hello@example.com>"`), and pending domains are
+included deliberately: you can write the code while DNS propagates; deliverability is
+enforced at send time either way (`from_not_allowed`).
+
+The generated types live *inside* the installed package (`node_modules/postboi`), so
+there's no file in your project: nothing to commit, gitignore, or see in diffs. Three
+consequences of that:
+
+- **A reinstall resets them.** `init` adds a `"prepare": "postboi sync"` script that
+  restores them after every install (chained onto your existing prepare script, if any).
+- **They're always optional.** Without them (fresh clone, CI without a token, teammate
+  who hasn't run init), `from` falls back to plain `string`: builds and deploys never
+  fail because the types are missing. `sync` itself is a quiet no-op without a
+  `POSTBOI_TOKEN` and always exits 0, so it's safe anywhere.
+- **They're a snapshot.** Re-run `bunx postboi sync` after adding or removing a domain
+  (your editor may want a TS-server restart to pick the change up).
+
+This only applies to the Postboi provider (we can't know another provider's identities). If you
+mix Postboi with a bring-your-own provider in one project, remove `postboi sync` from your
+prepare script: the narrowing applies to `from` everywhere.
+
+## Limits
+
+| Plan    | Included   | Daily cap | Overage   |
+| ------- | ---------- | --------- | --------- |
+| Free    | 3,000/mo   | 100/day   | none (hard) |
+| Starter | 20,000/mo  | none      | £0.40/1k  |
+| Pro     | 100,000/mo | none      | £0.35/1k  |
+| Scale   | 500,000/mo | none      | £0.30/1k  |
+
+The free tier stops at its caps; paid tiers keep sending and meter the overage. Every
+plan has a burst rate limit. When a limit is hit, `mail()` throws a `PostboiError` with a
+machine-readable `code`:
+
+| Code                     | Meaning                                             |
+| ------------------------ | --------------------------------------------------- |
+| `daily_limit_exceeded`   | Free-tier daily cap: resets at midnight UTC         |
+| `monthly_limit_exceeded` | Free-tier monthly wall: upgrade to keep sending     |
+| `rate_limited`           | Burst limit: back off and retry                     |
+| `from_not_allowed`       | `from` isn't your address or a verified domain      |
+| `sending_paused`         | Bounce/complaint rate tripped the safety threshold  |
+
+## Delivery status
+
+Every send appears in the [message log](https://postboi.email/dashboard/messages) with
+its delivery status: bounces and complaints are tracked automatically. High bounce or
+complaint rates pause sending to protect deliverability for everyone; the dashboard shows
+when that happens.
+
+You can also look a message up from code with the id `mail()` returned:
+
+```ts
+import Postboi from "postboi"
+
+const mail = new Postboi()
+const message = await mail.message(id)
+// { id, status: 'sent', to, subject, opened_at, open_count, … }
+```
+
+And a scheduled message can be moved (until it sends). `reschedule` takes the same
+formats as `scheduled_at`:
+
+```ts
+await mail.reschedule(id, { days: 2 }) // or a Date / ISO 8601 string
+```
+
+## Batching & idempotency
+
+[Personalized batches](/bulk#personalized-batches) go out as **one request** to the
+batch endpoint (up to 100 recipients per call) instead of one per recipient:
+
+```ts
+await mail.send({
+	to: ["ada@example.com", "linus@example.com"],
+	subject: "Hey {name}",
+	body: "<p>Hi {name}</p>",
+	data: {
+		"ada@example.com": { name: "Ada" },
+		"linus@example.com": { name: "Linus" },
+	},
+})
+```
+
+Single sends accept an [`idempotency_key`](/errors#retries): retrying a send with the
+same key returns the original message id instead of delivering a duplicate. Pair it
+with `retries` for safe automatic retry.
+
+## Lists & broadcasts
+
+The dashboard's recipient lists are available from code, so a newsletter signup can go
+straight onto a list without leaving your app — one import, one call:
+
+```ts
+import { add_recipients } from "postboi"
+
+await add_recipients("Newsletter", "Ada Lovelace <ada@example.com>")
+```
+
+`add_recipients` upserts on both sides. The first argument is a list **name or id** —
+an unknown name creates the list — and re-adding an address updates its name and
+`data` instead of duplicating it. Recipients take the same shapes as `to`: a bare
+address, `"Name <a@b.c>"`, `{ email, name?, data? }`, or an array mixing all three.
+(List names are unique per account, so `create_list` rejects a taken name with code
+`name_taken`.)
+
+Every list method accepts a name or an id — only `add_recipients` creates a missing
+list; everything else 404s on an unknown name. The response reports `added` (genuinely
+new addresses) and `updated` (existing ones refreshed), so calling it twice with the
+same address adds once:
+
+```ts
+await mail.add_recipients("Newsletter", [
+	{ email: "ada@example.com", name: "Ada", data: { plan: "Pro" } },
+	"Linus <linus@example.com>",
+]) // → { added: 2, updated: 0, list: { id, name } }
+
+await mail.broadcast("Newsletter", {
+	subject: "Hey {name}",
+	body: "<p>News for our {plan} users…</p>",
+	scheduled_at: { hours: 1 }, // optional: omit to queue immediately
+})
+```
+
+`{key}` placeholders are filled per recipient from their `data` (plus `{name}` and
+`{email}` from the recipient row), and every broadcast automatically carries the
+one-click unsubscribe headers Gmail and Yahoo require for bulk mail. The rest of the
+surface: `lists()`, `list(id)` (with recipients), `rename_list(id, name)`,
+`delete_list(id)`, and `remove_recipient(list_id, email)`.
+
+## Confirmation (double opt-in)
+
+Lists can require **confirmation**: new recipients start `pending` and receive an
+email with a personal confirm link; they only receive broadcasts (and count as new
+subscribers for notifications) once they click it. Manage it from the list's
+Confirmation tab, or from code:
+
+```ts
+await mail.update_list("Newsletter", { confirmation: true }) // or on create:
+await mail.create_list("Digest", { confirmation: true })
+
+await mail.add_recipients("Newsletter", "ada@example.com")
+// → { added: 1, updated: 0, pending: 1, list: … } — Ada gets the confirmation email
+```
+
+Recipients carry a **status** — `subscribed`, `pending`, `unsubscribed`, `bounced` or
+`complained`. Only subscribed recipients receive broadcasts and digests; unsubscribes,
+bounces and complaints flip the status automatically (the row stays, with history)
+rather than removing the recipient. Set it explicitly too:
+
+```ts
+await mail.add_recipients("Newsletter", "ada@example.com", { status: "pending" })
+await mail.set_recipient_status("Newsletter", "ada@example.com", "unsubscribed")
+```
+
+Two knobs, patchable via an object: `enabled` (send confirmation emails) and
+`default_status` (what new recipients start as). `confirmation: true` is shorthand for
+strict double opt-in (email + `"pending"`); a courtesy email without gating is
+`{ enabled: true, default_status: "subscribed" }`; off again is `confirmation: false`.
+The object also takes `subject`, `body` (HTML with `{key}` variables plus `{list}` and
+`{confirm_url}` — put it in a link) and `from`. Settings come back on `list()`, and
+recipient rows carry a `status` of `"subscribed"` or `"pending"`.
+
+## Notifications
+
+Each list can carry **notifications** — digests of new subscribers emailed to whoever
+should know, on a schedule or the moment someone joins. The dashboard's Notifications
+tab manages them visually; the same objects are available from code:
+
+```ts
+await mail.create_notification("Newsletter", {
+	recipients: "Darby <darby@uilo.co>",
+	schedule: "subscribe", // fire when someone new joins
+})
+
+await mail.create_notification("Newsletter", {
+	recipients: ["darby@uilo.co", "team@uilo.co"],
+	schedule: { frequency: "weekly", days: [1, 4], send_time: "09:00", timezone: "Europe/London" },
+})
+```
+
+`schedule` takes a bare frequency (`"daily"`, `"weekly"`, `"monthly"`, `"subscribe"`)
+or an object with `days` (JS weekday numbers, weekly), `month_day` (monthly),
+`send_time` and an IANA `timezone` — defaults are Mondays, 09:00, UTC. Subject and
+body default to a starter template; bodies are HTML with `{key}` variables plus
+`{#if}`/`{#each}` blocks over `new_subscribers`. The rest of the surface:
+`notifications(list)`, `update_notification(list, id, changes)` (partial — absent
+fields keep their values), and `delete_notification(list, id)`.
+
+## Suppressions
+
+Hard bounces, complaints and unsubscribes land on your account's suppression list, and
+sends to those addresses are dropped automatically. Inspect and manage it from code:
+
+```ts
+const rows = await mail.suppressions() // [{ email, reason, detail?, created_at }]
+await mail.suppress("noisy@example.com") // add by hand
+await mail.unsuppress("fixed@example.com") // allow sending again
+```
+
+## Notes
+
+- `scheduled_at` schedules a send up to 30 days ahead. Scheduled messages appear in the
+  dashboard's Messages → Scheduled tab, where they can be rescheduled or canceled until
+  they send. Scheduling counts against the free tier's daily cap on the day it's
+  accepted; the monthly quota is charged when the message actually sends.
+- `scheduled_at` accepts an ISO 8601 datetime string. Include an explicit timezone offset
+  or `Z` (e.g. `2026-07-10T14:30:00Z` or `2026-07-10T09:30:00-05:00`). A bare local time
+  without an offset is interpreted as UTC. It must be in the future and at most 30 days ahead.
+- In runtimes without ambient env vars (e.g. Cloudflare Workers), pass the token
+  explicitly: `new Postboi({ token })`.
+- The token can be revoked and reissued any time from the dashboard's API keys panel.
