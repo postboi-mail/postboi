@@ -84,7 +84,10 @@ export const contentSections: ContentSectionConfig[] = [
 			{
 				slug: "reference",
 				name: "Reference",
-				items: [{ slug: "api", name: "API reference" }],
+				items: [
+					{ slug: "api", name: "API reference" },
+					{ slug: "rest-api", name: "REST API" },
+				],
 			},
 		],
 	},
