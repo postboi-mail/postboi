@@ -135,6 +135,10 @@
       "svelte": "./dist/kit.js",
       "default": "./dist/kit.js"
     },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    },
     "./remote": {
       "types": "./dist/mail.remote.d.ts",
       "svelte": "./dist/mail.remote.js",

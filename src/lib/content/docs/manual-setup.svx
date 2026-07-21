@@ -123,5 +123,5 @@ import { mail } from 'postboi/kit'
 export const actions = { default: mail }
 ```
 
-> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider
-> directly. See [Using a provider directly](/providers#using-a-provider-directly).
+> On Cloudflare Workers this works the same way — bindings are read as env vars — but the
+> config file needs importing by hand. See [Cloudflare Workers](/cloudflare-workers).

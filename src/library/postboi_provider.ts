@@ -254,8 +254,8 @@ export interface NotificationDetails {
  * await mail.send({ to: "contact@example.com", subject: "Hello", body: "<p>Hi</p>" })
  * ```
  *
- * The token can still be passed explicitly (`new Postboi({ token })`), which is required
- * in runtimes that don't expose ambient env vars (e.g. Cloudflare Workers).
+ * That holds on Cloudflare Workers too — the token is read from the `POSTBOI_TOKEN`
+ * binding. Pass it explicitly (`new Postboi({ token })`) only to override.
  */
 export default class Postboi extends ProviderBase<SendResponse> {
 	protected readonly provider = "postboi"
@@ -277,6 +277,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	}
 
 	#require_token(): string {
+		// Re-read late as well as at construction: on Workers the bindings only reach the env
+		// cache once `ensure_env_loaded()` has run, which the send path awaits.
+		this.#token ??= read_env("POSTBOI_TOKEN")
 		if (!this.#token) {
 			throw new PostboiError({
 				provider: this.provider,

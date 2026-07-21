@@ -32,7 +32,8 @@ All on the Postboi provider, each using its framework's server handler to call `
 - [`express-provider-postboi`](./express-provider-postboi) — Express (plain JS). Shows the
   one place the pattern differs: parse multipart with `multer`, then rebuild a `FormData`.
 - [`cloudflare-workers-provider-postboi`](./cloudflare-workers-provider-postboi) — a Worker.
-  No filesystem or ambient env, so the token comes from the `env` binding: `new Postboi({ token })`.
+  The `POSTBOI_TOKEN` binding is read for you, so `mail({ body })` needs no wiring; the one
+  thing a Worker can't do is auto-load `postboi.config.ts` off a filesystem.
 
 ## Scripts
 

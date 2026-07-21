@@ -1,18 +1,21 @@
 import type { Defaults } from "./index.js"
+import { workers_env } from "./workers_env.js"
 
 /**
  * Cross-runtime environment reading shared by every provider. Works in Node, Bun,
- * Vercel/Netlify functions and Deno, and falls back to a `.env` file in dev (see
- * {@link ensure_env_loaded}).
+ * Vercel/Netlify functions, Deno and Cloudflare Workers, and falls back to a `.env` file
+ * in dev (see {@link ensure_env_loaded}).
  */
 
 /**
- * `.env` values parsed as a fallback. SvelteKit (and other Vite dev servers) load `.env`
- * files into their own `$env` modules, *not* `process.env`, so a library reading
- * `process.env` directly sees nothing in dev. We fill that gap by reading the files
- * ourselves — `process.env` always wins, so deployed/real env vars take precedence.
+ * Values that aren't on `process.env`, read once. Two sources feed it. SvelteKit (and other
+ * Vite dev servers) load `.env` files into their own `$env` modules, *not* `process.env`, so
+ * a library reading `process.env` directly sees nothing in dev — we read the files
+ * ourselves. Cloudflare Workers have no `process.env` at all without `nodejs_compat`, but
+ * expose bindings on `cloudflare:workers`. `process.env` always wins over both, so
+ * deployed/real env vars take precedence.
  */
-let dotenv: Record<string, string> | null = null
+let fallback: Record<string, string> | null = null
 
 function parse_dotenv(text: string): Array<[string, string]> {
 	const out: Array<[string, string]> = []
@@ -34,12 +37,21 @@ function parse_dotenv(text: string): Array<[string, string]> {
 }
 
 /**
- * Load `.env` / `.env.local` from the cwd once (Node/Bun only). Best-effort: any failure
- * leaves the fallback empty and we fall through to `process.env` alone.
+ * Populate the fallback once: Cloudflare Worker bindings, plus `.env` / `.env.local` from
+ * the cwd (Node/Bun only). Best-effort — any failure leaves the fallback empty and we fall
+ * through to `process.env` alone. Awaited on every send path, and cheap after the first call.
  */
-export async function ensure_env_loaded(): Promise<void> {
-	if (dotenv) return
-	dotenv = {}
+export function ensure_env_loaded(): Promise<void> {
+	// Cache the promise, not a done-flag: concurrent first sends must all wait for the
+	// bindings rather than the losers racing past an empty fallback.
+	return (loading ??= load_fallback())
+}
+
+let loading: Promise<void> | null = null
+
+async function load_fallback(): Promise<void> {
+	const out = await workers_env()
+	fallback = out
 	if (typeof process === "undefined" || !process.versions?.node) return
 	try {
 		const { existsSync, readFileSync } = await import("node:fs")
@@ -49,7 +61,7 @@ export async function ensure_env_loaded(): Promise<void> {
 		for (const file of [".env", ".env.local"]) {
 			const path = join(dir, file)
 			if (!existsSync(path)) continue
-			for (const [key, value] of parse_dotenv(readFileSync(path, "utf8"))) dotenv[key] = value
+			for (const [key, value] of parse_dotenv(readFileSync(path, "utf8"))) out[key] = value
 		}
 	} catch {
 		// no fs / unreadable — fall back to process.env only
@@ -58,16 +70,16 @@ export async function ensure_env_loaded(): Promise<void> {
 
 /**
  * Read an environment variable across runtimes. Works in Node, Bun, Vercel/Netlify
- * functions and Deno, and falls back to a `.env` file in dev (see {@link ensure_env_loaded}).
- * Cloudflare Workers pass env via bindings rather than the ambient environment, so this
- * returns undefined there — pass credentials explicitly in Workers.
+ * functions, Deno and Cloudflare Workers, and falls back to a `.env` file in dev.
+ * Worker bindings and `.env` values only appear once {@link ensure_env_loaded} has run,
+ * which every send path awaits.
  */
 export function read_env(name: string): string | undefined {
 	if (typeof process !== "undefined" && process.env) {
 		const value = process.env[name]
 		if (value) return value
 	}
-	if (dotenv && dotenv[name]) return dotenv[name]
+	if (fallback && fallback[name]) return fallback[name]
 	const deno = (globalThis as { Deno?: { env?: { get?(key: string): string | undefined } } }).Deno
 	try {
 		return deno?.env?.get?.(name) || undefined

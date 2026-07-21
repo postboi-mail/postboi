@@ -42,8 +42,8 @@ Want another provider? Quit being a baby and [open a PR](https://github.com/post
 
 ## Using a provider directly
 
-Useful when you want an explicit instance, or you're on a runtime without ambient env vars
-(e.g. Cloudflare Workers):
+Useful when you want an explicit instance, or credentials that don't come from the
+environment:
 
 ```typescript
 import Resend from 'postboi/resend'

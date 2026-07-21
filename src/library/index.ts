@@ -1,6 +1,7 @@
 import { title, html_to_text, pooled_map } from "./utils.js"
 import { get_config, merge_hooks } from "./config.js"
 import { check_captcha, type CaptchaOptions } from "./captcha.js"
+import { ensure_env_loaded } from "./env.js"
 
 // Global configuration (`postboi.config.ts`) is part of the public surface from the package root.
 export { configure, config, type PostboiConfig } from "./config.js"
@@ -1157,6 +1158,10 @@ export abstract class ProviderBase<TResponse = unknown> {
 	 * sender and recipient are present. Returns a {@link PreparedMessage} for `build_request`.
 	 */
 	protected async prepare_send(options: SendOptions): Promise<PreparedMessage> {
+		// Makes Worker bindings and `.env` values readable, so a provider constructed with no
+		// arguments can still find its credentials. Cached after the first send.
+		await ensure_env_loaded()
+
 		// `body` may be a promise (e.g. a framework's `request.formData()`) — resolve it first.
 		const body = await options.body
 		options = { ...options, body }

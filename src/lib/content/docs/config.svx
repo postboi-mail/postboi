@@ -53,7 +53,24 @@ Lowest to highest (later sources win):
 ## Edge runtimes
 
 Edge runtimes (Cloudflare Workers, etc.) have no filesystem, so the config file can't be
-auto-loaded. Register config at startup instead with `configure({ ... })`.
+read at runtime. Building with Vite? Add the plugin and it ships inside the server bundle —
+nothing else changes:
+
+```typescript
+// vite.config.ts
+import { postboi } from 'postboi/vite'
+
+export default defineConfig({ plugins: [sveltekit(), postboi()] })
+```
+
+It bundles the first `postboi.config.*` it finds from the Vite root upward (pass
+`postboi({ config: 'path/to/config.ts' })` to point elsewhere, or `config: false` to skip
+it), and only into the server build — a config file with hooks and secrets in it never
+reaches the browser. The plugin also carries the `optimizeDeps` exclude that
+[remote forms](/sveltekit#remote-functions) need.
+
+Without a bundler in the picture, register config at startup instead with
+`configure({ ... })`:
 
 ```typescript
 import { configure } from 'postboi'

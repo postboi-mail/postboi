@@ -9,7 +9,7 @@
 		"start": "wrangler dev"
 	},
 	"dependencies": {
-		"postboi": "^0.11.0"
+		"postboi": "^0.17.0"
 	},
 	"devDependencies": {
 		"wrangler": "^4.0.0",

@@ -1,8 +1,4 @@
-import Postboi from "postboi"
-
-interface Env {
-	POSTBOI_TOKEN: string
-}
+import { mail } from "postboi"
 
 function page(sent: boolean): Response {
 	return new Response(
@@ -37,14 +33,13 @@ function page(sent: boolean): Response {
 }
 
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url)
 
 		if (request.method === "POST" && url.pathname === "/contact") {
-			// No filesystem and no ambient env on Workers: pass the token from the binding and
-			// set defaults here instead of a postboi.config.ts file.
-			const mail = new Postboi({ token: env.POSTBOI_TOKEN })
-			await mail.send({ body: request.formData(), to: "team@acme.example" })
+			// The POSTBOI_TOKEN binding is read for us — Workers have no filesystem, so only
+			// a postboi.config.ts would need wiring up by hand.
+			await mail({ body: request.formData(), to: "team@acme.example" })
 			return Response.redirect(new URL("/?sent=1", url).toString(), 303)
 		}
 

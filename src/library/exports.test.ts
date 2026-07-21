@@ -36,6 +36,7 @@ describe("package exports", () => {
 			"registry.ts",
 			"config.ts",
 			"env.ts",
+			"workers_env.ts", // Cloudflare binding reader, used by env.ts
 			"mail.ts",
 			"captcha.ts", // spam protection, reached via the root export
 			"register.ts", // generated-types placeholder, reached via the root export

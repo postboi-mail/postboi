@@ -192,7 +192,8 @@ verification happens locally instead of via managed captcha.
 > deliberate: if a bot could skip the widget and POST directly, the captcha would be
 > decorative. Opt individual sends out with `captcha: { turnstile: false }`.
 
-On runtimes without ambient env vars (Cloudflare Workers), pass the secret explicitly:
+A `TURNSTILE_SECRET_KEY` binding on Cloudflare Workers is read like any other env var. To
+pass the secret from somewhere else entirely:
 
 ```typescript
 await mail.send({ body, captcha: { turnstile: { secret_key: env.TURNSTILE_SECRET_KEY } } })

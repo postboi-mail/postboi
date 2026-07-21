@@ -298,6 +298,6 @@ await mail.unsuppress("fixed@example.com") // allow sending again
 - `scheduled_at` accepts an ISO 8601 datetime string. Include an explicit timezone offset
   or `Z` (e.g. `2026-07-10T14:30:00Z` or `2026-07-10T09:30:00-05:00`). A bare local time
   without an offset is interpreted as UTC. It must be in the future and at most 30 days ahead.
-- In runtimes without ambient env vars (e.g. Cloudflare Workers), pass the token
-  explicitly: `new Postboi({ token })`.
+- On Cloudflare Workers a `POSTBOI_TOKEN` binding is read automatically — see
+  [Cloudflare Workers](/cloudflare-workers). Pass `new Postboi({ token })` only to override it.
 - The token can be revoked and reissued any time from the dashboard's API keys panel.

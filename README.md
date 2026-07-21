@@ -142,7 +142,7 @@ build your own with `remote(...)` from `postboi/kit`.
 | Hooks, global config, retries, bulk send | [docs.postboi.email/config](https://docs.postboi.email/config)             |
 | API reference                            | [docs.postboi.email/api](https://docs.postboi.email/api)                   |
 
-> On runtimes without ambient env vars (e.g. Cloudflare Workers), construct the provider directly — see [Providers](https://docs.postboi.email/providers#using-a-provider-directly).
+> Cloudflare Workers work the same way — bindings are read as env vars, and the `postboi/vite` plugin bundles `postboi.config.ts` in place of the filesystem auto-load. See [Cloudflare Workers](https://docs.postboi.email/cloudflare-workers).
 
 ## Development
 

@@ -138,6 +138,9 @@ kit: { experimental: { remoteFunctions: true } }
 optimizeDeps: { exclude: ['postboi/remote'] }
 ```
 
+> The [`postboi/vite`](/config#edge-runtimes) plugin sets that exclude itself, so if you're
+> already using it (for edge deploys, say) you can drop the line.
+
 Worth knowing:
 
 - **Field names nest instead of using arrows.** Remote-form names must be valid JS paths,
@@ -174,7 +177,7 @@ export const contact = remote(resend, { fields: { to: 'team@example.com' } })
 
 ## Using a configured instance
 
-Got a configured provider instance (or no ambient env vars)? Wrap it with `action()`. You
+Got a configured provider instance? Wrap it with `action()`. You
 can pass `status` for the failure code and `fields` for defaults merged into every send.
 
 ```typescript

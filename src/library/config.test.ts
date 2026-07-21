@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { configure, config, get_config, load_config, reset_config } from "$library/config.js"
+import {
+	configure,
+	config,
+	get_config,
+	load_config,
+	reset_config,
+	set_bundled_config,
+} from "$library/config.js"
 import Mock from "$library/mock.js"
 import { mail } from "$library/postboi.js"
 
@@ -136,6 +143,30 @@ describe("global config", () => {
 			rmSync(dir, { recursive: true, force: true })
 			warn.mockRestore()
 		}
+	})
+
+	it("reads a bundled config instead of the disk, for runtimes with no filesystem", async () => {
+		set_bundled_config(() =>
+			Promise.resolve({ default: { retries: 3, default: { from: "b@t.com" } } })
+		)
+
+		const config = await load_config()
+
+		expect(config.retries).toBe(3)
+		expect(config.default?.from).toBe("b@t.com")
+	})
+
+	it("warns rather than silently dropping a bundled config that fails to load", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		set_bundled_config(() => Promise.reject(new Error("boom")))
+
+		await expect(load_config()).resolves.toEqual(expect.any(Object))
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("bundled postboi.config"),
+			expect.any(Error)
+		)
+
+		warn.mockRestore()
 	})
 
 	it("auto-loads a postboi.config file from disk", async () => {

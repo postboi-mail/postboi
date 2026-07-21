@@ -41,8 +41,8 @@ There are three ways to use Postboi, from least to most explicit:
    provider is set per environment.
 2. **`postboi/kit` form actions**: a one-line SvelteKit action that reads `FormData`,
    sends it, and returns a result.
-3. **A provider instance**: `new Resend({ ... })` when you want an explicit instance or
-   you're on a runtime without ambient env vars.
+3. **A provider instance**: `new Resend({ ... })` when you want an explicit instance, or
+   credentials that don't come from the environment.
 
 Start with the [Quick start](/quick-start) and let the CLI wire everything up for you,
 or set things up by hand with [Manual setup](/manual-setup).

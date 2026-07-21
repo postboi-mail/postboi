@@ -86,6 +86,22 @@ function merge(base: PostboiConfig, override: PostboiConfig): PostboiConfig {
 let explicit: PostboiConfig = {}
 let disk: PostboiConfig = {}
 let disk_loaded = false
+let bundled: (() => Promise<unknown>) | null = null
+
+/**
+ * Install a bundler-inlined loader for the project's `postboi.config.*`. Called by the
+ * `postboi/vite` plugin, which is how edge runtimes get a config file at all — they have no
+ * filesystem to read one from, so the server bundle carries it instead.
+ *
+ * A lazy loader rather than a static import on purpose: the config file imports `config`
+ * from this module, so importing it from here in turn would evaluate it mid-cycle, before
+ * the state below exists.
+ *
+ * @internal
+ */
+export function set_bundled_config(load: () => Promise<unknown>): void {
+	bundled = load
+}
 
 /**
  * Register global config imperatively. Useful in runtimes without filesystem access (edge,
@@ -109,24 +125,40 @@ export function get_config(): PostboiConfig {
 	return merge(disk, explicit)
 }
 
-/** Reset all registered config. Intended for tests. */
+/** Reset all registered config, including any bundled loader. Intended for tests. */
 export function reset_config(): void {
 	explicit = {}
 	disk = {}
 	disk_loaded = false
+	bundled = null
 }
 
 /**
  * Ensure the config file has been read (once), then return the effective config. Called on
- * the `send()` path. Best-effort and Node/Bun-only — any failure falls back to whatever was set
- * via {@link configure}.
+ * the `send()` path. Best-effort — any failure falls back to whatever was set via
+ * {@link configure}. Reads the bundled copy where a bundler inlined one (see
+ * {@link set_bundled_config}), otherwise the file on disk, which needs Node/Bun.
  */
 export async function load_config(): Promise<PostboiConfig> {
 	if (!disk_loaded) {
 		disk_loaded = true
-		disk = await read_disk()
+		disk = bundled ? await read_bundled(bundled) : await read_disk()
 	}
 	return get_config()
+}
+
+/** Pull the config out of a bundled module. Its `config()` call also registers it directly. */
+async function read_bundled(load: () => Promise<unknown>): Promise<PostboiConfig> {
+	try {
+		const mod = (await load()) as { default?: PostboiConfig; config?: PostboiConfig }
+		const config = mod.default ?? mod.config
+		return config && typeof config === "object" ? config : {}
+	} catch (error) {
+		// Bundled means it built — failing here is a real misconfiguration, so be loud rather
+		// than let defaults/hooks/provider silently vanish.
+		console.warn("postboi: the bundled postboi.config failed to load:", error)
+		return {}
+	}
 }
 
 const CONFIG_FILES = [

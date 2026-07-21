@@ -75,7 +75,7 @@ Passing `FormData` as `body` renders a tidy HTML table. Conventions:
 {#if mail.result?.success}<p>Thanks!</p>{/if}
 ```
 
-Remote-form rules: field names are **nested JS paths** (`fields.contact.name`), not `contact→name` — the rendered email is identical. No schema is needed (`mail` accepts arbitrary fields; spam checks run in the pipeline). Enhancement is built in — no `use:enhance`; the form auto-resets on success; `mail.pending` / `mail.result` carry state; it degrades to a full-page POST without JS. Requires `optimizeDeps: { exclude: ["postboi/remote"] }` in `vite.config` (`postboi init` adds it). Custom provider/forced fields: `remote(instance, { fields? })` from `postboi/kit`, exported from your own `.remote.ts` file.
+Remote-form rules: field names are **nested JS paths** (`fields.contact.name`), not `contact→name` — the rendered email is identical. No schema is needed (`mail` accepts arbitrary fields; spam checks run in the pipeline). Enhancement is built in — no `use:enhance`; the form auto-resets on success; `mail.pending` / `mail.result` carry state; it degrades to a full-page POST without JS. Requires `optimizeDeps: { exclude: ["postboi/remote"] }` in `vite.config` (`postboi init` adds it, and the `postboi/vite` plugin carries it too). Custom provider/forced fields: `remote(instance, { fields? })` from `postboi/kit`, exported from your own `.remote.ts` file.
 
 **Otherwise → the classic action from `postboi/kit`:**
 
@@ -162,7 +162,7 @@ await mail.send({ to: "a@b.c", subject: "Hi", body: "<p>x</p>" })
 
 ## Edge runtimes (Cloudflare Workers, …)
 
-No filesystem, no ambient env — so `postboi.config.ts` can't auto-load. Either call `configure({ ... })` at startup, or construct the provider directly with credentials from `env`, and pass the Turnstile secret explicitly: `captcha: { turnstile: { secret_key: env.TURNSTILE_SECRET_KEY } }`. `/raw/cloudflare-workers`
+Cloudflare Worker bindings (`POSTBOI_TOKEN`, `TURNSTILE_SECRET_KEY`, …) are read automatically off `cloudflare:workers`, so `mail()` needs no explicit credentials — don't reach for `new Postboi({ token: env.POSTBOI_TOKEN })` unless you're overriding. There's no filesystem either, so `postboi.config.ts` can't auto-load: add `postboi()` from `postboi/vite` to `vite.config` and it's bundled into the server build (this also covers the `optimizeDeps` exclude). No Vite in the build? `import "../postboi.config"` from the entry point, or `configure({ ... })` at startup. `/raw/cloudflare-workers`
 
 ## Templates
 

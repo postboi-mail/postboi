@@ -2,7 +2,9 @@
 
 A contact form that turns into a tidy HTML email via [postboi](https://docs.postboi.email/) on [the Postboi provider](https://postboi.email), running on a Cloudflare Worker. A hidden `_reply_to` field — mirrored from the submitted email with a one-line `oninput` — means your replies reach the person who wrote in.
 
-The wrinkle worth noticing: Workers have no filesystem and no ambient env, so there's no `postboi.config.ts` to auto-load. Instead you construct the provider explicitly with the token from the `env` binding — `new Postboi({ token: env.POSTBOI_TOKEN })` — and call `mail.send({ body })`.
+The wrinkle worth noticing: Workers pass config as bindings rather than env vars, but Postboi reads them off `cloudflare:workers`, so `mail({ body })` finds `POSTBOI_TOKEN` with nothing passed in — no `env` threading, no `new Postboi({ token })`.
+
+The one thing a Worker can't do is auto-load a `postboi.config.ts`, since there's no filesystem to find it on. This example doesn't need one (the token is the only setting), but if yours does: build with Vite and add the [`postboi/vite`](https://docs.postboi.email/config#edge-runtimes) plugin, which bundles the file for you. Building with wrangler alone, as here, `import "../postboi.config"` from `src/index.ts` — esbuild inlines it and `config()` registers it as a side effect.
 
 ## Set up
 
@@ -20,7 +22,7 @@ npm run deploy
 
 ## How it works
 
-- **`src/index.ts`** — the `fetch` handler renders the form and, on POST to `/contact`, builds `new Postboi({ token: env.POSTBOI_TOKEN })` and calls `mail.send({ body: request.formData(), to })` (`body` takes the promise directly).
-- **`wrangler.jsonc`** — Worker config, with `nodejs_compat` turned on.
+- **`src/index.ts`** — the `fetch` handler renders the form and, on POST to `/contact`, calls `mail({ body: request.formData(), to })` (`body` takes the promise directly).
+- **`wrangler.jsonc`** — Worker config, with `nodejs_compat` turned on. `POSTBOI_TOKEN` isn't declared here: secrets come from `.dev.vars` locally and `wrangler secret` in production, and Postboi picks the binding up either way.
 
 Full docs live at https://docs.postboi.email and the Postboi provider is at https://postboi.email.

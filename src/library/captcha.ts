@@ -53,10 +53,10 @@ export type CaptchaOptions = {
 	honeypot?: string | false
 	/**
 	 * Cloudflare Turnstile verification. Defaults to auto: enforced whenever a secret key is
-	 * available (the `TURNSTILE_SECRET_KEY` env var). Pass `{ secret_key }` to provide the
-	 * secret explicitly (required on runtimes without ambient env vars, e.g. Cloudflare
-	 * Workers), `true` to require verification (erroring if no secret is configured), or
-	 * `false` to disable it for a send even when a secret is set.
+	 * available (the `TURNSTILE_SECRET_KEY` env var, or the binding of that name on
+	 * Cloudflare Workers). Pass `{ secret_key }` to provide the secret explicitly, `true` to
+	 * require verification (erroring if no secret is configured), or `false` to disable it
+	 * for a send even when a secret is set.
 	 */
 	turnstile?: { secret_key?: string } | boolean
 }
