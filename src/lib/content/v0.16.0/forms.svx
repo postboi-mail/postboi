@@ -1,0 +1,131 @@
+---
+title: Hosted forms
+name: Hosted forms
+description: Turn any HTML form into email. Point it at a hosted endpoint, no backend required.
+category: Guides
+---
+
+Everything else in these docs assumes you have a server for the library to run on. Hosted
+forms are for when you don't: static sites, landing pages, docs, portfolios, anything
+that's just HTML. Point a plain `<form>` at a Postboi endpoint and submissions arrive in
+your inbox as the same tidy email the library renders. No backend, no JavaScript, no
+`npm install`.
+
+## Create a form
+
+In the [dashboard](https://postboi.email/dashboard/forms), create a form: give it a name,
+pick which team member's inbox receives submissions, and you get an endpoint URL like
+`https://postboi.email/f/form_k3v9x2m1p8q4`.
+
+Submissions can only be delivered to a **team member's sign-in email**, an address
+verified at sign-in (magic link or SSO), so a public endpoint can never be pointed at
+someone else's inbox. If that member leaves the team, the form stops delivering until
+you point it at a current member.
+
+## The HTML
+
+```html
+<form action="https://postboi.email/f/form_k3v9x2m1p8q4" method="POST">
+	<input name="name" placeholder="Your name" required>
+	<input name="email" type="email" placeholder="Your email" required>
+	<textarea name="message" placeholder="Your message" required></textarea>
+
+	<!-- honeypot: hidden from humans; bots fill it and get dropped -->
+	<input name="_honey" style="position:absolute;left:-9999px;height:0;width:0;opacity:0"
+		tabindex="-1" autocomplete="off" aria-hidden="true">
+
+	<button>Send</button>
+</form>
+```
+
+That's the whole integration. On submit, the visitor lands on a hosted thank-you page,
+or set a **redirect URL** (https) on the form in the dashboard to send them back to your
+own site.
+
+The email arrives with fields rendered as a table, and an `email` field is automatically
+used as the **Reply-To**: hitting Reply in your inbox goes straight back to the sender.
+File inputs (`<input type="file">` with `enctype="multipart/form-data"`) become
+attachments, up to 5&nbsp;MB per submission.
+
+## Special fields
+
+The endpoint speaks the library's [FormData dialect](/formdata):
+
+| Field           | Effect                                                              |
+| --------------- | ------------------------------------------------------------------- |
+| `_subject`      | Sets the email's subject line                                       |
+| `_reply_to`     | Sets Reply-To explicitly (wins over an `email` field)               |
+| `_honey`        | The honeypot (classic `🍯` too): include it hidden; filled submissions are dropped |
+| `fieldset→field`| Groups fields into titled sections in the email                     |
+
+```html
+<input type="hidden" name="_subject" value="New enquiry from the pricing page">
+<input name="contact→name" placeholder="Your name">
+<input name="contact→email" type="email" placeholder="Your email">
+<textarea name="details→message"></textarea>
+```
+
+`_to`, `_from`, `_cc` and `_bcc` are ignored: the recipient is fixed by the form's
+configuration, so a bot can't repoint the mail.
+
+## Spam protection
+
+Two layers, same as the library's [spam protection](/spam):
+
+- **Honeypot**: include the hidden `_honey` field and bot submissions are silently dropped.
+  The bot even receives a success response, so it learns nothing.
+- **Managed captcha**: enable *Require captcha* on the form and add the captcha
+  `<script>` tag (from the dashboard) to the page. Postboi renders an invisible
+  Turnstile challenge and verifies every submission server-side. No Cloudflare account
+  needed.
+
+Endpoints are also rate-limited per form (10 submissions a minute, 500 a day) on top
+of your plan's limits, so a bot can't drain your quota (or your overage bill) through a
+public URL.
+
+## Open & click tracking
+
+Tick **Track opens & clicks** on a form and its notification emails opt into
+[engagement tracking](/tracking): opens and link clicks show up on the message in your
+log, exactly like a tracked API send. Left unticked, the form follows your account's
+tracking default.
+
+## Posting with fetch
+
+Prefer to stay on the page? Ask for JSON and you get `{ ok: true }` instead of a redirect
+(CORS is open, so static sites can post from their own origins):
+
+```ts
+const response = await fetch(form.action, {
+	method: "POST",
+	body: new FormData(form),
+	headers: { accept: "application/json" },
+})
+const result = await response.json() // { ok: true, id: "msg_…" }
+```
+
+A JSON request body works too: `POST` with `content-type: application/json` and a flat
+object of fields.
+
+Errors come back as `{ ok: false, code, message }` with a matching HTTP status:
+
+| Code                     | Status | Meaning                                            |
+| ------------------------ | ------ | -------------------------------------------------- |
+| `not_found`              | 404    | No such form                                       |
+| `form_disabled`          | 410    | The form (or its account) isn't accepting mail     |
+| `captcha_failed`         | 403    | Required captcha token missing or invalid          |
+| `captcha_misconfigured`  | 403    | Captcha required but its script hasn't run yet     |
+| `rate_limited`           | 429    | Form or plan burst limit hit                       |
+| `daily_limit_exceeded`   | 429    | Form daily cap (500), or the free tier's (100)     |
+| `monthly_limit_exceeded` | 429    | Free-tier monthly wall                             |
+
+## Notes
+
+- Form submissions are ordinary sends: they appear in the dashboard's
+  [message log](https://postboi.email/dashboard/messages/sent) and count towards your
+  plan's volume. The free tier's 3,000/mo covers a lot of contact form.
+- Pause a form from the dashboard and its endpoint stops accepting immediately (410);
+  resume it any time. Deleting a form kills the URL for good.
+- If you *do* have a server, the library's [FormData handling](/formdata) gives you the
+  same email with more control, and on SvelteKit the whole thing is a
+  [one-line form action](/sveltekit).

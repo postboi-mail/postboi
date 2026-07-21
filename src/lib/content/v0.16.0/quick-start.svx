@@ -1,0 +1,111 @@
+---
+title: Quick start
+name: Quick start
+description: postboi init signs you in, writes your token, and installs Postboi — or collects your own provider's credentials.
+category: Getting started
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "$lib"
+</script>
+
+One command, fully set up.
+
+<InstallationTabs exec args="init" />
+
+The first prompt is the only real decision: send with **Postboi**, or **bring your own
+provider** (Resend, SES, Mailgun, Postmark, …). Everything after that is the same, and so
+is every line of code you write.
+
+## Sending with Postboi
+
+Pick **Postboi** and the CLI opens your browser, authorises the device, and writes one env
+var. No provider account, no API key to copy from a dashboard, no DNS, no card:
+
+```bash
+# .env  (gitignored — the only secret)
+POSTBOI_TOKEN=…
+```
+
+```typescript
+import { mail } from 'postboi'
+
+await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
+```
+
+That's the setup. Mail sends from your account's `you@send.postboi.email` address — a real
+deliverable address, but not an inbox, so set `reply_to` if you want replies — until you
+[verify a domain](/provider#sending-from-your-own-domain) of your own.
+
+Because Postboi knows your account, `init` can wire up things a bring-your-own provider
+can't:
+
+- **Typed `from`** — narrowed to your sending address and verified domains, so a wrong one
+  is a type error instead of a runtime `from_not_allowed`. The types are generated
+  [inside `node_modules`](/provider#type-safe-from): nothing to commit, and always optional.
+- **Managed captcha** — the publishable key is baked in, so [`<Captcha />`](/spam#the-captcha-component)
+  works with no Cloudflare account and no keys.
+- **Webhook secrets** — every endpoint secret written as `POSTBOI_WEBHOOK_SECRET`, so
+  [`receive()`](/webhooks) verifies signatures without a copy-paste.
+
+Re-running `init` is safe: a working `POSTBOI_TOKEN` is reused rather than replaced, so you
+can walk the prompts again any time to revisit defaults. `bunx postboi sync` refreshes the
+generated pieces (types, captcha key, webhook secrets) after adding a domain.
+
+The same token also covers the rest of the platform from the same import — no second SDK:
+
+```typescript
+import { add_recipients } from 'postboi'
+
+await add_recipients('Newsletter', 'Ada Lovelace <ada@example.com>')
+```
+
+[Message status and the log](/provider#delivery-status),
+[lists, broadcasts and double opt-in](/provider#lists--broadcasts),
+[notifications](/provider#notifications), [suppressions](/provider#suppressions),
+[scheduling](/scheduling) and [batch sends with idempotency keys](/provider#batching--idempotency)
+are all documented in [The Postboi provider](/provider), along with plan limits.
+
+## Bringing your own provider
+
+Pick **Bring your own provider** and the CLI asks which one, then collects its credentials
+(an API key, plus a domain for Mailgun or a region for SES). It **writes only secrets** to
+your env file and **everything else** — the provider, defaults, and non-secret options — to
+a committed [`postboi.config.ts`](/config). The best case is a single env var:
+
+```ts
+// postboi.config.ts  (committed)
+import { config } from 'postboi'
+
+export default config({
+	provider: 'resend',
+	default: { from: 'no-reply@example.com' }
+})
+```
+
+```bash
+# .env  (gitignored, secrets only)
+RESEND_API_KEY=re_xxxxxxxx
+```
+
+`mail()` picks that up on every call, exactly as it does with a `POSTBOI_TOKEN` — the
+sending code never names a provider, so swapping later is a one-line config change.
+
+## What it does either way
+
+- Optionally collects `from` / `to` and other defaults applied to every send, and writes
+  them (with hooks, later) to the committed [`postboi.config.ts`](/config).
+- Installs `postboi` if it isn't installed yet.
+- Offers to push your env vars to your host (Vercel, Cloudflare, Netlify, Railway) and to
+  gitignore the env file if it isn't already.
+- Offers to install the **postboi agent skill** into `.claude/skills/`: a condensed
+  cheat-sheet that teaches AI coding agents the library's conventions. It ships inside
+  the package, and what's installed is a symlink to it — so upgrading postboi upgrades
+  the skill, with no diff in your repo. (Where symlinks aren't available the file is
+  copied instead, and `postboi sync` keeps that copy current.)
+
+## Prefer to do it yourself?
+
+Skip the CLI and write the config file plus the credential env vars by hand, or
+construct a provider instance directly. See [Manual setup](/manual-setup) and
+[Providers](/providers).
