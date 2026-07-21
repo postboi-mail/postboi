@@ -1,6 +1,6 @@
 ---
 name: postboi
-description: Integrate the postboi email library — send email from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Covers SvelteKit remote functions (postboi/remote) and migrating hand-rolled email code to postboi. Use whenever a task involves postboi, adding email sending / contact forms, or replacing nodemailer/direct provider SDK calls in a project that has (or should have) postboi installed.
+description: Integrate the postboi email library — send email from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Covers SvelteKit remote functions (postboi/remote) and migrating hand-rolled email code to postboi. Also covers full account setup and provider migration from the terminal: sending domains + DNS via `bunx postboi domains`, importing recipients and suppressions, webhooks, members, and the REST API at api.postboi.email. Use whenever a task involves postboi, adding email sending / contact forms, setting up or migrating an email provider/ESP, or replacing nodemailer/direct provider SDK calls in a project that has (or should have) postboi installed.
 ---
 
 # Postboi
@@ -167,6 +167,56 @@ No filesystem, no ambient env — so `postboi.config.ts` can't auto-load. Either
 ## Templates
 
 `body` is just HTML — any renderer works. For designed emails the blessed pairing is Maizzle via the optional `postboi/maizzle` helper: `body: maizzle("./emails/welcome.vue", { name: "Ava" })`. Needs Node/Bun (not edge). React Email / MJML output drops into `body` the same way. `/raw/templates`
+
+## Account setup & migration (CLI + REST API)
+
+With the Postboi provider, the whole account is manageable from the terminal. Exactly two steps need the human; everything else is agent-runnable:
+
+1. **Sign-in** — `bunx postboi init` is interactive and opens a browser to authorise. Have the user run it (or drive it yourself and relay the printed URL). Once `POSTBOI_TOKEN` is in the env, every command below is non-interactive and safe to run repeatedly.
+2. **DNS approval** — `domains add` prints a one-click setup URL; the user clicks it at their registrar (or pastes the printed records).
+
+```bash
+bunx postboi whoami                                # account, plan, usage — run first to verify the token
+bunx postboi domains add example.com               # prints DNS records + one-click Domain Connect URL
+bunx postboi domains check example.com             # re-check until verified (records land in minutes)
+bunx postboi lists add Newsletter
+bunx postboi recipients Newsletter add a@b.co c@d.co
+bunx postboi webhooks add https://example.com/api/events
+bunx postboi sync                                  # writes the webhook secret to POSTBOI_WEBHOOK_SECRET
+bunx postboi members invite colleague@example.com
+bunx postboi suppressions add bounced@example.com
+bunx postboi messages                              # recent sends with delivery status
+bunx postboi webhooks deliveries <id>              # per-endpoint delivery log for debugging
+```
+
+Anything richer than the CLI exposes, use the REST API directly — full interactive reference at https://api.postboi.email (OpenAPI spec at `/openapi.json`). Auth is `Authorization: Bearer $POSTBOI_TOKEN`; errors are always `{ "message", "code" }`.
+
+### Fresh project playbook
+
+`init` (human signs in) → `whoami` → wire the code (see Setup / Contact forms above) → optionally `domains add` + user clicks the setup link + `domains check` → only after **verified**, set `default.from` to the custom domain in `postboi.config.ts` → `webhooks add` + `sync` if the app reacts to delivery events. Until a domain verifies, sends come from the account's shared `send.postboi.email` address — that works immediately, so never block the code migration on DNS.
+
+### Migrating from another ESP/provider
+
+Order matters — the old provider keeps sending until the new domain verifies:
+
+1. `init` + `whoami`.
+2. `domains add` the sending domain; the DKIM CNAMEs coexist with the old provider's DNS records, so this is zero-downtime. `domains check` until verified.
+3. **Import suppressions before anything sends**: export bounces/complaints/unsubscribes from the old provider, then `suppressions add` each (loop is fine — one address per call).
+4. Import recipients. Bare emails: `recipients <list> add …`. With names/custom data, or in bulk (up to 10,000 per call), POST the API:
+
+   ```bash
+   curl -X POST "https://api.postboi.email/v1/lists/Newsletter/recipients?status=subscribed" \
+   	-H "Authorization: Bearer $POSTBOI_TOKEN" -H "Content-Type: application/json" \
+   	-d '[{ "email": "a@b.co", "name": "Ada", "data": { "plan": "pro" } }]'
+   ```
+
+   **Critical on double-opt-in lists:** pass `?status=subscribed` (or per-row `"status": "subscribed"`) for already-confirmed subscribers — those rows get **no** confirmation email. Omitting it re-confirms the entire imported base.
+
+5. Swap the sending code (see _Migrating existing email code_ above) and flip `default.from` once the domain is verified.
+6. `webhooks add` + `sync`; port suppress-on-bounce logic to the normalized events.
+7. Verify end-to-end: `messages` shows delivery statuses, `webhooks deliveries <id>` shows the event feed.
+
+Cautions: deletes are immediate and unprompted (`lists delete` takes the recipients with it). API-key management, member roles, and billing are dashboard-only by design — send the user there rather than trying.
 
 ## Quick reference
 
