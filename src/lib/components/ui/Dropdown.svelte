@@ -32,11 +32,19 @@
 	let focusedIndex = $state(0)
 	let itemRefEls: (HTMLElement | undefined)[] = $state([])
 	let clickRatioX = $state(0.5)
+	let menuMaxHeight = $state<number>()
 
 	function open() {
 		isOpen = true
 		const activeIdx = items.findIndex((item) => item.active)
 		focusedIndex = activeIdx >= 0 ? activeIdx : 0
+		// Cap the menu to the space between the trigger and the viewport edge it opens toward,
+		// so a long list (e.g. every docs version) scrolls instead of overflowing off-screen.
+		if (triggerEl) {
+			const rect = triggerEl.getBoundingClientRect()
+			const space = direction === "up" ? rect.top : window.innerHeight - rect.bottom
+			menuMaxHeight = Math.max(120, space - 16)
+		}
 	}
 
 	function openFromEvent(e: MouseEvent | KeyboardEvent) {
@@ -190,9 +198,10 @@
 	{#if isOpen}
 		<div
 			class={cn(
-				"absolute z-50 flex min-w-full flex-col gap-1 rounded-sm bg-background p-1 shadow-2xl card",
+				"absolute z-50 flex min-w-full flex-col gap-1 overflow-y-auto rounded-sm bg-background p-1 shadow-2xl card",
 				direction === "up" ? "bottom-full mb-1" : "mt-1"
 			)}
+			style={menuMaxHeight ? `max-height: ${menuMaxHeight}px` : undefined}
 			role="listbox"
 			transition:popTransition
 		>
