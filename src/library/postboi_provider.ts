@@ -84,11 +84,17 @@ export interface ListSummary {
 	updated_at: string
 }
 
-/** A recipient's lifecycle state. Only subscribed recipients receive broadcasts and
- * digests; unsubscribes and bounces flip the status instead of removing the row. */
-export type RecipientStatus = "subscribed" | "pending" | "unsubscribed" | "bounced" | "complained"
+/**
+ * A recipient's per-list membership state. Only `subscribed` recipients receive
+ * broadcasts and digests; `pending` awaits double-opt-in confirmation, `unsubscribed`
+ * stays on the list (with history) but out of every send. Since 0.19 this is the
+ * three-state membership enum — a bounce/complaint suppresses the address account-wide
+ * (see `suppressions`) rather than living on the membership. Alias of
+ * {@link MembershipStatus}. */
+export type RecipientStatus = MembershipStatus
 
-/** One recipient on a list. `data` holds the `{key}` broadcast template variables. */
+/** One recipient on a list — the contact joined to its membership. `data` is the
+ * contact's global `{key}` broadcast variables; `status` is the per-list state. */
 export interface ListRecipient {
 	id: string
 	email: string
@@ -116,6 +122,38 @@ export interface NewListRecipient {
  * when the recipient carries broadcast template `data`.
  */
 export type ListRecipientInput = Email | NewListRecipient
+
+/** A per-list membership status. Since 0.19 broadcasts/digests send to `subscribed`
+ * only; a bounce/complaint suppresses the address account-wide rather than changing
+ * this. */
+export type MembershipStatus = "subscribed" | "pending" | "unsubscribed"
+
+/** A contact — one per address per account. `email` is the handle; `data` holds the
+ * contact's global `{key}` broadcast variables, shared across every list it's on. */
+export interface Contact {
+	email: string
+	name?: string
+	data?: Record<string, string>
+	created_at: string
+	updated_at: string
+}
+
+/** A contact's presence on one list, with its per-list status. */
+export interface Membership {
+	list: { id: string; name: string }
+	status: MembershipStatus
+	subscribed_at?: string
+	created_at: string
+}
+
+/** A contact with its list memberships, as returned by `GET /v1/contacts/:email`. */
+export type ContactDetails = Contact & { memberships: Array<Membership> }
+
+/** Fields `contacts.add`/`contacts.update` accept. Absent fields keep stored values. */
+export interface ContactInput {
+	name?: string
+	data?: Record<string, string>
+}
 
 /** One suppressed address on the account. */
 export interface Suppression {
@@ -484,12 +522,87 @@ export default class Postboi extends ProviderBase<SendResponse> {
 				body: { email, status },
 			}),
 
-		/** Remove an address from a list. */
+		/** Remove an address from a list — the membership goes; the contact stays. */
 		remove: (list: string, email: string): Promise<{ email: string; deleted: boolean }> =>
 			this.#api(
 				`/lists/${encodeURIComponent(list)}/recipients?email=${encodeURIComponent(email)}`,
 				{ method: "DELETE" }
 			),
+
+		/** Every recipient on a list, with their per-list status. `list` is a name or id. */
+		all: async (list: string): Promise<Array<ListRecipient>> => {
+			const data = await this.lists.get(list)
+			return data.recipients
+		},
+	}
+
+	/**
+	 * Contacts — the account's audience. One contact per address; `email` is the handle
+	 * throughout. `data` is the contact's global custom fields, shared across every list
+	 * it belongs to. Membership of a list (and its per-list status) is managed under
+	 * `recipients`; a contact's lists are read with `contacts.lists`.
+	 */
+	readonly contacts = {
+		/**
+		 * Upsert a contact by email — create it, or update an existing one's global
+		 * name/`data` (last write wins; absent fields keep their stored values).
+		 *
+		 * @example
+		 * ```ts
+		 * await mail.contacts.add("ada@example.com", { name: "Ada", data: { plan: "pro" } })
+		 * ```
+		 */
+		add: (email: string, contact: ContactInput = {}): Promise<Contact> =>
+			this.#api("/contacts", { body: { email, name: contact.name, data: contact.data } }),
+
+		/** One contact with its list memberships. */
+		get: (email: string): Promise<ContactDetails> =>
+			this.#api(`/contacts/${encodeURIComponent(email)}`, { method: "GET" }),
+
+		/** Update a contact's global name and/or `data`. Pass `null` to clear a field. */
+		update: (
+			email: string,
+			changes: { name?: string | null; data?: Record<string, string> | null }
+		): Promise<Contact> =>
+			this.#api(`/contacts/${encodeURIComponent(email)}`, { method: "PATCH", body: changes }),
+
+		/** Delete a contact and all its list memberships. Does not add a suppression. */
+		remove: (email: string): Promise<{ email: string; deleted: boolean }> =>
+			this.#api(`/contacts/${encodeURIComponent(email)}`, { method: "DELETE" }),
+
+		/**
+		 * The whole audience, newest first — following pagination for you. Narrow with
+		 * `list` (a name or id) and/or a membership `status`.
+		 */
+		all: async (
+			options: { list?: string; status?: MembershipStatus } = {}
+		): Promise<Array<Contact>> => {
+			const out: Array<Contact> = []
+			let cursor: string | undefined
+			do {
+				const params = new URLSearchParams()
+				if (options.list) params.set("list", options.list)
+				if (options.status) params.set("status", options.status)
+				if (cursor) params.set("cursor", cursor)
+				const query = params.toString()
+				const page = await this.#api<{ contacts: Array<Contact>; cursor: string | null }>(
+					`/contacts${query ? `?${query}` : ""}`,
+					{ method: "GET" }
+				)
+				out.push(...page.contacts)
+				cursor = page.cursor ?? undefined
+			} while (cursor)
+			return out
+		},
+
+		/** Which lists a contact is on, with its per-list status. */
+		lists: async (email: string): Promise<Array<Membership>> => {
+			const data = await this.#api<{ lists: Array<Membership> }>(
+				`/contacts/${encodeURIComponent(email)}/lists`,
+				{ method: "GET" }
+			)
+			return data.lists
+		},
 	}
 
 	/** A list's notifications — its recurring digests. `list` is a name or id throughout. */

@@ -62,3 +62,54 @@ describe("send-address", () => {
 		expect(calls[0].init?.method ?? "GET").toBe("GET")
 	})
 })
+
+describe("contacts", () => {
+	function stub_fetch(response: unknown) {
+		const calls: Array<{ url: string; init?: RequestInit }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({ url, init })
+				return new Response(JSON.stringify(response), { status: 200 })
+			})
+		)
+		vi.spyOn(console, "log").mockImplementation(() => {})
+		return calls
+	}
+
+	it("add POSTs /v1/contacts with the parsed --name and --data flags", async () => {
+		const calls = stub_fetch({ email: "ada@example.com", name: "Ada" })
+		expect(
+			await api_command("contacts", [
+				"add",
+				"ada@example.com",
+				"--name",
+				"Ada",
+				"--data",
+				'{"plan":"pro"}',
+			])
+		).toBe(true)
+		expect(calls[0].url).toContain("/v1/contacts")
+		expect(calls[0].init?.method).toBe("POST")
+		expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+			email: "ada@example.com",
+			name: "Ada",
+			data: { plan: "pro" },
+		})
+	})
+
+	it("a bare email GETs the contact and its memberships", async () => {
+		const calls = stub_fetch({ email: "ada@example.com", memberships: [] })
+		expect(await api_command("contacts", ["ada@example.com"])).toBe(true)
+		expect(calls[0].url).toContain("/v1/contacts/ada%40example.com")
+		expect(calls[0].init?.method ?? "GET").toBe("GET")
+	})
+
+	it("remove DELETEs the contact", async () => {
+		const calls = stub_fetch({ email: "ada@example.com", deleted: true })
+		expect(await api_command("contacts", ["remove", "ada@example.com"])).toBe(true)
+		expect(calls[0].url).toContain("/v1/contacts/ada%40example.com")
+		expect(calls[0].init?.method).toBe("DELETE")
+	})
+})

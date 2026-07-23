@@ -195,6 +195,103 @@ async function recipients(args: Array<string>): Promise<void> {
 	)
 }
 
+// ── Contacts ─────────────────────────────────────────────────────────────────
+
+/** Pull `--name value` / `--data value` flags out of an arg list, returning the rest. */
+function take_flags(
+	args: Array<string>,
+	names: Array<string>
+): { flags: Record<string, string>; rest: Array<string> } {
+	const flags: Record<string, string> = {}
+	const rest: Array<string> = []
+	for (let i = 0; i < args.length; i++) {
+		const match = names.find((name) => args[i] === `--${name}`)
+		if (match) {
+			flags[match] = args[++i] ?? ""
+		} else {
+			rest.push(args[i])
+		}
+	}
+	return { flags, rest }
+}
+
+interface ContactWire {
+	email: string
+	name?: string
+	data?: Record<string, string>
+	created_at: string
+	updated_at: string
+}
+
+async function contacts(args: Array<string>): Promise<void> {
+	const [action, ...rest_args] = args
+
+	if (action === "add") {
+		const { flags, rest } = take_flags(rest_args, ["name", "data"])
+		const email = rest[0]
+		if (!email) {
+			throw new ApiCommandError(
+				"Usage: postboi contacts add <email> [--name <name>] [--data <json>]"
+			)
+		}
+		let data: Record<string, string> | undefined
+		if (flags.data) {
+			try {
+				const parsed: unknown = JSON.parse(flags.data)
+				if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error()
+				data = Object.fromEntries(
+					Object.entries(parsed).map(([key, value]) => [key, String(value)])
+				)
+			} catch {
+				throw new ApiCommandError('--data must be a JSON object, e.g. \'{"plan":"pro"}\'')
+			}
+		}
+		const contact = await api<ContactWire>("/v1/contacts", {
+			method: "POST",
+			body: { email, name: flags.name, data },
+		})
+		return console.log(`${green("✓")} saved ${bold(contact.email)}`)
+	}
+
+	if (action === "remove") {
+		const email = rest_args[0]
+		if (!email) throw new ApiCommandError("Usage: postboi contacts remove <email>")
+		await api(`/v1/contacts/${encodeURIComponent(email)}`, { method: "DELETE" })
+		return console.log(`${green("✓")} removed ${bold(email)}`)
+	}
+
+	// A bare `contacts <email>` shows one contact and the lists it's on.
+	if (action) {
+		const contact = await api<
+			ContactWire & {
+				memberships: Array<{ list: { name: string }; status: string; created_at: string }>
+			}
+		>(`/v1/contacts/${encodeURIComponent(action)}`)
+		console.log(`${bold(contact.email)}${contact.name ? dim(` (${contact.name})`) : ""}`)
+		if (contact.data && Object.keys(contact.data).length > 0) {
+			console.log(`  ${dim("data:")} ${JSON.stringify(contact.data)}`)
+		}
+		if (contact.memberships.length === 0) return console.log(dim("  On no lists."))
+		console.log()
+		return table(
+			["LIST", "STATUS", "SINCE"],
+			contact.memberships.map((m) => [
+				m.list.name,
+				m.status === "subscribed" ? green(m.status) : yellow(m.status),
+				day(m.created_at),
+			])
+		)
+	}
+
+	// No action → page the whole audience.
+	const { contacts: rows } = await api<{ contacts: Array<ContactWire> }>("/v1/contacts")
+	if (rows.length === 0) return console.log(dim("No contacts yet — postboi contacts add <email>"))
+	table(
+		["EMAIL", "NAME", "CREATED"],
+		rows.map((c) => [c.email, c.name ?? "", day(c.created_at)])
+	)
+}
+
 // ── Domains ────────────────────────────────────────────────────────────────
 
 interface DomainDetail {
@@ -467,6 +564,7 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	"send-address": send_address,
 	lists,
 	recipients,
+	contacts,
 	domains,
 	webhooks,
 	members,

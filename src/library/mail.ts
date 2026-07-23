@@ -175,7 +175,13 @@ async function postboi_provider(): Promise<Postboi> {
 	return provider as Postboi
 }
 
-type PostboiNamespace = "messages" | "lists" | "recipients" | "notifications" | "suppressions"
+type PostboiNamespace =
+	| "messages"
+	| "lists"
+	| "recipients"
+	| "contacts"
+	| "notifications"
+	| "suppressions"
 
 /**
  * A zero-config mirror of a Postboi namespace: every method call resolves the provider
@@ -214,6 +220,7 @@ export const mail: typeof send_mail & Pick<Postboi, PostboiNamespace> = Object.a
 	messages: lazy_namespace("messages"),
 	lists: lazy_namespace("lists"),
 	recipients: lazy_namespace("recipients"),
+	contacts: lazy_namespace("contacts"),
 	notifications: lazy_namespace("notifications"),
 	suppressions: lazy_namespace("suppressions"),
 })

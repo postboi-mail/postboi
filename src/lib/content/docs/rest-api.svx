@@ -1,7 +1,7 @@
 ---
 title: REST API
 name: REST API
-description: Everything the dashboard can do, over HTTP — send, lists, recipients, domains, webhooks, members, suppressions.
+description: Everything the dashboard can do, over HTTP — send, lists, contacts, domains, webhooks, members, suppressions.
 category: Reference
 ---
 
@@ -17,6 +17,21 @@ The full interactive reference lives at
 **[api.postboi.email](https://api.postboi.email)** — every endpoint with schemas and
 copy-paste examples in curl, JavaScript, Python, and more.
 
+Alongside the per-list `/v1/lists/{id}/recipients` endpoints, `/v1/contacts` is your
+whole **audience** — one contact per address, with global `name`/`data` and its list
+memberships:
+
+```bash
+# Upsert a contact
+curl https://api.postboi.email/v1/contacts \
+	-H "Authorization: Bearer $POSTBOI_TOKEN" \
+	-d '{"email":"ada@example.com","name":"Ada","data":{"plan":"pro"}}'
+
+# Which lists is Ada on?
+curl https://api.postboi.email/v1/contacts/ada@example.com/lists \
+	-H "Authorization: Bearer $POSTBOI_TOKEN"
+```
+
 Errors always come back as `{ "message": "…", "code": "…" }` with a matching HTTP
 status, so error handling is one shape everywhere.
 
@@ -28,6 +43,7 @@ The CLI wraps the same API, so quick account chores never need a dashboard tab:
 bunx postboi whoami
 bunx postboi lists add Newsletter
 bunx postboi recipients Newsletter add bob@example.com
+bunx postboi contacts add ada@example.com --name Ada --data '{"plan":"pro"}'
 bunx postboi domains add example.com   # prints the DNS records + a one-click setup link
 bunx postboi webhooks add https://example.com/api/events
 bunx postboi members invite colleague@example.com

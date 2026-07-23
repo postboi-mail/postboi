@@ -92,6 +92,7 @@ ${bold("Account")} ${dim("(Postboi provider — full reference: https://api.post
   ${cyan("bunx postboi send-address")}    Default sending address ${dim("· [name@yourdomain.com]")}
   ${cyan("bunx postboi lists")}           Lists ${dim("· add <name> · delete <ref>")}
   ${cyan("bunx postboi recipients")}      A list's recipients ${dim("· <list> add <email>… · <list> remove <email>")}
+  ${cyan("bunx postboi contacts")}        The audience ${dim("· add <email> [--name --data] · <email> · remove <email>")}
   ${cyan("bunx postboi domains")}         Sending domains ${dim("· add <domain> · check <ref> · delete <ref>")}
   ${cyan("bunx postboi webhooks")}        Webhooks ${dim("· add <url> · delete <id> · deliveries <id>")}
   ${cyan("bunx postboi members")}         Members ${dim("· invite <email> · remove <ref> · revoke <ref>")}

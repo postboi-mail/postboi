@@ -180,7 +180,8 @@ bunx postboi whoami                                # account, plan, usage — ru
 bunx postboi domains add example.com               # prints DNS records + one-click Domain Connect URL
 bunx postboi domains check example.com             # re-check until verified (records land in minutes)
 bunx postboi lists add Newsletter
-bunx postboi recipients Newsletter add a@b.co c@d.co
+bunx postboi recipients Newsletter add a@b.co c@d.co   # upserts contact + membership
+bunx postboi contacts add ada@example.com --data '{"plan":"pro"}'  # the audience: one contact, global data, shared across lists
 bunx postboi webhooks add https://example.com/api/events
 bunx postboi sync                                  # writes the webhook secret to POSTBOI_WEBHOOK_SECRET
 bunx postboi members invite colleague@example.com

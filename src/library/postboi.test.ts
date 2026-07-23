@@ -293,6 +293,62 @@ describe("the Postboi provider — account API", () => {
 		])
 	})
 
+	it("recipients.all returns a list's members via lists.get", async () => {
+		fetch.mockResolvedValue(
+			respond({ json: { id: "l1", name: "News", recipients: [{ email: "a@test.com" }] } })
+		)
+		const members = await provider().recipients.all("News")
+		expect(sent_url()).toBe("https://postboi.email/v1/lists/News")
+		expect(members).toEqual([{ email: "a@test.com" }])
+	})
+
+	it("contacts: upsert, get, update, remove, lists", async () => {
+		fetch.mockResolvedValue(respond({ json: { email: "ada@test.com", name: "Ada" } }))
+		await provider().contacts.add("ada@test.com", { name: "Ada", data: { plan: "pro" } })
+		expect(sent_url()).toBe("https://postboi.email/v1/contacts")
+		expect(sent_init().method).toBe("POST")
+		expect(sent_json()).toEqual({ email: "ada@test.com", name: "Ada", data: { plan: "pro" } })
+
+		await provider().contacts.get("a+b@test.com")
+		expect(sent_url()).toBe("https://postboi.email/v1/contacts/a%2Bb%40test.com")
+		expect(sent_init().method).toBe("GET")
+
+		await provider().contacts.update("ada@test.com", { data: null })
+		expect(sent_init().method).toBe("PATCH")
+		expect(sent_json()).toEqual({ data: null })
+
+		await provider().contacts.remove("ada@test.com")
+		expect(sent_url()).toBe("https://postboi.email/v1/contacts/ada%40test.com")
+		expect(sent_init().method).toBe("DELETE")
+
+		fetch.mockResolvedValue(
+			respond({ json: { email: "ada@test.com", lists: [{ status: "subscribed" }] } })
+		)
+		const lists = await provider().contacts.lists("ada@test.com")
+		expect(sent_url()).toBe("https://postboi.email/v1/contacts/ada%40test.com/lists")
+		expect(lists).toEqual([{ status: "subscribed" }])
+	})
+
+	it("contacts.all follows the cursor and unwraps contacts", async () => {
+		fetch
+			.mockResolvedValueOnce(
+				respond({ json: { contacts: [{ email: "a@test.com" }], cursor: "c1" } })
+			)
+			.mockResolvedValueOnce(
+				respond({ json: { contacts: [{ email: "b@test.com" }], cursor: null } })
+			)
+		const all = await provider().contacts.all({ list: "News", status: "subscribed" })
+		expect(fetch).toHaveBeenCalledTimes(2)
+		expect(all).toEqual([{ email: "a@test.com" }, { email: "b@test.com" }])
+		// First page carries the filters; the second appends the cursor.
+		expect(fetch.mock.calls[0][0]).toBe(
+			"https://postboi.email/v1/contacts?list=News&status=subscribed"
+		)
+		expect(fetch.mock.calls[1][0]).toBe(
+			"https://postboi.email/v1/contacts?list=News&status=subscribed&cursor=c1"
+		)
+	})
+
 	it("lists.update toggles confirmation and renames; lists.create takes options", async () => {
 		fetch.mockResolvedValue(
 			respond({ json: { id: "l1", name: "my list", confirmation: { enabled: true } } })

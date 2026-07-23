@@ -64,6 +64,7 @@ That's the whole setup. Mail goes out from your `you@send.postboi.email` address
 
 Beyond `mail()`, the token unlocks [message status](https://docs.postboi.email/provider#delivery-status),
 [recipient lists, broadcasts and double opt-in](https://docs.postboi.email/provider#lists--broadcasts),
+your [contacts (the audience)](https://docs.postboi.email/provider#contacts-the-audience),
 [suppressions](https://docs.postboi.email/provider#suppressions), and
 [batching with idempotency keys](https://docs.postboi.email/provider#batching--idempotency) — same import,
 no extra SDK:
@@ -72,6 +73,7 @@ no extra SDK:
 import { mail } from "postboi"
 
 await mail.recipients.add("Newsletter", "Ada Lovelace <ada@example.com>")
+await mail.contacts.add("ada@example.com", { data: { plan: "pro" } }) // one contact, shared across lists
 ```
 
 Full details: [The Postboi provider](https://docs.postboi.email/provider).
