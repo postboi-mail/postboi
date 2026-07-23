@@ -142,18 +142,15 @@ when that happens.
 You can also look a message up from code with the id `mail()` returned:
 
 ```ts
-import Postboi from "postboi"
-
-const mail = new Postboi()
-const message = await mail.message(id)
+const message = await mail.messages.get(id)
 // { id, status: 'sent', to, subject, opened_at, open_count, … }
 ```
 
-And a scheduled message can be moved (until it sends). `reschedule` takes the same
-formats as `scheduled_at`:
+And a scheduled message can be moved (until it sends). `mail.messages.reschedule`
+takes the same formats as `scheduled_at`:
 
 ```ts
-await mail.reschedule(id, { days: 2 }) // or a Date / ISO 8601 string
+await mail.messages.reschedule(id, { days: 2 }) // or a Date / ISO 8601 string
 ```
 
 ## Batching & idempotency
@@ -183,41 +180,43 @@ The dashboard's recipient lists are available from code, so a newsletter signup 
 straight onto a list without leaving your app — one import, one call:
 
 ```ts
-import { add_recipients } from "postboi"
+import { mail } from "postboi"
 
-await add_recipients("Newsletter", "Ada Lovelace <ada@example.com>")
+await mail.recipients.add("Newsletter", "Ada Lovelace <ada@example.com>")
 ```
 
-`add_recipients` upserts on both sides. The first argument is a list **name or id** —
+`mail.recipients.add` upserts on both sides. The first argument is a list **name or id** —
 an unknown name creates the list — and re-adding an address updates its name and
 `data` instead of duplicating it. Recipients take the same shapes as `to`: a bare
 address, `"Name <a@b.c>"`, `{ email, name?, data? }`, or an array mixing all three.
-(List names are unique per account, so `create_list` rejects a taken name with code
+(List names are unique per account, so `mail.lists.create` rejects a taken name with code
 `name_taken`.)
 
-Every list method accepts a name or an id — only `add_recipients` creates a missing
+Every list method accepts a name or an id — only `mail.recipients.add` creates a missing
 list; everything else 404s on an unknown name. The response reports `added` (genuinely
 new addresses) and `updated` (existing ones refreshed), so calling it twice with the
 same address adds once:
 
 ```ts
-await mail.add_recipients("Newsletter", [
+await mail.recipients.add("Newsletter", [
 	{ email: "ada@example.com", name: "Ada", data: { plan: "Pro" } },
 	"Linus <linus@example.com>",
 ]) // → { added: 2, updated: 0, list: { id, name } }
 
-await mail.broadcast("Newsletter", {
+await mail.lists.broadcast("Newsletter", {
 	subject: "Hey {name}",
-	body: "<p>News for our {plan} users…</p>",
+	body: "<p>News for our {plan} users…</p><p><a href='{unsubscribe_url}'>Unsubscribe</a></p>",
 	scheduled_at: { hours: 1 }, // optional: omit to queue immediately
 })
 ```
 
 `{key}` placeholders are filled per recipient from their `data` (plus `{name}` and
 `{email}` from the recipient row), and every broadcast automatically carries the
-one-click unsubscribe headers Gmail and Yahoo require for bulk mail. The rest of the
-surface: `lists()`, `list(id)` (with recipients), `rename_list(id, name)`,
-`delete_list(id)`, and `remove_recipient(list_id, email)`.
+one-click unsubscribe headers Gmail and Yahoo require for bulk mail. For a visible
+opt-out link in the body, drop in `{unsubscribe_url}` — a reserved variable filled with
+that recipient's signed one-click link (the same target as the header). The rest of the
+surface: `mail.lists.all()`, `mail.lists.get(id)` (with recipients), `mail.lists.rename(id, name)`,
+`mail.lists.delete(id)`, and `mail.recipients.remove(list_id, email)`.
 
 ## Confirmation (double opt-in)
 
@@ -227,10 +226,10 @@ subscribers for notifications) once they click it. Manage it from the list's
 Confirmation tab, or from code:
 
 ```ts
-await mail.update_list("Newsletter", { confirmation: true }) // or on create:
-await mail.create_list("Digest", { confirmation: true })
+await mail.lists.update("Newsletter", { confirmation: true }) // or on create:
+await mail.lists.create("Digest", { confirmation: true })
 
-await mail.add_recipients("Newsletter", "ada@example.com")
+await mail.recipients.add("Newsletter", "ada@example.com")
 // → { added: 1, updated: 0, pending: 1, list: … } — Ada gets the confirmation email
 ```
 
@@ -240,8 +239,8 @@ bounces and complaints flip the status automatically (the row stays, with histor
 rather than removing the recipient. Set it explicitly too:
 
 ```ts
-await mail.add_recipients("Newsletter", "ada@example.com", { status: "pending" })
-await mail.set_recipient_status("Newsletter", "ada@example.com", "unsubscribed")
+await mail.recipients.add("Newsletter", "ada@example.com", { status: "pending" })
+await mail.recipients.set_status("Newsletter", "ada@example.com", "unsubscribed")
 ```
 
 Two knobs, patchable via an object: `enabled` (send confirmation emails) and
@@ -249,7 +248,7 @@ Two knobs, patchable via an object: `enabled` (send confirmation emails) and
 strict double opt-in (email + `"pending"`); a courtesy email without gating is
 `{ enabled: true, default_status: "subscribed" }`; off again is `confirmation: false`.
 The object also takes `subject`, `body` (HTML with `{key}` variables plus `{list}` and
-`{confirm_url}` — put it in a link) and `from`. Settings come back on `list()`, and
+`{confirm_url}` — put it in a link) and `from`. Settings come back on `mail.lists.get()`, and
 recipient rows carry a `status` of `"subscribed"` or `"pending"`.
 
 ## Notifications
@@ -259,12 +258,12 @@ should know, on a schedule or the moment someone joins. The dashboard's Notifica
 tab manages them visually; the same objects are available from code:
 
 ```ts
-await mail.create_notification("Newsletter", {
+await mail.notifications.create("Newsletter", {
 	recipients: "Darby <darby@uilo.co>",
 	schedule: "subscribe", // fire when someone new joins
 })
 
-await mail.create_notification("Newsletter", {
+await mail.notifications.create("Newsletter", {
 	recipients: ["darby@uilo.co", "team@uilo.co"],
 	schedule: { frequency: "weekly", days: [1, 4], send_time: "09:00", timezone: "Europe/London" },
 })
@@ -275,8 +274,8 @@ or an object with `days` (JS weekday numbers, weekly), `month_day` (monthly),
 `send_time` and an IANA `timezone` — defaults are Mondays, 09:00, UTC. Subject and
 body default to a starter template; bodies are HTML with `{key}` variables plus
 `{#if}`/`{#each}` blocks over `new_subscribers`. The rest of the surface:
-`notifications(list)`, `update_notification(list, id, changes)` (partial — absent
-fields keep their values), and `delete_notification(list, id)`.
+`mail.notifications.all(list)`, `mail.notifications.update(list, id, changes)` (partial — absent
+fields keep their values), and `mail.notifications.delete(list, id)`.
 
 ## Suppressions
 
@@ -284,9 +283,9 @@ Hard bounces, complaints and unsubscribes land on your account's suppression lis
 sends to those addresses are dropped automatically. Inspect and manage it from code:
 
 ```ts
-const rows = await mail.suppressions() // [{ email, reason, detail?, created_at }]
-await mail.suppress("noisy@example.com") // add by hand
-await mail.unsuppress("fixed@example.com") // allow sending again
+const rows = await mail.suppressions.all() // [{ email, reason, detail?, created_at }]
+await mail.suppressions.add("noisy@example.com") // add by hand
+await mail.suppressions.remove("fixed@example.com") // allow sending again
 ```
 
 ## Notes

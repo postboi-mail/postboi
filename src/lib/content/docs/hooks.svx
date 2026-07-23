@@ -10,14 +10,14 @@ observe, rewrite, or cancel a message; the rest are best-effort observers: an er
 throw is swallowed, so logging and telemetry can never break a send. In a bulk
 [`mail(array)`](/bulk), hooks run once per message.
 
-> Setting the same hooks on every instance? Define them **once** in
-> [`postboi.config.ts`](/config) and they apply everywhere, including the
-> zero-config `mail()`.
+Define them **once** in [`postboi.config.ts`](/config) and they apply everywhere, including
+the zero-config `mail()`:
 
 ```typescript
-const mail = new Resend({
-	api_key: RESEND_API_KEY,
-	default: { from: 'no-reply@example.com' },
+// postboi.config.ts
+import { config } from 'postboi'
+
+export default config({
 	hooks: {
 		// observe, mutate, or throw to cancel (runs before the request)
 		before: {

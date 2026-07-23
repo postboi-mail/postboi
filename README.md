@@ -69,9 +69,9 @@ Beyond `mail()`, the token unlocks [message status](https://docs.postboi.email/p
 no extra SDK:
 
 ```typescript
-import { add_recipients } from "postboi"
+import { mail } from "postboi"
 
-await add_recipients("Newsletter", "Ada Lovelace <ada@example.com>")
+await mail.recipients.add("Newsletter", "Ada Lovelace <ada@example.com>")
 ```
 
 Full details: [The Postboi provider](https://docs.postboi.email/provider).

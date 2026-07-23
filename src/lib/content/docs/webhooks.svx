@@ -13,6 +13,7 @@ verification included.
 
 ```typescript
 import { receive } from 'postboi/webhooks'
+import { mail } from 'postboi'
 
 export async function POST(request: Request) {
 	const events = await receive(request)
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
 			console.log(`${event.email} opened in ${event.client?.name} on ${event.client?.device}`)
 		}
 		if (event.type === 'bounced' && event.bounce?.category === 'hard') {
-			await suppress(event.email)
+			await mail.suppressions.add(event.email)
 		}
 	}
 

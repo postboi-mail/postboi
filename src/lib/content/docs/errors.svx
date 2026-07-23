@@ -50,8 +50,10 @@ subclass) with codes `invalid_signature`, `missing_secret`, `stale_timestamp` or
 Every provider accepts `retries`, `retry_delay`, and `timeout`:
 
 ```typescript
-const mail = new Resend({
-	api_key: RESEND_API_KEY,
+// postboi.config.ts
+import { config } from 'postboi'
+
+export default config({
 	timeout: 30000, // per-request timeout in ms (default 30000)
 	retries: 2, // retries on 429/5xx and network errors (default 0)
 	retry_delay: 500 // base backoff in ms, doubles each attempt (default 500)

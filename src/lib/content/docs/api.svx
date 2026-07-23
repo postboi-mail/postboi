@@ -33,35 +33,34 @@ equivalents are `mail()` and `cancel()` from the package root.
 [The Postboi provider](/provider) adds account methods on top of the common surface:
 
 ```typescript
-import Postboi from 'postboi'
-const mail = new Postboi() // reads POSTBOI_TOKEN
+import { mail } from 'postboi' // reads POSTBOI_TOKEN
 
 // messages
-await mail.message(id) // status + content (see The Postboi provider)
-await mail.reschedule(id, when) // Date | ISO string | Duration (see Scheduling)
+await mail.messages.get(id) // status + content (see The Postboi provider)
+await mail.messages.reschedule(id, when) // Date | ISO string | Duration (see Scheduling)
 
 // lists & broadcasts (see The Postboi provider)
-await mail.lists()
-await mail.create_list(name, { confirmation? }) // names are unique per account (409 name_taken)
-await mail.list(name_or_id) // includes recipients + confirmation settings
-await mail.update_list(name_or_id, { name?, confirmation? })
-await mail.rename_list(name_or_id, name) // shorthand for update_list
-await mail.delete_list(name_or_id)
-await mail.add_recipients(name_or_id, recipients, { status? }) // upserts — see The Postboi provider
-await mail.set_recipient_status(name_or_id, email, status)
-await mail.remove_recipient(name_or_id, email)
-await mail.broadcast(name_or_id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
+await mail.lists.all()
+await mail.lists.create(name, { confirmation? }) // names are unique per account (409 name_taken)
+await mail.lists.get(name_or_id) // includes recipients + confirmation settings
+await mail.lists.update(name_or_id, { name?, confirmation? })
+await mail.lists.rename(name_or_id, name) // shorthand for lists.update
+await mail.lists.delete(name_or_id)
+await mail.recipients.add(name_or_id, recipients, { status? }) // upserts — see The Postboi provider
+await mail.recipients.set_status(name_or_id, email, status)
+await mail.recipients.remove(name_or_id, email)
+await mail.lists.broadcast(name_or_id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
 
 // notifications (see The Postboi provider)
-await mail.notifications(name_or_id)
-await mail.create_notification(name_or_id, { recipients, from?, subject?, body?, schedule })
-await mail.update_notification(name_or_id, id, changes) // partial
-await mail.delete_notification(name_or_id, id)
+await mail.notifications.all(name_or_id)
+await mail.notifications.create(name_or_id, { recipients, from?, subject?, body?, schedule })
+await mail.notifications.update(name_or_id, id, changes) // partial
+await mail.notifications.delete(name_or_id, id)
 
 // suppressions (see The Postboi provider)
-await mail.suppressions()
-await mail.suppress(email)
-await mail.unsuppress(email)
+await mail.suppressions.all()
+await mail.suppressions.add(email)
+await mail.suppressions.remove(email)
 ```
 
 ## SendOptions

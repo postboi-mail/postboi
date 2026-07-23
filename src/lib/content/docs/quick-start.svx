@@ -55,9 +55,9 @@ generated pieces (types, captcha key, webhook secrets) after adding a domain.
 The same token also covers the rest of the platform from the same import — no second SDK:
 
 ```typescript
-import { add_recipients } from 'postboi'
+import { mail } from 'postboi'
 
-await add_recipients('Newsletter', 'Ada Lovelace <ada@example.com>')
+await mail.recipients.add('Newsletter', 'Ada Lovelace <ada@example.com>')
 ```
 
 [Message status and the log](/provider#delivery-status),
