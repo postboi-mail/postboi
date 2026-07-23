@@ -11,7 +11,6 @@ import { PostboiError } from "./index.js"
 // Type-only — erased at compile time, so the provider module stays a dynamic-only leaf
 // (see the LOADERS note below).
 import type Postboi from "./postboi_provider.js"
-import type { ListRecipientInput } from "./postboi_provider.js"
 import { find_provider } from "./registry.js"
 import { load_config } from "./config.js"
 import { ensure_env_loaded, env_defaults, read_env } from "./env.js"
@@ -122,26 +121,17 @@ async function resolve_provider(): Promise<ProviderBase<unknown>> {
 	return new Provider(options)
 }
 
-/**
- * Send without constructing anything. The provider is whichever `POSTBOI_PROVIDER` names
- * (set by `bunx postboi init`); its credentials and the `POSTBOI_*` defaults are read from
- * the environment on each call. Pass an array to send many.
- *
- * @example
- * ```ts
- * import { mail } from "postboi"
- * await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
- * ```
- */
-export function mail<const T extends ReadonlyArray<Email>>(
+// The bare send function. Exported below as `mail`, augmented with the resource
+// namespaces (`mail.recipients`, `mail.lists`, …).
+function send_mail<const T extends ReadonlyArray<Email>>(
 	options: Omit<BatchOptions, "to" | "data"> & { to: T; data: BatchData<T> }
 ): Promise<Array<BatchResult<unknown>>>
-export function mail(options: SendOptions): Promise<unknown>
-export function mail(
+function send_mail(options: SendOptions): Promise<unknown>
+function send_mail(
 	options: Array<SendOptions>,
 	batch?: { concurrency?: number }
 ): Promise<Array<BatchResult<unknown>>>
-export async function mail(
+async function send_mail(
 	options: SendOptions | BatchOptions | Array<SendOptions>,
 	batch: { concurrency?: number } = {}
 ): Promise<unknown> {
@@ -168,40 +158,62 @@ export async function cancel(id: string): Promise<CancelResponse> {
 }
 
 /**
- * Add recipients to a Postboi list without constructing anything — the zero-config
- * counterpart of `new Postboi().add_recipients()`. `list` is a list name or id, and an
- * unknown name creates the list, so this is all a signup flow needs:
- *
- * @example
- * ```ts
- * import { add_recipients } from "postboi"
- * await add_recipients("my list", "Acme Inc <hello@acme.example>")
- * ```
- *
- * Recipients take the same shapes as `to` — an address, `"Name <a@b.c>"`,
- * `{ email, name, data }`, or an array of these. Lists live on the Postboi API, so this
- * rejects with code `lists_not_supported` when another provider is configured.
+ * Resolve the configured provider, asserting it's the Postboi provider — lists, recipients,
+ * suppressions and notifications live on its API. Duck-typed rather than `instanceof`:
+ * importing the class here would defeat the dynamic-only leaf (see LOADERS).
  */
-export async function add_recipients(
-	list: string,
-	recipients: ListRecipientInput | Array<ListRecipientInput>,
-	options: { status?: "subscribed" | "pending" } = {}
-): Promise<{
-	added: number
-	updated: number
-	pending: number
-	list: { id: string; name: string }
-}> {
+async function postboi_provider(): Promise<Postboi> {
 	const provider = await resolve_provider()
-	// Duck-typed rather than instanceof — importing the class here would defeat the
-	// dynamic-only leaf (see LOADERS).
-	if (!("add_recipients" in provider)) {
+	if (!("lists" in provider)) {
 		throw new PostboiError({
 			provider: "postboi",
 			code: "lists_not_supported",
 			message:
-				"Lists need the Postboi provider — set POSTBOI_TOKEN (run `bunx postboi init`), or call add_recipients on a `new Postboi()` instance.",
+				"List, recipient, suppression and notification management needs the Postboi provider — set POSTBOI_TOKEN (run `bunx postboi init`).",
 		})
 	}
-	return (provider as Postboi).add_recipients(list, recipients, options)
+	return provider as Postboi
 }
+
+type PostboiNamespace = "messages" | "lists" | "recipients" | "notifications" | "suppressions"
+
+/**
+ * A zero-config mirror of a Postboi namespace: every method call resolves the provider
+ * afresh (reading env each time, like `mail()` itself), then forwards to it. Kept in one
+ * proxy so all five namespaces share the resolve-then-forward logic.
+ */
+function lazy_namespace<K extends PostboiNamespace>(name: K): Postboi[K] {
+	return new Proxy({} as Postboi[K], {
+		get(_target, method: string) {
+			return async (...args: Array<unknown>) => {
+				const provider = await postboi_provider()
+				const ns = provider[name] as Record<string, (...a: Array<unknown>) => unknown>
+				return ns[method](...args)
+			}
+		},
+	})
+}
+
+/**
+ * Send without constructing anything — and manage lists, recipients, suppressions,
+ * notifications and messages off the same object. The provider is whichever
+ * `POSTBOI_PROVIDER` names (set by `bunx postboi init`); its credentials and the
+ * `POSTBOI_*` defaults are read from the environment on each call. Pass an array to `mail()`
+ * to send many. The `mail.*` namespaces need the Postboi provider (lists live on its API).
+ *
+ * @example
+ * ```ts
+ * import { mail } from "postboi"
+ *
+ * await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+ * await mail.recipients.add("Newsletter", "ada@example.com")
+ * await mail.lists.create("Newsletter", { confirmation: true })
+ * ```
+ */
+export const mail: typeof send_mail & Pick<Postboi, PostboiNamespace> = Object.assign(send_mail, {
+	messages: lazy_namespace("messages"),
+	lists: lazy_namespace("lists"),
+	recipients: lazy_namespace("recipients"),
+	notifications: lazy_namespace("notifications"),
+	suppressions: lazy_namespace("suppressions"),
+})

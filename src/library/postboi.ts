@@ -6,7 +6,7 @@ import "./register.js"
 export * from "./index.js"
 // The zero-config `mail()`/`cancel()` and provider dispatch are general (not Postboi-specific)
 // but belong on the package root, so re-export them here.
-export { mail, cancel, add_recipients } from "./mail.js"
+export { mail, cancel } from "./mail.js"
 
 // The Postboi provider itself lives in its own leaf module — `mail()`'s registry loads it
 // with a dynamic import, and a module that is both statically imported (this root, via

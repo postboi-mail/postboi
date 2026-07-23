@@ -216,7 +216,7 @@ describe("the Postboi provider — account API", () => {
 
 	it("message() retrieves status and content", async () => {
 		fetch.mockResolvedValue(respond({ json: { id: "m1", status: "sent", open_count: 2 } }))
-		const message = await provider().message("m1")
+		const message = await provider().messages.get("m1")
 		expect(sent_url()).toBe("https://postboi.email/v1/messages/m1")
 		expect(sent_init().method).toBe("GET")
 		expect(sent_init().body).toBeUndefined()
@@ -230,7 +230,7 @@ describe("the Postboi provider — account API", () => {
 			respond({ json: { id: "m1", scheduled_at: "2026-07-02T00:00:00.000Z" } })
 		)
 
-		const moved = await provider().reschedule("m1", { days: 1 })
+		const moved = await provider().messages.reschedule("m1", { days: 1 })
 		expect(sent_url()).toBe("https://postboi.email/v1/messages/m1")
 		expect(sent_init().method).toBe("PATCH")
 		expect(sent_json()).toEqual({ scheduled_at: "2026-07-02T00:00:00.000Z" })
@@ -240,29 +240,29 @@ describe("the Postboi provider — account API", () => {
 
 	it("lists() unwraps the lists array", async () => {
 		fetch.mockResolvedValue(respond({ json: { lists: [{ id: "l1", name: "News" }] } }))
-		const lists = await provider().lists()
+		const lists = await provider().lists.all()
 		expect(sent_url()).toBe("https://postboi.email/v1/lists")
 		expect(lists).toEqual([{ id: "l1", name: "News" }])
 	})
 
 	it("creates, renames and deletes lists", async () => {
 		fetch.mockResolvedValue(respond({ json: { id: "l1", name: "News" } }))
-		await provider().create_list("News")
+		await provider().lists.create("News")
 		expect(sent_url()).toBe("https://postboi.email/v1/lists")
 		expect(sent_json()).toEqual({ name: "News" })
 
-		await provider().rename_list("l1", "Newsletter")
+		await provider().lists.rename("l1", "Newsletter")
 		expect(sent_init().method).toBe("PATCH")
 		expect(sent_json()).toEqual({ name: "Newsletter" })
 
-		await provider().delete_list("l1")
+		await provider().lists.delete("l1")
 		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1")
 		expect(sent_init().method).toBe("DELETE")
 	})
 
 	it("adds and removes list recipients", async () => {
 		fetch.mockResolvedValue(respond({ json: { added: 2 } }))
-		const added = await provider().add_recipients("l1", [
+		const added = await provider().recipients.add("l1", [
 			{ email: "a@test.com", name: "Ada", data: { name: "Ada" } },
 			{ email: "b@test.com" },
 		])
@@ -270,20 +270,20 @@ describe("the Postboi provider — account API", () => {
 		expect(sent_json()).toHaveLength(2)
 		expect(added).toEqual({ added: 2 })
 
-		await provider().remove_recipient("l1", "a+b@test.com")
+		await provider().recipients.remove("l1", "a+b@test.com")
 		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1/recipients?email=a%2Bb%40test.com")
 		expect(sent_init().method).toBe("DELETE")
 	})
 
-	it("add_recipients takes to-style recipients and a list name", async () => {
+	it("recipients.add takes to-style recipients and a list name", async () => {
 		fetch.mockResolvedValue(
 			respond({ json: { added: 1, updated: 0, list: { id: "l1", name: "my list" } } })
 		)
-		await provider().add_recipients("my list", "Acme Inc <hello@acme.example>")
+		await provider().recipients.add("my list", "Acme Inc <hello@acme.example>")
 		expect(sent_url()).toBe("https://postboi.email/v1/lists/my%20list/recipients")
 		expect(sent_json()).toEqual([{ email: "hello@acme.example", name: "Acme Inc" }])
 
-		await provider().add_recipients("l1", [
+		await provider().recipients.add("l1", [
 			"a@test.com",
 			{ email: "b@test.com", data: { plan: "pro" } },
 		])
@@ -293,16 +293,16 @@ describe("the Postboi provider — account API", () => {
 		])
 	})
 
-	it("update_list toggles confirmation and renames; create_list takes options", async () => {
+	it("lists.update toggles confirmation and renames; lists.create takes options", async () => {
 		fetch.mockResolvedValue(
 			respond({ json: { id: "l1", name: "my list", confirmation: { enabled: true } } })
 		)
-		await provider().update_list("my list", { confirmation: true })
+		await provider().lists.update("my list", { confirmation: true })
 		expect(sent_url()).toBe("https://postboi.email/v1/lists/my%20list")
 		expect(sent_init().method).toBe("PATCH")
 		expect(sent_json()).toEqual({ confirmation: true })
 
-		await provider().update_list("l1", {
+		await provider().lists.update("l1", {
 			name: "News",
 			confirmation: { enabled: true, from: "Bot <bot@test.com>" },
 		})
@@ -311,7 +311,7 @@ describe("the Postboi provider — account API", () => {
 			confirmation: { enabled: true, from: { email: "bot@test.com", name: "Bot" } },
 		})
 
-		await provider().create_list("Fresh", { confirmation: true })
+		await provider().lists.create("Fresh", { confirmation: true })
 		expect(sent_url()).toBe("https://postboi.email/v1/lists")
 		expect(sent_json()).toEqual({ name: "Fresh", confirmation: true })
 	})
@@ -320,7 +320,7 @@ describe("the Postboi provider — account API", () => {
 		fetch.mockResolvedValue(
 			respond({ json: { id: "ntf_1", schedule: { frequency: "subscribe" } } })
 		)
-		await provider().create_notification("my list", {
+		await provider().notifications.create("my list", {
 			recipients: "Darby <darby@uilo.co>",
 			schedule: "subscribe",
 		})
@@ -331,12 +331,12 @@ describe("the Postboi provider — account API", () => {
 		})
 
 		fetch.mockResolvedValue(respond({ json: { notifications: [{ id: "ntf_1" }] } }))
-		const rows = await provider().notifications("my list")
+		const rows = await provider().notifications.all("my list")
 		expect(sent_init().method).toBe("GET")
 		expect(rows).toEqual([{ id: "ntf_1" }])
 
 		fetch.mockResolvedValue(respond({ json: { id: "ntf_1" } }))
-		await provider().update_notification("l1", "ntf_1", {
+		await provider().notifications.update("l1", "ntf_1", {
 			schedule: { frequency: "weekly", days: [1, 4], send_time: "17:30" },
 		})
 		expect(sent_url()).toBe("https://postboi.email/v1/lists/l1/notifications/ntf_1")
@@ -345,13 +345,13 @@ describe("the Postboi provider — account API", () => {
 		expect(sent_json().recipients).toBeUndefined()
 
 		fetch.mockResolvedValue(respond({ json: { id: "ntf_1", deleted: true } }))
-		await provider().delete_notification("l1", "ntf_1")
+		await provider().notifications.delete("l1", "ntf_1")
 		expect(sent_init().method).toBe("DELETE")
 	})
 
 	it("broadcast() maps body → html and normalizes addresses", async () => {
 		fetch.mockResolvedValue(respond({ json: { ids: ["m1"], recipients: 1, scheduled_at: "now" } }))
-		await provider().broadcast("l1", {
+		await provider().lists.broadcast("l1", {
 			from: "Ada <ada@test.com>",
 			subject: "Hey {name}",
 			body: "<p>Hi {name}</p>",
@@ -365,14 +365,14 @@ describe("the Postboi provider — account API", () => {
 
 	it("manages suppressions", async () => {
 		fetch.mockResolvedValue(respond({ json: { suppressions: [{ email: "x@test.com" }] } }))
-		const rows = await provider().suppressions()
+		const rows = await provider().suppressions.all()
 		expect(sent_url()).toBe("https://postboi.email/v1/suppressions")
 		expect(rows).toEqual([{ email: "x@test.com" }])
 
-		await provider().suppress("x@test.com")
+		await provider().suppressions.add("x@test.com")
 		expect(sent_json()).toEqual({ email: "x@test.com" })
 
-		await provider().unsuppress("x@test.com")
+		await provider().suppressions.remove("x@test.com")
 		expect(sent_url()).toBe("https://postboi.email/v1/suppressions?email=x%40test.com")
 		expect(sent_init().method).toBe("DELETE")
 	})
@@ -382,7 +382,7 @@ describe("the Postboi provider — account API", () => {
 			respond({ ok: false, status: 404, json: { message: "No message.", code: "not_found" } })
 		)
 		const error = await provider()
-			.message("missing")
+			.messages.get("missing")
 			.catch((e) => e)
 		expect(error).toBeInstanceOf(PostboiError)
 		expect(error.code).toBe("not_found")
