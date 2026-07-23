@@ -89,6 +89,7 @@ ${bold("Usage")}
 
 ${bold("Account")} ${dim("(Postboi provider — full reference: https://api.postboi.email)")}
   ${cyan("bunx postboi whoami")}          The account behind your token
+  ${cyan("bunx postboi send-address")}    Default sending address ${dim("· [name@yourdomain.com]")}
   ${cyan("bunx postboi lists")}           Lists ${dim("· add <name> · delete <ref>")}
   ${cyan("bunx postboi recipients")}      A list's recipients ${dim("· <list> add <email>… · <list> remove <email>")}
   ${cyan("bunx postboi domains")}         Sending domains ${dim("· add <domain> · check <ref> · delete <ref>")}

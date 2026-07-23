@@ -93,6 +93,25 @@ async function whoami(): Promise<void> {
 	if (account.suspended) console.log(`  ${red("suspended — contact support@postboi.email")}`)
 }
 
+/**
+ * Show or set the account's default sending address — the one stored on the account, not
+ * the per-project `default.from` in postboi.config.ts. The API enforces the constraints:
+ * a custom-domain address must be on a verified domain; a `@send.postboi.email` address
+ * must be an unclaimed, non-reserved slug.
+ */
+async function send_address(args: Array<string>): Promise<void> {
+	const address = args.join(" ").trim()
+	if (!address) {
+		const account = await api<{ send_address: string }>("/v1/account")
+		return console.log(`${dim("Send address:")} ${account.send_address}`)
+	}
+	const updated = await api<{ send_address: string }>("/v1/account", {
+		method: "PATCH",
+		body: { send_address: address },
+	})
+	console.log(`${green("✓")} send address set to ${bold(updated.send_address)}`)
+}
+
 // ── Lists ──────────────────────────────────────────────────────────────────
 
 async function lists(args: Array<string>): Promise<void> {
@@ -445,6 +464,7 @@ async function suppressions(args: Array<string>): Promise<void> {
 
 const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	whoami: () => whoami(),
+	"send-address": send_address,
 	lists,
 	recipients,
 	domains,

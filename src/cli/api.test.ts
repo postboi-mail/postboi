@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { table, api_command } from "./api.js"
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+	vi.restoreAllMocks()
+	vi.unstubAllGlobals()
+	vi.unstubAllEnvs()
+})
 
 describe("table", () => {
 	it("aligns columns ignoring ANSI colour codes", () => {
@@ -26,5 +30,35 @@ describe("api_command", () => {
 	it("returns false for commands it doesn't own", async () => {
 		expect(await api_command("init", [])).toBe(false)
 		expect(await api_command("definitely-not-a-command", [])).toBe(false)
+	})
+})
+
+describe("send-address", () => {
+	function stub_fetch(response: unknown) {
+		const calls: Array<{ url: string; init?: RequestInit }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({ url, init })
+				return new Response(JSON.stringify(response), { status: 200 })
+			})
+		)
+		vi.spyOn(console, "log").mockImplementation(() => {})
+		return calls
+	}
+
+	it("PATCHes /v1/account with the new address", async () => {
+		const calls = stub_fetch({ send_address: "hello@acme.example" })
+		expect(await api_command("send-address", ["hello@acme.example"])).toBe(true)
+		expect(calls[0].url).toContain("/v1/account")
+		expect(calls[0].init?.method).toBe("PATCH")
+		expect(JSON.parse(String(calls[0].init?.body))).toEqual({ send_address: "hello@acme.example" })
+	})
+
+	it("shows the current address (a plain GET) when given no argument", async () => {
+		const calls = stub_fetch({ send_address: "brisk-otter-cove@send.postboi.email" })
+		expect(await api_command("send-address", [])).toBe(true)
+		expect(calls[0].init?.method ?? "GET").toBe("GET")
 	})
 })
