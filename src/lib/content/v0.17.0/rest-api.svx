@@ -1,0 +1,37 @@
+---
+title: REST API
+name: REST API
+description: Everything the dashboard can do, over HTTP — send, lists, recipients, domains, webhooks, members, suppressions.
+category: Reference
+---
+
+Everything the Postboi dashboard can do is also a REST endpoint. Authenticate with the
+same `POSTBOI_TOKEN` the CLI writes (or any API key from **Dashboard → Keys**):
+
+```bash
+curl https://api.postboi.email/v1/lists \
+	-H "Authorization: Bearer $POSTBOI_TOKEN"
+```
+
+The full interactive reference lives at
+**[api.postboi.email](https://api.postboi.email)** — every endpoint with schemas and
+copy-paste examples in curl, JavaScript, Python, and more.
+
+Errors always come back as `{ "message": "…", "code": "…" }` with a matching HTTP
+status, so error handling is one shape everywhere.
+
+## …or skip HTTP entirely
+
+The CLI wraps the same API, so quick account chores never need a dashboard tab:
+
+```bash
+bunx postboi whoami
+bunx postboi lists add Newsletter
+bunx postboi recipients Newsletter add bob@example.com
+bunx postboi domains add example.com   # prints the DNS records + a one-click setup link
+bunx postboi webhooks add https://example.com/api/events
+bunx postboi members invite colleague@example.com
+```
+
+Run `bunx postboi --help` for the full command list. And for sending itself, the
+[library](/api) is the nicer surface — `mail()` speaks this API for you.

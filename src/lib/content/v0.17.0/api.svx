@@ -1,0 +1,174 @@
+---
+title: API reference
+name: API reference
+description: The provider surface, SendOptions, the Email type, and common constructor options.
+category: Reference
+---
+
+Looking for the HTTP endpoints instead — managing lists, domains, webhooks, and
+members over curl? That's the [REST API](/rest-api).
+
+## Provider class
+
+Every provider exposes the same surface:
+
+```typescript
+import Resend from 'postboi/resend'
+
+const mail = new Resend({
+	api_key: string, // see Providers for credential option names
+	default?: { from?, to?, cc?, bcc?, reply_to? }
+})
+
+await mail.send(options: SendOptions): Promise<SendResponse>
+await mail.cancel(id: string): Promise<{ id: string }> // scheduled sends (see Scheduling)
+mail.is_error(error: unknown): error is PostboiError
+```
+
+See [Providers](/providers) for each provider's credential option names. The zero-config
+equivalents are `mail()` and `cancel()` from the package root.
+
+### Postboi provider methods
+
+[The Postboi provider](/provider) adds account methods on top of the common surface:
+
+```typescript
+import Postboi from 'postboi'
+const mail = new Postboi() // reads POSTBOI_TOKEN
+
+// messages
+await mail.message(id) // status + content (see The Postboi provider)
+await mail.reschedule(id, when) // Date | ISO string | Duration (see Scheduling)
+
+// lists & broadcasts (see The Postboi provider)
+await mail.lists()
+await mail.create_list(name, { confirmation? }) // names are unique per account (409 name_taken)
+await mail.list(name_or_id) // includes recipients + confirmation settings
+await mail.update_list(name_or_id, { name?, confirmation? })
+await mail.rename_list(name_or_id, name) // shorthand for update_list
+await mail.delete_list(name_or_id)
+await mail.add_recipients(name_or_id, recipients, { status? }) // upserts — see The Postboi provider
+await mail.set_recipient_status(name_or_id, email, status)
+await mail.remove_recipient(name_or_id, email)
+await mail.broadcast(name_or_id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
+
+// notifications (see The Postboi provider)
+await mail.notifications(name_or_id)
+await mail.create_notification(name_or_id, { recipients, from?, subject?, body?, schedule })
+await mail.update_notification(name_or_id, id, changes) // partial
+await mail.delete_notification(name_or_id, id)
+
+// suppressions (see The Postboi provider)
+await mail.suppressions()
+await mail.suppress(email)
+await mail.unsuppress(email)
+```
+
+## SendOptions
+
+```typescript
+interface SendOptions {
+	to?: Email | Email[]
+	from?: Email
+	reply_to?: Email | Email[]
+	cc?: Email | Email[]
+	bcc?: Email | Email[]
+	subject?: string // default: "Mail sent from website"
+	body: string | FormData
+	text?: string
+	formatter?:
+		| {
+				fieldset?: ((label: string) => string) | null | false
+				name?: ((label: string) => string) | null | false
+		  }
+		| null
+		| false
+	attachments?: File | File[]
+	idempotency_key?: string
+	headers?: Record<string, string>
+	unsubscribe_url?: string // sets RFC 8058 List-Unsubscribe headers (see Tracking & unsubscribe)
+	tags?: string[]
+	scheduled_at?: Date | string | Duration // see Scheduling
+	tracking?: { opens?: boolean; clicks?: boolean } // see Tracking & unsubscribe
+	captcha?: {
+		honeypot?: string | false // honeypot field name (default "_honey"; "🍯" also accepted), false disables
+		turnstile?: { secret_key?: string } | boolean // default: on when TURNSTILE_SECRET_KEY is set
+	}
+}
+```
+
+`body` accepts a string of HTML, a [`FormData`](/formdata) object, or a promise resolving
+to either, so you can pass a template renderer's output straight through; see
+[Email templates](/templates). `formatter`
+controls how grouped-field labels are rendered. `headers` and `tags` are forwarded to each
+provider's native concept. See [Custom headers & tags](/providers#custom-headers--tags).
+`captcha` adjusts the built-in [spam protection](/spam) for a single send.
+
+## Common constructor options
+
+Every provider also accepts these, on top of its own credentials:
+
+```typescript
+{
+	// field defaults applied when a send omits them; to/cc/bcc accept a string or array
+	default?: { from?, to?, cc?, bcc?, reply_to? }
+	timeout?: number // per-request timeout in ms (default 30000)
+	retries?: number // retries on 429/5xx and network errors (default 0)
+	retry_delay?: number // base backoff in ms, doubles each attempt (default 500)
+	auto_text?: boolean // derive a plain-text body from the HTML (default true)
+	hooks?: Hooks // see Hooks
+	captcha?: CaptchaOptions // see Spam protection
+}
+```
+
+See [Errors & retries](/errors) for retry behaviour, [Hooks](/hooks) for the
+`hooks` shape, and [Spam protection](/spam) for `captcha`.
+
+## Email type
+
+```typescript
+type Email =
+	| string // plain address or "Name <address>"
+	| { address: string; name?: string }
+```
+
+All accepted address formats:
+
+```typescript
+'user@example.com'
+{ address: 'user@example.com', name: 'User Name' }
+'User Name <user@example.com>'
+['user1@example.com', 'user2@example.com']
+```
+
+## PostboiError
+
+The normalised error thrown by every provider. See [Errors & retries](/errors) for
+usage.
+
+```typescript
+interface PostboiError {
+	provider: string // e.g. "resend"
+	status?: number // HTTP status, when applicable
+	code?: string // provider-specific code, when available
+	message: string // normalised message
+	raw: unknown // the original provider payload
+}
+```
+
+## postboi/webhooks
+
+Receive delivery events, normalized across providers. See [Webhooks](/webhooks).
+
+```typescript
+import { receive, mock_event, mock_request, parse_user_agent } from 'postboi/webhooks'
+
+await receive(request: Request, options?: {
+	provider?: ProviderKey | WebhookAdapter // default: same resolution as mail()
+	secret?: string // default: <PROVIDER>_WEBHOOK_SECRET
+	verify?: boolean // false skips verification (explicit opt-out)
+}): Promise<WebhookEvent[]>
+```
+
+On SvelteKit, `webhook(handler, options?)` from `postboi/kit` wraps `receive` as a
+ready-made `+server.ts` request handler.
