@@ -37,9 +37,10 @@ function parse_dotenv(text: string): Array<[string, string]> {
 }
 
 /**
- * Populate the fallback once: Cloudflare Worker bindings, plus `.env` / `.env.local` from
- * the cwd (Node/Bun only). Best-effort — any failure leaves the fallback empty and we fall
- * through to `process.env` alone. Awaited on every send path, and cheap after the first call.
+ * Populate the fallback once: Cloudflare Worker bindings, plus `.env` / `.env.local` and
+ * Cloudflare's `.dev.vars` from the cwd (Node/Bun only). Best-effort — any failure leaves
+ * the fallback empty and we fall through to `process.env` alone. Awaited on every send path,
+ * and cheap after the first call.
  */
 export function ensure_env_loaded(): Promise<void> {
 	// Cache the promise, not a done-flag: concurrent first sends must all wait for the
@@ -57,8 +58,11 @@ async function load_fallback(): Promise<void> {
 		const { existsSync, readFileSync } = await import("node:fs")
 		const { join } = await import("node:path")
 		const dir = process.cwd()
-		// Later files win: `.env.local` overrides `.env`.
-		for (const file of [".env", ".env.local"]) {
+		// Later files win: `.env.local` overrides `.env`. Cloudflare Workers keep dev
+		// secrets in `.dev.vars` (same dotenv format) — wrangler and adapter-cloudflare's
+		// dev proxy read it but never put it on process.env, so a Vite/Node dev server
+		// can't see a Worker's token without this. It wins over `.env*` when both exist.
+		for (const file of [".env", ".env.local", ".dev.vars", ".dev.vars.local"]) {
 			const path = join(dir, file)
 			if (!existsSync(path)) continue
 			for (const [key, value] of parse_dotenv(readFileSync(path, "utf8"))) out[key] = value
