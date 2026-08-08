@@ -171,7 +171,9 @@ describe("on.retry", () => {
 
 		const result = await mail.send({ to: "a@test.com", body: "hi" })
 		expect(result).toEqual({ id: "ok" })
-		expect(retries).toEqual([{ provider: "resend", attempt: 1, status: 503, delay_ms: 0 }])
+		expect(retries).toEqual([
+			{ provider: "resend", channel: "email", attempt: 1, status: 503, delay_ms: 0 },
+		])
 	})
 })
 

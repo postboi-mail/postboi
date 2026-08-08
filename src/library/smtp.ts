@@ -312,7 +312,10 @@ export default class SMTP extends ProviderBase<SendResponse> {
 		if ("data" in options && options.data && Array.isArray(options.to)) {
 			return this.send_data_batch(options)
 		}
-		return this.with_hooks(options, (message) => this.#deliver(message))
+		return this.with_hooks(
+			() => this.prepare_send(options),
+			(message) => this.#deliver(message)
+		)
 	}
 
 	/** Build the RFC 5322 message body (headers + MIME) from a prepared message. */

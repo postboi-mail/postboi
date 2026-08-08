@@ -73,9 +73,15 @@ are all documented in [The Postboi provider](/provider), along with plan limits.
 ## Bringing your own provider
 
 Pick **Bring your own provider** and the CLI asks which one, then collects its credentials
-(an API key, plus a domain for Mailgun or a region for SES). It **writes only secrets** to
-your env file and **everything else** — the provider, defaults, and non-secret options — to
-a committed [`postboi.config.ts`](/config). The best case is a single env var:
+(an API key, plus a domain for Mailgun or a region for SES) — printing the exact dashboard
+page each one comes from. If you're signed in and your team has
+[synced the credential](/provider#team-credentials) before, the prompt answers itself: the
+key is pulled from your account and you type nothing. What you do type is synced up for
+the next teammate, so any credential is typed once, on one machine, ever.
+
+Either way it **writes only secrets** to your env file and **everything else** — the
+provider, defaults, and non-secret options — to a committed
+[`postboi.config.ts`](/config). The best case is a single env var:
 
 ```ts
 // postboi.config.ts  (committed)
@@ -107,6 +113,18 @@ sending code never names a provider, so swapping later is a one-line config chan
   the package, and what's installed is a symlink to it — so upgrading postboi upgrades
   the skill, with no diff in your repo. (Where symlinks aren't available the file is
   copied instead, and `postboi sync` keeps that copy current.)
+
+## Beyond email
+
+The same `init` sets up the other channels — `--sms`, `--whatsapp`, `--push`, `--chat` —
+and each channel's call works exactly the way `mail()` does. Start with
+[Multi-channel send()](/send), or jump straight to [SMS](/sms), [WhatsApp](/whatsapp),
+[Push](/push), [Slack](/slack), [Discord](/discord), [Teams](/teams) or
+[Telegram](/telegram).
+
+Signed in to the Postboi provider, `init` also **syncs the credentials it collects to
+your account**, so a teammate's `postboi sync` fills in their env file with no ceremony —
+see [Team credentials](/provider#team-credentials).
 
 ## Prefer to do it yourself?
 

@@ -60,3 +60,15 @@ export const Captcha = defineComponent({
 })
 
 export default Captcha
+
+// Web Push registration helpers. Framework-agnostic, re-exported here so the import matches
+// the rest of your app's postboi imports.
+export {
+	subscribe_push,
+	unsubscribe_push,
+	push_supported,
+	push_permission,
+	PushSubscribeError,
+	type PushSubscriptionJSON,
+	type SubscribeOptions,
+} from "./push/client.js"

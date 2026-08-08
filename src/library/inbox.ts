@@ -1,4 +1,5 @@
 import type { SentMessage } from "./mock.js"
+import type { Channel } from "./errors.js"
 import { read_env } from "./env.js"
 
 /**
@@ -21,12 +22,42 @@ export const INBOX_PATH = "/__postboi"
  */
 export const INBOX_DISCOVERY = "node_modules/.postboi/inbox.json"
 
+/**
+ * A non-email capture, normalised into the mail-ish shape the inbox lists by. The other
+ * channels' captures are smaller than mail — no cc, no attachments, one body — so they
+ * ride the same store with a `channel` marker and their oddities flattened into `meta`.
+ */
+export interface ChannelCapture {
+	channel: Exclude<Channel, "email">
+	to: Array<{ address: string }>
+	from?: { address: string }
+	/** A chat/push title, or the template name — whatever stands in for a subject line. */
+	subject?: string
+	/** The message body. Plain text on every non-email channel. */
+	text?: string
+	/** Channel-specific details worth showing (segments, template language, …), in order. */
+	meta?: Array<[string, string]>
+	scheduled_at?: Date
+}
+
 /** A captured message, plus the fields the inbox lists it by. */
-export interface InboxMessage extends Omit<SentMessage, "scheduled_at"> {
+export interface InboxMessage extends Omit<
+	SentMessage,
+	"scheduled_at" | "from" | "attachments" | "subject"
+> {
 	/** Identifies this capture within one inbox run. */
 	id: string
 	/** When the inbox received it (epoch ms). */
 	received_at: number
+	/** Which channel captured this. Absent means email, which predates the field. */
+	channel?: Channel
+	/** Channel-specific details, rendered as-is by the UI. */
+	meta?: Array<[string, string]>
+	/** Optional now that texts and chats — which have no sender address, subject line or
+	 * files — land in the same store. */
+	from?: SentMessage["from"]
+	subject?: string
+	attachments?: SentMessage["attachments"]
 	/**
 	 * Requested delivery time, ISO-8601. A string rather than a `Date` because a captured
 	 * message reaches the inbox as JSON, and pretending otherwise only moves the parse.
@@ -53,6 +84,11 @@ export interface Inbox {
 	 * matched to this message.
 	 */
 	deliver(message: SentMessage, send_id?: string): Promise<boolean>
+	/**
+	 * Hand over a non-email capture — a text, a WhatsApp message, a chat post, a push.
+	 * Same endpoint and same contract as {@link deliver}, different shape.
+	 */
+	capture(payload: ChannelCapture): Promise<boolean>
 	/**
 	 * Tell the inbox a scheduled send was cancelled. Without this the message sits in the
 	 * inbox looking like it is still going out, which is the opposite of what happened.
@@ -203,6 +239,7 @@ export async function resolve_inbox(): Promise<Inbox | null> {
 	return {
 		url: `${target.secure ? "https" : "http"}://localhost:${target.port}${INBOX_PATH}`,
 		deliver: (message, send_id) => post(target, INBOX_ENDPOINT, { ...message, send_id }),
+		capture: (payload) => post(target, INBOX_ENDPOINT, payload),
 		cancel: (send_id) => post(target, `${INBOX_ENDPOINT}/cancel`, { send_id }),
 	}
 }

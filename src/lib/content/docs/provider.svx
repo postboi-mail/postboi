@@ -112,6 +112,42 @@ await mail({
 })
 ```
 
+## Team credentials
+
+Your channel credentials — a Resend key, a Twilio SID, a Slack webhook — sync through
+your Postboi account, so a teammate (or your next machine) gets a working setup from one
+command:
+
+```bash
+bunx postboi sync   # pulls every synced credential your local env is missing
+```
+
+`postboi init` pushes credentials up as it collects them **and pulls them back down as it
+asks**: a prompt whose value the team already synced answers itself. So for most projects
+this is invisible — one person runs `init --sms` and types `TWILIO_AUTH_TOKEN` once, ever;
+every teammate's `init` or `sync` (already in the `prepare` script) fills it in from the
+team. Zero ceremony.
+
+The rules, because these are secrets:
+
+- **Local values always win.** `sync` only writes keys your environment is missing; a
+  deliberate local override is never clobbered. `postboi env pull --force` is the
+  explicit way to take the team's values wholesale.
+- **`POSTBOI_TOKEN` never syncs.** It's per developer, and it's the credential that
+  unlocks the rest — the store must not contain its own key.
+- **Encrypted at rest**, and only ever decrypted for a bearer of your account token: the
+  same trust that could already send with those credentials.
+- **CLI-time only.** Nothing in the send path reads this store — the library sends with
+  whatever is in your process environment, servers included.
+
+See what's synced, push a hand-set var, or remove one:
+
+```bash
+bunx postboi env                # list (values masked)
+bunx postboi env push           # push every known credential from your local env
+bunx postboi env remove OLD_KEY
+```
+
 ## Type-safe `from`
 
 `postboi init` (and `bunx postboi sync`) generate types from your account's sending

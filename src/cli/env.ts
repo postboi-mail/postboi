@@ -37,9 +37,46 @@ export function detect_env_targets(files: ReadonlyArray<string>): Array<EnvTarge
 	return targets
 }
 
-/** Quote a value safely for an env file (tokens rarely need it, but be correct). */
+/**
+ * Quote a value safely for an env file (tokens rarely need it, but be correct). Newlines
+ * become `\n` escapes: the parsers are line-based, so a raw newline (an FCM service-account
+ * key, say) would split the value and corrupt every line after it. dotenv expands the
+ * escape back; PEM consumers accept the literal sequence either way.
+ */
 function quote(value: string): string {
-	return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+	return `"${value
+		.replace(/\\/g, "\\\\")
+		.replace(/"/g, '\\"')
+		.replace(/\r/g, "\\r")
+		.replace(/\n/g, "\\n")}"`
+}
+
+/**
+ * Parse the `KEY=value` assignments in env-file content — the same shapes `upsert_env`
+ * writes, plus unquoted values written by hand. Exists so the bare `postboi env push`
+ * sweep can read the *project's* env files rather than the ambient shell environment,
+ * where a developer's unrelated exported secrets live.
+ */
+export function parse_env(content: string): Record<string, string> {
+	const out: Record<string, string> = {}
+	for (const raw of content.split("\n")) {
+		const line = raw.trim()
+		if (!line || line.startsWith("#")) continue
+		const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line)
+		if (!match) continue
+		out[match[1]] = unquote(match[2].trim())
+	}
+	return out
+}
+
+/** Undo `quote` (and accept single quotes / bare values from hand-written files). */
+function unquote(value: string): string {
+	if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+		const escapes: Record<string, string> = { '"': '"', "\\": "\\", n: "\n", r: "\r" }
+		return value.slice(1, -1).replace(/\\(["\\nr])/g, (_, c: string) => escapes[c])
+	}
+	if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1)
+	return value
 }
 
 /** Format a single `KEY=value` assignment for the given flavour. */

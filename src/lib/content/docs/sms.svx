@@ -1,0 +1,233 @@
+---
+title: SMS
+name: SMS
+description: Send a text with sms() — the same zero-config resolution, hooks and error handling as mail(), on a different channel.
+category: Channels
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "$lib"
+</script>
+
+```typescript
+import { sms } from "postboi"
+
+await sms({ to: "+447788223344", message: "Your code is 4291" })
+```
+
+Same shape as [`mail()`](/quick-start): the provider and its credentials come from your
+environment, [hooks](/hooks) run around every send, and failures throw a normalized
+[`PostboiError`](/errors).
+
+<InstallationTabs exec args="init --sms" />
+
+The first question is **where you're sending**, because unlike email the right SMS provider
+depends on the destination — a UK-native provider is materially cheaper into the UK and no
+use anywhere else. Your answer also becomes the default country, which is how national
+numbers like `07788 223344` get resolved.
+
+## Phone numbers
+
+Anything unambiguous works without configuration:
+
+```typescript
+await sms({ to: "+447788223344", message: "…" }) // international
+await sms({ to: "00447788223344", message: "…" }) // 00 prefix
+await sms({ to: ["+447788223344", "+353871234567"], message: "…" })
+await sms({ to: "+447788223344, +353871234567", message: "…" }) // comma-separated
+```
+
+National formats need a country, either as a default or per send:
+
+```typescript
+// postboi.config.ts → sms.default.country, or POSTBOI_SMS_COUNTRY
+await sms({ to: "07788 223344", message: "…" }) // → +447788223344
+await sms({ to: "07788 223344", message: "…", country: "GB" }) // per send
+```
+
+Give it an ISO country code (`"GB"`) or a dialling code (`"+44"`) — the dialling code always
+works, including for countries the ISO table doesn't list.
+
+### Numbers, and why they're risky
+
+A bare number reads nicely and is accepted:
+
+```typescript
+await sms({ to: 447788223344, message: "…" })
+```
+
+But a JavaScript number **cannot carry a leading `+` or a leading `0`**, so `07788 223344`
+becomes `7788223344` and nothing downstream can tell a UK number from a US one. We resolve
+what we safely can and **throw rather than guess** otherwise:
+
+```typescript
+await sms({ to: "7788223344", message: "…" })
+// PostboiError: Cannot tell what country "7788223344" belongs to.
+// Write it in full international form ("+447788223344"), or set a default
+// country via POSTBOI_SMS_COUNTRY or `sms.default.country` in postboi.config.
+```
+
+A wrong guess texts a stranger, so there isn't a silent fallback. **Pass `+`-prefixed
+strings and none of this applies.**
+
+## Development sends nothing
+
+In development, texts are **captured and logged, never sent** — even with a fully
+configured provider:
+
+```
+postboi (mock sms): +447788223344
+  from: POSTBOI
+  cost: 1 segment (gsm7)
+
+Your code is 4291
+```
+
+This is stricter than email, where the [dev inbox](/dev-inbox) only intercepts when
+it's actually running. The asymmetry is deliberate: a stray email is embarrassing, a stray
+text costs money, reaches a real handset, and cannot be recalled.
+
+When you genuinely need real delivery locally:
+
+```bash
+POSTBOI_SMS_DEV=send
+```
+
+```typescript
+// or, permanently, in postboi.config.ts
+export default config({ dev: { sms: false } })
+```
+
+## Sender
+
+Most providers need a sender — either a number you've purchased, or an **alphanumeric
+sender ID**: up to 11 characters, shown to the recipient in place of a number.
+
+```typescript
+export default config({
+	sms: { provider: "smsworks", default: { from: "POSTBOI", country: "GB" } },
+})
+```
+
+In the UK alphanumeric sender IDs are free and need no registration, which makes SMS setup
+about as light as email. Two things to know: they are **one-way** — a recipient cannot reply
+to one, so use a purchased number for conversations — and they must look like your brand,
+because generic IDs get filtered.
+
+In the US neither applies: sending needs 10DLC brand and campaign registration first, which
+takes weeks and is arranged with your provider, not here.
+
+## Cost, and message length
+
+SMS is billed per **segment**, not per message. A GSM-7 message fits 160 characters in one
+segment, then 153 per segment after that. A single character outside GSM-7 — an emoji, a
+curly quote, an em dash — switches the whole message to UCS-2, where a segment is **70**
+characters:
+
+```typescript
+import Mock from "postboi/sms-mock"
+
+const text = new Mock()
+await text.send({ to: "+447788223344", message: "…" })
+text.last?.segments // { count: 1, encoding: "gsm7", units: 17 }
+```
+
+That's usually the difference between one segment and three, so it's worth knowing before
+you paste in a “smart quote”.
+
+## Scheduling
+
+Where a provider supports it, `scheduled_at` takes a `Date`, an ISO string or a relative
+[duration](/scheduling):
+
+```typescript
+await sms({ to: "+447788223344", message: "…", scheduled_at: { hours: 2 } })
+```
+
+Providers that **can't** schedule reject the send rather than delivering immediately — a
+text meant for Tuesday arriving now is worse than an error, and silent.
+
+## Sending many
+
+Pass an array. Each message gets its own result, so one failure never loses the rest:
+
+```typescript
+const results = await sms([
+	{ to: "+447788223344", message: "one" },
+	{ to: "+353871234567", message: "two" },
+])
+
+for (const result of results) {
+	if (!result.ok) console.error(result.index, result.error.message)
+}
+```
+
+## Providers
+
+| Provider | Import | Best for |
+| --- | --- | --- |
+| The SMS Works | `postboi/smsworks` | UK — bills only for delivered messages |
+| Twilio | `postboi/twilio` | Global, and automatic RCS upgrade via a Messaging Service |
+| Amazon SNS | `postboi/sns` | Already on AWS |
+
+Construct one directly instead of using the environment, exactly like an email provider:
+
+```typescript
+import Twilio from "postboi/twilio"
+
+const text = new Twilio({
+	account_sid: process.env.TWILIO_ACCOUNT_SID,
+	auth_token: process.env.TWILIO_AUTH_TOKEN,
+	default: { from: "+15550001111" },
+})
+
+await text.send({ to: "+447788223344", message: "…" })
+```
+
+## RCS — an upgrade, not a channel
+
+RCS is the carrier-native successor to SMS: branded sender, delivery receipts, long
+messages billed once instead of per segment. Since iOS 18.1 it covers both platforms, and
+**with Twilio it needs no code at all** — add an RCS-capable sender to a
+[Messaging Service](https://www.twilio.com/docs/messaging/services) and put its SID in the
+environment. Twilio routes each message by device capability with automatic SMS fallback,
+and your sending code doesn't change:
+
+```bash
+# .env
+TWILIO_MESSAGING_SERVICE_SID=MG…   # has an RCS sender attached
+```
+
+```typescript
+import { sms } from "postboi"
+
+await sms({ to: "+447788223344", message: "…" }) // RCS if the device can, SMS if not
+```
+
+Worth knowing before you switch it on:
+
+- **Sender registration is console-side** — brand verification through your provider, with
+  a one-time onboarding fee and a lead time of days to weeks.
+- **Pricing is parity-to-higher for short messages** (RCS carries carrier fees too), but a
+  message over 160 characters bills **once** rather than per segment — the crossover where
+  RCS gets cheaper than cheap UK SMS is around 3 segments.
+- **Which rail delivered** arrives on Twilio's status callbacks, not the send response —
+  the message is queued before the routing decision happens.
+
+## Hooks
+
+[Hooks](/hooks) run on every channel, so narrow on `channel` before reading fields that
+only one of them has:
+
+```typescript
+export default config({
+	hooks: {
+		before: {
+			send: ({ channel, message }) => {
+				if (channel === "sms") console.log(message.to, message.message)
+				if (channel === "email") console.log(message.subject)
+			},
+		},
+	},
+})
+```

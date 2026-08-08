@@ -4,22 +4,11 @@
  * Cloudflare Workers and other edge runtimes.
  */
 
+import { base64_decode, base64_encode } from "../encoding.js"
+
+export { base64_decode, base64_encode }
+
 const encoder = new TextEncoder()
-
-/** Decode standard base64 into bytes. */
-export function base64_decode(value: string): Uint8Array {
-	const bin = atob(value)
-	const bytes = new Uint8Array(bin.length)
-	for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-	return bytes
-}
-
-/** Encode bytes as standard base64. */
-export function base64_encode(bytes: Uint8Array): string {
-	let bin = ""
-	for (const byte of bytes) bin += String.fromCharCode(byte)
-	return btoa(bin)
-}
 
 /** Encode bytes as lowercase hex. */
 export function hex_encode(bytes: Uint8Array): string {

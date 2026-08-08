@@ -1,19 +1,21 @@
 ---
 title: Dev inbox
 name: Dev inbox
-description: A local mailbox that catches every email your app sends in development, so you can read the real HTML instead of a console dump — no config, no second tool.
+description: A local inbox that catches everything your app sends in development — email, texts, WhatsApp, chat and push — so you can read the real thing instead of a console dump.
 category: Guides
 ---
 
-Mail you send while building has to go somewhere. Sending it for real means a stray
-customer address is one typo away; printing it to the terminal means you never see the
-thing you're actually building.
+Messages you send while building have to go somewhere. Sending them for real means a
+stray customer address is one typo away (and on SMS, a real bill); printing them to the
+terminal means you never see the thing you're actually building.
 
-So Postboi ships a local inbox. Start your dev server and mail lands in a mailbox at
-`/__postboi` instead of going out — rendered HTML, headers, attachments and all.
+So Postboi ships a local inbox. Start your dev server and everything lands at
+`/__postboi` instead of going out — mail with rendered HTML, headers and attachments, and
+[texts](/sms), [WhatsApp messages](/whatsapp), [chat posts](/slack) and
+[pushes](/push) alongside them.
 
-**Your code doesn't change.** No `preview()`, no `if (dev)`, no separate provider. The same
-`mail()` call that sends in production is captured in development.
+**Your code doesn't change.** No `preview()`, no `if (dev)`, no separate provider. The
+same calls that send in production are captured in development.
 
 ## Vite projects — nothing to run
 
@@ -79,6 +81,16 @@ bun --watch src/cli/index.ts dev --demo
 **Everything**, including a provider with real, working credentials. That's the point: a
 laptop should not be able to mail a real person because a test fixture had a real address
 in it. With the inbox running, `mail()` never reaches a provider.
+
+The other channels land here too, each by its own rule:
+
+- **[SMS](/sms) and [WhatsApp](/whatsapp)** are intercepted in development whether or not
+  an inbox is running — a stray text costs money and can't be recalled. With an inbox up,
+  the capture lands there; without one, it's printed to the console.
+- **Chat ([Slack](/slack), [Discord](/discord), [Teams](/teams), [Telegram](/telegram))
+  and [push](/push)** send for real in development once configured (posting to your own
+  Slack is usually the point). Unconfigured, their dev fallback captures to the inbox
+  instead of erroring.
 
 Two guards keep that from ever biting a deploy:
 
@@ -167,6 +179,18 @@ scheduled message crossing its time only moves folders while the page is open.
 > [`mail.messages.reschedule`](/scheduling#rescheduling) is a provider API call rather than
 > a send, so it doesn't pass through the inbox. A captured message keeps the time it was
 > captured with.
+
+### Conversations open in Messenger
+
+Mail opens in the reader. Everything else is a conversation, and opens in one: texts,
+WhatsApp messages, chat posts and pushes get a Messenger window of a suspiciously
+familiar vintage, threaded by channel and destination — send three texts to the same
+number and you read them as one conversation.
+
+Channel details ride along as system lines: SMS shows its segment count and encoding
+(what your provider would have billed), WhatsApp shows the template, language and
+variables, push shows the click-through URL and data payload. The Send button will
+cheerfully explain why it can't, and yes, there is a Nudge.
 
 ### Options
 

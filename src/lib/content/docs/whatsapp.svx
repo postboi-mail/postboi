@@ -1,0 +1,154 @@
+---
+title: WhatsApp
+name: WhatsApp
+description: Send WhatsApp messages with whatsapp() — templates that deliver anytime, free-form text inside the 24-hour window.
+category: Channels
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "$lib"
+</script>
+
+```typescript
+import { whatsapp } from "postboi"
+
+await whatsapp({
+	to: "+447788223344",
+	template: "order_shipped",
+	variables: { name: "Ada", tracking: "AB123" },
+})
+```
+
+Same shape as [`mail()`](/quick-start) and [`sms()`](/sms) — zero-config resolution,
+[hooks](/hooks), normalized [errors](/errors) — with one constraint the others don't have,
+and it shapes everything: **the 24-hour customer service window**.
+
+<InstallationTabs exec args="init --whatsapp" />
+
+## The 24-hour window
+
+A business may send **free-form text** only within 24 hours of the user's last inbound
+message. Outside that window — which is where most transactional sends happen — only
+**pre-approved templates** deliver. That's why `template` sits beside `message` as a
+first-class field rather than a provider option: template-only is the normal case, not the
+edge case.
+
+```typescript
+// Inside the window (the user messaged you recently) — free-form works:
+await whatsapp({ to: "+447788223344", message: "Thanks — on its way!" })
+
+// Anytime — a template approved with Meta, filled with variables:
+await whatsapp({
+	to: "+447788223344",
+	template: "order_shipped",
+	variables: { name: "Ada", tracking: "AB123" },
+})
+```
+
+A free-form send outside the window fails with `code: "outside_window"`, and the check
+hangs off `whatsapp` itself — no extra import:
+
+```typescript
+import { whatsapp } from "postboi"
+
+try {
+	await whatsapp({ to, message })
+} catch (error) {
+	if (!whatsapp.closed(error)) throw error
+	await whatsapp({ to, template: "re_engage", variables: { name } })
+}
+```
+
+(Holding a provider instance directly? The same check is
+`WhatsappProvider.is_outside_window()`.)
+
+Exactly one of `message` or `template` per send — passing both is rejected rather than
+guessed at, because a template's content is fixed at approval time.
+
+## Providers
+
+| Provider | Import | Templates are |
+| --- | --- | --- |
+| Twilio | `postboi/whatsapp-twilio` | Content SIDs (`HX…`) |
+| Meta Cloud API | `postboi/whatsapp-meta` | Approved names + language code |
+
+**Twilio** reuses your Twilio SMS credentials and the same Message resource — addresses get
+the `whatsapp:` prefix added for you. Templates are created in the Content Template Builder
+and addressed by their `HX…` SID.
+
+```bash
+# .env
+POSTBOI_WHATSAPP_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=AC…
+TWILIO_AUTH_TOKEN=…
+```
+
+**Meta's Cloud API** is the direct route — no platform fee on top of Meta's own pricing,
+at the cost of Business verification. The sender is the `phone_number_id` from your app
+dashboard, and templates are addressed by the name they were approved under plus a language
+code (`language`, default `"en"`) that must match an approved translation.
+
+```bash
+POSTBOI_WHATSAPP_PROVIDER=meta
+WHATSAPP_ACCESS_TOKEN=…
+WHATSAPP_PHONE_NUMBER_ID=123456789
+```
+
+### Template variables
+
+Named keys for templates approved with named parameters, numeric keys for positional ones:
+
+```typescript
+variables: { name: "Ada", tracking: "AB123" } // {{name}}, {{tracking}}
+variables: { 1: "Ada", 2: "AB123" } // {{1}}, {{2}}
+```
+
+## Development sends nothing
+
+Like [SMS](/sms) and for the same reason — a template send costs real money and reaches a
+real handset with no recall — WhatsApp messages are **captured and logged, never sent** in
+development, even with a configured provider. Opt out explicitly when you need real
+delivery:
+
+```bash
+POSTBOI_WHATSAPP_DEV=send
+```
+
+```typescript
+// or, permanently, in postboi.config.ts
+export default config({ dev: { whatsapp: false } })
+```
+
+The mock can also simulate the window for tests:
+
+```typescript
+import MockWhatsapp from "postboi/whatsapp-mock"
+
+const wa = new MockWhatsapp({ outside_window: true })
+await wa.send({ to: "+447788223344", message: "hi" }) // rejects: outside_window
+await wa.send({ to: "+447788223344", template: "order_shipped" }) // delivers
+```
+
+## In a fallback chain
+
+[`send()`](/send) slots WhatsApp between email and SMS in its `"cheapest"` order, and an
+`outside_window` failure is just a signal to advance — so a code or alert falls through to
+SMS rather than failing:
+
+```typescript
+await send({
+	to: { whatsapp: "+447788223344", sms: "+447788223344" },
+	channels: "cheapest",
+	message: "Your code is 4291",
+	whatsapp: { template: "login_code", variables: { 1: "4291" } },
+})
+```
+
+The `whatsapp` override carries the template so that leg stays deliverable outside the
+window, while the plain `message` rides the channels that can always carry it.
+
+## Phone numbers
+
+The same [E.164 rules as SMS](/sms#phone-numbers): international forms pass through,
+national forms need a default country (`whatsapp.default.country` or
+`POSTBOI_WHATSAPP_COUNTRY`), and anything ambiguous throws rather than guesses.

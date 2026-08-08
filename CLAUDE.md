@@ -10,6 +10,12 @@ changed, then `npm run release -- <patch|minor|major|X.Y.Z>` (bumps, tests,
 builds, publishes to npm, tags, and creates the GitHub release). Do not run the
 publish/push steps by hand — the script sequences them and checks preconditions.
 
+## Planned work
+
+**[CHANNELS.md](CHANNELS.md)** is the plan for taking postboi multi-channel — SMS, push
+notifications, and a `notify()` that fans out across them. Read it before starting any
+channel work; it carries the `ProviderBase` split that everything else depends on.
+
 ## Conventions
 
 - Code style: snake_case, no semicolons. Run `bun run check` and `bun run lint`.

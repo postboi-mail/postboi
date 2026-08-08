@@ -172,37 +172,40 @@ export default class Mock extends ProviderBase<SendResponse> {
 			return this.send_data_batch(options)
 		}
 
-		return this.with_hooks(options, async (message) => {
-			if (this.#fail) {
-				throw new PostboiError({
-					provider: "mock",
-					message: "Simulated failure from mock provider",
-				})
-			}
+		return this.with_hooks(
+			async () => this.prepare_send(options),
+			async (message) => {
+				if (this.#fail) {
+					throw new PostboiError({
+						provider: "mock",
+						message: "Simulated failure from mock provider",
+					})
+				}
 
-			const captured: SentMessage = {
-				to: this.parse_addresses(message.to),
-				from: this.parse_email_address(message.from),
-				cc: message.cc ? this.parse_addresses(message.cc) : undefined,
-				bcc: message.bcc ? this.parse_addresses(message.bcc) : undefined,
-				reply_to: message.reply_to ? this.parse_addresses(message.reply_to) : undefined,
-				subject: message.subject,
-				html: message.html,
-				text: message.text,
-				attachments: message.attachments ? await this.parse_attachments(message.attachments) : [],
-				scheduled_at: message.scheduled_at,
-			}
+				const captured: SentMessage = {
+					to: this.parse_addresses(message.to),
+					from: this.parse_email_address(message.from),
+					cc: message.cc ? this.parse_addresses(message.cc) : undefined,
+					bcc: message.bcc ? this.parse_addresses(message.bcc) : undefined,
+					reply_to: message.reply_to ? this.parse_addresses(message.reply_to) : undefined,
+					subject: message.subject,
+					html: message.html,
+					text: message.text,
+					attachments: message.attachments ? await this.parse_attachments(message.attachments) : [],
+					scheduled_at: message.scheduled_at,
+				}
 
-			this.sent.push(captured)
-			// Assigned before delivery so the inbox is told the same id the caller gets back,
-			// which is the id a later cancel() will arrive with.
-			const id = `mock-${++this.#counter}`
-			// The console is the fallback, not a duplicate: printing as well as delivering
-			// would put the whole body in the terminal on every send with the inbox open.
-			const delivered = this.#sink ? await this.#sink(captured, id) : false
-			if (this.#log || (this.#sink && !delivered)) log_message(captured)
-			return { id, message: captured }
-		})
+				this.sent.push(captured)
+				// Assigned before delivery so the inbox is told the same id the caller gets back,
+				// which is the id a later cancel() will arrive with.
+				const id = `mock-${++this.#counter}`
+				// The console is the fallback, not a duplicate: printing as well as delivering
+				// would put the whole body in the terminal on every send with the inbox open.
+				const delivered = this.#sink ? await this.#sink(captured, id) : false
+				if (this.#log || (this.#sink && !delivered)) log_message(captured)
+				return { id, message: captured }
+			}
+		)
 	}
 
 	// The mock never performs HTTP, so the request hooks are unused.

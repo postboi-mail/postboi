@@ -1,13 +1,19 @@
 ---
 title: Providers
 name: Providers
-description: Every supported email provider, its import path, and constructor options.
+description: Every supported email provider, its import path, and constructor options. The other channels' providers live on their own pages.
 category: Guides
 ---
 
 Each provider is its own entry point, so you only bundle the one you import. Every provider
 exposes the same `send()` and `is_error()` methods: swap providers without changing your
 calling code.
+
+This page is the **email** roster. The other channels' providers live with their channel:
+[SMS](/sms#providers) (The SMS Works, Twilio, Amazon SNS),
+[WhatsApp](/whatsapp#providers) (Twilio, Meta Cloud API), [Push](/push) (Web Push, FCM),
+and the chat platforms — [Slack](/slack), [Discord](/discord), [Teams](/teams),
+[Telegram](/telegram) — each on its own page.
 
 The **environment variables** are what [`postboi init`](/quick-start) writes and the
 zero-config [`mail()`](/api) reads; the **constructor options** are the same values passed

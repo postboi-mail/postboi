@@ -1,0 +1,57 @@
+---
+title: Microsoft Teams
+name: Teams
+description: Post to Microsoft Teams from your app with teams() — a Power Automate Workflows webhook, an Adaptive Card, zero config.
+category: Channels
+---
+
+```typescript
+import { teams } from "postboi"
+
+await teams({ title: "Deploy", message: "Finished in 42s" })
+```
+
+Postboi posts an [Adaptive Card](https://adaptivecards.io) to a **Power Automate
+Workflows** webhook — the current, supported way into a Teams channel.
+
+## Setup
+
+In Teams: pick a channel → **Workflows** → *Post to a channel when a webhook request is
+received*. The URL it gives you lives on `logic.azure.com`:
+
+```bash
+# .env
+TEAMS_WEBHOOK_URL=https://prod-….logic.azure.com:443/workflows/…
+```
+
+**Treat the URL as a secret** — anyone holding it can post to your channel. It's exactly
+the kind of credential [team sync](/provider#team-credentials) exists for.
+
+## Legacy connector URLs are rejected
+
+If you have an old Office 365 connector URL (`outlook.office.com/webhook/…` or
+`….webhook.office.com/…`): Microsoft disabled those in May 2026, and posts to them
+vanish without an error. Postboi recognises them and **throws
+`code: "legacy_webhook"`** instead — a loud failure pointing at the Workflows setup
+above, rather than a message that silently never arrives.
+
+## Titles
+
+`title` renders as a bold heading block in the card:
+
+```typescript
+await teams({ title: "Build failed", message: "3 tests failing on main" })
+```
+
+## Development posts for real
+
+Unlike [SMS](/sms), Teams is not intercepted in development. With no `TEAMS_WEBHOOK_URL`
+configured, messages are captured by the [dev inbox](/dev-inbox) (or logged) instead of
+erroring.
+
+## Worth knowing
+
+- Workflows answers a rejected post with `{ error: { code, message } }` — that's what
+  lands on the normalised `PostboiError`.
+- In a multi-channel [`send()`](/send), the chat leg posts to whichever platform
+  `chat.provider` names in your [config](/config). Your own code just calls `teams()`.

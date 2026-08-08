@@ -42,12 +42,23 @@ export type InboxMiddleware = (
 /**
  * A message on its way in. In-process it still carries a `Date`; over HTTP it has already
  * been through JSON and carries the ISO string. The store takes either and settles on one.
+ *
+ * Sender, subject and attachments went optional when the other channels arrived: a text
+ * has none of the three, and the store lists whatever it's given.
  */
-export type CapturedMessage = Omit<SentMessage, "scheduled_at"> & {
-	scheduled_at?: Date | string
-	/** The id the send handed back, which a later cancellation arrives with. */
-	send_id?: string
-}
+export type CapturedMessage = Omit<
+	SentMessage,
+	"scheduled_at" | "from" | "subject" | "attachments"
+> &
+	Partial<Pick<SentMessage, "from" | "subject" | "attachments">> & {
+		scheduled_at?: Date | string
+		/** The id the send handed back, which a later cancellation arrives with. */
+		send_id?: string
+		/** Which channel captured this. Absent means email. */
+		channel?: InboxMessage["channel"]
+		/** Channel-specific details, rendered as-is by the UI. */
+		meta?: Array<[string, string]>
+	}
 
 /** The captured messages, and the means to watch for more. */
 export interface InboxStore {
@@ -454,7 +465,7 @@ export function inbox_middleware(
 		const attachment_match = /^\/api\/messages\/([^/]+)\/attachments\/(\d+)$/.exec(route)
 		if (attachment_match && method === "GET") {
 			const message = store.get(attachment_match[1])
-			const attachment = message?.attachments[Number(attachment_match[2])]
+			const attachment = message?.attachments?.[Number(attachment_match[2])]
 			if (!attachment) return void send_json(response, 404, { error: "no such attachment" })
 			response.statusCode = 200
 			response.setHeader("content-type", safe_mime(attachment.mime_type))

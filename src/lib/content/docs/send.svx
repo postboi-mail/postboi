@@ -1,0 +1,116 @@
+---
+title: send() — every channel
+name: Multi-channel send()
+description: One call that reaches someone on email, SMS or chat — fanning out, or falling back to the cheapest channel that works.
+category: Channels
+---
+
+```typescript
+import { send } from "postboi"
+
+await send({
+	to: { email: "ada@example.com", sms: "+447788223344" },
+	subject: "Your order shipped",
+	message: "Your order shipped",
+})
+```
+
+`to` is **keyed by channel**, always. Nothing is inferred from the shape of a value — an
+address is only ever used on the channel you named it under.
+
+## Two modes
+
+**Fan out** (the default) attempts every channel in `to`, concurrently. Each gets its own
+result, so one failing never loses the others.
+
+**Fall back** (`channels`) walks the list in order and **stops at the first success** —
+which is what you want for a code or an alert that only needs to arrive once.
+
+```typescript
+const result = await send({
+	to: { chat: hook, sms: "+447788223344" },
+	channels: ["chat", "sms"],
+	message: "Your code is 4291",
+})
+
+result.delivered // "chat" — sms was never attempted
+```
+
+## Cheapest first
+
+`channels: "cheapest"` uses the built-in order — **push → chat → email → whatsapp → sms** —
+narrowed to the channels you actually have an address for.
+
+```typescript
+await send({
+	to: { email: "ada@example.com", sms: "+447788223344" },
+	channels: "cheapest",
+	subject: "Your code",
+	message: "4291",
+})
+// tries email first; only falls to SMS if it fails
+```
+
+That ordering is worth having because the spread isn't marginal, it's **total**. Push and
+chat cost nothing per message. Email is fractions of a penny. An SMS into Western Europe is
+2.8p or more, and can exceed 7p. Preferring a cheaper channel doesn't shave a percentage off
+— it saves the entire cost of the message.
+
+Nobody else will do this for you, either: a hosted orchestrator meters the fan-out itself,
+and no SMS vendor is going to route you to a channel it doesn't bill for.
+
+## Reading the result
+
+```typescript
+const result = await send({ to: { email: "…", sms: "…" }, subject: "…", message: "…" })
+
+result.ok // did anything get through?
+result.delivered // the channel that did
+for (const r of result.results) {
+	if (!r.ok) console.error(r.channel, r.error.message)
+}
+```
+
+`send()` **only rejects when `to` names no reachable channel at all.** Anything else
+resolves, because a partial delivery is information you need rather than an exception to
+catch. Every failure carries the `channel` it came from, so you never have to work out which
+leg broke.
+
+## Content
+
+Shared fields map onto each channel's natural shape:
+
+| Field | email | sms | chat | push | whatsapp |
+| --- | --- | --- | --- | --- | --- |
+| `message` | `text` part | the body | the body | the body | the text |
+| `subject` | the subject | — | the title | the title | — |
+| `body` | HTML body | — | — | — | — |
+
+So the simplest useful call is one string:
+
+```typescript
+await send({ to: { sms: "+447788223344", chat: hook }, message: "Deploy finished" })
+```
+
+When only `message` is given, email uses it as the body too rather than sending an empty one.
+
+### Per-channel overrides
+
+Where the copy genuinely differs — and it usually does, because SMS is billed by the
+character — override just that channel:
+
+```typescript
+await send({
+	to: { email: "ada@example.com", sms: "+447788223344" },
+	subject: "Your order shipped",
+	body: "<p>Track it here: …</p>",
+	message: "Your order shipped. Track it: example.com/t/abc",
+	sms: { message: "Order shipped: example.com/t/abc" },
+})
+```
+
+## Hooks fire per channel
+
+Each leg runs through the [hooks](/hooks) for its own channel, so a `before.send` sees three
+separate calls for a three-channel fan-out — each with its own `ctx.channel`. That's what
+you want for suppression: skipping the SMS leg shouldn't skip the email.

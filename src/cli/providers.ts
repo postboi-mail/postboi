@@ -2,14 +2,23 @@
 // can never drift. The CLI keeps the prompt-only extras (default fields, usage snippet).
 export {
 	PROVIDERS,
+	SMS_PROVIDERS,
+	CHAT_PROVIDERS,
+	PUSH_PROVIDERS,
+	WHATSAPP_PROVIDERS,
 	find_provider,
 	type ProviderMeta,
 	type ProviderField,
+	type SmsProviderMeta,
+	type NotedProviderMeta,
 } from "../library/registry.js"
-import type { ProviderMeta } from "../library/registry.js"
+import type { ProviderMeta, SmsProviderMeta } from "../library/registry.js"
 
 /** Alias kept for the CLI's existing call sites. */
 export type CliProvider = ProviderMeta
+
+/** The SMS equivalent — carries regions and an indicative price so `init` can recommend. */
+export type CliSmsProvider = SmsProviderMeta
 
 /**
  * Optional default fields. Config-first: init commits them to postboi.config. The
@@ -28,6 +37,57 @@ export const DEFAULT_FIELDS: Array<{ arg: string; env: string; label: string; hi
 	{ arg: "cc", env: "POSTBOI_CC", label: "Default cc" },
 	{ arg: "bcc", env: "POSTBOI_BCC", label: "Default bcc" },
 ]
+
+/**
+ * Optional default fields for the SMS channel. Shorter than the email set because SMS has
+ * no cc/bcc/reply-to — a sender ID and a country is the whole of it.
+ */
+export const SMS_DEFAULT_FIELDS: Array<{
+	arg: string
+	env: string
+	label: string
+	hint?: string
+}> = [
+	{
+		arg: "from",
+		env: "POSTBOI_SMS_FROM",
+		label: "Sender",
+		hint: 'a purchased number, or an alphanumeric sender ID — e.g. "POSTBOI" (11 chars max)',
+	},
+	{
+		arg: "country",
+		env: "POSTBOI_SMS_COUNTRY",
+		label: "Default country",
+		hint: 'resolves national numbers like "07788 223344" — an ISO code ("GB") or dialling code ("+44")',
+	},
+]
+
+/**
+ * Build a `postboi.config.ts` carrying a single non-email channel — used when
+ * `init --sms` / `--chat` / `--push` runs in a project with no config file yet.
+ */
+export function render_channel_config(
+	channel: "sms" | "chat" | "push" | "whatsapp",
+	provider: string,
+	defaults: Record<string, string>,
+	options: Record<string, string>
+): string {
+	const fn = {
+		sms: "sms()",
+		chat: "slack() and friends",
+		push: "push()",
+		whatsapp: "whatsapp()",
+	}[channel]
+	return `import { config } from "postboi"
+
+// Project-wide config, picked up automatically by ${fn}. Commit this — keep secrets in env.
+export default config({
+	${channel}: {
+		provider: ${JSON.stringify(provider)},
+${render_block("default", defaults, "\t\t")}${render_block("options", options, "\t\t")}	},
+})
+`
+}
 
 /** Render a `{ key: "value" }` block (one entry per line, tab-indented). Empty → "". */
 export function render_block(name: string, entries: Record<string, string>, indent = "\t"): string {
@@ -48,7 +108,7 @@ export function render_config(
 	const captcha = captcha_key ? render_block("captcha", { key: captcha_key }) : ""
 	return `import { config } from "postboi"
 
-// Project-wide config, picked up automatically by send(). Commit this — keep secrets in env.
+// Project-wide config, picked up automatically by mail(). Commit this — keep secrets in env.
 export default config({
 	provider: ${JSON.stringify(provider)},
 ${render_block("default", defaults)}${render_block("options", options)}${captcha}	hooks: {

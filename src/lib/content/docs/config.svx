@@ -18,24 +18,27 @@ export default config({
 	provider: 'resend',
 	default: { from: 'no-reply@example.com' },
 	options: { domain: 'mg.example.com' }, // non-secret provider options
+	sms: { provider: 'smsworks', default: { from: 'POSTBOI', country: 'GB' } },
 	retries: 2,
 	hooks: {
 		on: {
-			error: ({ error }) => Sentry.captureException(error)
+			error: ({ error }) => Sentry.captureException(error) // fires for every channel
 		}
 	}
 })
 ```
 
-It auto-loads on the first `mail()` (Node/Bun).
+It auto-loads on the first send (Node/Bun) — `mail()`, `sms()`, or any other channel.
 
 | Field      | What it sets                                                                       |
 | ---------- | --------------------------------------------------------------------------------- |
 | `provider` | which provider `mail()` uses (`resend`, `mailgun`, …)                              |
 | `default`  | `from` / `to` / `cc` / `bcc` / `reply_to` applied when a send omits them           |
 | `options`  | non-secret provider constructor options (Mailgun domain, SES region, SMTP host…)  |
-| `hooks`    | lifecycle [hooks](/hooks) run around every send                                   |
+| `sms`, `whatsapp`, `chat`, `push` | each channel's own `provider`, `default` and `options` — same shape, one block per channel |
+| `hooks`    | lifecycle [hooks](/hooks) run around every send, on every channel                 |
 | `captcha`  | [spam protection](/spam): the publishable `key` for `<Captcha />`, honeypot name, Turnstile |
+| `dev`      | development behaviour: the [inbox](/dev-inbox), and the [SMS](/sms#development-sends-nothing)/[WhatsApp](/whatsapp#development-sends-nothing) interception opt-outs |
 | _behaviour_ | `retries`, `retry_delay`, `timeout`, `auto_text`                                  |
 
 Keep **secrets out of this file**: API keys and tokens belong in the environment. To vary

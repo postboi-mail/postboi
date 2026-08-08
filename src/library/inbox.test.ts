@@ -3,7 +3,10 @@ import { createServer, type Server } from "node:http"
 import { create_inbox_store, inbox_middleware, best_rendition } from "./inbox_server.js"
 import { resolve_inbox, set_inbox_port, INBOX_PATH } from "./inbox.js"
 import { inbox_ui } from "./inbox_ui.js"
+import { inbox_sink } from "./channel_inbox.js"
 import Mock from "./mock.js"
+import MockSms from "./sms/mock.js"
+import MockChat from "./chat/mock.js"
 
 /** Stand the inbox up on a real port, so the delivery path is exercised end to end. */
 async function start_inbox(): Promise<{
@@ -121,9 +124,9 @@ describe("inbox middleware", () => {
 		expect(html).toContain('aria-label="Close" data-act="close" id="reader-close"')
 		// The mailbox closes too, and the Start menu is how it comes back.
 		expect(html).toContain('id="m-mailbox"')
-		// Resize handles on the mailbox, the reader and the app frame itself — the reading pane
-		// is only ever big enough because you can make it bigger.
-		expect(html.match(/class="grip"/g)).toHaveLength(3)
+		// Resize handles on the mailbox, the reader, the messenger and the app frame itself —
+		// the reading pane is only ever big enough because you can make it bigger.
+		expect(html.match(/class="grip"/g)).toHaveLength(4)
 	})
 
 	it("is branded Postboi, not the client it's dressed as", async () => {
@@ -503,5 +506,71 @@ describe("delivery", () => {
 		expect(String(log.mock.calls[0][0])).toContain("Orphaned")
 		expect(mail.sent).toHaveLength(1)
 		log.mockRestore()
+	})
+})
+
+/** The channel sinks post fire-and-forget, so the store fills a beat after send resolves. */
+async function until(predicate: () => boolean, ms = 1500): Promise<void> {
+	const start = Date.now()
+	while (!predicate()) {
+		if (Date.now() - start > ms) throw new Error("timed out waiting for the inbox")
+		await new Promise((resolve) => setTimeout(resolve, 20))
+	}
+}
+
+describe("channel captures", () => {
+	afterEach(() => set_inbox_port(null as unknown as number))
+
+	it("lands a dev-intercepted text in the inbox, normalised and tagged", async () => {
+		const inbox = await start_inbox()
+		set_inbox_port(inbox.port)
+		const log = vi.spyOn(console, "log").mockImplementation(() => {})
+
+		const text = new MockSms({ log: true, sink: inbox_sink("sms"), default: { country: "GB" } })
+		await text.send({ to: "07788 223344", message: "Your code is 4291" })
+		await until(() => inbox.store.list().length === 1)
+
+		const stored = inbox.store.list()[0]
+		expect(stored.channel).toBe("sms")
+		expect(stored.to).toEqual([{ address: "+447788223344" }])
+		expect(stored.text).toBe("Your code is 4291")
+		expect(stored.meta?.[0][0]).toBe("Segments")
+		// Taken by the inbox: the console gets a pointer, not the text itself.
+		await until(() => log.mock.calls.some((args) => String(args[0]).includes("dev inbox")))
+		expect(log.mock.calls.some((args) => String(args[0]).includes("Your code is 4291"))).toBe(false)
+		log.mockRestore()
+		await inbox.stop()
+	})
+
+	it("falls back to the console when no inbox is listening", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {})
+		const text = new MockSms({ log: true, sink: inbox_sink("sms"), default: { country: "GB" } })
+		await text.send({ to: "07788 223344", message: "Fallback text" })
+		await until(() => log.mock.calls.some((args) => String(args[0]).includes("Fallback text")))
+		expect(log.mock.calls.some((args) => String(args[0]).includes("Fallback text"))).toBe(true)
+		log.mockRestore()
+	})
+
+	it("keeps a chat capture's title alongside its body", async () => {
+		const inbox = await start_inbox()
+		set_inbox_port(inbox.port)
+
+		const chat = new MockChat({ sink: inbox_sink("chat") })
+		await chat.send({ message: "Deploy finished in 42s", title: "Deploy" })
+		await until(() => inbox.store.list().length === 1)
+
+		expect(inbox.store.list()[0]).toMatchObject({
+			channel: "chat",
+			subject: "Deploy",
+			text: "Deploy finished in 42s",
+		})
+		await inbox.stop()
+	})
+
+	it("ships the Messenger window in the UI document", () => {
+		const html = inbox_ui()
+		expect(html).toContain('id="messenger"')
+		expect(html).toContain('id="msn-nudge"')
+		expect(html).toContain("Conversation")
 	})
 })

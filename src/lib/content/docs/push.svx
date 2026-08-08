@@ -1,0 +1,171 @@
+---
+title: Push
+name: Push
+description: Web Push and FCM with push() — the only channel that costs nothing per message, and the only one where the address has to be registered first.
+category: Channels
+---
+
+```typescript
+import { push } from "postboi"
+
+await push({ to: subscription, title: "Order shipped", message: "On its way" })
+```
+
+Push is the odd one out in two ways, and both shape how you use it.
+
+**It costs nothing.** FCM, APNs and Web Push are free from Google, Apple and the browser
+vendors — there is no carrier and no termination fee anywhere in the chain. That's why push
+sits first in [`send()`'s cost ordering](/send#cheapest-first): routing a message to push
+instead of SMS doesn't save a percentage, it saves the entire cost.
+
+**The address has to be registered first.** An email address or a phone number is something
+you can be told. A push target only exists once the device has subscribed and handed it to
+you — so you have to store it, and it will expire.
+
+## Setup
+
+```bash
+# .env
+POSTBOI_PUSH_PROVIDER=webpush
+VAPID_PUBLIC_KEY=…
+VAPID_PRIVATE_KEY=…
+VAPID_SUBJECT=mailto:you@example.com
+```
+
+The VAPID key pair identifies **you** to the push service. No dashboard hands one out —
+`bunx postboi init --push` generates it for you. The public half is also what the browser
+subscribes with, so the two must match — mismatched keys are rejected on every send with a
+401 that explains nothing.
+
+`VAPID_SUBJECT` is required by RFC 8292 so a push service operator can reach you about
+misbehaving traffic. `mailto:` or an https URL.
+
+| Provider | Import | Reaches |
+| --- | --- | --- |
+| Web Push | `postboi/webpush` | Every modern browser, desktop and mobile |
+| FCM | `postboi/fcm` | Android and iOS apps — and the simplest route to APNs |
+
+## Subscribing, in the browser
+
+```typescript
+import { subscribe_push } from "postboi/react" // also /vue, or postboi/push-client
+
+async function enable() {
+	const subscription = await subscribe_push({ key: VAPID_PUBLIC_KEY })
+	await fetch("/api/push/register", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(subscription),
+	})
+}
+```
+
+**Call it from a click.** Browsers auto-deny a permission prompt that isn't tied to a user
+gesture, and once denied **you cannot ask again** — the user has to change it in site
+settings. That's the single most common way to permanently lose a subscriber.
+
+The helper requests permission if needed, registers your service worker (`/sw.js` by
+default), waits for it to be *active* rather than merely registered, and reuses an existing
+subscription — so calling it on every page load is safe.
+
+Failures carry a `reason` you can branch on:
+
+```typescript
+import { PushSubscribeError } from "postboi/push-client"
+
+try {
+	await subscribe_push({ key })
+} catch (error) {
+	if (error instanceof PushSubscribeError) {
+		if (error.reason === "permission_denied") show_settings_hint()
+		if (error.reason === "unsupported") hide_the_button()
+	}
+}
+```
+
+## Your service worker
+
+Push notifications are delivered to a service worker, which postboi doesn't provide — it's
+your file, at your scope. The minimum:
+
+```javascript
+// static/sw.js
+self.addEventListener("push", (event) => {
+	const { title, body, icon, url } = event.data.json()
+	event.waitUntil(
+		self.registration.showNotification(title ?? "", { body, icon, data: { url } })
+	)
+})
+
+self.addEventListener("notificationclick", (event) => {
+	event.notification.close()
+	if (event.notification.data?.url) event.waitUntil(clients.openWindow(event.notification.data.url))
+})
+```
+
+You **must** show a notification for every push. `userVisibleOnly` is mandatory in Chrome,
+and a browser that sees you receive pushes without showing anything will revoke the
+permission.
+
+## Subscriptions expire — plan for it
+
+This is routine, not an error case. Users clear site data, reinstall browsers, and don't
+open your app for months. The push service answers **410 Gone** and the right response is to
+**delete your stored copy** — not to retry, and not to alert:
+
+```typescript
+import { push } from "postboi"
+
+try {
+	await push({ to: subscription, message: "…" })
+} catch (error) {
+	if (push.expired(error)) await forget_subscription(subscription.endpoint)
+	else throw error
+}
+```
+
+The check hangs off `push` itself, so the send and its routine failure are one import.
+Sending to many at once, the same check applies per result:
+
+```typescript
+const results = await push(subscriptions.map((to) => ({ to, message: "…" })))
+
+for (const [i, result] of results.entries()) {
+	if (!result.ok && push.expired(result.error)) {
+		await forget_subscription(subscriptions[i].endpoint)
+	}
+}
+```
+
+(Holding a provider instance directly? The same check is `PushProvider.is_expired()`.)
+
+## Payload size
+
+One encrypted record holds **3993 bytes** of plaintext, and that's the whole payload — title,
+body, icon URL and data together. Postboi checks before encrypting and tells you the real
+number, rather than letting the push service reject it with a bare 400.
+
+If you're near the limit, send an id and fetch the detail in the service worker. That's
+better practice anyway: the payload is stored on someone else's server until it's delivered.
+
+## Urgency and TTL
+
+```typescript
+await push({
+	to: subscription,
+	message: "Your code is 4291",
+	urgency: "high", // ask the push service not to delay for battery
+	ttl: 60, // give up after a minute — a stale code is worse than none
+})
+```
+
+`ttl` defaults to 28 days. For anything time-sensitive, set it low: a notification that
+arrives two days late is usually worse than one that never arrives.
+
+## iOS
+
+Reaching iOS through **FCM** is the recommended route: one credential instead of two, and
+Firebase handles APNs for you. Direct APNs isn't implemented — say so if you need it.
+
+Web Push also works on iOS 16.4+, but **only for a home-screen web app**, and the user has
+to add it to their home screen first. Worth knowing before you build a flow around it.

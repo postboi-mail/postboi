@@ -1,28 +1,33 @@
 ---
 title: Introduction
 name: Introduction
-description: Postboi is a framework-agnostic email library optimised for SvelteKit. One API, swappable providers, zero configuration.
+description: Postboi is a framework-agnostic messaging library optimised for SvelteKit. Email, SMS, WhatsApp, push and chat behind one API, with swappable providers and zero configuration.
 category: Getting started
 ---
 
-Postboi is a framework-agnostic email library optimised for SvelteKit. It works with a
-variety of email providers and turns your `FormData` into tidy HTML emails, with **zero
-configuration**.
+Postboi is a framework-agnostic messaging library optimised for SvelteKit. **Email, SMS,
+WhatsApp, push and chat behind one API**, with swappable providers and **zero
+configuration** — and email brings extras like turning your `FormData` into tidy HTML.
 
-Import `mail`, call it, done. The provider and credentials come from environment
-variables, so the same line of code works whether you're on Resend, Postmark, Mailgun, or
-any of the other supported providers.
+Import a channel, call it, done. The provider and credentials come from environment
+variables, so the same line of code works whichever provider is behind it.
 
 ```typescript
-import { mail } from 'postboi'
+import { mail, sms } from 'postboi'
 
 await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
+await sms({ to: '+44 7788 223344', message: 'Your code is 4291' })
 ```
 
 ## Features
 
 - 👨‍💻 **Zero configuration**: works out of the box with minimal setup.
-- 🔌 **Provider-based**: swap email providers without changing your code.
+- 🔌 **Provider-based**: swap providers on any channel without changing your code.
+- 💬 **Five channels, one shape**: [`sms()`](/sms), [`whatsapp()`](/whatsapp),
+  [`push()`](/push), [`slack()`](/slack) and friends resolve, hook and error exactly like
+  `mail()`.
+- 📡 **Multi-channel [`send()`](/send)**: fan out to every channel, or stop at the
+  cheapest one that works.
 - 📝 **Smart FormData parsing**: automatically converts `FormData` to HTML tables.
 - 🎯 **Grouped fields**: organise form fields with `fieldset→field` syntax.
 - 📎 **Attachments**: attach files directly from form inputs or `File` objects.
@@ -36,13 +41,15 @@ await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
 
 There are three ways to use Postboi, from least to most explicit:
 
-1. **Zero-config `mail()`**: reads the provider and defaults from a committed
-   `postboi.config.ts`, and secrets from the environment. Best for apps where one
-   provider is set per environment.
+1. **Zero-config channel calls** — `mail()`, `sms()`, `whatsapp()`, `push()`, `slack()`
+   and friends:
+   each reads its provider and defaults from a committed `postboi.config.ts`, and secrets
+   from the environment. Best for apps where one provider per channel is set per
+   environment.
 2. **`postboi/kit` form actions**: a one-line SvelteKit action that reads `FormData`,
    sends it, and returns a result.
-3. **A provider instance**: `new Resend({ ... })` when you want an explicit instance, or
-   credentials that don't come from the environment.
+3. **A provider instance**: `new Resend({ ... })` or `new Twilio({ ... })` when you want
+   an explicit instance, or credentials that don't come from the environment.
 
 Start with the [Quick start](/quick-start) and let the CLI wire everything up for you,
 or set things up by hand with [Manual setup](/manual-setup).
@@ -52,6 +59,8 @@ or set things up by hand with [Manual setup](/manual-setup).
 | Page                                       | What you'll find                                  |
 | ------------------------------------------ | ------------------------------------------------- |
 | [Quick start](/quick-start)           | `postboi init`: pick a provider, send your first email |
+| [Multi-channel send()](/send)         | One call across email, SMS, WhatsApp, push and chat |
+| [SMS](/sms), [WhatsApp](/whatsapp), [Push](/push), [Slack](/slack), [Discord](/discord), [Teams](/teams), [Telegram](/telegram) | Each channel's setup and quirks |
 | [Manual setup](/manual-setup)         | Wire Postboi up by hand without the CLI           |
 | [SvelteKit form actions](/sveltekit)  | One-line contact forms                            |
 | [Hosted forms](/forms)                | Contact forms for static sites, no backend       |

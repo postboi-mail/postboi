@@ -170,6 +170,63 @@ export async function fetch_domains(
 	}
 }
 
+/**
+ * The account's synced channel credentials, or undefined when unreachable (or on an API
+ * that predates them). An empty object is a real answer: nothing synced yet.
+ */
+export async function fetch_env_vars(
+	base: string,
+	token: string,
+	fetch_fn: FetchLike = fetch
+): Promise<{ vars: Record<string, string> } | undefined> {
+	try {
+		const response = await fetch_fn(`${base}/v1/env`, {
+			headers: { Authorization: `Bearer ${token}` },
+		})
+		if (!response.ok) return undefined
+		const data = (await response.json()) as { vars?: unknown }
+		if (data.vars === null || typeof data.vars !== "object") return undefined
+		const vars: Record<string, string> = {}
+		for (const [key, value] of Object.entries(data.vars as Record<string, unknown>)) {
+			if (typeof value === "string") vars[key] = value
+		}
+		return { vars }
+	} catch {
+		return undefined
+	}
+}
+
+/**
+ * Merge vars into the account's synced set. A null value deletes. A rejection carries the
+ * API's reason so the caller can relay it — "the vars cap is hit" and "the network is
+ * down" need different advice, and collapsing them told users to retry a 422 forever.
+ */
+export async function push_env_vars(
+	base: string,
+	token: string,
+	vars: Record<string, string | null>,
+	fetch_fn: FetchLike = fetch
+): Promise<{ ok: true } | { ok: false; reason?: string }> {
+	try {
+		const response = await fetch_fn(`${base}/v1/env`, {
+			method: "PUT",
+			headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+			body: JSON.stringify({ vars }),
+		})
+		if (response.ok) return { ok: true }
+		let reason = `the API answered ${response.status}`
+		try {
+			const data = (await response.json()) as { message?: unknown }
+			if (typeof data.message === "string" && data.message) reason = data.message
+		} catch {
+			// Empty or non-JSON error body — the status line will have to do.
+		}
+		return { ok: false, reason }
+	} catch {
+		return { ok: false }
+	}
+}
+
 /** Best-effort: open `url` in the default browser. The URL is always printed anyway. */
 export function open_browser(url: string, os: string = platform): boolean {
 	const spec =

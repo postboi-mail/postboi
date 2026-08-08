@@ -10,7 +10,7 @@
 
 ---
 
-Postboi is a framework-agnostic email library optimised for SvelteKit. Works with a variety of email providers and turns your FormData into tidy HTML emails, with **zero configuration**.
+Postboi is a framework-agnostic messaging library optimised for SvelteKit — **email first, and now SMS, WhatsApp, push and chat behind the same API**. Works with a variety of providers and turns your FormData into tidy HTML emails, with **zero configuration**.
 
 📖 **Full documentation: [docs.postboi.email](https://docs.postboi.email)**
 
@@ -31,6 +31,8 @@ Postboi is a framework-agnostic email library optimised for SvelteKit. Works wit
 - 🍯 **Invisible spam protection** - a zero-config [honeypot](https://docs.postboi.email/spam), plus invisible captcha — fully managed on the Postboi provider, or bring your own Turnstile key
 - 🧩 **`<Captcha />` component** - one prop-free tag inside your own form, for [Svelte, React, Vue and Astro](https://docs.postboi.email/spam#the-captcha-component) — `postboi sync` bakes in the key
 - 🛡️ **Type-safe** - full TypeScript support with normalized error handling
+- 💬 **Every channel, one shape** - [`sms()`](https://docs.postboi.email/sms), [`whatsapp()`](https://docs.postboi.email/whatsapp), [`push()`](https://docs.postboi.email/push), [`slack()`, `discord()`, `teams()` and `telegram()`](https://docs.postboi.email/chat) resolve, hook and error exactly like `mail()` — Twilio, The SMS Works, Meta, Web Push, FCM and friends behind them
+- 📡 **Multi-channel `send()`** - [one call](https://docs.postboi.email/send) fans out to everything in `to`, or walks `channels: "cheapest"` (push → chat → email → whatsapp → sms) and stops at the first success — the fan-out runs in your process, so nobody meters it
 
 ## Quick start
 
@@ -146,6 +148,40 @@ build your own with `remote(...)` from `postboi/kit`.
 | API reference                            | [docs.postboi.email/api](https://docs.postboi.email/api)                   |
 
 > Cloudflare Workers work the same way — bindings are read as env vars, and the `postboi/vite` plugin bundles `postboi.config.ts` in place of the filesystem auto-load. See [Cloudflare Workers](https://docs.postboi.email/cloudflare-workers).
+
+## Beyond email
+
+Every channel is the same three moves: `bunx postboi init --sms` (or `--whatsapp`,
+`--push`, `--chat`), credentials land in env, then call the function. Same hooks, same
+normalized errors, same zero config:
+
+```typescript
+import { sms, whatsapp, push, slack, send } from "postboi"
+
+await sms({ to: "+447788223344", message: "Your code is 4291" })
+await whatsapp({ to: "+447788223344", template: "order_shipped", variables: { name: "Ada" } })
+await push({ to: subscription, title: "Order shipped", message: "On its way" })
+await slack({ message: "Deploy finished" })
+
+// …or one call that stops at the first (cheapest) channel that works:
+await send({
+	to: { push: subscription, sms: "+447788223344" },
+	channels: "cheapest",
+	message: "Your code is 4291",
+})
+```
+
+In development, texts and WhatsApp messages are **logged, never sent** — the same
+no-way-to-mail-a-customer-from-your-laptop guarantee the dev inbox gives email, but
+stricter, because a stray text costs money and can't be recalled.
+
+| Channel                  | Docs                                                               |
+| ------------------------ | ------------------------------------------------------------------ |
+| Multi-channel `send()`   | [docs.postboi.email/send](https://docs.postboi.email/send)         |
+| SMS (and RCS)            | [docs.postboi.email/sms](https://docs.postboi.email/sms)           |
+| WhatsApp                 | [docs.postboi.email/whatsapp](https://docs.postboi.email/whatsapp) |
+| Push (Web Push, FCM)     | [docs.postboi.email/push](https://docs.postboi.email/push)         |
+| Chat (Slack, Discord, …) | [docs.postboi.email/chat](https://docs.postboi.email/chat)         |
 
 ## Development
 

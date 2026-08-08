@@ -38,7 +38,16 @@ describe("package exports", () => {
 			"env.ts",
 			"workers_env.ts", // Cloudflare binding reader, used by env.ts
 			"mail.ts",
+			"encoding.ts", // shared base64/base64url codecs, used by webhooks, push and FCM
+			"twilio_common.ts", // Twilio plumbing shared by the SMS and WhatsApp providers
+			"channels.ts", // shared zero-config resolution, used by each channel send.ts
+			"send.ts", // the multi-channel fan-out, re-exported from the root
+			"mock_recorder.ts", // shared mock capture machinery, used by each channel mock
+			"channel_inbox.ts", // channel captures → dev inbox bridge, used by the dev interceptions
 			"captcha.ts", // spam protection, reached via the root export
+			"aws.ts", // SigV4 signing, used by ses.ts (and SNS later)
+			"errors.ts", // normalized errors, re-exported from the root
+			"transport.ts", // channel-agnostic provider base, re-exported from the root
 			"register.ts", // generated-types placeholder, reached via the root export
 			"inbox.ts", // dev inbox discovery, reached via mail.ts (and patched by postboi/vite)
 			"inbox_server.ts", // dev inbox HTTP surface, mounted by postboi/vite and the CLI
@@ -48,9 +57,35 @@ describe("package exports", () => {
 			"inbox_art.ts", // the dev inbox's sign-on artwork, served by inbox_server.ts
 			"inbox_desktop.ts", // the dev inbox's wallpaper, clip and Start button, served by inbox_server.ts
 		])
-		const providers = readdirSync(`${root}src/library`).filter(
-			(f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !internal.has(f)
-		)
+		// Channel providers live in subdirectories (`sms/`), so scan those too — otherwise a
+		// new provider could ship with no exports entry and nothing would notice.
+		const channel_internal = new Set([
+			"sms/types.ts", // pure types, re-exported from the root
+			"sms/provider.ts", // the SMS base class, reached via each provider
+			"sms/phone.ts", // E.164 + segment helpers, used by sms/provider.ts
+			"sms/send.ts", // the zero-config sms(), re-exported from the root
+			"chat/types.ts", // pure types, re-exported from the root
+			"chat/provider.ts", // the chat base class, reached via each provider
+			"chat/send.ts", // the platform functions (slack() and friends), re-exported from the root
+			"push/types.ts", // pure types, re-exported from the root
+			"push/provider.ts", // the push base class, reached via each provider
+			"push/crypto.ts", // VAPID + aes128gcm, used by push/webpush.ts
+			"push/send.ts", // the zero-config push(), re-exported from the root
+			"whatsapp/types.ts", // pure types, re-exported from the root
+			"whatsapp/provider.ts", // the WhatsApp base class, reached via each provider
+			"whatsapp/send.ts", // the zero-config whatsapp(), re-exported from the root
+		])
+		const providers = [
+			...readdirSync(`${root}src/library`).filter(
+				(f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !internal.has(f)
+			),
+			...["sms", "chat", "push", "whatsapp"].flatMap((dir) =>
+				readdirSync(`${root}src/library/${dir}`)
+					.filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+					.map((f) => `${dir}/${f}`)
+					.filter((f) => !channel_internal.has(f))
+			),
+		]
 		const exported = new Set(
 			entries.map(([, t]) => to_source(t.default).replace("src/library/", ""))
 		)

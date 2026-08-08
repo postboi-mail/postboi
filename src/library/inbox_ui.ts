@@ -10,6 +10,18 @@
  */
 
 import { THEME_CSS } from "./inbox_theme.js"
+import type { Channel } from "./errors.js"
+
+/**
+ * Channel chip labels, typed here (and inlined into the client script below) so adding a
+ * channel without a label is a compile error rather than a blank chip.
+ */
+const CHANNEL_LABELS = {
+	sms: "SMS",
+	whatsapp: "WhatsApp",
+	chat: "Chat",
+	push: "Push",
+} satisfies Record<Exclude<Channel, "email">, string>
 
 /**
  * The Postboi mark, inlined as a data URI — the tab icon, and the badge in every title
@@ -294,6 +306,85 @@ td.who { width: 34% }
 #readerfoot { display: flex; align-items: center; gap: 10px; padding: 0 10px 10px; background: #c0c0c0 }
 #readerfoot #r-count { flex: 1; text-align: center; font-weight: bold; color: #17265c }
 
+/* ---- Channel chips in the mailbox list ---- */
+.chan {
+	font: bold 9px Tahoma, Arial, sans-serif; letter-spacing: .02em; color: #0b5394;
+	background: #dceafa; border: 1px solid #9db9d9; border-radius: 3px;
+	padding: 0 4px; margin-left: 5px; vertical-align: 1px; text-transform: uppercase;
+}
+tr.on .chan { background: #2f5db3; color: #fff; border-color: #7aa0dc }
+
+/*
+ * ---- The Messenger window ----
+ *
+ * Texts, WhatsApp messages, chat posts and pushes open here instead of the mail reader,
+ * because they are conversations, not letters. It is dressed as MSN Messenger with the
+ * same shamelessness the rest of this wears AOL: the To: banner, the display-picture
+ * boxes down the right, the toolbar of things that never worked, and the nudge.
+ */
+#messenger { display: none }
+#messenger.open { display: flex }
+#messenger.open.min, #messenger.open.closed { display: none }
+#msnbar {
+	display: flex; gap: 1px; padding: 3px 6px 2px;
+	background: linear-gradient(180deg, #fdfefe 0%, #e8f1fb 45%, #d2e3f6 100%);
+	border-bottom: 1px solid #a9c4e2;
+}
+#msnbar button {
+	display: flex; flex-direction: column; align-items: center; min-width: 52px;
+	padding: 2px 6px 1px; background: transparent; border: 1px solid transparent;
+	border-radius: 3px; font: 10px Tahoma, Arial, sans-serif; color: #30517c; box-shadow: none;
+}
+#msnbar button:hover { border-color: #90b4dc; background: rgba(255,255,255,.7); box-shadow: none }
+#msnbar .ico { font-size: 15px; line-height: 17px }
+#msnto {
+	padding: 4px 9px; background: #eef5fd; border-bottom: 1px solid #b7cbe4;
+	font: 11px Tahoma, Arial, sans-serif; color: #40506a;
+	white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#msnmain {
+	flex: 1; display: flex; gap: 7px; padding: 7px; min-height: 0;
+	background: linear-gradient(180deg, #cfe1f6 0%, #e8f1fb 34%, #e8f1fb 100%);
+}
+#msncol { flex: 1; display: flex; flex-direction: column; min-width: 0; gap: 7px }
+#msnhistory {
+	flex: 1; background: #fff; overflow: auto; padding: 7px 9px;
+	font: 12px Tahoma, Arial, sans-serif; border: 1px solid #a9c4e2;
+}
+#msnhistory .says { color: #6a7686; margin: 7px 0 1px }
+#msnhistory .says:first-of-type { margin-top: 2px }
+#msnhistory .says b { color: #16233b }
+#msnhistory .stamp { color: #a4b0bf; font-size: 10px }
+#msnhistory .line { padding-left: 13px; color: #101010; white-space: pre-wrap; word-wrap: break-word }
+#msnhistory .line b { color: #24344f }
+#msnhistory .sysline { color: #8b96a5; font-size: 11px; margin: 6px 0; font-style: italic }
+#msnhistory .tpl {
+	background: #f3f7e8; border: 1px dashed #a9c48a; border-radius: 3px;
+	padding: 3px 7px; margin: 2px 0 2px 13px; display: inline-block; color: #4a6018;
+}
+#msnentry { background: #fff; border: 1px solid #a9c4e2; padding: 4px; flex: none }
+#msnentry textarea {
+	display: block; width: 100%; border: 0; outline: 0; resize: none;
+	font: 12px Tahoma, Arial, sans-serif; background: transparent;
+}
+#msnentry .row { display: flex; justify-content: space-between; align-items: center; margin-top: 3px }
+#msnentry .hint { color: #a4b0bf; font-size: 10px; font-style: italic }
+#msnentry .btns { display: flex; gap: 4px }
+#msnpics { width: 106px; flex: none; display: flex; flex-direction: column; justify-content: space-between }
+#msnpics .pic {
+	width: 106px; height: 106px; background: #fff; border: 1px solid #90b4dc;
+	border-radius: 4px; padding: 6px; box-sizing: border-box;
+}
+#msnpics .pic img { width: 100%; height: 100%; object-fit: contain }
+@keyframes msn-nudge {
+	0%, 100% { translate: 0 0 } 10% { translate: -6px 2px } 20% { translate: 5px -3px }
+	30% { translate: -4px -2px } 40% { translate: 6px 3px } 50% { translate: -5px 1px }
+	60% { translate: 4px -2px } 70% { translate: -3px 3px } 80% { translate: 5px -1px }
+	90% { translate: -2px 2px }
+}
+#messenger.nudging { animation: msn-nudge .55s linear }
+@media (prefers-reduced-motion: reduce) { #messenger.nudging { animation: none } }
+
 /* ---- Taskbar and Start menu ---- */
 /* The taskbar is Luna's, not 98's — everything else moved to XP.css and this was the last
    thing still wearing grey. */
@@ -529,7 +620,8 @@ var ICON_OPEN =
 var FOLDERS = ["outbox", "sent", "scheduled", "deleted"]
 var LABELS = { outbox: "Outbox", sent: "Sent", scheduled: "Scheduled", deleted: "Deleted" }
 var EMPTY = {
-	outbox: "Your outbox is empty.<br>Send something from your app and it will arrive here.",
+	outbox:
+		"Your outbox is empty.<br>Send anything from your app \\u2014 mail, texts, chats, pushes \\u2014 and it lands here.",
 	sent: "Nothing has gone out yet.",
 	scheduled: "Nothing is waiting on a clock.<br>Send with <b>scheduled_at</b> and it will queue up here.",
 	deleted: "Nothing cancelled.<br>Call <b>cancel(id)</b> on a scheduled send and it will land here.",
@@ -551,6 +643,24 @@ var ICON_BIN =
 	'<path d="M6.2 1.2h3.6v2H6.2z" fill="#cfcfcf" stroke="#3f3f3f" stroke-linejoin="round"/>' +
 	'<path d="M6.6 5.4v5m2.8-5v5" fill="none" stroke="#8a8a8a"/>' +
 	"</svg>"
+
+/* The other channels' rows, drawn in the same hand as the envelopes. */
+var ICON_BUBBLE =
+	'<svg class="mailico" viewBox="0 0 16 13" aria-hidden="true">' +
+	'<path d="M1.5 1.5h13V9H8l-3.4 2.8V9H1.5z" fill="#fdfbf2" stroke="#3f3f3f" stroke-linejoin="round"/>' +
+	'<path d="M4 4.1h8.5M4 6.3h6" fill="none" stroke="#cfcab4"/>' +
+	"</svg>"
+var ICON_BELL =
+	'<svg class="mailico" viewBox="0 0 16 13" aria-hidden="true">' +
+	'<path d="M8 1.3c2.5 0 4 1.8 4 4.2 0 2.3.7 3.2 1.5 3.9h-11c.8-.7 1.5-1.6 1.5-3.9C4 3.1 5.5 1.3 8 1.3z" fill="#fff2c9" stroke="#3f3f3f" stroke-linejoin="round"/>' +
+	'<path d="M6.7 10.4a1.4 1.4 0 0 0 2.6 0" fill="none" stroke="#3f3f3f"/>' +
+	"</svg>"
+var CHANNELS = ${JSON.stringify(CHANNEL_LABELS)}
+function channel_of(m) { return m.channel || "email" }
+function snip(text, n) {
+	text = String(text == null ? "" : text)
+	return text.length > n ? text.slice(0, n - 1) + "\\u2026" : text
+}
 
 /*
  * Which folder a captured message belongs in.
@@ -595,6 +705,7 @@ function render_list() {
 	$("empty").innerHTML = EMPTY[folder]
 	shown.forEach(function (m) {
 		var tr = document.createElement("tr")
+		var chan = channel_of(m)
 		tr.className = (read[m.id] ? "" : "unread") + (selected && selected.id === m.id ? " on" : "")
 		tr.innerHTML =
 			'<td class="flag">' +
@@ -602,13 +713,19 @@ function render_list() {
 				? ICON_BIN
 				: state_of(m) === "scheduled"
 					? ICON_CLOCK
-					: read[m.id]
-						? ICON_OPEN
-						: ICON_SEALED) +
+					: chan === "email"
+						? read[m.id]
+							? ICON_OPEN
+							: ICON_SEALED
+						: chan === "push"
+							? ICON_BELL
+							: ICON_BUBBLE) +
 			"</td>" +
 			'<td class="when">' + when(m.received_at) + "</td>" +
 			'<td class="who">' + esc(who(m.to)) + "</td>" +
-			"<td>" + esc(m.subject || "(no subject)") +
+			"<td>" +
+			esc(snip(m.subject || (chan === "email" ? "(no subject)" : m.text || "(no message)"), 90)) +
+			(chan === "email" ? "" : ' <span class="chan">' + CHANNELS[chan] + "</span>") +
 			(m.cancelled_at
 				? ' <span class="sched off">cancelled</span>'
 				: state_of(m) === "scheduled"
@@ -630,7 +747,7 @@ function render_list() {
 	var unread = messages.filter(function (m) { return !read[m.id] }).length
 	$("count").textContent =
 		messages.length + " message" + (messages.length === 1 ? "" : "s") + (unread ? ", " + unread + " new" : "")
-	document.title = (unread ? "(" + unread + ") " : "") + "Postboi Mail"
+	document.title = (unread ? "(" + unread + ") " : "") + "Postboi Local"
 	$("stat").textContent = messages.length ? "Ready" : "Waiting for mail\\u2026"
 	sync_actions()
 }
@@ -656,10 +773,17 @@ function sync_actions() {
 
 function open_message(m) {
 	selected = m
-	current = m
 	read[m.id] = true
+	// Letters open in the mail reader; everything else is a conversation, and opens in one.
+	if (channel_of(m) === "email") {
+		current = m
+		render_list()
+		render_reader()
+		return
+	}
+	convo = m
 	render_list()
-	render_reader()
+	render_messenger()
 }
 
 function row(label, value) {
@@ -744,6 +868,7 @@ function load() {
 	return fetch(api + "/messages").then(function (r) { return r.json() }).then(function (data) {
 		messages = data.messages || []
 		if (current) current = messages.filter(function (m) { return m.id === current.id })[0] || null
+		if (convo) convo = messages.filter(function (m) { return m.id === convo.id })[0] || null
 		// Gated on having loaded once rather than on having seen a message: an inbox that starts
 		// empty has seen zero, which is exactly when the next arrival is the first one to chime.
 		if (loaded && messages.length > seen) play("mail")
@@ -751,8 +876,117 @@ function load() {
 		loaded = true
 		render_list()
 		render_reader()
+		render_messenger()
 	})
 }
+
+/* ---- The Messenger window: one conversation per channel + destination ---- */
+var convo = null
+var extra_lines = []
+var extra_key = null
+
+function thread_key(m) { return channel_of(m) + "|" + who(m.to) }
+function thread_of(m) {
+	var key = thread_key(m)
+	// messages is newest first; a conversation reads downwards.
+	return messages.filter(function (x) { return thread_key(x) === key }).reverse()
+}
+function stamp(ms) {
+	var d = new Date(ms)
+	var h = d.getHours()
+	var min = d.getMinutes()
+	var ampm = h >= 12 ? "PM" : "AM"
+	h = h % 12
+	if (!h) h = 12
+	return h + ":" + (min < 10 ? "0" : "") + min + " " + ampm
+}
+
+function render_messenger() {
+	var el = $("messenger")
+	var win = find("messenger")
+	if (!convo) {
+		el.className = "child window"
+		if (win) {
+			win.open = false
+			if (focused === "messenger") focused = "mailbox"
+			paint()
+		}
+		return
+	}
+	var key = thread_key(convo)
+	// The nudges and refused sends belong to one conversation, not to all of them.
+	if (extra_key !== key) { extra_key = key; extra_lines = [] }
+	var thread = thread_of(convo)
+	// Opening a conversation reads the whole thread, the way a chat window would.
+	thread.forEach(function (m) { read[m.id] = true })
+	var to = who(convo.to)
+	var chan = channel_of(convo)
+
+	el.className = "child window open" + (win && win.min ? " min" : "")
+	if (win) {
+		win.title = to + " - Conversation"
+		var reopened = !win.open
+		win.open = true
+		if (reopened) focus_window("messenger")
+		else paint()
+	}
+	$("msn-title").textContent = to + " - Conversation"
+	$("msn-to").textContent = to
+	$("msn-chan").textContent = CHANNELS[chan] || chan
+
+	var parts = [
+		'<div class="sysline">' + esc(to) +
+			" joins the conversation. Captured by the dev inbox \\u2014 nothing was actually sent.</div>",
+	]
+	thread.forEach(function (m) {
+		parts.push(
+			'<div class="says"><b>Your app</b> says: <span class="stamp">(' +
+				stamp(m.received_at) + ")</span></div>"
+		)
+		var tpl = (m.meta || []).filter(function (pair) { return pair[0] === "Template" })[0]
+		if (m.subject && !tpl) parts.push('<div class="line"><b>' + esc(m.subject) + "</b></div>")
+		if (m.text) parts.push('<div class="line">' + esc(m.text) + "</div>")
+		if (tpl) parts.push('<div class="tpl">\\u{1F4CB} ' + esc(tpl[1]) + "</div>")
+		;(m.meta || []).forEach(function (pair) {
+			if (pair[0] === "Template") return
+			parts.push('<div class="sysline">\\u2736 ' + esc(pair[0]) + ": " + esc(pair[1]) + "</div>")
+		})
+		if (m.cancelled_at) {
+			parts.push('<div class="sysline">This send was cancelled. It was never going out.</div>')
+		} else if (state_of(m) === "scheduled") {
+			parts.push('<div class="sysline">Scheduled \\u2014 sends ' + esc(when_full(m.scheduled_at)) + "</div>")
+		}
+	})
+	var history = $("msnhistory")
+	history.innerHTML = parts.concat(extra_lines).join("")
+	history.scrollTop = history.scrollHeight
+	render_list()
+}
+
+function msn_sys(text) {
+	extra_lines.push('<div class="sysline">' + text + "</div>")
+	render_messenger()
+}
+$("msn-send").onclick = function () {
+	var box = $("msn-text")
+	if (!box.value.trim()) return
+	box.value = ""
+	msn_sys("This glass is one-way \\u2014 your app does the talking. Nothing was sent.")
+}
+$("msn-nudge").onclick = function () {
+	var el = $("messenger")
+	el.classList.remove("nudging")
+	void el.offsetWidth
+	el.classList.add("nudging")
+	msn_sys("You have just sent a nudge. It was captured, and will never arrive.")
+}
+$("msnbar").addEventListener("click", function (event) {
+	var button = event.target
+	while (button && button !== this && !(button.dataset && button.dataset.say)) {
+		button = button.parentNode
+	}
+	if (button && button.dataset && button.dataset.say) msn_sys(button.dataset.say)
+})
 
 /*
  * The voice. Muted state is remembered, and defaults to whatever the server was configured
@@ -947,6 +1181,13 @@ function close_window(win) {
 		current = null
 		render_list()
 		render_reader()
+		return
+	}
+	// Same deal for the messenger: closing the conversation is leaving it.
+	if (win.id === "messenger") {
+		convo = null
+		render_list()
+		render_messenger()
 		return
 	}
 	win.el.classList.add("closed")
@@ -1525,6 +1766,15 @@ register("reader", "Message", {
 	w: rd.w,
 	h: rd.h,
 })
+/* Offset from the reader, so a mail and a conversation can be open side by side-ish. */
+var mg = { w: Math.min(560, box.w - 80), h: Math.min(470, box.h - 50) }
+register("messenger", "Conversation", {
+	x: Math.min(box.w - mg.w, Math.round((box.w - mg.w) / 2) + 36),
+	y: Math.max(0, Math.round((box.h - mg.h) / 2) - 10),
+	w: mg.w,
+	h: mg.h,
+})
+$("msn-them").src = api + "/desktop/avatar"
 $("aol").classList.add("maxed")
 focus_window("mailbox")
 // They sit on the desktop, so it is the browser window changing size they have to survive.
@@ -1552,6 +1802,7 @@ setInterval(function () {
 	play("sent")
 	render_list()
 	render_reader()
+	render_messenger()
 }, 1000)
 new EventSource(api + "/events").onmessage = function () { load() }
 load()
@@ -1596,7 +1847,7 @@ export function inbox_ui({ sounds = true, intro = true }: InboxUiOptions = {}): 
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Postboi Mail</title>
+<title>Postboi Local</title>
 <link rel="icon" href="${FAVICON}">
 <style>${THEME_CSS}</style>
 <style>${CSS}</style>
@@ -1775,6 +2026,45 @@ export function inbox_ui({ sounds = true, intro = true }: InboxUiOptions = {}): 
 			<button class="aolbtn" id="r-prev">&#9664; Prev</button>
 			<span id="r-count"></span>
 			<button class="aolbtn" id="r-next">Next &#9654;</button>
+		</div>
+		<span class="edge edge-r"></span><span class="edge edge-b"></span><span class="grip"></span>
+	</div>
+
+	<div id="messenger" class="child window">
+		<div class="title-bar">
+			<div class="title-bar-text">&#128172; <span id="msn-title">Conversation</span></div>
+			<div class="title-bar-controls">
+				<button aria-label="Minimize" data-act="min"></button>
+				<button aria-label="Maximize" data-act="max"></button>
+				<button aria-label="Close" data-act="close"></button>
+			</div>
+		</div>
+		<div id="msnbar">
+			<button data-say="No one else is coming. It's a dev inbox."><span class="ico">&#128101;</span>Invite</button>
+			<button data-say="Attachments ride the email channel."><span class="ico">&#128190;</span>Send Files</button>
+			<button data-say="The webcam is a drawing of a webcam."><span class="ico">&#128249;</span>Webcam</button>
+			<button data-say="Voice clip failed: the modem is using the line."><span class="ico">&#127908;</span>Voice</button>
+			<button data-say="Minesweeper is on the other machine."><span class="ico">&#127918;</span>Games</button>
+		</div>
+		<div id="msnto">To: <b id="msn-to"></b> <span id="msn-chan" class="chan"></span></div>
+		<div id="msnmain">
+			<div id="msncol">
+				<div id="msnhistory" class="selectable"></div>
+				<div id="msnentry">
+					<textarea id="msn-text" class="selectable" rows="2"></textarea>
+					<div class="row">
+						<span class="hint">Messenger Plus! not detected</span>
+						<span class="btns">
+							<button class="aolbtn" id="msn-nudge">Nudge</button>
+							<button class="aolbtn" id="msn-send">Send</button>
+						</span>
+					</div>
+				</div>
+			</div>
+			<div id="msnpics">
+				<div class="pic"><img id="msn-them" src="" alt=""></div>
+				<div class="pic"><img src="${FAVICON}" alt="The Postboi mascot"></div>
+			</div>
 		</div>
 		<span class="edge edge-r"></span><span class="edge edge-b"></span><span class="grip"></span>
 	</div>

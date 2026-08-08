@@ -1,7 +1,82 @@
-import { title, escape_html, escape_lines, html_to_text, pooled_map } from "./utils.js"
-import { config_loaded, get_config, merge_hooks } from "./config.js"
+import { title, escape_html, escape_lines, html_to_text } from "./utils.js"
+import { config_loaded, get_config } from "./config.js"
 import { check_captcha, merge_captcha, type CaptchaMode, type CaptchaOptions } from "./captcha.js"
 import { ensure_env_loaded } from "./env.js"
+import { PostboiError, SpamError, type Channel } from "./errors.js"
+import {
+	Transport,
+	type BatchResult,
+	type Duration,
+	type RecipientVars,
+	type RequestSpec,
+	type TransportOptions,
+} from "./transport.js"
+// Type-only: the SMS channel's prepared shape widens `Hooks`, without pulling the SMS
+// provider into the email module graph.
+import type { PreparedSms } from "./sms/types.js"
+import type { PreparedChat } from "./chat/types.js"
+import type { PreparedPush } from "./push/types.js"
+import type { PreparedWhatsapp } from "./whatsapp/types.js"
+
+// The SMS channel's public types, surfaced from the root alongside the email ones.
+export type {
+	Phone,
+	PreparedSms,
+	SmsDefaults,
+	SmsOptions,
+	SmsProviderOptions,
+	SmsApiKeyOptions,
+} from "./sms/types.js"
+
+// The chat channel's public types.
+export type {
+	ChatDefaults,
+	ChatOptions,
+	ChatProviderOptions,
+	PreparedChat,
+	WebhookChatOptions,
+} from "./chat/types.js"
+
+// The push channel's public types.
+export type {
+	PushDefaults,
+	PushOptions,
+	PushProviderOptions,
+	PushTarget,
+	PreparedPush,
+	WebPushOptions,
+	WebPushSubscription,
+} from "./push/types.js"
+
+// The WhatsApp channel's public types.
+export type {
+	PreparedWhatsapp,
+	WhatsappDefaults,
+	WhatsappOptions,
+	WhatsappProviderOptions,
+} from "./whatsapp/types.js"
+
+// Errors are shared across every channel, but the package root stays their public home.
+export {
+	PostboiError,
+	SkipSendError,
+	SpamError,
+	is_error,
+	is_spam,
+	type Channel,
+	type ProviderError,
+} from "./errors.js"
+// The channel-agnostic base and the types that go with it. `Transport` is exported so a
+// third party can implement a channel we don't ship.
+export {
+	Transport,
+	type BatchResult,
+	type Duration,
+	type RecipientVars,
+	type RequestSpec,
+	type TransportHooks,
+	type TransportOptions,
+} from "./transport.js"
 
 // Global configuration (`postboi.config.ts`) is part of the public surface from the package root.
 export { configure, config, type PostboiConfig } from "./config.js"
@@ -74,28 +149,6 @@ export interface Tracking {
 	opens?: boolean
 	/** Track link clicks for this message (link rewriting, where the provider supports it). */
 	clicks?: boolean
-}
-
-/**
- * A relative delay for {@link SendOptions.scheduled_at}, added to the send time. Every field is
- * optional and they combine — `{ days: 1, hours: 5 }` is 26 hours from now. Days/weeks/hours/…
- * are fixed spans; months and years are calendar-aware (a real "+1 month").
- */
-export interface Duration {
-	/** Seconds from now. */
-	seconds?: number
-	/** Minutes from now. */
-	minutes?: number
-	/** Hours from now. */
-	hours?: number
-	/** Days from now. */
-	days?: number
-	/** Weeks from now. */
-	weeks?: number
-	/** Calendar months from now (e.g. Jan 31 + 1 month lands in Feb). */
-	months?: number
-	/** Calendar years from now. */
-	years?: number
 }
 
 /**
@@ -199,9 +252,6 @@ export interface SendOptions {
 	captcha?: CaptchaOptions
 }
 
-/** A single recipient's template variables (`{key}` → value). */
-export type RecipientVars = Record<string, string>
-
 /**
  * The personalized-batch form of {@link SendOptions}: an array `to` plus per-recipient
  * `data`. `data` is kept off {@link SendOptions} so a plain send literal can't smuggle it
@@ -267,22 +317,8 @@ export interface PreparedMessage {
 	captcha?: { token?: string; remoteip?: string }
 }
 
-/** A provider-agnostic description of the HTTP request to send. */
-export type RequestSpec = {
-	url: string
-	method?: string
-	headers: Record<string, string>
-	/** Omit for bodyless requests (GET/DELETE). */
-	body?: BodyInit
-}
-
 /** The normalized result of cancelling a scheduled email. */
 export type CancelResponse = { id: string }
-
-/** The per-message outcome of a bulk `send(messages)` call. */
-export type BatchResult<TResponse> =
-	| { ok: true; index: number; response: TResponse }
-	| { ok: false; index: number; error: PostboiError }
 
 /**
  * Default field values applied to every send when the corresponding option is omitted.
@@ -297,28 +333,19 @@ export type Defaults = {
 	reply_to?: Array<Email> | Email
 }
 
-/** Common options shared by all provider constructors. */
-export type CommonProviderOptions = {
+/**
+ * Common options shared by all email provider constructors — the channel-agnostic
+ * {@link TransportOptions} (timeout, retries, hooks) plus the email-only settings.
+ */
+export type CommonProviderOptions = TransportOptions<PreparedMessage> & {
 	/** Default field values applied when a send omits them. */
 	default?: Defaults
-	/** Per-request timeout in milliseconds. Defaults to 30000. */
-	timeout?: number
-	/**
-	 * Number of retries on network errors and 429/5xx responses. Defaults to 0.
-	 * Retries are opt-in because retrying a send that already reached the provider can
-	 * deliver a duplicate email — pair this with `idempotency_key` where supported.
-	 */
-	retries?: number
-	/** Base backoff delay in milliseconds between retries (doubles each attempt). Defaults to 500. */
-	retry_delay?: number
 	/**
 	 * Derive a plain-text body from the HTML body when `text` is omitted, so every email
 	 * ships a multipart alternative — better spam scores and text-only clients. Defaults
 	 * to true; set false to send HTML-only.
 	 */
 	auto_text?: boolean
-	/** Lifecycle hooks run around every send (see {@link Hooks}). */
-	hooks?: Hooks
 	/** Spam-protection settings applied to every FormData send (see {@link CaptchaOptions}). */
 	captcha?: CaptchaOptions
 }
@@ -329,112 +356,75 @@ export type ApiKeyOptions = CommonProviderOptions & {
 	api_key: string
 }
 
-/** Normalized error fields a provider extracts from a failed response body. */
-export type ProviderError = { message: string; code?: string | number }
-
 /**
- * A normalized error thrown by every provider, so error handling is the same no matter
- * which provider you use. The original provider payload is preserved on `raw`.
+ * The channel/message pairing hooks discriminate on. A **discriminated union** rather than
+ * independent `channel` and `message` properties, so that narrowing on `ctx.channel`
+ * genuinely narrows `ctx.message` — `channel === "email"` makes `message` a
+ * {@link PreparedMessage}, and `message.subject` typechecks.
  */
-export class PostboiError extends Error {
-	/** The provider that produced the error, e.g. "resend". */
-	readonly provider: string
-	/** HTTP status code, when the failure came from a response. */
-	readonly status?: number
-	/** Provider-specific error code, when available. */
-	readonly code?: string | number
-	/** The original provider error payload (parsed body or thrown cause). */
-	readonly raw: unknown
+export type HookChannelContext =
+	| { channel: "email"; message: PreparedMessage }
+	| { channel: "sms"; message: PreparedSms }
+	| { channel: "chat"; message: PreparedChat }
+	| { channel: "push"; message: PreparedPush }
+	| { channel: "whatsapp"; message: PreparedWhatsapp }
 
-	constructor(args: {
-		provider: string
-		message: string
-		status?: number
-		code?: string | number
-		raw?: unknown
-	}) {
-		super(args.message)
-		this.name = "PostboiError"
-		this.provider = args.provider
-		this.status = args.status
-		this.code = args.code
-		this.raw = args.raw
-	}
-}
+/** The prepared-message union across every channel. */
+export type PreparedAny = HookChannelContext["message"]
 
 /**
- * Thrown from a `before.send` hook to cancel a send (e.g. a suppressed/unsubscribed
- * recipient). It is a {@link PostboiError} with `code: "skipped"`, so it flows through
- * `is_error` and bulk `BatchResult`s; catch it with `instanceof SkipSendError`. Skips do
- * **not** trigger the `on.error` hook.
- */
-export class SkipSendError extends PostboiError {
-	constructor(message = "Email send was skipped by a before.send hook", code: string = "skipped") {
-		super({ provider: "skip", message, code })
-		this.name = "SkipSendError"
-	}
-}
-
-/**
- * Thrown when a FormData body trips the spam checks — the honeypot field (`🍯` by default)
- * was filled. A {@link SkipSendError} with `code: "spam"`, so like any intentional skip it
- * never reaches the `on.error` hook. `postboi/kit` turns it into a silent
- * `{ success: true }` so bots can't tell they were caught.
- */
-export class SpamError extends SkipSendError {
-	constructor(message = "Submission flagged as spam") {
-		super(message, "spam")
-		this.name = "SpamError"
-	}
-}
-
-/** Type guard: is a caught value a normalized {@link PostboiError}? */
-export function is_error(error: unknown): error is PostboiError {
-	return error instanceof PostboiError
-}
-
-/** Type guard: is a caught value the spam-check {@link SpamError}? */
-export function is_spam(error: unknown): error is SpamError {
-	return error instanceof SpamError
-}
-
-/**
- * Awaitable lifecycle hooks, run around every send. `before.send` can observe, replace
- * or cancel a message; the rest are best-effort observers (errors they throw are
- * swallowed so logging/telemetry can't break a send).
+ * Awaitable lifecycle hooks, run around every send on every channel. `before.send` can
+ * observe, replace or cancel a message; the rest are best-effort observers (errors they
+ * throw are swallowed so logging/telemetry can't break a send).
+ *
+ * The context is discriminated on `channel`, so **narrow on it before reading
+ * channel-specific fields** — this compiles:
+ *
+ * ```ts
+ * hooks: {
+ * 	before: {
+ * 		send: (ctx) => {
+ * 			if (ctx.channel === "email") console.log(ctx.message.subject)
+ * 			if (ctx.channel === "sms") console.log(ctx.message.to)
+ * 		},
+ * 	},
+ * }
+ * ```
+ *
+ * A `before.send` hook that returns a replacement must return the same channel's shape it
+ * received; returning another channel's is undefined behaviour.
  */
 export type Hooks = {
 	before?: {
 		/**
-		 * Runs after normalization, before the request. Return a modified {@link PreparedMessage}
-		 * to replace it (e.g. redirect recipients in staging), or throw to abort — throw
+		 * Runs after normalization, before the request. Return a modified message to replace
+		 * it (e.g. redirect recipients in staging), or throw to abort — throw
 		 * {@link SkipSendError} for an intentional skip.
 		 */
-		send?: (ctx: {
-			provider: string
-			message: PreparedMessage
-		}) => void | PreparedMessage | Promise<void | PreparedMessage>
+		send?: (
+			ctx: { provider: string } & HookChannelContext
+		) => void | PreparedAny | Promise<void | PreparedAny>
 	}
 	after?: {
 		/** Runs after a successful send. */
-		send?: (ctx: {
-			provider: string
-			message: PreparedMessage
-			response: unknown
-			duration_ms: number
-		}) => void | Promise<void>
+		send?: (
+			ctx: { provider: string; response: unknown; duration_ms: number } & HookChannelContext
+		) => void | Promise<void>
 	}
 	on?: {
 		/** Runs on any send failure — e.g. report to Sentry. */
 		error?: (ctx: {
 			provider: string
-			message?: PreparedMessage
+			channel: Channel
+			/** Absent when the failure happened before the message finished preparing. */
+			message?: PreparedAny
 			error: PostboiError
 			duration_ms: number
 		}) => void | Promise<void>
 		/** Runs before each retry attempt. */
 		retry?: (ctx: {
 			provider: string
+			channel: Channel
 			attempt: number
 			status?: number
 			reason?: unknown
@@ -469,9 +459,14 @@ function missing_config_hint(): string {
 	)
 }
 
-export abstract class ProviderBase<TResponse = unknown> {
+export abstract class EmailProvider<TResponse = unknown> extends Transport<
+	TResponse,
+	PreparedMessage
+> {
 	/** Stable provider identifier used in thrown errors. */
 	protected abstract readonly provider: string
+
+	protected readonly channel: Channel = "email"
 
 	/**
 	 * Whether a sender address must be resolvable client-side. Providers whose API can
@@ -487,38 +482,17 @@ export abstract class ProviderBase<TResponse = unknown> {
 	protected readonly captcha_mode: CaptchaMode = "byo"
 
 	protected defaults: Defaults
-	#timeout: number
-	#retries: number
-	#retry_delay: number
 	#auto_text: boolean
-	#hooks: Hooks
 	#captcha: CaptchaOptions
 
 	constructor(options: CommonProviderOptions = {}) {
+		super(options)
 		// Global config (postboi.config.ts / package.json) sit underneath per-instance
 		// options, so explicit constructor arguments always win.
 		const s = get_config()
 		this.defaults = { ...s.default, ...options.default }
-		this.#timeout = options.timeout ?? s.timeout ?? 30000
-		this.#retries = options.retries ?? s.retries ?? 0
-		this.#retry_delay = options.retry_delay ?? s.retry_delay ?? 500
 		this.#auto_text = options.auto_text ?? s.auto_text ?? true
-		this.#hooks = merge_hooks(s.hooks, options.hooks)
 		this.#captcha = merge_captcha(s.captcha, options.captcha)
-	}
-
-	/** Map a prepared message into the provider's HTTP request. */
-	protected abstract build_request(message: PreparedMessage): RequestSpec | Promise<RequestSpec>
-
-	/** Read the provider's success payload from the response. */
-	protected abstract parse_response(response: Response, data: unknown): TResponse
-
-	/**
-	 * Recognise a provider error in the response body and return normalized fields.
-	 * Return undefined to fall back to HTTP status handling. Override per provider.
-	 */
-	protected parse_error(_response: Response, _data: unknown): ProviderError | undefined {
-		return undefined
 	}
 
 	/**
@@ -550,7 +524,10 @@ export abstract class ProviderBase<TResponse = unknown> {
 		if ("data" in options && options.data && Array.isArray(options.to)) {
 			return this.send_data_batch(options)
 		}
-		return this.with_hooks(options, (message) => this.deliver(message))
+		return this.with_hooks(
+			() => this.prepare_send(options as SendOptions),
+			(message) => this.deliver(message)
+		)
 	}
 
 	/**
@@ -569,171 +546,12 @@ export abstract class ProviderBase<TResponse = unknown> {
 		)
 	}
 
-	/** Build the request, send it, and read/validate the success payload for one message. */
-	protected async deliver(message: PreparedMessage): Promise<TResponse> {
-		const spec = await this.build_request(message)
-		const response = await this.request(spec)
-		const data = await this.read_json(response)
-		const error = this.error_for(response, data, "request")
-		if (error) throw error
-		return this.parse_response(response, data)
-	}
-
-	/**
-	 * Map a response into a {@link PostboiError} if the provider flags it as a failure
-	 * (via `parse_error`) or the HTTP status is not ok. Returns undefined on success.
-	 */
-	protected error_for(response: Response, data: unknown, kind: string): PostboiError | undefined {
-		const error = this.parse_error(response, data)
-		if (error) {
-			return new PostboiError({
-				provider: this.provider,
-				status: response.status,
-				message: error.message,
-				code: error.code,
-				raw: data,
-			})
-		}
-		if (!response.ok) {
-			return new PostboiError({
-				provider: this.provider,
-				status: response.status,
-				message: `${this.provider} ${kind} failed with status ${response.status}`,
-				raw: data,
-			})
-		}
-		return undefined
-	}
-
-	/**
-	 * Run the lifecycle hooks around a single send, delegating the actual delivery to `core`.
-	 * Shared by the real providers and the mock so hooks behave identically everywhere.
-	 */
-	protected async with_hooks(
-		options: SendOptions,
-		core: (message: PreparedMessage) => Promise<TResponse>
-	): Promise<TResponse> {
-		const start = performance.now()
-
-		let message: PreparedMessage
-		try {
-			message = await this.prepare_send(options)
-		} catch (error) {
-			throw await this.#emit_error(error, undefined, start)
-		}
-
-		// before.send may observe, replace the message, or throw to cancel (no on.error).
-		const replaced = await this.before_send(message)
-		if (replaced) message = replaced
-
-		try {
-			const response = await core(message)
-			await this.#observe(() =>
-				this.#hooks.after?.send?.({
-					provider: this.provider,
-					message,
-					response,
-					duration_ms: this.#since(start),
-				})
-			)
-			return response
-		} catch (error) {
-			throw await this.#emit_error(error, message, start)
-		}
-	}
-
-	/** Run the `before.send` hook, returning a replacement message if it provided one. */
-	protected async before_send(message: PreparedMessage): Promise<PreparedMessage | void> {
-		if (this.#hooks.before?.send) {
-			return this.#hooks.before.send({ provider: this.provider, message })
-		}
-	}
-
-	/** Normalize a thrown value, fire the on.error hook (best-effort) and return the error. */
-	async #emit_error(
-		error: unknown,
-		message: PreparedMessage | undefined,
-		start: number
-	): Promise<PostboiError> {
-		const e =
-			error instanceof PostboiError
-				? error
-				: new PostboiError({
-						provider: this.provider,
-						message: error instanceof Error ? error.message : String(error),
-						raw: error,
-					})
-		// Intentional skips (before.send cancellations, spam) are not failures — no on.error.
-		if (e instanceof SkipSendError) return e
-		await this.#observe(() =>
-			this.#hooks.on?.error?.({
-				provider: this.provider,
-				message,
-				error: e,
-				duration_ms: this.#since(start),
-			})
-		)
-		return e
-	}
-
-	/** Run an observability hook, swallowing any error it throws (hooks are best-effort). */
-	async #observe(run: () => unknown): Promise<void> {
-		try {
-			await run()
-		} catch {
-			// observability hooks must never break a send
-		}
-	}
-
-	#since(start: number): number {
-		return Math.round(performance.now() - start)
-	}
-
-	/** Type guard: is this a normalized Postboi error? */
-	is_error(error: unknown): error is PostboiError {
-		return error instanceof PostboiError
-	}
-
-	/** Normalize any thrown value into a {@link PostboiError}. */
-	protected normalize_error(error: unknown): PostboiError {
-		return error instanceof PostboiError
-			? error
-			: new PostboiError({
-					provider: this.provider,
-					message: error instanceof Error ? error.message : String(error),
-					raw: error,
-				})
-	}
-
 	/** Shared bulk-send dispatch used by the array overload of `send`. */
 	protected async send_batch(
 		messages: Array<SendOptions>,
 		batch: { concurrency?: number } = {}
 	): Promise<Array<BatchResult<TResponse>>> {
-		return pooled_map(messages, batch.concurrency ?? 5, async (message, index) => {
-			try {
-				return { ok: true, index, response: await this.send(message) }
-			} catch (error) {
-				return { ok: false, index, error: this.normalize_error(error) }
-			}
-		})
-	}
-
-	/**
-	 * Replace `{key}` placeholders in `text` with the matching variable. Unknown keys
-	 * become empty strings. Only bare `{identifier}` tokens are touched — `{` followed by a
-	 * space (e.g. CSS `{ color: red }`) is left alone.
-	 */
-	protected fill_template(text: string, vars: RecipientVars): string {
-		return text.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? "")
-	}
-
-	/**
-	 * Rewrite every `{key}` placeholder into a provider's native merge syntax (e.g. Mailgun's
-	 * `%recipient.key%`). Used by providers whose batch endpoint does the substitution itself.
-	 */
-	protected translate_placeholders(text: string, to: (key: string) => string): string {
-		return text.replace(/\{(\w+)\}/g, (_, key) => to(key))
+		return this.run_batch(messages, (message) => this.send(message), batch)
 	}
 
 	/**
@@ -837,79 +655,6 @@ export abstract class ProviderBase<TResponse = unknown> {
 		return slots.map((s) => s.result!)
 	}
 
-	/** Perform the HTTP request with a timeout and opt-in retry/backoff. */
-	protected async request(spec: RequestSpec): Promise<Response> {
-		const init: RequestInit = {
-			method: spec.method ?? "POST",
-			headers: spec.headers,
-			body: spec.body,
-		}
-
-		for (let attempt = 0; ; attempt++) {
-			const controller = new AbortController()
-			const timer = setTimeout(() => controller.abort(), this.#timeout)
-			try {
-				const response = await fetch(spec.url, { ...init, signal: controller.signal })
-				if (this.#should_retry(response.status) && attempt < this.#retries) {
-					const delay = this.#backoff(attempt + 1, response)
-					await this.#observe(() =>
-						this.#hooks.on?.retry?.({
-							provider: this.provider,
-							attempt: attempt + 1,
-							status: response.status,
-							delay_ms: delay,
-						})
-					)
-					await this.#sleep(delay)
-					continue
-				}
-				return response
-			} catch (cause) {
-				if (attempt < this.#retries) {
-					const delay = this.#backoff(attempt + 1)
-					await this.#observe(() =>
-						this.#hooks.on?.retry?.({
-							provider: this.provider,
-							attempt: attempt + 1,
-							reason: cause,
-							delay_ms: delay,
-						})
-					)
-					await this.#sleep(delay)
-					continue
-				}
-				const reason = cause instanceof Error ? cause.message : String(cause)
-				throw new PostboiError({
-					provider: this.provider,
-					message: `${this.provider} request failed: ${reason}`,
-					raw: cause,
-				})
-			} finally {
-				clearTimeout(timer)
-			}
-		}
-	}
-
-	#should_retry(status: number): boolean {
-		return status === 429 || status >= 500
-	}
-
-	#backoff(attempt: number, response?: Response): number {
-		const retry_after = response ? Number(response.headers.get("retry-after")) : NaN
-		if (!Number.isNaN(retry_after) && retry_after > 0) return retry_after * 1000
-		return this.#retry_delay * 2 ** (attempt - 1)
-	}
-
-	#sleep(ms: number): Promise<void> {
-		return new Promise((resolve) => setTimeout(resolve, ms))
-	}
-
-	/** Convert a File into a base64 string. */
-	protected async file_to_base64(file: File): Promise<string> {
-		const array_buffer = await file.arrayBuffer()
-		return Buffer.from(array_buffer).toString("base64")
-	}
-
 	/** Convert a File into a provider-agnostic attachment. */
 	protected async parse_attachment(file: File): Promise<MailAttachment> {
 		return {
@@ -980,42 +725,12 @@ export abstract class ProviderBase<TResponse = unknown> {
 		return this.parse_addresses(addresses).map((a) => this.email_name(a))
 	}
 
-	/** Read a Response body as JSON, tolerating empty bodies (e.g. 202 responses). */
-	protected async read_json(response: Response): Promise<unknown> {
-		const text = await response.text()
-		if (!text) return undefined
-		try {
-			return JSON.parse(text)
-		} catch {
-			return text
-		}
-	}
-
 	/** Decode a base64 string if it looks like base64, otherwise return the original. */
 	protected decode_value(str: string): string {
 		const base64_regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 		if (!base64_regex.test(str)) return str
 		const clean = str.replace(/[\r\n]+/g, "")
 		return Buffer.from(clean, "base64").toString("utf8")
-	}
-
-	/**
-	 * Resolve a {@link SendOptions.scheduled_at} input to a `Date`: a `Date` passes through, an
-	 * ISO 8601 string is parsed, and a relative {@link Duration} is added to the current time
-	 * (months/years via calendar arithmetic, the rest as fixed spans).
-	 */
-	protected resolve_scheduled_at(value: Date | string | Duration): Date {
-		if (value instanceof Date) return value
-		if (typeof value === "string") return new Date(value)
-		const date = new Date()
-		if (value.years) date.setFullYear(date.getFullYear() + value.years)
-		if (value.months) date.setMonth(date.getMonth() + value.months)
-		if (value.weeks) date.setDate(date.getDate() + value.weeks * 7)
-		if (value.days) date.setDate(date.getDate() + value.days)
-		if (value.hours) date.setHours(date.getHours() + value.hours)
-		if (value.minutes) date.setMinutes(date.getMinutes() + value.minutes)
-		if (value.seconds) date.setSeconds(date.getSeconds() + value.seconds)
-		return date
 	}
 
 	/**
@@ -1266,3 +981,12 @@ export abstract class ProviderBase<TResponse = unknown> {
 		}
 	}
 }
+
+/**
+ * The email provider base class, under its historical name.
+ *
+ * Kept as an alias so every existing provider — and any third-party subclass — keeps
+ * working unchanged after the {@link Transport} split. New channels extend `Transport`
+ * directly rather than this.
+ */
+export { EmailProvider as ProviderBase }
