@@ -58,6 +58,12 @@ jobs:
   # WET on purpose (each example is copy-paste-complete for its framework), which is
   # only affordable if nothing rots silently — so every example installs and runs its
   # own `ci` script (a typecheck or build, whichever is cheapest and meaningful).
+  #
+  # Against the version each example pins, an example could never use anything the next
+  # release adds: pre-1.0 a caret can't cross a minor, so `^0.35.0` never installs
+  # 0.36.0 and the job went red for a feature that was fine. They install the tarball
+  # from this commit instead. The pins stay real — someone copying an example folder
+  # still gets a working install — they just aren't what CI resolves.
   examples:
     name: Examples
     runs-on: ubuntu-latest
@@ -71,10 +77,43 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Setup env vars for the package build
+        run: |
+          echo "ZEPTO_TOKEN=test-token" > .env
+          echo "EMAIL_FROM_ADDRESS=test@example.com" >> .env
+          echo "EMAIL_TO_ADDRESS=test@example.com" >> .env
+
+      # `npm pack` is the published artifact, not a shortcut to it: it runs `prepack`
+      # (svelte-package, the CLI build, publint) and honours `files` and `exports`
+      # exactly as `npm publish` would. So the thing the old job was really testing — a
+      # path missing from `files`, a broken exports entry, a `.d.ts` that doesn't
+      # resolve in someone else's project — still fails here. A symlink (`bun link`)
+      # would have tested none of that, and would resolve peers from this repo's
+      # node_modules rather than the example's.
+      - name: Pack the package the examples install
+        run: npm pack --pack-destination "$RUNNER_TEMP"
+
+      # Unpacked over the installed copy rather than `bun add`ed. Two examples commit
+      # a bun.lock pinning postboi@^0.35.0, and a second resolution for the same name
+      # under a lockfile is a conflict bun refuses outright (DependencyLoop). Extracting
+      # sidesteps resolution entirely, and is complete rather than a hack because
+      # postboi has no runtime `dependencies` — the directory *is* the install, and the
+      # .bin/postboi symlink the install made still points into it.
       - name: Check every example
         run: |
           set -e
+          tarball="$(ls "$RUNNER_TEMP"/postboi-*.tgz)"
           for dir in examples/*/; do
             echo "── $dir"
-            (cd "$dir" && bun install && bun run ci)
+            (
+              cd "$dir"
+              bun install
+              rm -rf node_modules/postboi
+              mkdir -p node_modules/postboi
+              tar -xzf "$tarball" -C node_modules/postboi --strip-components=1
+              bun run ci
+            )
           done

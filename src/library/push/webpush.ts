@@ -1,5 +1,5 @@
 import { PushProvider, type PreparedPush, type WebPushOptions } from "./provider.js"
-import type { WebPushSubscription } from "./types.js"
+import type { PushPayload, WebPushSubscription } from "./types.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
 import { encrypt_payload, vapid_header, MAX_PAYLOAD_BYTES, to_base64url } from "./crypto.js"
@@ -139,15 +139,17 @@ export default class WebPush extends PushProvider<SendResponse> {
 		return header
 	}
 
-	/** The JSON a service worker receives in its `push` event. */
+	/** The JSON a service worker receives in its `push` event. Typed as {@link PushPayload}
+	 * so it is the same shape `receive()` reads on the other end. */
 	protected payload(message: PreparedPush): string {
-		return JSON.stringify({
+		const payload: PushPayload = {
 			title: message.title,
 			body: message.message,
 			icon: message.icon,
 			url: message.url,
 			data: message.data,
-		})
+		}
+		return JSON.stringify(payload)
 	}
 
 	protected async build_request(message: PreparedPush): Promise<RequestSpec> {

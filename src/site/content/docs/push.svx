@@ -215,11 +215,101 @@ that never runs. `PushSubscribeError` is exported too if you prefer `instanceof`
 
 ## Your service worker
 
-Push notifications are delivered to a service worker, which postboi doesn't provide — it's
-your file, at your scope. The minimum:
+Push notifications are delivered to a service worker, and the handlers inside it are the
+same in every app. `bunx postboi init --push` offers to write them — it finds the worker
+your framework already has, or creates one where that framework expects it:
+
+```
+✓ created public/sw.js (handlers written out — this file is served as-is and can't import)
+
+  On the page:
+    subscription({ register: "/push/subscriptions" })
+```
+
+It never appends to a worker that already handles `push` itself — two handlers means two
+notifications for one send — and it tells you instead.
+
+### The two shapes
+
+Which shape you get depends on whether your worker file is **built** or **served
+verbatim**, and that's a per-framework fact rather than a preference:
+
+| Framework | Worker file | Shape |
+| --- | --- | --- |
+| SvelteKit | `src/service-worker.ts` | Built — imports `postboi/push/sw` |
+| Next.js, Nuxt, Astro, Remix | `public/sw.js` | Served as-is — handlers written out |
+| Vite / webpack worker entry | your entry | Built — imports `postboi/push/sw` |
+
+A built worker is four lines:
+
+```typescript
+// src/service-worker.ts
+import { receive } from "postboi/push/sw"
+
+receive({ register: "/push/subscriptions" })
+```
+
+A served-as-is file can't `import` — an import statement there is a syntax error at worker
+startup, with nothing pointing at the cause — so the CLI writes the same handlers out
+instead, with your VAPID public key baked in. postboi's test suite drives both through one
+fake worker and compares what they do, so the generated copy can't drift from `receive()`.
+
+Either way you get `push` (show the notification), `notificationclick` (open the thing, or
+focus the tab already showing it) and `pushsubscriptionchange` — the one that only exists
+inside a worker, and the one everybody skips. Nothing else: no fetch handler, no caching,
+no claiming clients. A worker that intercepts requests is a different feature, and yours
+may already be one.
+
+**`subscribe()` looks for `/sw.js`.** A worker served anywhere else needs
+`service_worker` passed, which is the most common way a fully wired setup still answers
+`no_service_worker`. The CLI prints the right line for where it put the file.
+
+### Adjusting the notification
+
+`notification` returns the fields to override, merged over the defaults. The two things the
+payload can't carry are an app-name fallback for a send with no title, and
+`tag`/`renotify`/`actions`:
+
+```typescript
+receive({
+	register: "/push/subscriptions",
+	notification: (payload) => ({ title: payload.title ?? "Acme", tag: "orders" }),
+})
+```
+
+In a generated worker the same thing is a literal edit — the file is yours from the moment
+it's written, and the `""` fallback title is commented where it sits.
+
+### Rotations, and why they matter
+
+Subscriptions rotate. Browsers replace them on their own schedule, and when that happens
+the address you stored is dead while the browser holds a replacement nobody has told you
+about. `pushsubscriptionchange` fires **only** inside the worker, which is why a page-side
+helper can't cover it and why this is the piece worth wiring.
+
+Without a handler the gap does close on its own — the next send answers 410, and
+`push.expired()` deletes the row — but only *after* one notification has silently gone
+nowhere. `receive` re-subscribes and POSTs the replacement to `register`, carrying
+`old_endpoint` when the browser says which subscription it replaced:
+
+```json
+{
+	"endpoint": "https://push.example/new",
+	"keys": { "p256dh": "…", "auth": "…" },
+	"old_endpoint": "https://push.example/old"
+}
+```
+
+Delete the row for `old_endpoint`, then store the rest — that's a swap rather than a leak.
+The field is absent on browsers that don't hand the old subscription over, and a register
+endpoint that ignores it still works.
+
+### Writing it yourself
+
+Nothing stops you. The minimum is:
 
 ```javascript
-// static/sw.js
+// public/sw.js
 self.addEventListener("push", (event) => {
 	const { title, body, icon, url } = event.data.json()
 	event.waitUntil(
@@ -235,7 +325,9 @@ self.addEventListener("notificationclick", (event) => {
 
 You **must** show a notification for every push. `userVisibleOnly` is mandatory in Chrome,
 and a browser that sees you receive pushes without showing anything will revoke the
-permission.
+permission. That's also why `receive` shows an empty notification rather than throwing on a
+payload it can't parse — and why the version above, which throws on any payload that isn't
+JSON, is a subscriber you lose eventually.
 
 ## Subscriptions expire — plan for it
 

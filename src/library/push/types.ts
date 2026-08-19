@@ -32,6 +32,29 @@ export interface WebPushSubscription {
  */
 export type PushTarget = WebPushSubscription | string
 
+/**
+ * The JSON a Web Push service worker receives in its `push` event — what
+ * `postboi/webpush` sends, and what `receive()` from `postboi/push/sw` reads.
+ *
+ * One type across the two ends on purpose: the payload is the only contract between the
+ * server and the worker, it travels as opaque encrypted bytes, and a disagreement about a
+ * field name shows up as a notification that never appears rather than as an error.
+ *
+ * FCM, APNs and HMS build their own vendor-shaped payloads and don't use this.
+ */
+export interface PushPayload {
+	/** Notification title. Absent when the send had none. */
+	title?: string
+	/** Notification body — `push({ message })`. */
+	body?: string
+	/** Icon URL. */
+	icon?: string
+	/** URL to open when the notification is clicked. */
+	url?: string
+	/** Whatever `push({ data })` carried. */
+	data?: Record<string, unknown>
+}
+
 /** Default values applied to every push when the option is omitted. */
 export type PushDefaults = {
 	to?: PushTarget

@@ -1,0 +1,76 @@
+name: Release
+
+# Cut a release without a clean local main: Actions → Release → Run workflow →
+# type the bump. Everything after that is the same path a local `npm run release`
+# takes — the script is the single implementation, this just runs it somewhere
+# that always has a clean checkout and can't be mid-rebase.
+#
+# It does NOT publish. It bumps, validates, commits and pushes, then dispatches
+# the Publish workflow, which is still the only thing that talks to npm.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "patch | minor | major | X.Y.Z"
+        required: true
+        default: patch
+        type: string
+
+permissions:
+  contents: write # push the version-bump commit
+  actions: write # dispatch the Publish workflow
+
+jobs:
+  release:
+    name: Bump, validate and hand off to Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      # The script refuses to run anywhere but main, so check it out as a branch
+      # rather than the detached HEAD a dispatch would otherwise give us.
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Setup env vars for type checking
+        run: |
+          echo "ZEPTO_TOKEN=test-token" > .env
+          echo "EMAIL_FROM_ADDRESS=test@example.com" >> .env
+          echo "EMAIL_TO_ADDRESS=test@example.com" >> .env
+
+      - name: Identify as the release bot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # RELEASE_SKIP_TAG: a tag pushed with the automatic token doesn't trigger
+      # any workflow, so the script pushes the bump commit only and the next step
+      # dispatches Publish, which creates the tag itself.
+      - name: Bump, validate, commit and push
+        env:
+          RELEASE_SKIP_TAG: "1"
+        run: bash scripts/release.sh "${{ inputs.version }}"
+
+      - name: Hand off to Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          gh workflow run publish.yml --ref main
+          echo "▶ dispatched Publish for v$version" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Next: snapshot the outgoing docs version — see RELEASING.md part A." >> "$GITHUB_STEP_SUMMARY"

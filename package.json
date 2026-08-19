@@ -192,6 +192,10 @@
 			"types": "./dist/push/client.d.ts",
 			"default": "./dist/push/client.js"
 		},
+		"./push/sw": {
+			"types": "./dist/push/sw.d.ts",
+			"default": "./dist/push/sw.js"
+		},
 		"./whatsapp-twilio": {
 			"types": "./dist/whatsapp/twilio.d.ts",
 			"default": "./dist/whatsapp/twilio.js"

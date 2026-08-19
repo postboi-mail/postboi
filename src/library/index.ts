@@ -41,6 +41,7 @@ export type {
 export type {
 	PushDefaults,
 	PushOptions,
+	PushPayload,
 	PushProviderOptions,
 	PushTarget,
 	PreparedPush,

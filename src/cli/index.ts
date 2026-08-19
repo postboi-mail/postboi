@@ -1,7 +1,14 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } from "node:fs"
+import {
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+	existsSync,
+	appendFileSync,
+	mkdirSync,
+} from "node:fs"
 import { spawnSync } from "node:child_process"
-import { join, delimiter } from "node:path"
+import { join, delimiter, dirname } from "node:path"
 import { argv, cwd, exit, platform, env } from "node:process"
 import {
 	PROVIDERS,
@@ -47,6 +54,13 @@ import {
 	install_command,
 	is_bundled_framework,
 } from "./project.js"
+import {
+	find_worker,
+	suggest_worker,
+	wire_worker,
+	page_snippet,
+	type WorkerTarget,
+} from "./service_worker.js"
 import {
 	create_prompts,
 	PromptCancelledError,
@@ -1399,6 +1413,77 @@ const CHANNEL_INIT = {
  * to any shared step (team prefill, browser connect, host push, credential sync) reaches
  * every channel. What differs per channel lives in its {@link InitSpec} entry.
  */
+/**
+ * Offer to wire up the service worker — the half of Web Push that can't live on the page.
+ *
+ * `pushsubscriptionchange` fires nowhere but inside a worker, so a project without one
+ * misses a notification every time a browser rotates a subscription. The file is found
+ * where the framework keeps it, or created where the framework expects it, and the
+ * handlers go in the shape that file can actually run: an import where a bundler builds
+ * it, written out where it's served verbatim.
+ */
+async function offer_service_worker(
+	prompts: Prompts,
+	files: Array<string>,
+	key: string | undefined
+): Promise<void> {
+	let pkg: PackageJson | undefined
+	try {
+		pkg = JSON.parse(readFileSync("package.json", "utf8")) as PackageJson
+	} catch {
+		// No package.json, or an unreadable one — the suggestion falls back to the shape
+		// that runs anywhere, which is the right answer when we know nothing.
+	}
+
+	const found = find_worker(existsSync)
+	const target: WorkerTarget = found ?? suggest_worker(files, pkg, existsSync)
+
+	console.log(
+		`\n${dim("Subscriptions expire and browsers rotate them. Only a service worker hears about it.")}`
+	)
+	const question = found
+		? `${bold("Wire push into")} ${cyan(found.path)}?`
+		: `${bold("Create")} ${cyan(target.path)} ${bold("to receive notifications?")}`
+	if (!(await prompts.confirm(question))) {
+		console.log(dim("  skipped — `receive()` from postboi/push/sw does it in one line."))
+		return
+	}
+
+	const register = await prompts.ask("  Endpoint a subscription is filed at", {
+		default: "/push/subscriptions",
+	})
+
+	const result = wire_worker(target, found ? readFileSync(found.path, "utf8") : undefined, {
+		register,
+		key,
+	})
+
+	if (result === "present") {
+		console.log(`${green("✓")} ${bold(target.path)} already routes push through postboi`)
+	} else if (result === "conflict") {
+		// Appending would leave two `push` handlers, and every send would show twice.
+		console.log(
+			`${yellow("!")} ${bold(target.path)} already handles \`push\` itself — two handlers would show two notifications for one send.`
+		)
+		console.log(dim("  Merge it by hand, or delete yours and run this again."))
+		return
+	} else {
+		mkdirSync(dirname(target.path), { recursive: true })
+		writeFileSync(target.path, result.source)
+		const how =
+			target.kind === "bundled"
+				? dim(" (imports postboi/push/sw — your bundler builds it)")
+				: dim(" (handlers written out — this file is served as-is and can't import)")
+		console.log(`${green("✓")} ${result.action} ${bold(target.path)}${how}`)
+	}
+
+	// The worker is only half of it: the page still has to subscribe, and `subscribe()`
+	// looks for /sw.js unless told otherwise — the most common way a fully wired setup
+	// still fails with `no_service_worker`.
+	console.log(dim("\n  On the page:"))
+	console.log(`    ${cyan(page_snippet(target, register))}`)
+}
+
 async function channel_init(
 	prompts: Prompts,
 	files: Array<string>,
@@ -1492,6 +1577,12 @@ async function channel_init(
 			console.log(`${green("✓")} VAPID public key baked — subscribe() needs no key`)
 			ensure_prepare()
 		}
+	}
+
+	// Web Push only: FCM, APNs and HMS deliver to a native app, which has no service worker
+	// and none of this to wire.
+	if (channel === "push" && provider.key === "webpush") {
+		await offer_service_worker(prompts, files, values.VAPID_PUBLIC_KEY)
 	}
 
 	console.log(`\n${green(bold("Done!"))}\n`)

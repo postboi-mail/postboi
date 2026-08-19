@@ -89,7 +89,7 @@ function permission(): NotificationPermission | "unsupported" {
  */
 async function current(): Promise<PushSubscriptionJSON | null> {
 	const subscription = await existing()
-	return subscription ? to_json(subscription) : null
+	return subscription ? subscription_json(subscription) : null
 }
 
 /** This browser's live subscription object, if it has one — the lookup `current()
@@ -119,7 +119,14 @@ function same_key(existing: ArrayBuffer | null, key: string): boolean {
 	return a.length === b.length && a.every((byte, i) => byte === b[i])
 }
 
-function to_json(subscription: PushSubscription): PushSubscriptionJSON {
+/**
+ * A live `PushSubscription` as the JSON you store — the shape `subscribe()` hands back.
+ *
+ * Exported so the service-worker helper re-files a rotated subscription in exactly the
+ * shape the page filed the first one, rather than a second reading of `toJSON()` that
+ * agrees until one of them is edited.
+ */
+export function subscription_json(subscription: PushSubscription): PushSubscriptionJSON {
 	const json = subscription.toJSON() as {
 		endpoint?: string
 		expirationTime?: number | null
@@ -217,7 +224,7 @@ async function subscribe_now(options: SubscribeOptions = {}): Promise<PushSubscr
 	const existing = await registration.pushManager.getSubscription()
 	if (existing) {
 		if (same_key(existing.options?.applicationServerKey ?? null, key)) {
-			return to_json(existing)
+			return subscription_json(existing)
 		}
 		await existing.unsubscribe()
 	}
@@ -229,7 +236,7 @@ async function subscribe_now(options: SubscribeOptions = {}): Promise<PushSubscr
 			userVisibleOnly: true,
 			applicationServerKey: vapid_key_to_bytes(key) as BufferSource,
 		})
-		return to_json(subscription)
+		return subscription_json(subscription)
 	} catch (cause) {
 		throw new PushSubscribeError(
 			"failed",
@@ -247,7 +254,7 @@ export const subscribe = Object.assign(subscribe_now, { supported, permission, c
 export async function unsubscribe(): Promise<PushSubscriptionJSON | null> {
 	const subscription = await existing()
 	if (!subscription) return null
-	const json = to_json(subscription)
+	const json = subscription_json(subscription)
 	await subscription.unsubscribe()
 	return json
 }

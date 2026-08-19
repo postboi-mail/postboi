@@ -33,12 +33,24 @@ npm run lint    # oxfmt + eslint — the tag push's CI gates on this too
 npm test
 npm run build   # prepack runs publint on the packed output
 
-# --- commit + tag ------------------------------------------------------------
+# --- commit ------------------------------------------------------------------
 git add package.json
 git commit -m "$VERSION"
-git tag -a "$TAG" -m "$VERSION"
 
-# --- push — the tag triggers the Publish workflow ------------------------------
+# --- push — the tag is what triggers the Publish workflow ----------------------
+#
+# Unless we're already inside Actions. GitHub deliberately doesn't run workflows
+# for refs pushed with the automatic token, so a tag pushed from a workflow would
+# land and nothing would publish. The Release workflow sets this and dispatches
+# Publish itself, which derives the tag from package.json and creates it — the
+# same path RELEASING.md documents for sandboxes that can't push tags.
+if [ "${RELEASE_SKIP_TAG:-0}" = "1" ]; then
+	git push origin main
+	echo "✓ pushed $VERSION — the Release workflow will dispatch Publish to tag and publish it"
+	exit 0
+fi
+
+git tag -a "$TAG" -m "$VERSION"
 git push origin main
 git push origin "$TAG"
 

@@ -85,18 +85,25 @@ currently-published version as an archived snapshot **before** you edit docs for
 
 ### B. Release the library
 
-From the repo root, on a clean `main`:
+Either from GitHub, which needs nothing local:
+
+> **Actions → [Release](https://github.com/postboi-mail/postboi/actions/workflows/release.yml)
+> → Run workflow →** type `X.Y.Z` (or `patch` / `minor` / `major`).
+
+or from a clean `main` locally:
 
 ```sh
 npm run release -- X.Y.Z      # or: patch | minor | major
 ```
 
-The script ([`scripts/release.sh`](scripts/release.sh)) does, failing fast if
-anything is off:
+Both run the same script ([`scripts/release.sh`](scripts/release.sh)) — the
+workflow just runs it somewhere that always has a clean checkout — and both fail
+fast if anything is off:
 
 1. Checks you're on `main` and the tree is clean.
 2. Bumps `package.json` to `X.Y.Z`.
-3. Runs `npm test` and `npm run build` (build runs `publint` on the package).
+3. Runs `npm run lint`, `npm test` and `npm run build` (build runs `publint` on
+   the package).
 4. Commits `X.Y.Z`, tags `vX.Y.Z`.
 5. Pushes `main` and the tag.
 
@@ -106,27 +113,43 @@ build, checks the tag matches `package.json`, publishes to npm via trusted
 publishing (OIDC, with provenance), and creates the GitHub release with
 generated notes.
 
-If tags can't be pushed from where you're releasing (e.g. a remote sandbox
-whose git proxy only allows branch pushes), push `main` with the version-bump
-commit and trigger the Publish workflow manually on `main` instead
-(`workflow_dispatch`) — it derives the tag from `package.json` and creates
-both the tag and the release itself.
+**Neither path publishes.** Publish is the only thing that talks to npm, and it
+still runs the whole suite before it does — so a release you started by mistake
+is stopped by a red test, not by you noticing.
+
+> The workflow skips step 4's tag and dispatches Publish directly instead
+> (`RELEASE_SKIP_TAG=1`). GitHub deliberately doesn't run workflows for refs
+> pushed with the automatic token, so a tag pushed from inside Actions would land
+> and nothing would publish. Publish's `workflow_dispatch` path derives the tag
+> from `package.json` and creates it — the same route to use by hand from a
+> sandbox whose git proxy only allows branch pushes.
 
 ### C. Point the examples at it
 
-Each `examples/*/package.json` pins `"postboi": "^X.Y.Z"`, and pre-1.0 a caret
-doesn't cross the minor — `^0.30.0` can never install `0.31.0`. So until they're
-bumped the examples keep building against the previous release, and the CI
-**Examples** job on `main` goes red the moment one of them uses something the
-release added.
+Each `examples/*/package.json` pins `"postboi": "^X.Y.Z"`. CI doesn't resolve
+those pins — the **Examples** job packs the tarball from the commit under test
+and installs that — so this bump no longer unblocks anything. It exists because
+the pin is what someone copying an example folder actually installs, and a stale
+one hands them a release that predates the code beside it.
 
 ```sh
-sed -i '' 's/"postboi": "\^0\.30\.0"/"postboi": "^0.31.0"/' examples/*/package.json
-(cd examples && for dir in */; do (cd "$dir" && bun install && bun run ci); done)
+sed -i '' 's/"postboi": "\^0\.35\.0"/"postboi": "^0.36.0"/' examples/*/package.json
 ```
 
-That loop is exactly what the CI job runs, so a green one here is a green one
-there.
+To reproduce the CI job locally, pack and install the same way it does — a plain
+`bun install` in an example resolves the pin instead, which is the previous
+release:
+
+```sh
+npm pack --pack-destination /tmp
+for dir in examples/*/; do
+  (cd "$dir" && bun install && bun add /tmp/postboi-X.Y.Z.tgz && bun run ci)
+done
+```
+
+This is also the step that lets an example use something the release added
+_before_ it's published: examples on a feature branch can import new APIs and go
+green, because the tarball CI builds is that branch's.
 
 ### D. Verify
 
