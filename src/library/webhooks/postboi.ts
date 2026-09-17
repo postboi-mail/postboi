@@ -29,7 +29,7 @@ interface PostboiPayload {
 		timestamp?: string
 		/** A form submission's form and fields, on every event about that send. */
 		form?: { id?: string; name?: string }
-		fields?: Array<[string, string]>
+		fields?: Array<unknown>
 	}
 }
 
@@ -78,6 +78,14 @@ function bounce(data: NonNullable<PostboiPayload["data"]>): BounceDetail | undef
 	}
 }
 
+/** Keep only the well-formed `[name, value]` pairs — the shape a handler destructures. */
+function field_pairs(fields: Array<unknown>): Array<[string, string]> {
+	return fields.filter(
+		(pair): pair is [string, string] =>
+			Array.isArray(pair) && typeof pair[0] === "string" && typeof pair[1] === "string"
+	)
+}
+
 const adapter: WebhookAdapter = {
 	provider: "postboi",
 
@@ -110,7 +118,7 @@ const adapter: WebhookAdapter = {
 					data.form && typeof data.form.id === "string" && typeof data.form.name === "string"
 						? { id: data.form.id, name: data.form.name }
 						: undefined,
-				fields: Array.isArray(data.fields) ? data.fields : undefined,
+				fields: Array.isArray(data.fields) ? field_pairs(data.fields) : undefined,
 				url: data.url,
 				bounce: type === "bounced" ? bounce(data) : undefined,
 				body:

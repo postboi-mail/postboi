@@ -98,8 +98,9 @@ function register_block(
 		blocks.push(variables_member(variables))
 	}
 	// Forms differ from addresses in that an empty list is an answer: an account with no
-	// forms gets no `form` member, so a stale name is an error. Only a run that couldn't
-	// ask (undefined) keeps the last generated names.
+	// forms gets no `form` member, and `form` widens back to any string so the first send
+	// can create one. Only a run that couldn't ask (undefined) keeps the last generated
+	// names, so a blip doesn't loosen a type that was narrow yesterday.
 	const form = forms ? form_members(forms) : keep_forms
 	if (form.length > 0) blocks.push(member("form", form))
 	if (blocks.length === 0) return ""
@@ -282,9 +283,20 @@ export function write_runtime(
 	return RUNTIME_TARGET
 }
 
-/** Read the provider out of a `postboi.config.*` source (`provider: "resend"`). */
+/**
+ * Read the provider out of a `postboi.config.*` source (`provider: "resend"`) — the config
+ * object's own key, not a channel's. `sms: { provider: "twilio" }` says what SMS goes
+ * through and nothing about mail, and a config that leaves the top-level one out (the
+ * usual Postboi setup) must not be read as sending through Twilio. So a match only counts
+ * one brace deep, inside the `config({ … })` call and no deeper.
+ */
 export function config_provider(source: string): string | undefined {
-	return /^\s*provider\s*:\s*["']([a-z0-9_-]+)["']/m.exec(source)?.[1]
+	for (const match of source.matchAll(/^\s*provider\s*:\s*["']([a-z0-9_-]+)["']/gm)) {
+		const before = source.slice(0, match.index)
+		const depth = (before.match(/\{/g)?.length ?? 0) - (before.match(/\}/g)?.length ?? 0)
+		if (depth <= 1) return match[1]
+	}
+	return undefined
 }
 
 /** Read the publishable key out of a `postboi.config.*` source (`captcha: { key }`). */

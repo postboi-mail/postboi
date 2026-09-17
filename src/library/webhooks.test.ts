@@ -274,6 +274,9 @@ describe("receive — postboi", () => {
 						["name", "Ada"],
 						["interest", "web"],
 						["interest", "print"],
+						// a malformed entry is dropped rather than handed over as a pair
+						"stray",
+						["half"],
 					],
 				},
 			}),

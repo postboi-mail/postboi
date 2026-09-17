@@ -875,10 +875,12 @@ async function sync(): Promise<void> {
 	const config_file = CONFIG_FILES.find((f) => existsSync(f))
 	const config_source = config_file ? readFileSync(config_file, "utf8") : undefined
 	const config_key = config_source ? config_captcha_key(config_source) : undefined
-	// The provider the project sends through, for the generated `provider` marker: the
-	// config's word when it has one; otherwise a token that reaches an account means
-	// Postboi, and nothing at all means keep whatever the last run wrote.
-	const config_provider_name = config_source ? config_provider(config_source) : undefined
+	// The provider the project sends through, for the generated `provider` marker, resolved
+	// the way `mail()` resolves it: `POSTBOI_PROVIDER` wins, then the config's word. With
+	// neither, a token that reaches an account means Postboi, and nothing at all means keep
+	// whatever the last run wrote.
+	const provider_name =
+		read_env("POSTBOI_PROVIDER") ?? (config_source ? config_provider(config_source) : undefined)
 	// Templates come from Meta or Twilio, not from Postboi, so this runs with or without a
 	// token — and starting it first lets it overlap whatever account requests follow.
 	const templates_promise = fetch_whatsapp_templates()
@@ -904,7 +906,7 @@ async function sync(): Promise<void> {
 	if (!token) {
 		await bake(config_key, config_file ?? "config")
 		const { names, variables } = await templates_promise
-		if (write_types(undefined, [], names, variables, undefined, config_provider_name))
+		if (write_types(undefined, [], names, variables, undefined, provider_name))
 			report_templates(names)
 		console.log(dim("postboi sync: no POSTBOI_TOKEN — skipping the generated from types."))
 		return
@@ -919,7 +921,7 @@ async function sync(): Promise<void> {
 	if (!account) {
 		await bake(config_key, config_file ?? "config")
 		const { names, variables } = await templates_promise
-		if (write_types(undefined, [], names, variables, undefined, config_provider_name))
+		if (write_types(undefined, [], names, variables, undefined, provider_name))
 			report_templates(names)
 		console.log(
 			yellow("postboi sync: could not fetch domains from the Postboi provider — skipped.")
@@ -977,19 +979,21 @@ async function sync(): Promise<void> {
 
 	const { names, variables } = await templates_promise
 	const forms = await forms_promise
+	const send_address = account.send_address ?? read_env("POSTBOI_FROM")
 	const file = write_types(
-		account.send_address ?? read_env("POSTBOI_FROM"),
+		send_address,
 		account.domains,
 		names,
 		variables,
 		forms,
-		config_provider_name ?? "postboi"
+		provider_name ?? "postboi"
 	)
-	if (!file) {
-		console.log(dim("postboi sync: no sending addresses on this account yet."))
-		return
-	}
+	if (!file) return
 	console.log(`${green("✓")} wrote ${bold(file)}`)
+	// The provider marker alone is worth writing, so the file exists either way — say when
+	// there was nothing to narrow `from` to, rather than let "wrote" imply there was.
+	if (!send_address && account.domains.length === 0)
+		console.log(dim("postboi sync: no sending addresses on this account yet."))
 	report_templates(names)
 	if (forms && forms.length > 0) {
 		const listed = forms.map((f) => f.name)

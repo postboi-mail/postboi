@@ -862,7 +862,7 @@ describe("cloud domains & generated from types", () => {
 		expect(source).toContain('| "form_2"')
 		// forms alone are enough to generate — a bring-your-own-provider project can still name them
 		expect(render_types(undefined, [], [], {}, [], forms)!).toContain('| "Contact"')
-		// an account with no forms gets no member, so a stale name is a type error
+		// an account with no forms gets no member — `form` widens back to any string
 		expect(render_types("joe@send.postboi.email", domains, [], {}, [], [])!).not.toContain("form:")
 		expect(render_types(undefined, [], [], {}, [], [])).toBeNull()
 	})
@@ -949,9 +949,16 @@ describe("cloud domains & generated from types", () => {
 	it("config_provider reads the committed provider, and nothing else that says provider", () => {
 		expect(config_provider('export default config({\n\tprovider: "resend",\n})')).toBe("resend")
 		expect(config_provider("\tprovider: 'postboi',")).toBe("postboi")
-		// the sms block's own provider is nested and indented the same — first match wins,
-		// which is the top-level one because it comes first in every config init writes
-		expect(config_provider("sms: {\n\t\tprovider: 'twilio',\n\t},")).toBe("twilio")
+		// a channel block's own provider is one brace deeper and says nothing about mail —
+		// a config that leaves the top-level one out is still a Postboi project
+		expect(
+			config_provider("export default config({\n\tsms: {\n\t\tprovider: 'twilio',\n\t},\n})")
+		).toBeUndefined()
+		expect(
+			config_provider(
+				"export default config({\n\tsms: {\n\t\tprovider: 'twilio',\n\t},\n\tprovider: 'resend',\n})"
+			)
+		).toBe("resend")
 		expect(config_provider("default: { to: 'a@b.c' },")).toBeUndefined()
 	})
 

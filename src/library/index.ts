@@ -1048,8 +1048,8 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 
 		if (grouped.size > 0) {
 			const rows: Array<string> = []
-			for (const [fieldset, fields] of grouped) {
-				if (fields.size > 0) {
+			for (const [fieldset, entries] of grouped) {
+				if (entries.size > 0) {
 					if (fieldset !== "general") {
 						// Labels derive from submitted field names, so they need escaping too —
 						// and formatters are documented as label→label string transforms, not
@@ -1059,7 +1059,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 							`<tr><td colspan="2" style="padding: 15px 0 10px 0; font-weight: bold; font-size: 16px; border-bottom: 1px solid #ccc;">${header_label}</td></tr>`
 						)
 					}
-					const field_rows = Array.from(fields.entries()).map(([field, value]) => {
+					const field_rows = Array.from(entries.entries()).map(([field, value]) => {
 						const label = escape_html(format_name(field))
 						const display = Array.isArray(value)
 							? `<ul style="margin: 0; padding-left: 20px;">${value.map((v) => `<li>${escape_lines(v)}</li>`).join("")}</ul>`
