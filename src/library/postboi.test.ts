@@ -555,6 +555,45 @@ describe("the Postboi provider — account API", () => {
 		expect(sent_json()).toEqual({ name: "Fresh", confirmation: true })
 	})
 
+	it("lists forms, and manages scheduled exports", async () => {
+		fetch.mockResolvedValue(respond({ json: { forms: [{ id: "form_1", name: "Contact" }] } }))
+		expect(await provider().forms.all()).toEqual([{ id: "form_1", name: "Contact" }])
+		expect(sent_url()).toBe("https://postboi.app/v1/forms")
+		expect(sent_init().method).toBe("GET")
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1" } }))
+		await provider().exports.create({
+			name: "Weekly",
+			recipients: "Ops <ops@acme.com>",
+			filter: { form: "Contact", status: "delivered" },
+			schedule: "weekly",
+		})
+		expect(sent_url()).toBe("https://postboi.app/v1/exports")
+		expect(sent_json()).toEqual({
+			name: "Weekly",
+			recipients: [{ email: "ops@acme.com", name: "Ops" }],
+			filter: { form: "Contact", status: "delivered" },
+			schedule: "weekly",
+		})
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1", paused: true } }))
+		await provider().exports.update("sxp_1", { paused: true, from: null })
+		expect(sent_init().method).toBe("PATCH")
+		expect(sent_json()).toEqual({ paused: true, from: null })
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1", queued: true } }))
+		expect(await provider().exports.run("sxp_1")).toEqual({ id: "sxp_1", queued: true })
+		expect(sent_url()).toBe("https://postboi.app/v1/exports/sxp_1/run")
+
+		fetch.mockResolvedValue(respond({ json: { exports: [{ id: "sxp_1" }] } }))
+		expect(await provider().exports.all()).toEqual([{ id: "sxp_1" }])
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1", deleted: true } }))
+		await provider().exports.delete("sxp_1")
+		expect(sent_init().method).toBe("DELETE")
+		expect(sent_url()).toBe("https://postboi.app/v1/exports/sxp_1")
+	})
+
 	it("manages notifications: create with shorthand schedule, list, update, delete", async () => {
 		fetch.mockResolvedValue(
 			respond({ json: { id: "ntf_1", schedule: { frequency: "subscribe" } } })

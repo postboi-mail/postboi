@@ -8,6 +8,7 @@ import type {
 	Duration,
 	Email,
 	FromAddress,
+	FormName,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 import { read_env, env_defaults } from "./env.js"
@@ -95,6 +96,101 @@ export interface MessageDetails {
 	scheduled_at?: string
 	opened_at?: string
 	open_count: number
+	/** The form this submission was filed under, when it was one. */
+	form?: { id: string; name: string }
+	/** A submission's fields as `[name, value]` pairs, in submission order. */
+	fields?: Array<[string, string]>
+	created_at: string
+	updated_at: string
+}
+
+/** A form on the account, as `forms.all()` lists them — what `form:` is typed to. */
+export interface FormSummary {
+	id: string
+	name: string
+	/** Named from your code, or a hosted endpoint any page can post to. */
+	kind: "library" | "hosted"
+	paused: boolean
+	created_at: string
+}
+
+/** Which sends a scheduled export covers — the Sent log's own filters. Days are UTC days. */
+export interface ExportFilter {
+	/** One form's submissions, by name or id — typed the way `form:` is. */
+	form?: FormName
+	subject?: string
+	/** Match the whole subject rather than a fragment. */
+	subject_exact?: boolean
+	from?: string
+	to?: string
+	status?: string | Array<string>
+	opens?: "opened" | "unopened" | "untracked"
+	since?: string
+	until?: string
+}
+
+/** When an export runs: a bare frequency is shorthand (`"weekly"` means Mondays at 09:00 UTC). */
+export type ExportScheduleInput =
+	| "daily"
+	| "weekly"
+	| "monthly"
+	| {
+			frequency: "daily" | "weekly" | "monthly"
+			/** Weekly: JS weekday numbers (0 = Sunday). */
+			days?: Array<number>
+			/** Monthly: 1-31, clamped to shorter months. */
+			month_day?: number
+			/** "HH:MM", 24h. */
+			send_time?: string
+			/** IANA zone name, e.g. "Europe/London". */
+			timezone?: string
+	  }
+
+/** What `exports.create` accepts. */
+export interface ScheduledExportOptions {
+	name: string
+	/** Who gets the file — the same shapes as `to`. */
+	recipients: Email | Array<Email>
+	/** Sender — your send address or one at a verified domain. Omit for the account default. */
+	from?: FromAddress
+	filter?: ExportFilter
+	/** `"csv"` by default. */
+	format?: "csv" | "xlsx"
+	/** Export column keys; the usual set when omitted. */
+	columns?: Array<string>
+	/** One column per form field after the chosen columns. On by default. */
+	fields?: boolean
+	/**
+	 * Which rows each run covers: new since the last run (the default), the previous
+	 * whole day, week or month in the schedule's zone, or everything the filter matches.
+	 */
+	window?: "since_last_run" | "previous_period" | "all_matching"
+	schedule: ExportScheduleInput
+}
+
+/** A scheduled export as the API returns it. */
+export interface ScheduledExportDetails {
+	id: string
+	name: string
+	recipients: Array<{ email: string; name?: string }>
+	from: string | null
+	filter: Omit<ExportFilter, "form" | "status"> & { form?: string; status?: Array<string> }
+	format: "csv" | "xlsx"
+	columns: Array<string>
+	fields: boolean
+	window: "since_last_run" | "previous_period" | "all_matching"
+	schedule: {
+		frequency: "daily" | "weekly" | "monthly"
+		days: Array<number>
+		month_day: number
+		send_time: string
+		timezone: string
+	}
+	paused: boolean
+	last_run_at: string | null
+	/** Null while paused. */
+	next_run_at: string | null
+	last_error: string | null
 	created_at: string
 	updated_at: string
 }
@@ -735,6 +831,86 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	 * number is suppressed per channel: `{ phone }` means SMS, `{ phone, channel:
 	 * "whatsapp" }` the other.
 	 */
+	/** The account's forms — what submissions are filed under, and what `form:` is typed to. */
+	readonly forms = {
+		/** Every form on the account, by id and current name. */
+		all: async (): Promise<Array<FormSummary>> => {
+			const data = await this.#api<{ forms: Array<FormSummary> }>("/forms", { method: "GET" })
+			return data.forms
+		},
+	}
+
+	/**
+	 * Scheduled exports: a filter of the Sent log — a form's submissions, say — emailed
+	 * as a CSV or spreadsheet every day, week or month. Each run's file lands in the log
+	 * too, on the message that carried it.
+	 *
+	 * @example
+	 * ```ts
+	 * await mail.exports.create({
+	 * 	name: "Home ownership queries, weekly",
+	 * 	recipients: "Ops <ops@acme.example>",
+	 * 	filter: { form: "Home Ownership Query" },
+	 * 	schedule: { frequency: "weekly", days: [1], send_time: "09:00", timezone: "Europe/London" },
+	 * })
+	 * ```
+	 */
+	readonly exports = {
+		/** Every scheduled export on the account. */
+		all: async (): Promise<Array<ScheduledExportDetails>> => {
+			const data = await this.#api<{ exports: Array<ScheduledExportDetails> }>("/exports", {
+				method: "GET",
+			})
+			return data.exports
+		},
+
+		/** One scheduled export. */
+		get: (id: string): Promise<ScheduledExportDetails> =>
+			this.#api(`/exports/${encodeURIComponent(id)}`, { method: "GET" }),
+
+		/** Create a scheduled export. */
+		create: (options: ScheduledExportOptions): Promise<ScheduledExportDetails> =>
+			this.#api("/exports", {
+				body: {
+					...options,
+					recipients: this.email_name_list(options.recipients),
+					from:
+						options.from !== undefined
+							? this.email_name(this.parse_email_address(options.from))
+							: undefined,
+				},
+			}),
+
+		/**
+		 * Update a scheduled export — absent fields keep their stored values. `paused`
+		 * pauses or resumes it; `from: null` reverts to the account's send address.
+		 */
+		update: (
+			id: string,
+			options: Partial<ScheduledExportOptions> & { from?: FromAddress | null; paused?: boolean }
+		): Promise<ScheduledExportDetails> =>
+			this.#api(`/exports/${encodeURIComponent(id)}`, {
+				method: "PATCH",
+				body: {
+					...options,
+					recipients:
+						options.recipients !== undefined ? this.email_name_list(options.recipients) : undefined,
+					from:
+						options.from !== undefined && options.from !== null
+							? this.email_name(this.parse_email_address(options.from))
+							: options.from,
+				},
+			}),
+
+		/** Run a scheduled export now — the file goes within a minute; the schedule carries on. */
+		run: (id: string): Promise<{ id: string; queued: boolean }> =>
+			this.#api(`/exports/${encodeURIComponent(id)}/run`, { method: "POST" }),
+
+		/** Delete a scheduled export. */
+		delete: (id: string): Promise<{ id: string; deleted: boolean }> =>
+			this.#api(`/exports/${encodeURIComponent(id)}`, { method: "DELETE" }),
+	}
+
 	readonly suppressions = {
 		/** Every suppressed address on the account, optionally on one channel. */
 		all: async (options: { channel?: SuppressionChannel } = {}): Promise<Array<Suppression>> => {

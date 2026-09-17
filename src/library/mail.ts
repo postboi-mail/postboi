@@ -318,6 +318,8 @@ type PostboiNamespace =
 	| "contacts"
 	| "notifications"
 	| "suppressions"
+	| "forms"
+	| "exports"
 
 /**
  * A zero-config mirror of a Postboi namespace: every method call resolves the provider
@@ -360,4 +362,6 @@ export const mail: typeof send_mail & Pick<Postboi, PostboiNamespace> = Object.a
 	contacts: lazy_namespace("contacts"),
 	notifications: lazy_namespace("notifications"),
 	suppressions: lazy_namespace("suppressions"),
+	forms: lazy_namespace("forms"),
+	exports: lazy_namespace("exports"),
 })

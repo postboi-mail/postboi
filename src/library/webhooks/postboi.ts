@@ -27,6 +27,9 @@ interface PostboiPayload {
 		url?: string
 		tags?: Array<string>
 		timestamp?: string
+		/** A form submission's form and fields, on every event about that send. */
+		form?: { id?: string; name?: string }
+		fields?: Array<[string, string]>
 	}
 }
 
@@ -103,6 +106,11 @@ const adapter: WebhookAdapter = {
 				timestamp: to_date(data.timestamp ?? payload.created_at),
 				subject: data.subject,
 				tags: data.tags,
+				form:
+					data.form && typeof data.form.id === "string" && typeof data.form.name === "string"
+						? { id: data.form.id, name: data.form.name }
+						: undefined,
+				fields: Array.isArray(data.fields) ? data.fields : undefined,
 				url: data.url,
 				bounce: type === "bounced" ? bounce(data) : undefined,
 				body:
