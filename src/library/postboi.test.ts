@@ -180,6 +180,45 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.form).toBe(true)
 	})
 
+	it("sends the submission's fields as data beside the rendered table", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("_subject", "Quote")
+		form.append("_honey", "")
+		form.append("name", "Ada")
+		form.append("interest", "web")
+		form.append("interest", "print")
+		await new Postboi().send({ to: "to@test.com", body: form })
+
+		const body = sent_json()
+		expect(body.subject).toBe("Quote")
+		expect(body.html).toContain("Ada")
+		// the table's source, in order — specials and the honeypot never appear in it
+		expect(body.fields).toEqual([
+			["name", "Ada"],
+			["interest", "web"],
+			["interest", "print"],
+		])
+	})
+
+	it("names the form on the wire, on FormData and string bodies alike", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("name", "Ada")
+		await new Postboi().send({ to: "to@test.com", body: form, form: "Home Ownership Query" })
+		expect(sent_json().form).toBe("Home Ownership Query")
+
+		// a hand-rolled body can still be filed under a form — and is a form send for captcha
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", form: "form_abc123" })
+		const body = sent_json()
+		expect(body.form).toBe("form_abc123")
+		expect(body.fields).toBeUndefined()
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
@@ -188,6 +227,7 @@ describe("the Postboi provider (zero-config)", () => {
 		const body = sent_json()
 		expect(body.form).toBeUndefined()
 		expect(body.captcha_token).toBeUndefined()
+		expect(body.fields).toBeUndefined()
 	})
 
 	it("forwards idempotency_key as the Idempotency-Key header", async () => {

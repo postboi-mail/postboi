@@ -291,6 +291,38 @@ export interface PostboiDomain {
 	status: string
 }
 
+/** A form on the account, as `GET /v1/forms` lists it — what `form:` narrows to. */
+export interface PostboiForm {
+	id: string
+	name: string
+}
+
+/**
+ * Best-effort fetch of the account's forms, for the generated `form` types. Undefined when
+ * the endpoint is unreachable or unrecognised (an older API), which the caller treats as
+ * "no opinion" — the previously generated names are kept — rather than as an account
+ * with no forms, which is an empty array.
+ */
+export async function fetch_forms(
+	base: string,
+	token: string,
+	fetch_fn: FetchLike = fetch
+): Promise<Array<PostboiForm> | undefined> {
+	try {
+		const response = await fetch_fn(`${base}/v1/forms`, {
+			headers: { Authorization: `Bearer ${token}` },
+		})
+		if (!response.ok) return undefined
+		const data = (await response.json()) as { forms?: Array<Partial<PostboiForm>> }
+		if (!Array.isArray(data.forms)) return undefined
+		return data.forms
+			.filter((f) => typeof f.id === "string" && typeof f.name === "string")
+			.map((f) => ({ id: f.id as string, name: f.name as string }))
+	} catch {
+		return undefined
+	}
+}
+
 /** The account's sending identity, as reported by `GET /v1/domains`. */
 export interface PostboiAccount {
 	send_address?: string

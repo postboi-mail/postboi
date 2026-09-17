@@ -60,8 +60,13 @@ export interface SendParams {
 	 * caller's server, so without this the API only ever sees that server's address.
 	 */
 	captcha_ip?: string
-	/** True when the send originated from a form submission — the only sends captcha gates. */
-	form?: boolean
+	/**
+	 * Marks a form submission — the only sends captcha gates. A string names the Postboi
+	 * form the submission is filed under (by name or `form_…` id); `true` just flags it.
+	 */
+	form?: boolean | string
+	/** The submission's `[name, value]` entries, the data the table in `html` was drawn from. */
+	fields?: Array<[string, string]>
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -819,7 +824,8 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			tracking: message.tracking,
 			captcha_token: message.captcha?.token,
 			captcha_ip: message.captcha?.remoteip,
-			form: message.captcha ? true : undefined,
+			form: message.form ?? (message.captcha ? true : undefined),
+			fields: message.fields,
 			send_via: this.#send_via,
 		}
 	}

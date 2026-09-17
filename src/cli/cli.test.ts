@@ -57,6 +57,7 @@ import {
 	poll_device_auth,
 	provision_account,
 	fetch_domains,
+	fetch_forms,
 	fetch_env_vars,
 	push_env_vars,
 	start_connect,
@@ -68,6 +69,7 @@ import {
 	render_types,
 	render_runtime,
 	parse_from,
+	parse_forms,
 	parse_runtime,
 	config_captcha_key,
 	upsert_captcha_key,
@@ -817,6 +819,65 @@ describe("cloud domains & generated from types", () => {
 
 	it("render_types returns null when there is nothing to narrow", () => {
 		expect(render_types(undefined, [])).toBeNull()
+	})
+
+	it("fetch_forms lists the account's forms, and degrades to undefined rather than to none", async () => {
+		const forms = await fetch_forms("https://postboi.app", "pb_secret", async (url, init) => {
+			expect(url).toBe("https://postboi.app/v1/forms")
+			expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer pb_secret")
+			return json({
+				forms: [
+					{ id: "form_1", name: "Contact", kind: "library" },
+					{ id: "form_2", name: "Home Ownership Query" },
+					{ id: 3, name: "broken" },
+				],
+			})
+		})
+		expect(forms).toEqual([
+			{ id: "form_1", name: "Contact" },
+			{ id: "form_2", name: "Home Ownership Query" },
+		])
+		// an account with no forms is an answer; an older API or a blip is not
+		expect(await fetch_forms("https://x", "t", async () => json({ forms: [] }))).toEqual([])
+		expect(await fetch_forms("https://x", "t", async () => json({}, 404))).toBeUndefined()
+		expect(await fetch_forms("https://x", "t", async () => json({ nope: true }))).toBeUndefined()
+		expect(
+			await fetch_forms("https://x", "t", async () => {
+				throw new Error("offline")
+			})
+		).toBeUndefined()
+	})
+
+	it("render_types narrows form to the current names and ids, and drops it on an empty list", () => {
+		const forms = [
+			{ id: "form_1", name: "Contact" },
+			{ id: "form_2", name: "Home Ownership Query" },
+		]
+		const source = render_types("joe@send.postboi.email", domains, [], {}, [], forms)!
+		expect(source).toContain("form:")
+		expect(source).toContain('| "Contact"')
+		expect(source).toContain('| "Home Ownership Query"')
+		expect(source).toContain('| "form_2"')
+		// forms alone are enough to generate — a bring-your-own-provider project can still name them
+		expect(render_types(undefined, [], [], {}, [], forms)!).toContain('| "Contact"')
+		// an account with no forms gets no member, so a stale name is a type error
+		expect(render_types("joe@send.postboi.email", domains, [], {}, [], [])!).not.toContain("form:")
+		expect(render_types(undefined, [], [], {}, [], [])).toBeNull()
+	})
+
+	it("carries the form union forward when a run couldn't list the forms", () => {
+		const forms = [{ id: "form_1", name: "Contact" }]
+		const kept = parse_forms(render_types("joe@send.postboi.email", domains, [], {}, [], forms)!)
+		expect(kept).toEqual(['"Contact"', '"form_1"'])
+		// undefined is "no opinion": the previous names are re-emitted verbatim
+		const next = render_types("joe@send.postboi.email", domains, [], {}, [], undefined, kept)!
+		expect(parse_forms(next)).toEqual(kept)
+		// and the from union is untouched by any of it
+		expect(parse_from(next)).toEqual(parse_from(render_types("joe@send.postboi.email", domains)!))
+		// an empty list beats the kept names: the forms really are gone
+		expect(render_types("joe@send.postboi.email", domains, [], {}, [], [], kept)!).not.toContain(
+			"form:"
+		)
 	})
 
 	it("render_types narrows template to the approved names, with or without a from union", () => {

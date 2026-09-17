@@ -82,6 +82,7 @@ import {
 	provision_account,
 	open_browser,
 	fetch_domains,
+	fetch_forms,
 	fetch_env_vars,
 	push_env_vars,
 	start_connect,
@@ -905,6 +906,9 @@ async function sync(): Promise<void> {
 	// The two GETs are independent, and sync runs as the project's predev hook — start the
 	// env-vars fetch now so the network round trips overlap instead of stacking.
 	const vars_promise = fetch_env_vars(cloud_base(), token)
+	// Forms drive the generated `form` types the same way domains drive `from`; a fetch
+	// that fails keeps the last generated names rather than erasing them.
+	const forms_promise = fetch_forms(cloud_base(), token)
 	const account = await fetch_domains(cloud_base(), token)
 	if (!account) {
 		await bake(config_key, config_file ?? "config")
@@ -965,11 +969,13 @@ async function sync(): Promise<void> {
 	}
 
 	const { names, variables } = await templates_promise
+	const forms = await forms_promise
 	const file = write_types(
 		account.send_address ?? read_env("POSTBOI_FROM"),
 		account.domains,
 		names,
-		variables
+		variables,
+		forms
 	)
 	if (!file) {
 		console.log(dim("postboi sync: no sending addresses on this account yet."))
@@ -977,6 +983,12 @@ async function sync(): Promise<void> {
 	}
 	console.log(`${green("✓")} wrote ${bold(file)}`)
 	report_templates(names)
+	if (forms && forms.length > 0) {
+		const listed = forms.map((f) => f.name)
+		console.log(
+			`${green("✓")} typed ${bold("form")} to your ${forms.length} form(s) ${dim(`(${listed.slice(0, 3).join(", ")}${listed.length > 3 ? ", …" : ""})`)}`
+		)
+	}
 	for (const d of account.domains) {
 		console.log(
 			d.status === "verified"

@@ -149,6 +149,21 @@ export type WhatsappTemplate = Register extends { template: infer T extends stri
 	: string
 
 /**
+ * The forms on your Postboi account, per the generated types — or any string when none
+ * have been generated. `bunx postboi sync` reads their names and ids from the account, so
+ * a form that was renamed or never existed is a type error rather than a stray form
+ * minted at runtime. A raw `form_…` id stays valid whatever's been generated, the same
+ * way a Twilio SID does for templates.
+ *
+ * Only the *current* names are generated. The API still answers to a form's previous
+ * names, so code shipped against the old one keeps landing in the right place; the type
+ * error on the next sync is the nudge to update it.
+ */
+export type FormName = Register extends { form: infer F extends string }
+	? F | `form_${string}`
+	: string
+
+/**
  * The variables one WhatsApp template takes, per the generated types — the placeholder
  * names in its approved body, so they're required rather than guessed at. Any
  * `Record<string, string>` when nothing has been generated, or when the template isn't one
@@ -287,6 +302,15 @@ export interface SendOptions {
 	 * Turnstile verification runs whenever `TURNSTILE_SECRET_KEY` is set.
 	 */
 	captcha?: CaptchaOptions
+	/**
+	 * The Postboi form this send belongs to, by name or `form_…` id. Every submission that
+	 * names a form is filed under it in the dashboard, where its fields become the columns
+	 * of a table and of the exports built from it. Case-insensitive at runtime; a name the
+	 * account doesn't have yet is created on first use. Naming a form marks the send as a
+	 * form submission, so managed captcha gates it like any FormData send. Ignored by every
+	 * other provider.
+	 */
+	form?: FormName
 }
 
 /**
@@ -387,6 +411,15 @@ export interface PreparedMessage {
 	 * arrived. Providers without managed captcha never see this set.
 	 */
 	captcha?: { token?: string; remoteip?: string }
+	/** The Postboi form the send names — see {@link SendOptions.form}. */
+	form?: string
+	/**
+	 * The submission's fields as data, beside the table rendered from them: FormData's own
+	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi
+	 * provider puts them on the wire, so the dashboard can export a form's submissions as
+	 * rows rather than as emails. Absent on string bodies.
+	 */
+	fields?: Array<[string, string]>
 }
 
 /** The normalized result of cancelling a scheduled email. */
@@ -908,7 +941,9 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 	/**
 	 * Parse FormData, extracting special header fields and rendering the remaining
 	 * data into a compact HTML table, grouped by the `fieldset→field` key syntax.
-	 * Returns the extracted SendOptions (to/from/etc) along with any File attachments.
+	 * Returns the extracted SendOptions (to/from/etc) along with any File attachments, and
+	 * the rendered fields as the `[name, value]` pairs they came in as — the table for the
+	 * inbox, the pairs for anything that wants the submission as data.
 	 */
 	protected async parse_form_data(
 		form_data: FormData,
@@ -919,9 +954,14 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			  }
 			| null
 			| false
-	): Promise<{ options: Partial<SendOptions>; attachments: Array<File> }> {
+	): Promise<{
+		options: Partial<SendOptions>
+		attachments: Array<File>
+		fields: Array<[string, string]>
+	}> {
 		const options: Partial<SendOptions> = {}
 		const attachments: Array<File> = []
+		const fields: Array<[string, string]> = []
 		const grouped = new Map<string, Map<string, string | Array<string>>>()
 
 		// choose formatter behaviour
@@ -968,6 +1008,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 						continue
 				}
 
+				fields.push([key, value])
 				const [fieldset, field] = key.split("→")
 				if (field) {
 					if (!grouped.has(fieldset)) grouped.set(fieldset, new Map())
@@ -1021,7 +1062,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			options.body = `<table style="border-collapse: collapse; width: auto;">${rows.join("")}</table>`
 		}
 
-		return { options, attachments }
+		return { options, attachments, fields }
 	}
 
 	/**
@@ -1065,15 +1106,14 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 		// extracted header fields plus a rendered HTML table (honouring any formatter).
 		const form = this.to_form_data(body)
 		let captcha: { token?: string; remoteip?: string } | undefined
+		let fields: Array<[string, string]> | undefined
 		if (form) {
 			// Spam checks run first, and strip their plumbing fields so they never reach the email.
 			captcha = await this.enforce_captcha(form, options.captcha)
-			const { options: extracted, attachments } = await this.parse_form_data(
-				form,
-				options.formatter
-			)
-			options = { ...options, ...extracted }
-			if (attachments.length > 0) options.attachments = attachments
+			const parsed = await this.parse_form_data(form, options.formatter)
+			options = { ...options, ...parsed.options }
+			if (parsed.attachments.length > 0) options.attachments = parsed.attachments
+			if (parsed.fields.length > 0) fields = parsed.fields
 		}
 
 		const to = options.to ?? this.defaults.to
@@ -1134,6 +1174,8 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			scheduled_at,
 			tracking: options.tracking,
 			captcha,
+			form: options.form,
+			fields,
 		}
 	}
 }
