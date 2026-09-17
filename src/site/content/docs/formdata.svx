@@ -60,6 +60,33 @@ Use the `fieldset→field` syntax to group related fields into sections:
 This produces sectioned tables in the email body: one section per fieldset (`contact`,
 `order`), with a row per field.
 
+## Naming the form
+
+On the Postboi provider, a send can say which form it came from:
+
+```typescript
+await mail({ to: "housing@example.org", body: request.formData(), form: "Home Ownership Query" })
+```
+
+Every submission that names a form is filed under it in the dashboard, and the fields it
+carried become the columns of that form's table — and of the CSV or spreadsheet exports
+built from it. That works because the provider sends the submission's fields as data
+beside the rendered table (FormData's own `[name, value]` entries, minus files and the
+`_` specials), so the dashboard has the submission, not just the email.
+
+A name is matched case-insensitively and created on first use, so nothing needs setting
+up before the first send. `bunx postboi sync` then types `form` to your account's forms
+(and their `form_…` ids), the same way it types `from`, so a form you rename in the
+dashboard becomes a type error here on the next sync — while the API keeps answering to
+the old name, so what's already shipped keeps landing in the right place. The one
+exception: create a *new* form under a name an older one used to have, and that name now
+means the new form.
+
+Naming a form marks the send as a form submission, so [managed captcha](/spam) gates it
+like any FormData send. Forms are the Postboi provider's: on a project whose
+`postboi.config` names another provider, `sync` records that too, and `form` becomes a type
+error there rather than an option that silently does nothing.
+
 ## Escaping
 
 Field names and values are HTML-escaped before they reach the table, so a submission

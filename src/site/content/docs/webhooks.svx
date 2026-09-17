@@ -107,9 +107,15 @@ interface WebhookEvent {
 	client?: EmailClient  // opened/clicked, see below
 	ip?: string
 	body?: { html?: string; text?: string }  // received events: the message
+	form?: { id: string; name: string }      // Postboi: the form a submission was filed under
+	fields?: Array<[string, string]>         // Postboi: the submission's fields, in order
 	raw: unknown          // the untouched provider payload
 }
 ```
+
+On the Postboi provider, every event about a form submission — `sent` through `clicked` —
+names the form and carries the fields it was submitted with, so a handler that files
+submissions somewhere else has the data rather than an email to scrape it from.
 
 ## Mail coming back
 

@@ -318,11 +318,13 @@ type PostboiNamespace =
 	| "contacts"
 	| "notifications"
 	| "suppressions"
+	| "forms"
+	| "exports"
 
 /**
  * A zero-config mirror of a Postboi namespace: every method call resolves the provider
  * afresh (reading env each time, like `mail()` itself), then forwards to it. Kept in one
- * proxy so all five namespaces share the resolve-then-forward logic.
+ * proxy so every namespace shares the resolve-then-forward logic.
  */
 function lazy_namespace<K extends PostboiNamespace>(name: K): Postboi[K] {
 	return new Proxy({} as Postboi[K], {
@@ -360,4 +362,6 @@ export const mail: typeof send_mail & Pick<Postboi, PostboiNamespace> = Object.a
 	contacts: lazy_namespace("contacts"),
 	notifications: lazy_namespace("notifications"),
 	suppressions: lazy_namespace("suppressions"),
+	forms: lazy_namespace("forms"),
+	exports: lazy_namespace("exports"),
 })

@@ -180,6 +180,45 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.form).toBe(true)
 	})
 
+	it("sends the submission's fields as data beside the rendered table", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("_subject", "Quote")
+		form.append("_honey", "")
+		form.append("name", "Ada")
+		form.append("interest", "web")
+		form.append("interest", "print")
+		await new Postboi().send({ to: "to@test.com", body: form })
+
+		const body = sent_json()
+		expect(body.subject).toBe("Quote")
+		expect(body.html).toContain("Ada")
+		// the table's source, in order — specials and the honeypot never appear in it
+		expect(body.fields).toEqual([
+			["name", "Ada"],
+			["interest", "web"],
+			["interest", "print"],
+		])
+	})
+
+	it("names the form on the wire, on FormData and string bodies alike", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("name", "Ada")
+		await new Postboi().send({ to: "to@test.com", body: form, form: "Home Ownership Query" })
+		expect(sent_json().form).toBe("Home Ownership Query")
+
+		// a hand-rolled body can still be filed under a form — and is a form send for captcha
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", form: "form_abc123" })
+		const body = sent_json()
+		expect(body.form).toBe("form_abc123")
+		expect(body.fields).toBeUndefined()
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
@@ -188,6 +227,7 @@ describe("the Postboi provider (zero-config)", () => {
 		const body = sent_json()
 		expect(body.form).toBeUndefined()
 		expect(body.captcha_token).toBeUndefined()
+		expect(body.fields).toBeUndefined()
 	})
 
 	it("forwards idempotency_key as the Idempotency-Key header", async () => {
@@ -513,6 +553,45 @@ describe("the Postboi provider — account API", () => {
 		await provider().lists.create("Fresh", { confirmation: true })
 		expect(sent_url()).toBe("https://postboi.app/v1/lists")
 		expect(sent_json()).toEqual({ name: "Fresh", confirmation: true })
+	})
+
+	it("lists forms, and manages scheduled exports", async () => {
+		fetch.mockResolvedValue(respond({ json: { forms: [{ id: "form_1", name: "Contact" }] } }))
+		expect(await provider().forms.all()).toEqual([{ id: "form_1", name: "Contact" }])
+		expect(sent_url()).toBe("https://postboi.app/v1/forms")
+		expect(sent_init().method).toBe("GET")
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1" } }))
+		await provider().exports.create({
+			name: "Weekly",
+			recipients: "Ops <ops@acme.com>",
+			filter: { form: "Contact", status: "delivered" },
+			schedule: "weekly",
+		})
+		expect(sent_url()).toBe("https://postboi.app/v1/exports")
+		expect(sent_json()).toEqual({
+			name: "Weekly",
+			recipients: [{ email: "ops@acme.com", name: "Ops" }],
+			filter: { form: "Contact", status: "delivered" },
+			schedule: "weekly",
+		})
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1", paused: true } }))
+		await provider().exports.update("sxp_1", { paused: true, from: null })
+		expect(sent_init().method).toBe("PATCH")
+		expect(sent_json()).toEqual({ paused: true, from: null })
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1", queued: true } }))
+		expect(await provider().exports.run("sxp_1")).toEqual({ id: "sxp_1", queued: true })
+		expect(sent_url()).toBe("https://postboi.app/v1/exports/sxp_1/run")
+
+		fetch.mockResolvedValue(respond({ json: { exports: [{ id: "sxp_1" }] } }))
+		expect(await provider().exports.all()).toEqual([{ id: "sxp_1" }])
+
+		fetch.mockResolvedValue(respond({ json: { id: "sxp_1", deleted: true } }))
+		await provider().exports.delete("sxp_1")
+		expect(sent_init().method).toBe("DELETE")
+		expect(sent_url()).toBe("https://postboi.app/v1/exports/sxp_1")
 	})
 
 	it("manages notifications: create with shorthand schedule, list, update, delete", async () => {

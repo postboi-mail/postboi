@@ -184,6 +184,26 @@ describe("ProviderBase", () => {
 			expect(options.body).toContain("Darby")
 		})
 
+		it("hands back the rendered fields as ordered pairs, minus specials and files", async () => {
+			const form = new FormData()
+			form.append("_subject", "Quote request")
+			form.append("name", "Ada")
+			form.append("contact→phone", "+44 1")
+			form.append("interest", "web")
+			form.append("interest", "print")
+			form.append("cv", new File(["hi"], "cv.txt", { type: "text/plain" }))
+
+			const { fields, attachments } = await provider.form(form)
+			// FormData's own entries: repeats stay repeated, the grouping arrow stays raw
+			expect(fields).toEqual([
+				["name", "Ada"],
+				["contact→phone", "+44 1"],
+				["interest", "web"],
+				["interest", "print"],
+			])
+			expect(attachments.map((f) => f.name)).toEqual(["cv.txt"])
+		})
+
 		it("groups fieldset→field keys under a header row", async () => {
 			const form = new FormData()
 			form.append("contact→name", "Darby")

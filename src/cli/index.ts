@@ -82,6 +82,7 @@ import {
 	provision_account,
 	open_browser,
 	fetch_domains,
+	fetch_forms,
 	fetch_env_vars,
 	push_env_vars,
 	start_connect,
@@ -97,6 +98,7 @@ import {
 	write_runtime,
 	from_status,
 	config_captcha_key,
+	config_provider,
 	upsert_captcha_key,
 	TYPES_TARGET,
 } from "./typegen.js"
@@ -873,6 +875,12 @@ async function sync(): Promise<void> {
 	const config_file = CONFIG_FILES.find((f) => existsSync(f))
 	const config_source = config_file ? readFileSync(config_file, "utf8") : undefined
 	const config_key = config_source ? config_captcha_key(config_source) : undefined
+	// The provider the project sends through, for the generated `provider` marker, resolved
+	// the way `mail()` resolves it: `POSTBOI_PROVIDER` wins, then the config's word. With
+	// neither, a token that reaches an account means Postboi, and nothing at all means keep
+	// whatever the last run wrote.
+	const provider_name =
+		read_env("POSTBOI_PROVIDER") ?? (config_source ? config_provider(config_source) : undefined)
 	// Templates come from Meta or Twilio, not from Postboi, so this runs with or without a
 	// token — and starting it first lets it overlap whatever account requests follow.
 	const templates_promise = fetch_whatsapp_templates()
@@ -898,18 +906,23 @@ async function sync(): Promise<void> {
 	if (!token) {
 		await bake(config_key, config_file ?? "config")
 		const { names, variables } = await templates_promise
-		if (write_types(undefined, [], names, variables)) report_templates(names)
+		if (write_types(undefined, [], names, variables, undefined, provider_name))
+			report_templates(names)
 		console.log(dim("postboi sync: no POSTBOI_TOKEN — skipping the generated from types."))
 		return
 	}
 	// The two GETs are independent, and sync runs as the project's predev hook — start the
 	// env-vars fetch now so the network round trips overlap instead of stacking.
 	const vars_promise = fetch_env_vars(cloud_base(), token)
+	// Forms drive the generated `form` types the same way domains drive `from`; a fetch
+	// that fails keeps the last generated names rather than erasing them.
+	const forms_promise = fetch_forms(cloud_base(), token)
 	const account = await fetch_domains(cloud_base(), token)
 	if (!account) {
 		await bake(config_key, config_file ?? "config")
 		const { names, variables } = await templates_promise
-		if (write_types(undefined, [], names, variables)) report_templates(names)
+		if (write_types(undefined, [], names, variables, undefined, provider_name))
+			report_templates(names)
 		console.log(
 			yellow("postboi sync: could not fetch domains from the Postboi provider — skipped.")
 		)
@@ -965,18 +978,29 @@ async function sync(): Promise<void> {
 	}
 
 	const { names, variables } = await templates_promise
+	const forms = await forms_promise
+	const send_address = account.send_address ?? read_env("POSTBOI_FROM")
 	const file = write_types(
-		account.send_address ?? read_env("POSTBOI_FROM"),
+		send_address,
 		account.domains,
 		names,
-		variables
+		variables,
+		forms,
+		provider_name ?? "postboi"
 	)
-	if (!file) {
-		console.log(dim("postboi sync: no sending addresses on this account yet."))
-		return
-	}
+	if (!file) return
 	console.log(`${green("✓")} wrote ${bold(file)}`)
+	// The provider marker alone is worth writing, so the file exists either way — say when
+	// there was nothing to narrow `from` to, rather than let "wrote" imply there was.
+	if (!send_address && account.domains.length === 0)
+		console.log(dim("postboi sync: no sending addresses on this account yet."))
 	report_templates(names)
+	if (forms && forms.length > 0) {
+		const listed = forms.map((f) => f.name)
+		console.log(
+			`${green("✓")} typed ${bold("form")} to your ${forms.length} form(s) ${dim(`(${listed.slice(0, 3).join(", ")}${listed.length > 3 ? ", …" : ""})`)}`
+		)
+	}
 	for (const d of account.domains) {
 		console.log(
 			d.status === "verified"
@@ -1183,7 +1207,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 	write_config("postboi", config_defaults, {}, cloud_account?.captcha_key)
 
 	// Lives inside node_modules — nothing to commit, no diffs, `bunx postboi sync` refreshes it.
-	const types_file = write_types(send_address, domains)
+	const types_file = write_types(send_address, domains, [], {}, undefined, "postboi")
 	if (types_file) {
 		console.log(
 			`${green("✓")} typed ${bold("from")} to your addresses ${dim(`(generated into ${types_file})`)}`

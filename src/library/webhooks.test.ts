@@ -260,6 +260,45 @@ describe("receive — postboi", () => {
 		expect(events[0].client?.name).toBe("Apple Mail")
 	})
 
+	it("carries a submission's form and fields through", async () => {
+		const request = new Request("https://example.com/webhooks", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				type: "email.delivered",
+				data: {
+					message_id: "msg_1",
+					to: "housing@acme.com",
+					form: { id: "form_1", name: "Home Ownership Query" },
+					fields: [
+						["name", "Ada"],
+						["interest", "web"],
+						["interest", "print"],
+						// a malformed entry is dropped rather than handed over as a pair
+						"stray",
+						["half"],
+					],
+				},
+			}),
+		})
+		const [event] = await receive(request, { provider: "postboi", verify: false })
+		expect(event.form).toEqual({ id: "form_1", name: "Home Ownership Query" })
+		expect(event.fields).toEqual([
+			["name", "Ada"],
+			["interest", "web"],
+			["interest", "print"],
+		])
+		// and stays absent on a send that wasn't a submission
+		const plain = new Request("https://example.com/webhooks", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ type: "email.delivered", data: { message_id: "msg_2" } }),
+		})
+		const [other] = await receive(plain, { provider: "postboi", verify: false })
+		expect(other.form).toBeUndefined()
+		expect(other.fields).toBeUndefined()
+	})
+
 	it("normalizes bounce categories", async () => {
 		const { request, secret } = await mock_request({ provider: "postboi", type: "bounced" })
 		const [event] = await receive(request, { provider: "postboi", secret })

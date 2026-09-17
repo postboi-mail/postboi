@@ -61,6 +61,15 @@ await mail.notifications.delete(name_or_id, id)
 await mail.suppressions.all()
 await mail.suppressions.add(email)
 await mail.suppressions.remove(email)
+
+// forms & scheduled exports (see Forms)
+await mail.forms.all() // what `form:` is typed to
+await mail.exports.all()
+await mail.exports.get(id)
+await mail.exports.create({ name, recipients, from?, filter?, format?, columns?, fields?, window?, schedule })
+await mail.exports.update(id, changes) // partial; { paused: true } pauses
+await mail.exports.run(id) // the file goes within a minute
+await mail.exports.delete(id)
 ```
 
 ## SendOptions

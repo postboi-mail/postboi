@@ -119,6 +119,17 @@ export interface WebhookEvent {
 	ip?: string
 	/** The message body — `received` events only, when the provider includes it. */
 	body?: { html?: string; text?: string }
+	/**
+	 * The form a submission was filed under — Postboi provider events about a send that
+	 * named one (`mail({ form })`) or came through a hosted endpoint.
+	 */
+	form?: { id: string; name: string }
+	/**
+	 * A submission's fields as data, `[name, value]` pairs in the order they were
+	 * submitted — the same entries the rendered table was drawn from. Postboi provider
+	 * events only, on the same sends `form` is set for.
+	 */
+	fields?: Array<[string, string]>
 	/** The untouched provider payload for this event — the escape hatch. */
 	raw: unknown
 }

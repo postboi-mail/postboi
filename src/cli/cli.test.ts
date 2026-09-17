@@ -57,6 +57,7 @@ import {
 	poll_device_auth,
 	provision_account,
 	fetch_domains,
+	fetch_forms,
 	fetch_env_vars,
 	push_env_vars,
 	start_connect,
@@ -68,8 +69,11 @@ import {
 	render_types,
 	render_runtime,
 	parse_from,
+	parse_forms,
+	parse_provider,
 	parse_runtime,
 	config_captcha_key,
+	config_provider,
 	upsert_captcha_key,
 	from_status,
 } from "./typegen.js"
@@ -819,6 +823,65 @@ describe("cloud domains & generated from types", () => {
 		expect(render_types(undefined, [])).toBeNull()
 	})
 
+	it("fetch_forms lists the account's forms, and degrades to undefined rather than to none", async () => {
+		const forms = await fetch_forms("https://postboi.app", "pb_secret", async (url, init) => {
+			expect(url).toBe("https://postboi.app/v1/forms")
+			expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer pb_secret")
+			return json({
+				forms: [
+					{ id: "form_1", name: "Contact", kind: "library" },
+					{ id: "form_2", name: "Home Ownership Query" },
+					{ id: 3, name: "broken" },
+				],
+			})
+		})
+		expect(forms).toEqual([
+			{ id: "form_1", name: "Contact" },
+			{ id: "form_2", name: "Home Ownership Query" },
+		])
+		// an account with no forms is an answer; an older API or a blip is not
+		expect(await fetch_forms("https://x", "t", async () => json({ forms: [] }))).toEqual([])
+		expect(await fetch_forms("https://x", "t", async () => json({}, 404))).toBeUndefined()
+		expect(await fetch_forms("https://x", "t", async () => json({ nope: true }))).toBeUndefined()
+		expect(
+			await fetch_forms("https://x", "t", async () => {
+				throw new Error("offline")
+			})
+		).toBeUndefined()
+	})
+
+	it("render_types narrows form to the current names and ids, and drops it on an empty list", () => {
+		const forms = [
+			{ id: "form_1", name: "Contact" },
+			{ id: "form_2", name: "Home Ownership Query" },
+		]
+		const source = render_types("joe@send.postboi.email", domains, [], {}, [], forms)!
+		expect(source).toContain("form:")
+		expect(source).toContain('| "Contact"')
+		expect(source).toContain('| "Home Ownership Query"')
+		expect(source).toContain('| "form_2"')
+		// forms alone are enough to generate — a bring-your-own-provider project can still name them
+		expect(render_types(undefined, [], [], {}, [], forms)!).toContain('| "Contact"')
+		// an account with no forms gets no member — `form` widens back to any string
+		expect(render_types("joe@send.postboi.email", domains, [], {}, [], [])!).not.toContain("form:")
+		expect(render_types(undefined, [], [], {}, [], [])).toBeNull()
+	})
+
+	it("carries the form union forward when a run couldn't list the forms", () => {
+		const forms = [{ id: "form_1", name: "Contact" }]
+		const kept = parse_forms(render_types("joe@send.postboi.email", domains, [], {}, [], forms)!)
+		expect(kept).toEqual(['"Contact"', '"form_1"'])
+		// undefined is "no opinion": the previous names are re-emitted verbatim
+		const next = render_types("joe@send.postboi.email", domains, [], {}, [], undefined, kept)!
+		expect(parse_forms(next)).toEqual(kept)
+		// and the from union is untouched by any of it
+		expect(parse_from(next)).toEqual(parse_from(render_types("joe@send.postboi.email", domains)!))
+		// an empty list beats the kept names: the forms really are gone
+		expect(render_types("joe@send.postboi.email", domains, [], {}, [], [], kept)!).not.toContain(
+			"form:"
+		)
+	})
+
 	it("render_types narrows template to the approved names, with or without a from union", () => {
 		const both = render_types("joe@send.postboi.email", domains, ["order_shipped"])!
 		expect(both).toContain("from:")
@@ -881,6 +944,46 @@ describe("cloud domains & generated from types", () => {
 			vapid_public_key: undefined,
 			sids: {},
 		})
+	})
+
+	it("config_provider reads the committed provider, and nothing else that says provider", () => {
+		expect(config_provider('export default config({\n\tprovider: "resend",\n})')).toBe("resend")
+		expect(config_provider("\tprovider: 'postboi',")).toBe("postboi")
+		// a channel block's own provider is one brace deeper and says nothing about mail —
+		// a config that leaves the top-level one out is still a Postboi project
+		expect(
+			config_provider("export default config({\n\tsms: {\n\t\tprovider: 'twilio',\n\t},\n})")
+		).toBeUndefined()
+		expect(
+			config_provider(
+				"export default config({\n\tsms: {\n\t\tprovider: 'twilio',\n\t},\n\tprovider: 'resend',\n})"
+			)
+		).toBe("resend")
+		expect(config_provider("default: { to: 'a@b.c' },")).toBeUndefined()
+	})
+
+	it("render_types carries a provider marker, kept across runs that have no opinion", () => {
+		const resend = render_types(undefined, [], [], {}, [], undefined, [], "resend")!
+		expect(resend).toContain("provider:")
+		expect(resend).toContain('| "resend"')
+		expect(parse_provider(resend)).toBe("resend")
+		// a marker alone is worth writing: it is what makes `form` an error on that project
+		expect(render_types(undefined, [], [], {}, [], undefined, [], undefined)).toBeNull()
+		// and it rides along with everything else
+		const full = render_types(
+			"joe@send.postboi.email",
+			domains,
+			["t"],
+			{},
+			[],
+			[{ id: "form_1", name: "Contact" }],
+			[],
+			"postboi"
+		)!
+		expect(parse_provider(full)).toBe("postboi")
+		expect(parse_from(full).length).toBeGreaterThan(0)
+		expect(parse_forms(full)).toEqual(['"Contact"', '"form_1"'])
+		expect(parse_provider("nothing here")).toBeUndefined()
 	})
 
 	it("config_captcha_key reads the committed key", () => {
