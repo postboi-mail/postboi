@@ -83,7 +83,9 @@ exception: create a *new* form under a name an older one used to have, and that 
 means the new form.
 
 Naming a form marks the send as a form submission, so [managed captcha](/spam) gates it
-like any FormData send. Every other provider ignores `form`.
+like any FormData send. Forms are the Postboi provider's: on a project whose
+`postboi.config` names another provider, `sync` records that too, and `form` becomes a type
+error there rather than an option that silently does nothing.
 
 ## Escaping
 

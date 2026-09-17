@@ -70,8 +70,10 @@ import {
 	render_runtime,
 	parse_from,
 	parse_forms,
+	parse_provider,
 	parse_runtime,
 	config_captcha_key,
+	config_provider,
 	upsert_captcha_key,
 	from_status,
 } from "./typegen.js"
@@ -942,6 +944,39 @@ describe("cloud domains & generated from types", () => {
 			vapid_public_key: undefined,
 			sids: {},
 		})
+	})
+
+	it("config_provider reads the committed provider, and nothing else that says provider", () => {
+		expect(config_provider('export default config({\n\tprovider: "resend",\n})')).toBe("resend")
+		expect(config_provider("\tprovider: 'postboi',")).toBe("postboi")
+		// the sms block's own provider is nested and indented the same — first match wins,
+		// which is the top-level one because it comes first in every config init writes
+		expect(config_provider("sms: {\n\t\tprovider: 'twilio',\n\t},")).toBe("twilio")
+		expect(config_provider("default: { to: 'a@b.c' },")).toBeUndefined()
+	})
+
+	it("render_types carries a provider marker, kept across runs that have no opinion", () => {
+		const resend = render_types(undefined, [], [], {}, [], undefined, [], "resend")!
+		expect(resend).toContain("provider:")
+		expect(resend).toContain('| "resend"')
+		expect(parse_provider(resend)).toBe("resend")
+		// a marker alone is worth writing: it is what makes `form` an error on that project
+		expect(render_types(undefined, [], [], {}, [], undefined, [], undefined)).toBeNull()
+		// and it rides along with everything else
+		const full = render_types(
+			"joe@send.postboi.email",
+			domains,
+			["t"],
+			{},
+			[],
+			[{ id: "form_1", name: "Contact" }],
+			[],
+			"postboi"
+		)!
+		expect(parse_provider(full)).toBe("postboi")
+		expect(parse_from(full).length).toBeGreaterThan(0)
+		expect(parse_forms(full)).toEqual(['"Contact"', '"form_1"'])
+		expect(parse_provider("nothing here")).toBeUndefined()
 	})
 
 	it("config_captcha_key reads the committed key", () => {

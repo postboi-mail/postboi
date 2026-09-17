@@ -76,9 +76,13 @@ function register_block(
 	variables: Record<string, Array<string>>,
 	keep_from: Array<string>,
 	forms: Array<PostboiForm> | undefined,
-	keep_forms: Array<string>
+	keep_forms: Array<string>,
+	provider: string | undefined
 ): string {
 	const blocks: Array<string> = []
+	// Which provider the project sends through, so the Postboi-only options (`form`)
+	// can be a type error elsewhere. Undefined is "no opinion" and keeps the last one.
+	if (provider) blocks.push(member("provider", [JSON.stringify(provider)]))
 	// Nothing to compute a union from means this run didn't reach the account, not that the
 	// account lost its addresses — keep the ones already generated.
 	const resolved = members(send_address, domains)
@@ -120,7 +124,8 @@ export function render_types(
 	variables: Record<string, Array<string>> = {},
 	keep_from: Array<string> = [],
 	forms: Array<PostboiForm> | undefined = undefined,
-	keep_forms: Array<string> = []
+	keep_forms: Array<string> = [],
+	provider: string | undefined = undefined
 ): string | null {
 	const register = register_block(
 		send_address,
@@ -129,7 +134,8 @@ export function render_types(
 		variables,
 		keep_from,
 		forms,
-		keep_forms
+		keep_forms,
+		provider
 	)
 	if (!register) return null
 	return `${HEADER}${register}export declare const captcha_key: string | undefined
@@ -186,6 +192,16 @@ export function parse_forms(source: string): Array<string> {
 	return parse_member(source, "form")
 }
 
+/** Read back the `provider:` marker, so a run with no config to read keeps it. */
+export function parse_provider(source: string): string | undefined {
+	const [literal] = parse_member(source, "provider")
+	try {
+		return literal ? (JSON.parse(literal) as string) : undefined
+	} catch {
+		return undefined
+	}
+}
+
 /** Read back what {@link render_runtime} baked. */
 export function parse_runtime(source: string): {
 	captcha_key?: string
@@ -222,7 +238,8 @@ export function write_types(
 	domains: Array<PostboiDomain>,
 	templates: Array<string> = [],
 	variables: Record<string, Array<string>> = {},
-	forms: Array<PostboiForm> | undefined = undefined
+	forms: Array<PostboiForm> | undefined = undefined,
+	provider: string | undefined = undefined
 ): string | null {
 	if (!existsSync(TYPES_TARGET)) return null
 	const current = installed(TYPES_TARGET)
@@ -233,7 +250,8 @@ export function write_types(
 		variables,
 		parse_from(current),
 		forms,
-		parse_forms(current)
+		parse_forms(current),
+		provider ?? parse_provider(current)
 	)
 	if (!source) return null
 	replace(TYPES_TARGET, source)
@@ -262,6 +280,11 @@ export function write_runtime(
 	if (!key && !vapid && Object.keys(sids).length === 0) return null
 	replace(RUNTIME_TARGET, render_runtime(key, sids, vapid))
 	return RUNTIME_TARGET
+}
+
+/** Read the provider out of a `postboi.config.*` source (`provider: "resend"`). */
+export function config_provider(source: string): string | undefined {
+	return /^\s*provider\s*:\s*["']([a-z0-9_-]+)["']/m.exec(source)?.[1]
 }
 
 /** Read the publishable key out of a `postboi.config.*` source (`captcha: { key }`). */

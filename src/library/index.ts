@@ -158,8 +158,20 @@ export type WhatsappTemplate = Register extends { template: infer T extends stri
  * Only the *current* names are generated. The API still answers to a form's previous
  * names, so code shipped against the old one keeps landing in the right place; the type
  * error on the next sync is the nudge to update it.
+ *
+ * Forms are the Postboi provider's. When the generated types say the project sends
+ * through another provider (`sync` writes the config's `provider` into {@link Register}),
+ * `form` is `never`, so naming one is a type error there rather than an option that
+ * silently does nothing. With nothing generated at all it stays a string, for the same
+ * reason `from` does: a build with no token must not fail on the types being absent.
  */
-export type FormName = Register extends { form: infer F extends string }
+export type FormName = Register extends { provider: infer P }
+	? P extends "postboi" | "mock"
+		? GeneratedFormName
+		: never
+	: GeneratedFormName
+
+type GeneratedFormName = Register extends { form: infer F extends string }
 	? F | `form_${string}`
 	: string
 
