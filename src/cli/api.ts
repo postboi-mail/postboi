@@ -1443,7 +1443,11 @@ export async function api_command(command: string, args: Array<string>): Promise
 	const rest = args.filter((arg) => arg !== "--json")
 	try {
 		await handler(LISTING.has(command) && rest[0] === "list" ? rest.slice(1) : rest)
-		if (json_mode) console.log(JSON.stringify(last_response ?? null, null, 2))
+		// A command that put a file on stdout (`exports download --out -`) leaves no
+		// response to print, and printing `null` after the bytes would corrupt the file.
+		if (json_mode && last_response !== undefined) {
+			console.log(JSON.stringify(last_response, null, 2))
+		}
 	} finally {
 		json_mode = false
 	}
