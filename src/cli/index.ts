@@ -107,6 +107,7 @@ import { offer_skill, refresh_skill, skill_command } from "./skill.js"
 import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
 import { api_command, ApiCommandError, error_json } from "./api.js"
 import { CONFIG_FILES, doctor } from "./doctor.js"
+import { help_text } from "./help.js"
 import { dev_command } from "./dev.js"
 import { inspect_command } from "./inspect.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
@@ -127,44 +128,7 @@ function help(): void {
 ${banner()}
 ${dim(`  v${version()}`)}
 
-${bold("Usage")}
-  ${cyan("bunx postboi init")}     Set up the Postboi provider or a provider of your own
-  ${dim("                          · --agent: zero prompts, zero sign-in — provisions a claimable")}
-  ${dim("                            sandbox account (made for AI coding agents and CI)")}
-  ${cyan("bunx postboi sync")}     Pull synced team credentials and refresh the generated from/template types
-  ${cyan("bunx postboi env")}      The synced credentials ${dim("· push · pull [--force] · remove <KEY>")}
-  ${cyan("bunx postboi vapid")}    Mint a VAPID key pair for Web Push, printed to stdout
-  ${cyan("bunx postboi doctor")}   Is this project wired? Token, provider, from address, webhooks, skill ${dim("· --json · exit 1 on a failure")}
-  ${cyan("bunx postboi skill")}    Install the agent skill, so AI coding agents know the library
-  ${cyan("bunx postboi dev")}      Local inbox for mail sent in development
-  ${dim("                          · --port <n> --demo --no-sound --no-intro")}
-  ${dim("                          (Vite projects already serve it at /__postboi)")}
-  ${cyan("bunx postboi inspect")}  Lint an email's HTML — client compatibility, clipping, dead links
-  ${dim("                          · <file.html> · --links --subject <s> --json (exit 1 on warnings)")}
-
-${bold("Account")} ${dim("(Postboi provider — full reference: https://api.postboi.app)")}
-  ${cyan("bunx postboi whoami")}          The account behind your token
-  ${cyan("bunx postboi send")}            One email, now ${dim("· --to <emails> --subject <s> --text|--html|--file <body> [--at <ISO>]")}
-  ${cyan("bunx postboi send-address")}    Default sending address ${dim("· [name@yourdomain.com]")}
-  ${cyan("bunx postboi lists")}           Lists ${dim("· add <name> · send <list> --subject <s> --text|--html|--file <body> · delete <ref>")}
-  ${cyan("bunx postboi recipients")}      A list's recipients ${dim("· <list> add <email>… · <list> remove <email>")}
-  ${cyan("bunx postboi contacts")}        The audience ${dim("· add <email> [--name --phone --data] · <email> · remove <email>")}
-  ${cyan("bunx postboi domains")}         Sending domains ${dim("· add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>")}
-  ${cyan("bunx postboi webhooks")}        Webhooks ${dim("· add <url> · rotate <id> · deliveries <id> · delete <id>")}
-  ${cyan("bunx postboi members")}         Members ${dim("· invite <email> · remove <ref> · revoke <ref>")}
-  ${cyan("bunx postboi messages")}        Recent messages ${dim("· [status] · <id> (status, opens, fields) · cancel <id>")}
-  ${cyan("bunx postboi exports")}         Exports ${dim("· download [--form <form>] [--xlsx] [--out <file>] · add <name> --to <emails> --weekly · run · pause · resume · delete <id>")}
-  ${cyan("bunx postboi suppressions")}    Suppressed addresses ${dim("· add <email|+phone> · remove <email|+phone>")}
-  ${cyan("bunx postboi forms")}           The forms submissions are filed under ${dim("(named in your code)")}
-  ${cyan("bunx postboi notifications")}   A list's digests ${dim("· <list> · <list> add --to <emails> --weekly|--on-signup · <list> delete <id>")}
-  ${cyan("bunx postboi testing")}         Email tests ${dim("· add [--label] [--clients] · <id> (the report) · clients · delete <id>")}
-  ${dim("                               A bare noun lists; `list` says the same. Add --json to any of")}
-  ${dim("                               them for the API's response as JSON (errors carry the API's code).")}
-
-${bold("Options")}
-  -h, --help        Show this help
-  -V, --version     Show the version
-`)
+${help_text()}`)
 }
 
 /** The committer's email from git config, or undefined — the unattended VAPID subject. */
