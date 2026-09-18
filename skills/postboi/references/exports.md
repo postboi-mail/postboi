@@ -69,7 +69,7 @@ messages` shows it in the log with its file. Then `bunx postboi exports` lists w
 ## The rest of the surface
 
 ```bash
-bunx postboi exports                   # NAME · SCHEDULE · TO · NEXT · STATE · ID
+bunx postboi exports                   # (or `exports list`) NAME · SCHEDULE · TO · NEXT · STATE · ID
 bunx postboi exports run <id>          # one file now; the schedule carries on
 bunx postboi exports pause <id>        # keeps the row, stops the clock (run refuses while paused)
 bunx postboi exports resume <id>

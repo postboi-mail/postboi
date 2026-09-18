@@ -678,7 +678,9 @@ const EXPORTS_ADD_USAGE = [
 ].join("\n")
 
 async function exports_command(args: Array<string>): Promise<void> {
-	const [action, ...rest_args] = args
+	const [first, ...rest_args] = args
+	// Bare `exports` lists, as every noun does; `exports list` is what people guess.
+	const action = first === "list" ? undefined : first
 
 	if (action === "add") {
 		const { flags, rest, on } = take_flags(

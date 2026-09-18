@@ -224,6 +224,7 @@ describe("exports", () => {
 			exports: [created, { ...created, id: "exp_2", paused: true, next_run_at: null }],
 		})
 		expect(await api_command("exports", [])).toBe(true)
+		expect(await api_command("exports", ["list"])).toBe(true) // the alias people guess
 		const text = lines.join("\n")
 		expect(text).toContain("Weekly enquiries")
 		expect(text).toContain("weekly on Monday at 09:00 UTC")
