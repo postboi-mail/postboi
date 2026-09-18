@@ -191,14 +191,24 @@ export function help_markdown(): string {
 		out.push(`## ${section.title === "Usage" ? "Setup and tools" : "The account"}`)
 		out.push("")
 		if (section.note) out.push(`${section.note.replace(/: (https?:\S+)/, ": <$1>")}`, "")
-		out.push("| Command | What it does |")
-		out.push("| --- | --- |")
+		// Padded to the widest cell, as the formatter would write it, so a generated file
+		// is already in the shape `oxfmt --check` expects.
+		// A `|` inside a cell splits it, code span or not, so it is escaped for the table.
+		const cell = (text: string) => text.replace(/\|/g, "\\|")
+		const rows: Array<[string, string]> = [["Command", "What it does"]]
 		for (const entry of section.entries) {
 			const details = (entry.details ?? []).map((line) => `\`${line}\``).join(" · ")
-			out.push(
-				`| \`bunx postboi ${entry.command}\` | ${entry.summary}${details ? ` — ${details}` : ""} |`
-			)
+			rows.push([
+				`\`bunx postboi ${entry.command}\``,
+				cell(`${entry.summary}${details ? ` — ${details}` : ""}`),
+			])
 		}
+		const widths = [0, 1].map((i) => Math.max(...rows.map((row) => row[i].length)))
+		const line = (row: [string, string]) =>
+			`| ${row[0].padEnd(widths[0])} | ${row[1].padEnd(widths[1])} |`
+		out.push(line(rows[0]))
+		out.push(`| ${"-".repeat(widths[0])} | ${"-".repeat(widths[1])} |`)
+		for (const row of rows.slice(1)) out.push(line(row))
 		out.push("")
 		if (section.footer) out.push(section.footer.join(" "), "")
 	}
