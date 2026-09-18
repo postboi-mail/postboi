@@ -9,7 +9,7 @@ import {
 } from "node:fs"
 import { spawnSync } from "node:child_process"
 import { join, delimiter, dirname } from "node:path"
-import { argv, cwd, exit, platform, env } from "node:process"
+import { argv, cwd, exit, platform, env, stdin } from "node:process"
 import {
 	PROVIDERS,
 	SMS_PROVIDERS,
@@ -1882,6 +1882,15 @@ function write_channel_config(
 }
 
 async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = false): Promise<void> {
+	// Without a terminal there is nobody to answer the prompts: the first one hits EOF and
+	// the run ends on "Cancelled", which reads as a bug. Say what to run instead.
+	if (!agent && !stdin.isTTY) {
+		console.error(red("postboi init asks questions, and there is no terminal here to answer them."))
+		console.error(
+			`  ${dim("Unattended:")} ${cyan("bunx postboi init --agent")} ${dim("— zero prompts, provisions a claimable project")}`
+		)
+		return exit(2)
+	}
 	// `--agent` swaps the prompter for one that answers itself — same flow, no questions,
 	// and the Postboi auth step provisions a claimable project instead of opening a browser.
 	const prompts = agent ? create_auto_prompts() : create_prompts()

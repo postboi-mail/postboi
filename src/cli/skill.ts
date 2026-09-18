@@ -16,6 +16,19 @@ import { bold, dim, green, red, type create_prompts } from "./prompts.js"
 type Prompts = ReturnType<typeof create_prompts>
 
 export const SKILL_TARGET = join(".claude", "skills", "postboi", "SKILL.md")
+/** The same skill for agents that read the Agent Skills layout rather than Claude's. */
+export const AGENTS_TARGET = join(".agents", "skills", "postboi", "SKILL.md")
+/** The file most other agents read first; a pointer there is the whole footprint. */
+export const AGENTS_MD = "AGENTS.md"
+
+/** What the pointer in AGENTS.md says — short, because the skill is where the content is. */
+export const AGENTS_MD_POINTER = `
+## Postboi
+
+Email here goes through the \`postboi\` package. Before touching mail, forms or exports,
+read \`.claude/skills/postboi/SKILL.md\` (the same file is at
+\`node_modules/postboi/skills/postboi/SKILL.md\`) and run \`bunx postboi doctor\`.
+`
 
 /** Where the package keeps the skill, relative to its root — the same path the link targets. */
 const SKILL_IN_PACKAGE = join("skills", "postboi")
@@ -167,17 +180,54 @@ export function skill_state(
 	}
 }
 
+/**
+ * The other places a skill install reaches, derived from the Claude target so a test
+ * pointing at a temp file gets none of them: `.agents/skills/…` beside `.claude/skills/…`,
+ * and the project's AGENTS.md when it has one.
+ */
+export function companions(target: string): { agents?: string; agents_md?: string } {
+	const claude = join(".claude", "skills", "postboi", "SKILL.md")
+	if (!target.endsWith(claude)) return {}
+	const root = target.slice(0, -claude.length)
+	return { agents: join(root, AGENTS_TARGET), agents_md: join(root, AGENTS_MD) }
+}
+
+/**
+ * Append the pointer to an AGENTS.md that exists and doesn't already mention postboi.
+ * Never creates the file: a project without one has chosen not to have one.
+ */
+export function point_agents_md(path: string | undefined): boolean {
+	if (!path || !existsSync(path)) return false
+	const current = readFileSync(path, "utf8")
+	if (/postboi/i.test(current)) return false
+	writeFileSync(path, current.replace(/\s*$/, "\n") + AGENTS_MD_POINTER)
+	console.log(`${green("✓")} pointed ${bold(path)} at the skill`)
+	return true
+}
+
+/** Install or refresh the skill's companions beside a freshly placed Claude copy. */
+function place_companions(target: string, skill: string): void {
+	const { agents, agents_md } = companions(target)
+	if (agents) {
+		if (present(agents)) refresh_skill(agents, skill)
+		else install_skill(agents, skill)
+	}
+	point_agents_md(agents_md)
+}
+
 /** Offer to install the agent skill into .claude/skills/; an existing copy is refreshed silently. */
 export async function offer_skill(prompts: Prompts, target = SKILL_TARGET): Promise<void> {
 	const skill = bundled_skill()
 	if (!skill) return
 	if (present(target)) {
 		refresh_skill(target, skill)
+		place_companions(target, skill)
 		return
 	}
 	const question = `\nInstall the ${bold("postboi")} agent skill? ${dim("— teaches AI coding agents the library")}`
 	if (!(await prompts.confirm(question))) return
 	install_skill(target, skill)
+	place_companions(target, skill)
 }
 
 /** Write (or link) the skill into place. Callers decide whether to ask first. */
@@ -219,8 +269,10 @@ export function skill_command(target = SKILL_TARGET): boolean {
 		if (!refresh_skill(target, skill)) {
 			console.log(`${green("✓")} already installed at ${bold(target)}`)
 		}
+		place_companions(target, skill)
 		return true
 	}
 	install_skill(target, skill)
+	place_companions(target, skill)
 	return true
 }
