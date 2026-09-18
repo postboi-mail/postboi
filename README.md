@@ -20,8 +20,10 @@ Postboi is a framework-agnostic messaging library optimised for SvelteKit — **
 provisions a working, claimable account with zero prompts and zero sign-in — the agent
 wires everything, you claim the project with one click when you're ready. The package
 also ships a skill that teaches agents the whole library. `bunx postboi skill` installs
-it at `.claude/skills/postboi/SKILL.md` (`init` offers the same thing), or read it in
-place at `node_modules/postboi/skills/postboi/SKILL.md`. Every docs page is also plain
+it at `.claude/skills/postboi/SKILL.md` and `.agents/skills/postboi/SKILL.md`, with the
+longer recipes beside it in `references/`, and adds a three-line pointer to an existing
+`AGENTS.md` (`init` offers the same thing), or read it in place at
+`node_modules/postboi/skills/postboi/SKILL.md`. Every docs page is also plain
 Markdown at [`docs.postboi.app/raw/<slug>`](https://docs.postboi.app/raw/push) — the HTML
 pages render client-side, so fetch those instead. All of it in one file:
 [`/llms-full.txt`](https://docs.postboi.app/llms-full.txt).

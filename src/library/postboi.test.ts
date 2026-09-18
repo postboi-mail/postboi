@@ -594,6 +594,52 @@ describe("the Postboi provider — account API", () => {
 		expect(sent_url()).toBe("https://postboi.app/v1/exports/sxp_1")
 	})
 
+	it("downloads an export now: the filter as a query string, the file as bytes and text", async () => {
+		const csv = "\uFEFFSent at,Subject\r\n2026-09-12T08:00:00.000Z,Query\r\n"
+		fetch.mockResolvedValue(
+			new Response(csv, {
+				status: 200,
+				headers: {
+					"Content-Type": "text/csv; charset=utf-8",
+					"Content-Disposition": 'attachment; filename="acme-messages.csv"',
+				},
+			})
+		)
+		const file = await provider().exports.download({
+			filter: { form: "Contact", status: ["delivered", "bounced"], since: "2026-09-01" },
+			columns: ["created_at", "subject"],
+			fields: false,
+		})
+		expect(sent_url()).toBe(
+			"https://postboi.app/v1/exports/download?form=Contact&since=2026-09-01&status=delivered%2Cbounced&columns=created_at%2Csubject&fields=0"
+		)
+		expect(sent_init().method).toBe("GET")
+		expect(sent_init().headers).toMatchObject({ Authorization: "Bearer t" })
+		expect(file.filename).toBe("acme-messages.csv")
+		expect(file.type).toContain("text/csv")
+		expect(file.text()).toBe(csv.slice(1)) // decoded, minus the BOM
+		expect(file.bytes.length).toBe(new TextEncoder().encode(csv).length)
+
+		// no options at all is the whole log, with no query string
+		fetch.mockResolvedValue(new Response("", { status: 200 }))
+		const bare = await provider().exports.download()
+		expect(sent_url()).toBe("https://postboi.app/v1/exports/download")
+		expect(bare.filename).toBe("export.csv")
+
+		// a refusal is the API's own message and code
+		fetch.mockResolvedValue(
+			new Response(
+				JSON.stringify({ message: "No form with that name.", code: "invalid_request" }),
+				{
+					status: 400,
+				}
+			)
+		)
+		await expect(provider().exports.download({ filter: { form: "Nope" } })).rejects.toThrow(
+			"No form with that name."
+		)
+	})
+
 	it("manages notifications: create with shorthand schedule, list, update, delete", async () => {
 		fetch.mockResolvedValue(
 			respond({ json: { id: "ntf_1", schedule: { frequency: "subscribe" } } })

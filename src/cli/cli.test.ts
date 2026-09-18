@@ -77,7 +77,14 @@ import {
 	upsert_captcha_key,
 	from_status,
 } from "./typegen.js"
-import { bundled_skill, offer_skill, refresh_skill, skill_command } from "./skill.js"
+import {
+	bundled_skill,
+	companions,
+	offer_skill,
+	point_agents_md,
+	refresh_skill,
+	skill_command,
+} from "./skill.js"
 import { detect_domains, hostname_of } from "./domain_hint.js"
 import { find_auth_keys, offer_auth_key, verify_apns } from "./apns.js"
 
@@ -1101,6 +1108,63 @@ describe("agent skill", () => {
 		p.close()
 		expect(lstatSync(t).isSymbolicLink()).toBe(true)
 		expect(readlinkSync(t).startsWith("..")).toBe(true) // relative — survives a clone
+	})
+
+	it("installs the references folder beside the skill", async () => {
+		const t = target()
+		const p = prompter([""])
+		await offer_skill(p, t)
+		p.close()
+		const reference = join(dirname(t), "references", "exports.md")
+		expect(existsSync(reference)).toBe(true)
+		expect(readFileSync(reference, "utf8")).toContain("postboi exports add")
+		// SKILL.md points at it by that relative path, so the two have to agree.
+		expect(bundled_skill()).toContain("references/exports.md")
+	})
+
+	it("refresh_skill adds references to an install from before they existed", () => {
+		const t = target()
+		writeFileSync(t, bundled_skill()!)
+		expect(refresh_skill(t)).toBe(true)
+		expect(existsSync(join(dirname(t), "references", "exports.md"))).toBe(true)
+		expect(refresh_skill(t)).toBe(false) // and is then quiet
+	})
+
+	it("a temp target has no companions; the real layout has both", () => {
+		expect(companions(target())).toEqual({})
+		const real = join("proj", ".claude", "skills", "postboi", "SKILL.md")
+		expect(companions(real)).toEqual({
+			agents: join("proj", ".agents", "skills", "postboi", "SKILL.md"),
+			agents_md: join("proj", "AGENTS.md"),
+		})
+	})
+
+	it("installs to .agents/skills too, and points an existing AGENTS.md at the skill, once", () => {
+		const root = mkdtempSync(join(tmpdir(), "postboi-proj-"))
+		writeFileSync(join(root, "AGENTS.md"), "# Project\n\nSome rules.\n")
+		const t = join(root, ".claude", "skills", "postboi", "SKILL.md")
+		expect(skill_command(t)).toBe(true)
+		expect(readFileSync(join(root, ".agents", "skills", "postboi", "SKILL.md"), "utf8")).toBe(
+			bundled_skill()
+		)
+		expect(existsSync(join(root, ".agents", "skills", "postboi", "references", "exports.md"))).toBe(
+			true
+		)
+		const agents_md = readFileSync(join(root, "AGENTS.md"), "utf8")
+		expect(agents_md).toContain("Some rules.")
+		expect(agents_md).toContain("bunx postboi doctor")
+		// a second run adds nothing
+		expect(skill_command(t)).toBe(true)
+		expect(readFileSync(join(root, "AGENTS.md"), "utf8")).toBe(agents_md)
+	})
+
+	it("never creates an AGENTS.md, and leaves one that already mentions postboi alone", () => {
+		const root = mkdtempSync(join(tmpdir(), "postboi-proj-"))
+		expect(point_agents_md(join(root, "AGENTS.md"))).toBe(false)
+		expect(existsSync(join(root, "AGENTS.md"))).toBe(false)
+		writeFileSync(join(root, "AGENTS.md"), "See the postboi skill.\n")
+		expect(point_agents_md(join(root, "AGENTS.md"))).toBe(false)
+		expect(readFileSync(join(root, "AGENTS.md"), "utf8")).toBe("See the postboi skill.\n")
 	})
 
 	it("links via node_modules/postboi, not the version-pinned store path", async () => {

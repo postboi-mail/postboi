@@ -9,7 +9,7 @@ import {
 } from "node:fs"
 import { spawnSync } from "node:child_process"
 import { join, delimiter, dirname } from "node:path"
-import { argv, cwd, exit, platform, env } from "node:process"
+import { argv, cwd, exit, platform, env, stdin } from "node:process"
 import {
 	PROVIDERS,
 	SMS_PROVIDERS,
@@ -105,17 +105,12 @@ import {
 import { fetch_whatsapp_templates } from "./whatsapp_templates.js"
 import { offer_skill, refresh_skill, skill_command } from "./skill.js"
 import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
-import { api_command } from "./api.js"
+import { api_command, ApiCommandError, error_json } from "./api.js"
+import { CONFIG_FILES, doctor } from "./doctor.js"
+import { help_text } from "./help.js"
 import { dev_command } from "./dev.js"
 import { inspect_command } from "./inspect.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
-
-const CONFIG_FILES = [
-	"postboi.config.ts",
-	"postboi.config.mts",
-	"postboi.config.js",
-	"postboi.config.mjs",
-]
 
 type Prompts = ReturnType<typeof create_prompts>
 
@@ -133,36 +128,7 @@ function help(): void {
 ${banner()}
 ${dim(`  v${version()}`)}
 
-${bold("Usage")}
-  ${cyan("bunx postboi init")}     Set up the Postboi provider or a provider of your own
-  ${dim("                          · --agent: zero prompts, zero sign-in — provisions a claimable")}
-  ${dim("                            sandbox account (made for AI coding agents and CI)")}
-  ${cyan("bunx postboi sync")}     Pull synced team credentials and refresh the generated from/template types
-  ${cyan("bunx postboi env")}      The synced credentials ${dim("· push · pull [--force] · remove <KEY>")}
-  ${cyan("bunx postboi vapid")}    Mint a VAPID key pair for Web Push, printed to stdout
-  ${cyan("bunx postboi skill")}    Install the agent skill, so AI coding agents know the library
-  ${cyan("bunx postboi dev")}      Local inbox for mail sent in development
-  ${dim("                          · --port <n> --demo --no-sound --no-intro")}
-  ${dim("                          (Vite projects already serve it at /__postboi)")}
-  ${cyan("bunx postboi inspect")}  Lint an email's HTML — client compatibility, clipping, dead links
-  ${dim("                          · <file.html> · --links --subject <s> --json (exit 1 on warnings)")}
-
-${bold("Account")} ${dim("(Postboi provider — full reference: https://api.postboi.app)")}
-  ${cyan("bunx postboi whoami")}          The account behind your token
-  ${cyan("bunx postboi send-address")}    Default sending address ${dim("· [name@yourdomain.com]")}
-  ${cyan("bunx postboi lists")}           Lists ${dim("· add <name> · delete <ref>")}
-  ${cyan("bunx postboi recipients")}      A list's recipients ${dim("· <list> add <email>… · <list> remove <email>")}
-  ${cyan("bunx postboi contacts")}        The audience ${dim("· add <email> [--name --phone --data] · <email> · remove <email>")}
-  ${cyan("bunx postboi domains")}         Sending domains ${dim("· add <domain> · check <ref> · delete <ref>")}
-  ${cyan("bunx postboi webhooks")}        Webhooks ${dim("· add <url> · delete <id> · deliveries <id>")}
-  ${cyan("bunx postboi members")}         Members ${dim("· invite <email> · remove <ref> · revoke <ref>")}
-  ${cyan("bunx postboi messages")}        Recent messages ${dim("· [status]")}
-  ${cyan("bunx postboi suppressions")}    Suppressed addresses ${dim("· add <email|+phone> · remove <email|+phone>")}
-
-${bold("Options")}
-  -h, --help        Show this help
-  -V, --version     Show the version
-`)
+${help_text()}`)
 }
 
 /** The committer's email from git config, or undefined — the unattended VAPID subject. */
@@ -1880,6 +1846,15 @@ function write_channel_config(
 }
 
 async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = false): Promise<void> {
+	// Without a terminal there is nobody to answer the prompts: the first one hits EOF and
+	// the run ends on "Cancelled", which reads as a bug. Say what to run instead.
+	if (!agent && !stdin.isTTY) {
+		console.error(red("postboi init asks questions, and there is no terminal here to answer them."))
+		console.error(
+			`  ${dim("Unattended:")} ${cyan("bunx postboi init --agent")} ${dim("— zero prompts, provisions a claimable project")}`
+		)
+		return exit(2)
+	}
 	// `--agent` swaps the prompter for one that answers itself — same flow, no questions,
 	// and the Postboi auth step provisions a claimable project instead of opening a browser.
 	const prompts = agent ? create_auto_prompts() : create_prompts()
@@ -1977,6 +1952,7 @@ async function main(): Promise<void> {
 		if (!skill_command()) exit(1)
 		return
 	}
+	if (command === "doctor") return doctor(argv.slice(3))
 	if (command === "vapid") return vapid_command()
 	if (command === "sync") return sync()
 	if (command === "env") return env_command(argv.slice(3))
@@ -1995,6 +1971,11 @@ main().catch((error) => {
 		console.log(dim("\nCancelled."))
 		exit(130)
 	}
-	console.error(red(error instanceof Error ? error.message : String(error)))
+	if (argv.includes("--json")) {
+		console.error(error_json(error))
+		exit(1)
+	}
+	const code = error instanceof ApiCommandError && error.code ? dim(` (${error.code})`) : ""
+	console.error(red(error instanceof Error ? error.message : String(error)) + code)
 	exit(1)
 })

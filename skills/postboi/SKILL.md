@@ -1,6 +1,6 @@
 ---
 name: postboi
-description: Integrate the postboi messaging library — send email, SMS, WhatsApp, push and chat (Slack, Discord, Teams, Telegram, Bluesky) from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), plus multi-channel `send()` that fans out or falls back across them. Wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Covers SvelteKit remote functions (postboi/remote) and migrating hand-rolled email code to postboi. Also covers full account setup and provider migration from the terminal — sending domains + DNS via `bunx postboi domains`, importing recipients and suppressions, webhooks, members, and the REST API at api.postboi.app. Use whenever a task involves postboi, adding email / SMS / WhatsApp / push / chat sending or contact forms, setting up or migrating an email or SMS provider/ESP, or replacing nodemailer/direct provider SDK calls in a project that has (or should have) postboi installed.
+description: Integrate the postboi messaging library — send email, SMS, WhatsApp, push and chat (Slack, Discord, Teams, Telegram, Bluesky) from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), plus multi-channel `send()` that fans out or falls back across them. Wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Covers SvelteKit remote functions (postboi/remote) and migrating hand-rolled email code to postboi. Also covers full account setup and provider migration from the terminal — sending domains + DNS via `bunx postboi domains`, importing recipients and suppressions, webhooks, members, and the REST API at api.postboi.app — and the hosted features behind a Postboi account: naming forms so submissions file as rows, scheduled exports (a CSV or spreadsheet of a form's submissions or the Sent log emailed daily, weekly or monthly — never build a cron job for this), list digests, and receiving. Use whenever a task involves postboi, adding email / SMS / WhatsApp / push / chat sending or contact forms, setting up or migrating an email or SMS provider/ESP, or replacing nodemailer/direct provider SDK calls in a project that has (or should have) postboi installed.
 ---
 
 # Postboi
@@ -226,6 +226,8 @@ Every provider on every channel throws the same normalised `PostboiError` (`prov
 
 ## Testing
 
+**Proving a send in dev without a human:** the dev inbox has an HTTP surface. On a Vite project it is the dev server's `/__postboi` (`curl -s localhost:5173/__postboi/api/messages` → `{ "messages": [...] }`, newest first, each with `to`, `subject`, `html`/`text`); with `bunx postboi dev` it is `localhost:1080/__postboi/api/messages`, and the live port is in `node_modules/.postboi/inbox.json`. `DELETE` the same URL to clear it. So: trigger the send, read the inbox, assert on it — no mailbox needed. In production, `bunx postboi messages <id>` is the same check against the real log.
+
 ```ts
 import Mock from "postboi/mock"
 
@@ -276,51 +278,36 @@ The steps that still involve the human, when they come up later:
 **Custom sending domain — get it from the user or the project, never guess.** If the user named their domain, or the project states it unambiguously (astro `site`, `package.json` `homepage`, a `CNAME` file, wrangler routes, a `SITE_URL` env var — `init --agent` prints what it detected as a suggestion), confirm it and run `bunx postboi domains add <domain>`, which prints the one-click DNS link. **On an unclaimed `--agent` project the API refuses domains until the human claims** (an anonymous token must not squat someone else's domain), so tell your user: claim first, then you'll add the domain — or they run the printed command themselves after claiming. If the domain is ambiguous or absent, ask — one question — or skip it. Interactive `init` offers the same thing itself (prefilled with the detected domain), so don't double-register after a human ran it.
 
 ```bash
-bunx postboi whoami                                # account, plan, usage — run first to verify the token
-bunx postboi domains add example.com               # prints DNS records + one-click Domain Connect URL
-bunx postboi domains check example.com             # re-check until verified (records land in minutes)
-bunx postboi lists add Newsletter
-bunx postboi recipients Newsletter add a@b.co c@d.co   # upserts contact + membership
-bunx postboi contacts add ada@example.com --data '{"plan":"pro"}'  # one contact, global data, shared across lists
-bunx postboi webhooks add https://example.com/api/events
-bunx postboi sync                                  # writes the webhook secret to POSTBOI_WEBHOOK_SECRET
-bunx postboi members invite colleague@example.com
-bunx postboi suppressions add bounced@example.com
-bunx postboi suppressions add +447788223344         # a number is suppressed per channel: SMS here, --channel whatsapp for the other
-bunx postboi messages                              # recent sends with delivery status
-bunx postboi webhooks deliveries <id>              # per-endpoint delivery log for debugging
+bunx postboi doctor                                # is this project wired? run first and last — exit 1 on a failure, --json for data
+bunx postboi send --to you@example.com --subject "Test" --text "hi"   # one real send; prints the id
+bunx postboi messages <id>                         # what happened to it: status, opens, error, a form's fields
 ```
 
-Anything richer than the CLI exposes, use the REST API — interactive reference at https://api.postboi.app (OpenAPI at `/openapi.json`). Auth is `Authorization: Bearer $POSTBOI_TOKEN`; errors are always `{ "message", "code" }`.
+Every noun lists bare and takes verbs — `whoami`, `send-address`, `lists` (`add · send · delete`), `recipients`, `contacts`, `domains` (`add · check · inbound · delete`), `webhooks` (`add · rotate · deliveries · delete`), `members`, `messages`, `exports` (`download · add · run · pause · resume · delete`), `suppressions`, `forms`, `notifications`, `testing` — and the **full table with every flag is `references/cli.md`** beside this file (the same content as https://docs.postboi.app/raw/cli). Add `--json` to any of them for the API's response as one JSON document (a failure is `{ "error": { "message", "code" } }` on stderr, exit 1) and branch on the `code`, never the wording.
 
 **Cautions:** deletes are immediate and unprompted (`lists delete` takes the recipients with it). API-key management, member roles and billing are dashboard-only by design — send the user there rather than trying.
 
-### Fresh project playbook
+### The playbooks
 
-`init --agent` (no human needed) → `whoami` → wire the code → **hand the user the claim URL** → optionally `domains add`, user clicks the setup link, `domains check` → only once **verified**, set `default.from` to the custom domain → `webhooks add` + `sync` if the app reacts to delivery events. When the human is present and wants to sign in now, plain `init` (interactive) does that instead and skips the sandbox.
+Two orderings that matter live in `references/migration.md` beside this file: the **fresh
+project** sequence (`init --agent` → wire → hand over the claim URL → domain → webhooks —
+never blocking the code on DNS or on the claim) and **migrating from another ESP**
+(domain first, suppressions imported before anything sends, `?status=subscribed` on
+already-confirmed recipients, then the code swap). Read it before either.
 
-Until a domain verifies, sends come from the account's shared `send.postboi.email` address. That works immediately, so **never block the code migration on DNS** — and never block wiring the code on the claim either: sandboxed sends prove the integration end to end (they're in the message log), and in dev the [dev inbox](https://docs.postboi.app/raw/dev-inbox) captures everything locally anyway.
+## Hosted features (Postboi provider)
 
-### Migrating from another ESP
+An account does more than send, and each of these is **already built and hosted** — switch it on, don't write it. Each row is the client on the `mail` instance, the CLI verb, and the docs page to fetch (raw Markdown at `https://docs.postboi.app/raw/<slug>`); the ones with a reference file next to this skill carry the recipe there.
 
-Order matters — the old provider keeps sending until the new domain verifies.
+| Feature                                                                                                                                          | From code                                           | CLI                                  | Read                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------ | ------------------------------------- |
+| **Forms** — name the form on a send (`form: "Contact"`) and its submissions file as rows with a column per field, exportable and typed by `sync` | `mail.forms.all()`                                  | `forms`                              | `/raw/forms`                          |
+| **Scheduled exports** — a form's submissions or a Sent-log filter emailed as CSV/xlsx daily, weekly or monthly                                   | `mail.exports.create / all / update / run / delete` | `exports add · run · pause · delete` | `references/exports.md`, `/raw/forms` |
+| **List digests** — a recurring email to a list's recipients on a schedule                                                                        | `mail.notifications.create(list, …)`                | `notifications <list> add`           | `/raw/provider` (Notifications)       |
+| **Message log** — status, opens, cancel and reschedule                                                                                           | `mail.messages.get / all / cancel / reschedule`     | `messages [status]`                  | `/raw/provider` (Delivery status)     |
+| **Receiving** — inbound mail on a verified domain, delivered as `received` events                                                                | `POST /v1/domains/{id}/inbound`                     | `domains inbound <domain>`           | `/raw/provider` (Receiving)           |
 
-1. `init` + `whoami`.
-2. `domains add` the sending domain. The DKIM CNAMEs coexist with the old provider's records, so this is zero-downtime. `domains check` until verified.
-3. **Import suppressions before anything sends** — export bounces/complaints/unsubscribes from the old provider, then `suppressions add` each (a loop is fine, one address per call).
-4. Import recipients. Bare emails: `recipients <list> add …`. With names/custom data, or in bulk (up to 10,000 per call), POST the API:
-
-   ```bash
-   curl -X POST "https://api.postboi.app/v1/lists/Newsletter/recipients?status=subscribed" \
-   	-H "Authorization: Bearer $POSTBOI_TOKEN" -H "Content-Type: application/json" \
-   	-d '[{ "email": "a@b.co", "name": "Ada", "data": { "plan": "pro" } }]'
-   ```
-
-   **Critical on double-opt-in lists:** pass `?status=subscribed` (or per-row `"status": "subscribed"`) for already-confirmed subscribers — those rows get **no** confirmation email. Omitting it re-confirms the entire imported base.
-
-5. Swap the sending code (see [Migrating existing email code](#migrating-existing-email-code-to-postboi)), and flip `default.from` once the domain is verified.
-6. `webhooks add` + `sync`; port suppress-on-bounce logic to the normalized events.
-7. Verify end-to-end: `messages` shows delivery statuses, `webhooks deliveries <id>` shows the event feed.
+Every one of them needs a `POSTBOI_TOKEN` — on another provider there is no account, and the honest answer is "that lives in Postboi's hosted side; want to add it?".
 
 ## Quick reference
 

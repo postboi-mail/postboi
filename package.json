@@ -9,6 +9,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && npm run prepack",
+		"docs:cli": "bun scripts/cli-docs.ts",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"build:cli": "bun build ./src/cli/index.ts --target=node --outfile dist/cli.js",
