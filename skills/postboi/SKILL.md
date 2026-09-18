@@ -292,7 +292,7 @@ bunx postboi exports add "Weekly enquiries" --to ops@acme.example --form Contact
 bunx postboi webhooks deliveries <id>              # per-endpoint delivery log for debugging
 ```
 
-Anything richer than the CLI exposes, use the REST API — interactive reference at https://api.postboi.app (OpenAPI at `/openapi.json`). Auth is `Authorization: Bearer $POSTBOI_TOKEN`; errors are always `{ "message", "code" }`.
+Add `--json` to any account command for the API's response as one JSON document (errors go to stderr as `{ "error": { "message", "code" } }` and exit 1) — parse that rather than the table. Anything richer than the CLI exposes, use the REST API — interactive reference at https://api.postboi.app (OpenAPI at `/openapi.json`). Auth is `Authorization: Bearer $POSTBOI_TOKEN`; errors are always `{ "message", "code" }`.
 
 **Cautions:** deletes are immediate and unprompted (`lists delete` takes the recipients with it). API-key management, member roles and billing are dashboard-only by design — send the user there rather than trying.
 

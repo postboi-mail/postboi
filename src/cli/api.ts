@@ -10,8 +10,32 @@ import { bold, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
  * https://api.postboi.app
  */
 
-/** A failure with a message safe to print as-is — main() prints it red and exits 1. */
-export class ApiCommandError extends Error {}
+/**
+ * A failure with a message safe to print as-is — main() prints it red and exits 1. `code`
+ * is the API's own (`name_taken`, `export_paused`, …) when the API said so, and is what a
+ * script or an agent should branch on rather than the wording.
+ */
+export class ApiCommandError extends Error {
+	code?: string
+	constructor(message: string, code?: string) {
+		super(message)
+		this.code = code
+	}
+}
+
+/**
+ * `--json` on any account command: the API's response printed as one JSON document and
+ * nothing else on stdout, so a pipeline or an agent reads the body rather than a table.
+ * Set by `api_command`, read by `say`, cleared after the command.
+ */
+let json_mode = false
+/** The last successful API response — what `--json` prints. */
+let last_response: unknown
+
+/** Print a line for a person; silent under `--json`, where stdout is the document. */
+function say(line = ""): void {
+	if (!json_mode) console.log(line)
+}
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -23,7 +47,10 @@ async function api<T>(
 	await ensure_env_loaded()
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
-		throw new ApiCommandError("No POSTBOI_TOKEN found — run `postboi init` to sign in first.")
+		throw new ApiCommandError(
+			"No POSTBOI_TOKEN found — run `postboi init` to sign in first.",
+			"no_token"
+		)
 	}
 	let response: Response
 	try {
@@ -37,15 +64,22 @@ async function api<T>(
 		})
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
-		throw new ApiCommandError(`Could not reach ${cloud_base()} (${reason}). Are you online?`)
+		throw new ApiCommandError(
+			`Could not reach ${cloud_base()} (${reason}). Are you online?`,
+			"unreachable"
+		)
 	}
 	const data = (await response.json().catch(() => undefined)) as
-		| (T & { message?: string })
+		| (T & { message?: string; code?: string })
 		| undefined
 	if (!response.ok) {
-		throw new ApiCommandError(data?.message ?? `The API responded with ${response.status}.`)
+		throw new ApiCommandError(
+			data?.message ?? `The API responded with ${response.status}.`,
+			data?.code ?? `http_${response.status}`
+		)
 	}
 	if (data === undefined) throw new ApiCommandError("Unexpected empty response from the API.")
+	last_response = data
 	return data
 }
 
@@ -57,7 +91,10 @@ async function api_file(
 	await ensure_env_loaded()
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
-		throw new ApiCommandError("No POSTBOI_TOKEN found — run `postboi init` to sign in first.")
+		throw new ApiCommandError(
+			"No POSTBOI_TOKEN found — run `postboi init` to sign in first.",
+			"no_token"
+		)
 	}
 	let response: Response
 	try {
@@ -66,11 +103,19 @@ async function api_file(
 		})
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
-		throw new ApiCommandError(`Could not reach ${cloud_base()} (${reason}). Are you online?`)
+		throw new ApiCommandError(
+			`Could not reach ${cloud_base()} (${reason}). Are you online?`,
+			"unreachable"
+		)
 	}
 	if (!response.ok) {
-		const data = (await response.json().catch(() => undefined)) as { message?: string } | undefined
-		throw new ApiCommandError(data?.message ?? `The API responded with ${response.status}.`)
+		const data = (await response.json().catch(() => undefined)) as
+			| { message?: string; code?: string }
+			| undefined
+		throw new ApiCommandError(
+			data?.message ?? `The API responded with ${response.status}.`,
+			data?.code ?? `http_${response.status}`
+		)
 	}
 	const disposition = response.headers.get("content-disposition") ?? ""
 	return {
@@ -94,8 +139,8 @@ export function table(header: Array<string>, rows: Array<Array<string>>): void {
 			.map((cell, i) => cell + " ".repeat(widths[i] - width(cell)))
 			.join("  ")
 			.trimEnd()
-	console.log(dim(line(header)))
-	for (const row of rows) console.log(line(row))
+	say(dim(line(header)))
+	for (const row of rows) say(line(row))
 }
 
 function day(iso: string | undefined): string {
@@ -117,19 +162,17 @@ async function whoami(): Promise<void> {
 		unclaimed?: boolean
 		claim_url?: string
 	}>("/v1/account")
-	console.log(`${bold(account.name ?? "My Team")} ${dim(`(${account.id})`)}`)
-	console.log(`  plan          ${account.plan}`)
-	console.log(`  send address  ${account.send_address}`)
-	console.log(
-		`  sends         ${account.sends_today} today, ${account.sends_this_month} this month`
-	)
-	if (account.suspended) console.log(`  ${red("suspended — contact support@postboi.app")}`)
+	say(`${bold(account.name ?? "My Team")} ${dim(`(${account.id})`)}`)
+	say(`  plan          ${account.plan}`)
+	say(`  send address  ${account.send_address}`)
+	say(`  sends         ${account.sends_today} today, ${account.sends_this_month} this month`)
+	if (account.suspended) say(`  ${red("suspended — contact support@postboi.app")}`)
 	if (account.unclaimed && account.claim_url) {
-		console.log(
+		say(
 			`  ${yellow("unclaimed")}     sandboxed until claimed — claim it at ${cyan(account.claim_url)}`
 		)
 	} else if (account.sandbox) {
-		console.log(`  ${yellow("sandbox")}       sends are logged, nothing is delivered`)
+		say(`  ${yellow("sandbox")}       sends are logged, nothing is delivered`)
 	}
 }
 
@@ -143,13 +186,13 @@ async function send_address(args: Array<string>): Promise<void> {
 	const address = args.join(" ").trim()
 	if (!address) {
 		const account = await api<{ send_address: string }>("/v1/account")
-		return console.log(`${dim("Send address:")} ${account.send_address}`)
+		return say(`${dim("Send address:")} ${account.send_address}`)
 	}
 	const updated = await api<{ send_address: string }>("/v1/account", {
 		method: "PATCH",
 		body: { send_address: address },
 	})
-	console.log(`${green("✓")} send address set to ${bold(updated.send_address)}`)
+	say(`${green("✓")} send address set to ${bold(updated.send_address)}`)
 }
 
 // ── Lists ──────────────────────────────────────────────────────────────────
@@ -163,7 +206,7 @@ async function lists(args: Array<string>): Promise<void> {
 			method: "POST",
 			body: { name },
 		})
-		return console.log(`${green("✓")} created ${bold(list.name)} ${dim(`(${list.id})`)}`)
+		return say(`${green("✓")} created ${bold(list.name)} ${dim(`(${list.id})`)}`)
 	}
 	if (action === "delete") {
 		const ref = rest.join(" ").trim()
@@ -171,7 +214,7 @@ async function lists(args: Array<string>): Promise<void> {
 		const gone = await api<{ id: string }>(`/v1/lists/${encodeURIComponent(ref)}`, {
 			method: "DELETE",
 		})
-		return console.log(`${green("✓")} deleted ${bold(ref)} ${dim(`(${gone.id})`)}`)
+		return say(`${green("✓")} deleted ${bold(ref)} ${dim(`(${gone.id})`)}`)
 	}
 	if (action) throw new ApiCommandError(`Unknown action: lists ${action}. Try add or delete.`)
 
@@ -184,7 +227,7 @@ async function lists(args: Array<string>): Promise<void> {
 			created_at: string
 		}>
 	}>("/v1/lists")
-	if (rows.length === 0) return console.log(dim("No lists yet — postboi lists add <name>"))
+	if (rows.length === 0) return say(dim("No lists yet — postboi lists add <name>"))
 	table(
 		["NAME", "RECIPIENTS", "OPT-IN", "CREATED", "ID"],
 		rows.map((l) => [
@@ -210,13 +253,13 @@ async function recipients(args: Array<string>): Promise<void> {
 			body: emails,
 		})
 		const pending = result.pending > 0 ? dim(` (${result.pending} pending confirmation)`) : ""
-		return console.log(`${green("✓")} added ${result.added}, updated ${result.updated}${pending}`)
+		return say(`${green("✓")} added ${result.added}, updated ${result.updated}${pending}`)
 	}
 	if (action === "remove") {
 		const email = emails[0]
 		if (!email) throw new ApiCommandError("Usage: postboi recipients <list> remove <email>")
 		await api(`${path}?email=${encodeURIComponent(email)}`, { method: "DELETE" })
-		return console.log(`${green("✓")} removed ${bold(email)}`)
+		return say(`${green("✓")} removed ${bold(email)}`)
 	}
 	if (action) throw new ApiCommandError(`Unknown action: recipients ${action}. Try add or remove.`)
 
@@ -224,7 +267,7 @@ async function recipients(args: Array<string>): Promise<void> {
 		name: string
 		recipients: Array<{ email: string; name?: string; status: string }>
 	}>(`/v1/lists/${encodeURIComponent(ref)}`)
-	if (list.recipients.length === 0) return console.log(dim(`${list.name} has no recipients yet.`))
+	if (list.recipients.length === 0) return say(dim(`${list.name} has no recipients yet.`))
 	table(
 		["EMAIL", "NAME", "STATUS"],
 		list.recipients.map((r) => [
@@ -296,14 +339,14 @@ async function contacts(args: Array<string>): Promise<void> {
 			method: "POST",
 			body: { email, name: flags.name, phone: flags.phone, data },
 		})
-		return console.log(`${green("✓")} saved ${bold(contact.email)}`)
+		return say(`${green("✓")} saved ${bold(contact.email)}`)
 	}
 
 	if (action === "remove") {
 		const email = rest_args[0]
 		if (!email) throw new ApiCommandError("Usage: postboi contacts remove <email>")
 		await api(`/v1/contacts/${encodeURIComponent(email)}`, { method: "DELETE" })
-		return console.log(`${green("✓")} removed ${bold(email)}`)
+		return say(`${green("✓")} removed ${bold(email)}`)
 	}
 
 	// A bare `contacts <email>` shows one contact and the lists it's on.
@@ -313,13 +356,13 @@ async function contacts(args: Array<string>): Promise<void> {
 				memberships: Array<{ list: { name: string }; status: string; created_at: string }>
 			}
 		>(`/v1/contacts/${encodeURIComponent(action)}`)
-		console.log(`${bold(contact.email)}${contact.name ? dim(` (${contact.name})`) : ""}`)
-		if (contact.phone) console.log(`  ${dim("phone:")} ${contact.phone}`)
+		say(`${bold(contact.email)}${contact.name ? dim(` (${contact.name})`) : ""}`)
+		if (contact.phone) say(`  ${dim("phone:")} ${contact.phone}`)
 		if (contact.data && Object.keys(contact.data).length > 0) {
-			console.log(`  ${dim("data:")} ${JSON.stringify(contact.data)}`)
+			say(`  ${dim("data:")} ${JSON.stringify(contact.data)}`)
 		}
-		if (contact.memberships.length === 0) return console.log(dim("  On no lists."))
-		console.log()
+		if (contact.memberships.length === 0) return say(dim("  On no lists."))
+		say()
 		return table(
 			["LIST", "STATUS", "SINCE"],
 			contact.memberships.map((m) => [
@@ -332,7 +375,7 @@ async function contacts(args: Array<string>): Promise<void> {
 
 	// No action → page the whole audience.
 	const { contacts: rows } = await api<{ contacts: Array<ContactWire> }>("/v1/contacts")
-	if (rows.length === 0) return console.log(dim("No contacts yet — postboi contacts add <email>"))
+	if (rows.length === 0) return say(dim("No contacts yet — postboi contacts add <email>"))
 	table(
 		["EMAIL", "NAME", "CREATED"],
 		rows.map((c) => [c.email, c.name ?? "", day(c.created_at)])
@@ -352,11 +395,11 @@ interface DomainDetail {
 /** The records table + registrar shortcut a pending domain needs. */
 function print_domain_setup(detail: DomainDetail): void {
 	if (detail.status === "verified") {
-		return console.log(`${green("✓")} ${bold(detail.domain)} is verified`)
+		return say(`${green("✓")} ${bold(detail.domain)} is verified`)
 	}
-	console.log(`${yellow("⌛")} ${bold(detail.domain)} is ${detail.status}`)
+	say(`${yellow("⌛")} ${bold(detail.domain)} is ${detail.status}`)
 	if (detail.records.length > 0) {
-		console.log(`\n${bold("Publish these DNS records:")}\n`)
+		say(`\n${bold("Publish these DNS records:")}\n`)
 		table(
 			["TYPE", "NAME", "VALUE"],
 			detail.records.map((r) => [
@@ -369,17 +412,15 @@ function print_domain_setup(detail: DomainDetail): void {
 	const setup = detail.setup
 	if (setup?.connect_url) {
 		const dmarc = setup.covers_dmarc ? " (DMARC included)" : ""
-		console.log(`\n${bold(`One-click setup at ${setup.provider}:`)}${dim(dmarc)}\n`)
-		console.log(`  ${cyan(setup.connect_url)}\n`)
+		say(`\n${bold(`One-click setup at ${setup.provider}:`)}${dim(dmarc)}\n`)
+		say(`  ${cyan(setup.connect_url)}\n`)
 		if (stdout.isTTY && open_browser(setup.connect_url)) {
-			console.log(dim("  (opening in your default browser)"))
+			say(dim("  (opening in your default browser)"))
 		}
 	} else if (setup?.manage_url) {
-		console.log(
-			`\n${dim(`Add them in your ${setup.provider} DNS console:`)} ${cyan(setup.manage_url)}`
-		)
+		say(`\n${dim(`Add them in your ${setup.provider} DNS console:`)} ${cyan(setup.manage_url)}`)
 	}
-	console.log(`\n${dim("Then:")} ${cyan(`bunx postboi domains check ${detail.domain}`)}`)
+	say(`\n${dim("Then:")} ${cyan(`bunx postboi domains check ${detail.domain}`)}`)
 }
 
 async function domains(args: Array<string>): Promise<void> {
@@ -387,7 +428,7 @@ async function domains(args: Array<string>): Promise<void> {
 	if (action === "add") {
 		if (!ref) throw new ApiCommandError("Usage: postboi domains add <domain>")
 		const detail = await api<DomainDetail>("/v1/domains", { method: "POST", body: { domain: ref } })
-		console.log(`${green("✓")} registered ${bold(detail.domain)}\n`)
+		say(`${green("✓")} registered ${bold(detail.domain)}\n`)
 		return print_domain_setup(detail)
 	}
 	if (action === "check") {
@@ -400,7 +441,7 @@ async function domains(args: Array<string>): Promise<void> {
 	if (action === "delete") {
 		if (!ref) throw new ApiCommandError("Usage: postboi domains delete <domain>")
 		await api(`/v1/domains/${encodeURIComponent(ref)}`, { method: "DELETE" })
-		return console.log(
+		return say(
 			`${green("✓")} removed ${bold(ref)} ${dim("(DNS records at your registrar are untouched)")}`
 		)
 	}
@@ -409,9 +450,9 @@ async function domains(args: Array<string>): Promise<void> {
 	}
 
 	const identity = await api<{ send_address: string; domains: Array<PostboiDomain> }>("/v1/domains")
-	console.log(`${dim("Send address:")} ${identity.send_address}\n`)
+	say(`${dim("Send address:")} ${identity.send_address}\n`)
 	if (identity.domains.length === 0) {
-		return console.log(dim("No custom domains yet — postboi domains add <domain>"))
+		return say(dim("No custom domains yet — postboi domains add <domain>"))
 	}
 	table(
 		["DOMAIN", "STATUS"],
@@ -421,9 +462,7 @@ async function domains(args: Array<string>): Promise<void> {
 		])
 	)
 	if (identity.domains.some((d) => d.status !== "verified")) {
-		console.log(
-			`\n${dim("Pending? See its records:")} ${cyan("bunx postboi domains check <domain>")}`
-		)
+		say(`\n${dim("Pending? See its records:")} ${cyan("bunx postboi domains check <domain>")}`)
 	}
 }
 
@@ -437,16 +476,14 @@ async function webhooks(args: Array<string>): Promise<void> {
 			method: "POST",
 			body: { url: ref },
 		})
-		console.log(`${green("✓")} created ${bold(endpoint.url)} ${dim(`(${endpoint.id})`)}`)
-		console.log(`  ${dim("secret:")} ${endpoint.secret}`)
-		return console.log(
-			`  ${dim("`postboi sync` writes it to POSTBOI_WEBHOOK_SECRET for receive().")}`
-		)
+		say(`${green("✓")} created ${bold(endpoint.url)} ${dim(`(${endpoint.id})`)}`)
+		say(`  ${dim("secret:")} ${endpoint.secret}`)
+		return say(`  ${dim("`postboi sync` writes it to POSTBOI_WEBHOOK_SECRET for receive().")}`)
 	}
 	if (action === "delete") {
 		if (!ref) throw new ApiCommandError("Usage: postboi webhooks delete <id>")
 		await api(`/v1/webhooks/${encodeURIComponent(ref)}`, { method: "DELETE" })
-		return console.log(`${green("✓")} deleted ${bold(ref)}`)
+		return say(`${green("✓")} deleted ${bold(ref)}`)
 	}
 	if (action === "deliveries") {
 		if (!ref) throw new ApiCommandError("Usage: postboi webhooks deliveries <id>")
@@ -459,7 +496,7 @@ async function webhooks(args: Array<string>): Promise<void> {
 				created_at: string
 			}>
 		}>(`/v1/webhooks/${encodeURIComponent(ref)}/deliveries`)
-		if (deliveries.length === 0) return console.log(dim("No deliveries yet."))
+		if (deliveries.length === 0) return say(dim("No deliveries yet."))
 		return table(
 			["EVENT", "STATUS", "ATTEMPTS", "WHEN", "ERROR"],
 			deliveries.map((d) => [
@@ -488,7 +525,7 @@ async function webhooks(args: Array<string>): Promise<void> {
 			disabled: boolean
 		}>
 	}>("/v1/webhooks")
-	if (rows.length === 0) return console.log(dim("No webhooks yet — postboi webhooks add <url>"))
+	if (rows.length === 0) return say(dim("No webhooks yet — postboi webhooks add <url>"))
 	table(
 		["URL", "EVENTS", "STATE", "ID"],
 		rows.map((w) => [
@@ -510,7 +547,7 @@ async function members(args: Array<string>): Promise<void> {
 			method: "POST",
 			body: { email: ref },
 		})
-		return console.log(
+		return say(
 			`${green("✓")} invited ${bold(invite.email)} ${dim(`(expires ${day(invite.expires_at)})`)}`
 		)
 	}
@@ -519,14 +556,14 @@ async function members(args: Array<string>): Promise<void> {
 		const gone = await api<{ email: string }>(`/v1/members/${encodeURIComponent(ref)}`, {
 			method: "DELETE",
 		})
-		return console.log(`${green("✓")} removed ${bold(gone.email)}`)
+		return say(`${green("✓")} removed ${bold(gone.email)}`)
 	}
 	if (action === "revoke") {
 		if (!ref) throw new ApiCommandError("Usage: postboi members revoke <email or invite id>")
 		const gone = await api<{ email: string }>(`/v1/members/invites/${encodeURIComponent(ref)}`, {
 			method: "DELETE",
 		})
-		return console.log(`${green("✓")} revoked the invite for ${bold(gone.email)}`)
+		return say(`${green("✓")} revoked the invite for ${bold(gone.email)}`)
 	}
 	if (action) {
 		throw new ApiCommandError(`Unknown action: members ${action}. Try invite, remove, or revoke.`)
@@ -541,9 +578,7 @@ async function members(args: Array<string>): Promise<void> {
 		data.members.map((m) => [m.email, m.name ?? "", m.role, day(m.created_at)])
 	)
 	for (const invite of data.invites) {
-		console.log(
-			`  ${invite.email}  ${yellow("invited")} ${dim(`(expires ${day(invite.expires_at)})`)}`
-		)
+		say(`  ${invite.email}  ${yellow("invited")} ${dim(`(expires ${day(invite.expires_at)})`)}`)
 	}
 }
 
@@ -561,7 +596,7 @@ async function messages(args: Array<string>): Promise<void> {
 			created_at: string
 		}>
 	}>(`/v1/messages${query}`)
-	if (rows.length === 0) return console.log(dim("No messages."))
+	if (rows.length === 0) return say(dim("No messages."))
 	table(
 		["WHEN", "TO", "SUBJECT", "STATUS", "ID"],
 		rows.map((m) => [
@@ -614,10 +649,10 @@ async function suppressions(args: Array<string>): Promise<void> {
 		const target = suppression_target(value, flags.channel)
 		if (action === "add") {
 			await api("/v1/suppressions", { method: "POST", body: target.body })
-			return console.log(`${green("✓")} suppressed ${bold(target.label)}`)
+			return say(`${green("✓")} suppressed ${bold(target.label)}`)
 		}
 		await api(`/v1/suppressions?${target.query}`, { method: "DELETE" })
-		return console.log(`${green("✓")} unsuppressed ${bold(target.label)}`)
+		return say(`${green("✓")} unsuppressed ${bold(target.label)}`)
 	}
 	if (action) {
 		throw new ApiCommandError(`Unknown action: suppressions ${action}. Try add or remove.`)
@@ -632,7 +667,7 @@ async function suppressions(args: Array<string>): Promise<void> {
 			created_at: string
 		}>
 	}>("/v1/suppressions")
-	if (rows.length === 0) return console.log(dim("No suppressed addresses."))
+	if (rows.length === 0) return say(dim("No suppressed addresses."))
 	table(
 		["ADDRESS", "CHANNEL", "REASON", "SINCE"],
 		rows.map((s) => [s.email ?? s.phone ?? "", s.channel, s.reason, day(s.created_at)])
@@ -775,19 +810,19 @@ async function exports_command(args: Array<string>): Promise<void> {
 				schedule,
 			},
 		})
-		console.log(
+		say(
 			`${green("✓")} scheduled ${bold(created.name)} ${dim(`(${created.id})`)} — ${describe_schedule(created.schedule)}`
 		)
-		console.log(`  ${dim("to:")} ${created.recipients.map((r) => r.email).join(", ")}`)
+		say(`  ${dim("to:")} ${created.recipients.map((r) => r.email).join(", ")}`)
 		const set = Object.entries(created.filter).filter(([, value]) => value !== undefined)
-		console.log(
+		say(
 			`  ${dim("rows:")} ${
 				set.length === 0
 					? "the whole Sent log"
 					: set.map(([key, value]) => `${key}=${String(value)}`).join(" ")
 			}${created.format === "xlsx" ? dim(" · xlsx") : ""}${dim(` · ${created.window.replace(/_/g, " ")}`)}`
 		)
-		return console.log(`  ${dim(`postboi exports run ${created.id} sends one now.`)}`)
+		return say(`  ${dim(`postboi exports run ${created.id} sends one now.`)}`)
 	}
 
 	if (action === "download") {
@@ -817,7 +852,8 @@ async function exports_command(args: Array<string>): Promise<void> {
 		}
 		const target = download_target(flags.out, file.filename, on.has("xlsx") ? "xlsx" : "csv")
 		writeFileSync(target, file.bytes)
-		return console.log(`${green("✓")} wrote ${bold(target)}${count}`)
+		last_response = { filename: target, bytes: file.bytes.length, rows }
+		return say(`${green("✓")} wrote ${bold(target)}${count}`)
 	}
 
 	if (action === "run" || action === "pause" || action === "resume" || action === "delete") {
@@ -826,19 +862,17 @@ async function exports_command(args: Array<string>): Promise<void> {
 		const path = `/v1/exports/${encodeURIComponent(id)}`
 		if (action === "run") {
 			await api(`${path}/run`, { method: "POST" })
-			return console.log(
-				`${green("✓")} queued ${bold(id)} ${dim("— the file goes within a minute")}`
-			)
+			return say(`${green("✓")} queued ${bold(id)} ${dim("— the file goes within a minute")}`)
 		}
 		if (action === "delete") {
 			await api(path, { method: "DELETE" })
-			return console.log(`${green("✓")} deleted ${bold(id)}`)
+			return say(`${green("✓")} deleted ${bold(id)}`)
 		}
 		const row = await api<ExportWire>(path, {
 			method: "PATCH",
 			body: { paused: action === "pause" },
 		})
-		return console.log(
+		return say(
 			`${green("✓")} ${action === "pause" ? "paused" : "resumed"} ${bold(row.name)}${
 				row.next_run_at ? dim(` — next ${row.next_run_at.slice(0, 16).replace("T", " ")}`) : ""
 			}`
@@ -853,9 +887,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 
 	const { exports: rows } = await api<{ exports: Array<ExportWire> }>("/v1/exports")
 	if (rows.length === 0) {
-		return console.log(
-			dim("No scheduled exports — postboi exports add <name> --to <email> --weekly")
-		)
+		return say(dim("No scheduled exports — postboi exports add <name> --to <email> --weekly"))
 	}
 	table(
 		["NAME", "SCHEDULE", "TO", "NEXT", "STATE", "ID"],
@@ -906,6 +938,21 @@ const LISTING = new Set([
 export async function api_command(command: string, args: Array<string>): Promise<boolean> {
 	const handler = COMMANDS[command]
 	if (!handler) return false
-	await handler(LISTING.has(command) && args[0] === "list" ? args.slice(1) : args)
+	json_mode = args.includes("--json")
+	last_response = undefined
+	const rest = args.filter((arg) => arg !== "--json")
+	try {
+		await handler(LISTING.has(command) && rest[0] === "list" ? rest.slice(1) : rest)
+		if (json_mode) console.log(JSON.stringify(last_response ?? null, null, 2))
+	} finally {
+		json_mode = false
+	}
 	return true
+}
+
+/** How main() reports a failure under `--json`: one JSON document on stderr, with the code. */
+export function error_json(error: unknown): string {
+	const message = error instanceof Error ? error.message : String(error)
+	const code = error instanceof ApiCommandError ? error.code : undefined
+	return JSON.stringify({ error: { message, code } })
 }
