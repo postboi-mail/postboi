@@ -104,6 +104,7 @@ export const contentSections: ContentSectionConfig[] = [
 				items: [
 					{ slug: "api", name: "API reference" },
 					{ slug: "rest-api", name: "REST API" },
+					{ slug: "cli", name: "CLI" },
 				],
 			},
 		],
