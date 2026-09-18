@@ -47,7 +47,10 @@ async function api<T>(
 	await ensure_env_loaded()
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
-		throw new ApiCommandError("No POSTBOI_TOKEN found — run `postboi init` to sign in first.")
+		throw new ApiCommandError(
+			"No POSTBOI_TOKEN found — run `postboi init` to sign in first.",
+			"no_token"
+		)
 	}
 	let response: Response
 	try {
@@ -61,7 +64,10 @@ async function api<T>(
 		})
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
-		throw new ApiCommandError(`Could not reach ${cloud_base()} (${reason}). Are you online?`)
+		throw new ApiCommandError(
+			`Could not reach ${cloud_base()} (${reason}). Are you online?`,
+			"unreachable"
+		)
 	}
 	const data = (await response.json().catch(() => undefined)) as
 		| (T & { message?: string; code?: string })
@@ -85,7 +91,10 @@ async function api_file(
 	await ensure_env_loaded()
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
-		throw new ApiCommandError("No POSTBOI_TOKEN found — run `postboi init` to sign in first.")
+		throw new ApiCommandError(
+			"No POSTBOI_TOKEN found — run `postboi init` to sign in first.",
+			"no_token"
+		)
 	}
 	let response: Response
 	try {
@@ -94,7 +103,10 @@ async function api_file(
 		})
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
-		throw new ApiCommandError(`Could not reach ${cloud_base()} (${reason}). Are you online?`)
+		throw new ApiCommandError(
+			`Could not reach ${cloud_base()} (${reason}). Are you online?`,
+			"unreachable"
+		)
 	}
 	if (!response.ok) {
 		const data = (await response.json().catch(() => undefined)) as
