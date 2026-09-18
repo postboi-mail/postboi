@@ -224,7 +224,6 @@ describe("exports", () => {
 			exports: [created, { ...created, id: "exp_2", paused: true, next_run_at: null }],
 		})
 		expect(await api_command("exports", [])).toBe(true)
-		expect(await api_command("exports", ["list"])).toBe(true) // the alias people guess
 		const text = lines.join("\n")
 		expect(text).toContain("Weekly enquiries")
 		expect(text).toContain("weekly on Monday at 09:00 UTC")
@@ -262,5 +261,63 @@ describe("describe_schedule", () => {
 		expect(
 			describe_schedule({ ...base, frequency: "monthly", month_day: 22, timezone: "Europe/London" })
 		).toBe("monthly on the 22nd at 09:00 Europe/London")
+	})
+})
+
+describe("`list` as the bare listing", () => {
+	it("is accepted on every noun that lists, and hits the collection GET", async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({ url, init })
+				const empty = Object.fromEntries(
+					[
+						"lists",
+						"contacts",
+						"domains",
+						"webhooks",
+						"members",
+						"messages",
+						"suppressions",
+						"exports",
+					].map((k) => [k, []])
+				)
+				return new Response(JSON.stringify({ ...empty, invites: [] }), { status: 200 })
+			})
+		)
+		vi.spyOn(console, "log").mockImplementation(() => {})
+		const nouns: Array<[string, string]> = [
+			["lists", "/v1/lists"],
+			["contacts", "/v1/contacts"],
+			["domains", "/v1/domains"],
+			["webhooks", "/v1/webhooks"],
+			["members", "/v1/members"],
+			["messages", "/v1/messages"],
+			["suppressions", "/v1/suppressions"],
+			["exports", "/v1/exports"],
+		]
+		for (const [noun, path] of nouns) {
+			calls.length = 0
+			expect(await api_command(noun, ["list"])).toBe(true)
+			expect(calls[0].url.replace(/^.*\/v1/, "/v1")).toBe(path)
+			expect(calls[0].init?.method ?? "GET").toBe("GET")
+		}
+	})
+
+	it("stays a list name for recipients, whose first word is the list", async () => {
+		const calls: Array<string> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string) => {
+				calls.push(url)
+				return new Response(JSON.stringify({ name: "list", recipients: [] }), { status: 200 })
+			})
+		)
+		vi.spyOn(console, "log").mockImplementation(() => {})
+		await api_command("recipients", ["list"])
+		expect(calls[0]).toContain("/v1/lists/list")
 	})
 })

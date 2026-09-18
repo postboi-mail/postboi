@@ -678,9 +678,7 @@ const EXPORTS_ADD_USAGE = [
 ].join("\n")
 
 async function exports_command(args: Array<string>): Promise<void> {
-	const [first, ...rest_args] = args
-	// Bare `exports` lists, as every noun does; `exports list` is what people guess.
-	const action = first === "list" ? undefined : first
+	const [action, ...rest_args] = args
 
 	if (action === "add") {
 		const { flags, rest, on } = take_flags(
@@ -816,10 +814,26 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	suppressions,
 }
 
+/**
+ * The nouns that list on a bare call. `list` is what people and agents guess first, so
+ * it is accepted as the same thing; `recipients` is left out because its first word is
+ * the list's name.
+ */
+const LISTING = new Set([
+	"lists",
+	"contacts",
+	"domains",
+	"webhooks",
+	"members",
+	"messages",
+	"suppressions",
+	"exports",
+])
+
 /** Handle a resource command; false when `command` isn't one (main falls through to help). */
 export async function api_command(command: string, args: Array<string>): Promise<boolean> {
 	const handler = COMMANDS[command]
 	if (!handler) return false
-	await handler(args)
+	await handler(LISTING.has(command) && args[0] === "list" ? args.slice(1) : args)
 	return true
 }
