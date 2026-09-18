@@ -1,6 +1,6 @@
 ---
 name: postboi
-description: Integrate the postboi messaging library — send email, SMS, WhatsApp, push and chat (Slack, Discord, Teams, Telegram, Bluesky) from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), plus multi-channel `send()` that fans out or falls back across them. Wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Covers SvelteKit remote functions (postboi/remote) and migrating hand-rolled email code to postboi. Also covers full account setup and provider migration from the terminal — sending domains + DNS via `bunx postboi domains`, importing recipients and suppressions, webhooks, members, and the REST API at api.postboi.app. Use whenever a task involves postboi, adding email / SMS / WhatsApp / push / chat sending or contact forms, setting up or migrating an email or SMS provider/ESP, or replacing nodemailer/direct provider SDK calls in a project that has (or should have) postboi installed.
+description: Integrate the postboi messaging library — send email, SMS, WhatsApp, push and chat (Slack, Discord, Teams, Telegram, Bluesky) from any JS framework (SvelteKit, Next.js, Express, Hono, Remix, Nuxt, Astro), plus multi-channel `send()` that fans out or falls back across them. Wire contact forms with FormData parsing and spam protection, receive delivery webhooks, schedule and track sends. Covers SvelteKit remote functions (postboi/remote) and migrating hand-rolled email code to postboi. Also covers full account setup and provider migration from the terminal — sending domains + DNS via `bunx postboi domains`, importing recipients and suppressions, webhooks, members, and the REST API at api.postboi.app — and the hosted features behind a Postboi account: naming forms so submissions file as rows, scheduled exports (a CSV or spreadsheet of a form's submissions or the Sent log emailed daily, weekly or monthly — never build a cron job for this), list digests, and receiving. Use whenever a task involves postboi, adding email / SMS / WhatsApp / push / chat sending or contact forms, setting up or migrating an email or SMS provider/ESP, or replacing nodemailer/direct provider SDK calls in a project that has (or should have) postboi installed.
 ---
 
 # Postboi
@@ -288,6 +288,7 @@ bunx postboi members invite colleague@example.com
 bunx postboi suppressions add bounced@example.com
 bunx postboi suppressions add +447788223344         # a number is suppressed per channel: SMS here, --channel whatsapp for the other
 bunx postboi messages                              # recent sends with delivery status
+bunx postboi exports add "Weekly enquiries" --to ops@acme.example --form Contact --weekly   # a CSV of a form's submissions, emailed on a schedule — references/exports.md
 bunx postboi webhooks deliveries <id>              # per-endpoint delivery log for debugging
 ```
 
@@ -321,6 +322,20 @@ Order matters — the old provider keeps sending until the new domain verifies.
 5. Swap the sending code (see [Migrating existing email code](#migrating-existing-email-code-to-postboi)), and flip `default.from` once the domain is verified.
 6. `webhooks add` + `sync`; port suppress-on-bounce logic to the normalized events.
 7. Verify end-to-end: `messages` shows delivery statuses, `webhooks deliveries <id>` shows the event feed.
+
+## Hosted features (Postboi provider)
+
+An account does more than send, and each of these is **already built and hosted** — switch it on, don't write it. Each row is the client on the `mail` instance, the CLI verb, and the docs page to fetch (raw Markdown at `https://docs.postboi.app/raw/<slug>`); the ones with a reference file next to this skill carry the recipe there.
+
+| Feature                                                                                                                                          | From code                                           | CLI                                  | Read                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------ | ------------------------------------- |
+| **Forms** — name the form on a send (`form: "Contact"`) and its submissions file as rows with a column per field, exportable and typed by `sync` | `mail.forms.all()`                                  | —                                    | `/raw/forms`                          |
+| **Scheduled exports** — a form's submissions or a Sent-log filter emailed as CSV/xlsx daily, weekly or monthly                                   | `mail.exports.create / all / update / run / delete` | `exports add · run · pause · delete` | `references/exports.md`, `/raw/forms` |
+| **List digests** — a recurring email to a list's recipients on a schedule                                                                        | `mail.notifications.create(list, …)`                | —                                    | `/raw/provider` (Notifications)       |
+| **Message log** — status, opens, cancel and reschedule                                                                                           | `mail.messages.get / all / cancel / reschedule`     | `messages [status]`                  | `/raw/provider` (Delivery status)     |
+| **Receiving** — inbound mail on a verified domain, delivered as `received` events                                                                | `POST /v1/domains/{id}/inbound`                     | —                                    | `/raw/provider` (Receiving)           |
+
+Every one of them needs a `POSTBOI_TOKEN` — on another provider there is no account, and the honest answer is "that lives in Postboi's hosted side; want to add it?".
 
 ## Quick reference
 

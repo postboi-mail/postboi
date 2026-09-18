@@ -209,19 +209,24 @@ async function recipients(args: Array<string>): Promise<void> {
 /** Pull `--name value` / `--data value` flags out of an arg list, returning the rest. */
 function take_flags(
 	args: Array<string>,
-	names: Array<string>
-): { flags: Record<string, string>; rest: Array<string> } {
+	names: Array<string>,
+	switches: Array<string> = []
+): { flags: Record<string, string>; rest: Array<string>; on: Set<string> } {
 	const flags: Record<string, string> = {}
 	const rest: Array<string> = []
+	const on = new Set<string>()
 	for (let i = 0; i < args.length; i++) {
 		const match = names.find((name) => args[i] === `--${name}`)
+		const flag = switches.find((name) => args[i] === `--${name}`)
 		if (match) {
 			flags[match] = args[++i] ?? ""
+		} else if (flag) {
+			on.add(flag)
 		} else {
 			rest.push(args[i])
 		}
 	}
-	return { flags, rest }
+	return { flags, rest, on }
 }
 
 interface ContactWire {
@@ -603,6 +608,196 @@ async function suppressions(args: Array<string>): Promise<void> {
 	)
 }
 
+// ── Scheduled exports ──────────────────────────────────────────────────────
+
+interface ExportSchedule {
+	frequency: string
+	days: Array<number>
+	month_day: number
+	send_time: string
+	timezone: string
+}
+
+interface ExportWire {
+	id: string
+	name: string
+	recipients: Array<{ email: string; name?: string }>
+	filter: Record<string, unknown>
+	format: string
+	window: string
+	schedule: ExportSchedule
+	paused: boolean
+	next_run_at: string | null
+	last_error: string | null
+}
+
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+/** `mon`, `Monday`, `1`, or a comma list of them, as the API's 0–6 (0 = Sunday). */
+export function parse_weekdays(value: string): Array<number> {
+	return value
+		.split(/[,\s]+/)
+		.filter(Boolean)
+		.map((part) => {
+			const lower = part.toLowerCase()
+			if (/^[0-6]$/.test(lower)) return Number(lower)
+			const index = lower.length >= 3 ? WEEKDAYS.findIndex((day) => day.startsWith(lower)) : -1
+			if (index === -1) {
+				throw new ApiCommandError(`--day takes weekday names or 0-6 (0 = Sunday), not "${part}".`)
+			}
+			return index
+		})
+}
+
+function ordinal(n: number): string {
+	const rest = n % 100
+	const suffix = rest >= 11 && rest <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")
+	return `${n}${suffix}`
+}
+
+/** "weekly on Monday at 09:00 UTC" — said back after a create, so a default is visible. */
+export function describe_schedule(schedule: ExportSchedule): string {
+	const when = `at ${schedule.send_time} ${schedule.timezone}`
+	if (schedule.frequency === "daily") return `daily ${when}`
+	if (schedule.frequency === "monthly") {
+		return `monthly on the ${ordinal(schedule.month_day)} ${when}`
+	}
+	const names = schedule.days.map((day) => {
+		const name = WEEKDAYS[day] ?? "?"
+		return name.charAt(0).toUpperCase() + name.slice(1)
+	})
+	return `weekly on ${names.join(", ")} ${when}`
+}
+
+const EXPORTS_ADD_USAGE = [
+	"Usage: postboi exports add <name> --to <emails> --daily|--weekly|--monthly",
+	"         [--form <form>] [--day mon,fri] [--month-day 1] [--at HH:MM] [--tz Europe/London]",
+	"         [--xlsx] [--no-fields] [--window since_last_run|previous_period|all_matching]",
+	"         [--from <sender>] [--subject <s>] [--from-address <a>] [--to-address <a>]",
+	"         [--status delivered,bounced] [--opens opened|unopened|untracked]",
+].join("\n")
+
+async function exports_command(args: Array<string>): Promise<void> {
+	const [action, ...rest_args] = args
+
+	if (action === "add") {
+		const { flags, rest, on } = take_flags(
+			rest_args,
+			[
+				"to",
+				"form",
+				"from",
+				"day",
+				"month-day",
+				"at",
+				"tz",
+				"window",
+				"subject",
+				"from-address",
+				"to-address",
+				"status",
+				"opens",
+			],
+			["daily", "weekly", "monthly", "xlsx", "no-fields"]
+		)
+		const name = rest.join(" ").trim()
+		const frequencies = ["daily", "weekly", "monthly"].filter((f) => on.has(f))
+		if (!name || !flags.to || frequencies.length !== 1) {
+			throw new ApiCommandError(EXPORTS_ADD_USAGE)
+		}
+		const schedule = {
+			frequency: frequencies[0],
+			days: flags.day ? parse_weekdays(flags.day) : undefined,
+			month_day: flags["month-day"] ? Number(flags["month-day"]) : undefined,
+			send_time: flags.at,
+			timezone: flags.tz,
+		}
+		const filter = {
+			form: flags.form,
+			subject: flags.subject,
+			from: flags["from-address"],
+			to: flags["to-address"],
+			status: flags.status ? flags.status.split(",").map((s) => s.trim()) : undefined,
+			opens: flags.opens,
+		}
+		const created = await api<ExportWire>("/v1/exports", {
+			method: "POST",
+			body: {
+				name,
+				recipients: flags.to,
+				from: flags.from,
+				filter,
+				format: on.has("xlsx") ? "xlsx" : undefined,
+				fields: on.has("no-fields") ? false : undefined,
+				window: flags.window,
+				schedule,
+			},
+		})
+		console.log(
+			`${green("✓")} scheduled ${bold(created.name)} ${dim(`(${created.id})`)} — ${describe_schedule(created.schedule)}`
+		)
+		console.log(`  ${dim("to:")} ${created.recipients.map((r) => r.email).join(", ")}`)
+		const set = Object.entries(created.filter).filter(([, value]) => value !== undefined)
+		console.log(
+			`  ${dim("rows:")} ${
+				set.length === 0
+					? "the whole Sent log"
+					: set.map(([key, value]) => `${key}=${String(value)}`).join(" ")
+			}${created.format === "xlsx" ? dim(" · xlsx") : ""}${dim(` · ${created.window.replace(/_/g, " ")}`)}`
+		)
+		return console.log(`  ${dim(`postboi exports run ${created.id} sends one now.`)}`)
+	}
+
+	if (action === "run" || action === "pause" || action === "resume" || action === "delete") {
+		const id = rest_args[0]
+		if (!id) throw new ApiCommandError(`Usage: postboi exports ${action} <id>`)
+		const path = `/v1/exports/${encodeURIComponent(id)}`
+		if (action === "run") {
+			await api(`${path}/run`, { method: "POST" })
+			return console.log(
+				`${green("✓")} queued ${bold(id)} ${dim("— the file goes within a minute")}`
+			)
+		}
+		if (action === "delete") {
+			await api(path, { method: "DELETE" })
+			return console.log(`${green("✓")} deleted ${bold(id)}`)
+		}
+		const row = await api<ExportWire>(path, {
+			method: "PATCH",
+			body: { paused: action === "pause" },
+		})
+		return console.log(
+			`${green("✓")} ${action === "pause" ? "paused" : "resumed"} ${bold(row.name)}${
+				row.next_run_at ? dim(` — next ${row.next_run_at.slice(0, 16).replace("T", " ")}`) : ""
+			}`
+		)
+	}
+
+	if (action) {
+		throw new ApiCommandError(
+			`Unknown action: exports ${action}. Try add, run, pause, resume, or delete.`
+		)
+	}
+
+	const { exports: rows } = await api<{ exports: Array<ExportWire> }>("/v1/exports")
+	if (rows.length === 0) {
+		return console.log(
+			dim("No scheduled exports — postboi exports add <name> --to <email> --weekly")
+		)
+	}
+	table(
+		["NAME", "SCHEDULE", "TO", "NEXT", "STATE", "ID"],
+		rows.map((row) => [
+			row.name,
+			describe_schedule(row.schedule),
+			row.recipients.map((r) => r.email).join(","),
+			row.next_run_at ? row.next_run_at.slice(0, 16).replace("T", " ") : "",
+			row.paused ? yellow("paused") : row.last_error ? red("failing") : green("active"),
+			dim(row.id),
+		])
+	)
+}
+
 // ── Dispatch ───────────────────────────────────────────────────────────────
 
 const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
@@ -615,6 +810,7 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	webhooks,
 	members,
 	messages,
+	exports: exports_command,
 	suppressions,
 }
 

@@ -1,4 +1,5 @@
 import {
+	cpSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
@@ -16,6 +17,10 @@ type Prompts = ReturnType<typeof create_prompts>
 
 export const SKILL_TARGET = join(".claude", "skills", "postboi", "SKILL.md")
 
+/** Where the package keeps the skill, relative to its root — the same path the link targets. */
+const SKILL_IN_PACKAGE = join("skills", "postboi")
+const REFERENCES = "references"
+
 /**
  * The agent skill ships inside the npm package (skills/postboi/SKILL.md) so an installed
  * copy always matches the installed version.
@@ -32,6 +37,17 @@ export function bundled_skill_path(): string | undefined {
 export function bundled_skill(): string | undefined {
 	const file = bundled_skill_path()
 	return file ? readFileSync(file, "utf8") : undefined
+}
+
+/**
+ * The recipes SKILL.md points at (`references/exports.md`) live beside it in the package,
+ * and an agent reads them on demand — so they are installed beside the copy too.
+ */
+export function bundled_references_path(): string | undefined {
+	const skill = bundled_skill_path()
+	if (!skill) return undefined
+	const dir = join(dirname(skill), REFERENCES)
+	return existsSync(dir) ? dir : undefined
 }
 
 /** existsSync follows symlinks, so a dangling link (package not installed yet) reads as absent. */
@@ -57,15 +73,20 @@ function is_link(path: string): boolean {
  * diff at all. Falls back to a copy where symlinks don't work (Windows without dev mode).
  */
 function link_skill(target: string, source = bundled_skill_path()): boolean {
+	return link_installed(target, join(SKILL_IN_PACKAGE, "SKILL.md"), source)
+}
+
+/** Link `target` at `sub` inside the installed package, or at `source` when none is found. */
+function link_installed(target: string, sub: string, source: string | undefined): boolean {
 	try {
 		// Prefer node_modules/postboi over import.meta.url: pnpm and bun resolve the running
 		// file into a version-pinned store path, which would pin the link to today's version.
 		const dir = realpathSync(dirname(resolve(target)))
 		const nm = ancestors(dir)
-			.map((d) => join(d, "node_modules", "postboi", "skills", "postboi", "SKILL.md"))
+			.map((d) => join(d, "node_modules", "postboi", sub))
 			.find((p) => existsSync(p))
 		if (!nm && !source) return false
-		rmSync(target, { force: true })
+		rmSync(target, { force: true, recursive: true })
 		// The link is resolved from the *real* directory, so anything symlinked above the
 		// target (macOS /var, a linked checkout) would send a relative link astray.
 		symlinkSync(relative(dir, nm ?? source!), target)
@@ -73,6 +94,28 @@ function link_skill(target: string, source = bundled_skill_path()): boolean {
 	} catch {
 		return false
 	}
+}
+
+/**
+ * Put `references/` beside an installed SKILL.md — a link like the skill's where links
+ * work, a copy where they don't. Returns true when it was absent and is now there; an
+ * existing link is left alone and an existing copy is refreshed silently, matching
+ * `refresh_skill`'s idea of what deserves a line.
+ */
+function place_references(target: string): boolean {
+	const source = bundled_references_path()
+	if (!source) return false
+	const dest = join(dirname(target), REFERENCES)
+	const was_present = present(dest)
+	if (was_present && is_link(dest)) return false
+	if (!link_installed(dest, join(SKILL_IN_PACKAGE, REFERENCES), source)) {
+		try {
+			cpSync(source, dest, { recursive: true })
+		} catch {
+			return false
+		}
+	}
+	return !was_present
 }
 
 function ancestors(dir: string): Array<string> {
@@ -87,14 +130,21 @@ function ancestors(dir: string): Array<string> {
  */
 export function refresh_skill(target = SKILL_TARGET, skill = bundled_skill()): boolean {
 	if (!skill || !present(target)) return false
-	if (is_link(target)) return false // already live — the link tracks the installed version
+	// An install from before the skill had references gets them on the next refresh.
+	const added_references = place_references(target)
+	if (added_references) {
+		console.log(
+			`${green("✓")} added ${bold(join(dirname(target), REFERENCES))} beside the agent skill`
+		)
+	}
+	if (is_link(target)) return added_references // already live — the link tracks the installed version
 	if (link_skill(target)) {
 		console.log(
 			`${green("✓")} linked ${bold(target)} to the installed postboi ${dim("— future releases update it with no diff")}`
 		)
 		return true
 	}
-	if (readFileSync(target, "utf8") === skill) return false
+	if (readFileSync(target, "utf8") === skill) return added_references
 	writeFileSync(target, skill)
 	console.log(`${green("✓")} refreshed the agent skill at ${bold(target)}`)
 	return true
@@ -116,6 +166,7 @@ export async function offer_skill(prompts: Prompts, target = SKILL_TARGET): Prom
 /** Write (or link) the skill into place. Callers decide whether to ask first. */
 function install_skill(target: string, skill: string): void {
 	mkdirSync(dirname(target), { recursive: true })
+	place_references(target)
 	if (link_skill(target)) {
 		console.log(
 			`${green("✓")} linked ${bold(target)} to the installed postboi ${dim("— commit it; upgrades update the skill for free")}`

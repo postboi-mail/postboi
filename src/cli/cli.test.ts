@@ -1103,6 +1103,26 @@ describe("agent skill", () => {
 		expect(readlinkSync(t).startsWith("..")).toBe(true) // relative — survives a clone
 	})
 
+	it("installs the references folder beside the skill", async () => {
+		const t = target()
+		const p = prompter([""])
+		await offer_skill(p, t)
+		p.close()
+		const reference = join(dirname(t), "references", "exports.md")
+		expect(existsSync(reference)).toBe(true)
+		expect(readFileSync(reference, "utf8")).toContain("postboi exports add")
+		// SKILL.md points at it by that relative path, so the two have to agree.
+		expect(bundled_skill()).toContain("references/exports.md")
+	})
+
+	it("refresh_skill adds references to an install from before they existed", () => {
+		const t = target()
+		writeFileSync(t, bundled_skill()!)
+		expect(refresh_skill(t)).toBe(true)
+		expect(existsSync(join(dirname(t), "references", "exports.md"))).toBe(true)
+		expect(refresh_skill(t)).toBe(false) // and is then quiet
+	})
+
 	it("links via node_modules/postboi, not the version-pinned store path", async () => {
 		const root = mkdtempSync(join(tmpdir(), "postboi-proj-"))
 		const pkg = join(root, "node_modules", "postboi", "skills", "postboi")
