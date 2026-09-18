@@ -276,7 +276,8 @@ The steps that still involve the human, when they come up later:
 **Custom sending domain — get it from the user or the project, never guess.** If the user named their domain, or the project states it unambiguously (astro `site`, `package.json` `homepage`, a `CNAME` file, wrangler routes, a `SITE_URL` env var — `init --agent` prints what it detected as a suggestion), confirm it and run `bunx postboi domains add <domain>`, which prints the one-click DNS link. **On an unclaimed `--agent` project the API refuses domains until the human claims** (an anonymous token must not squat someone else's domain), so tell your user: claim first, then you'll add the domain — or they run the printed command themselves after claiming. If the domain is ambiguous or absent, ask — one question — or skip it. Interactive `init` offers the same thing itself (prefilled with the detected domain), so don't double-register after a human ran it.
 
 ```bash
-bunx postboi whoami                                # account, plan, usage — run first to verify the token
+bunx postboi doctor                                # is this project wired? token, provider, from, webhooks, skill — run first and last; exit 1 on a failure, --json for data
+bunx postboi whoami                                # account, plan, usage
 bunx postboi domains add example.com               # prints DNS records + one-click Domain Connect URL
 bunx postboi domains check example.com             # re-check until verified (records land in minutes)
 bunx postboi lists add Newsletter

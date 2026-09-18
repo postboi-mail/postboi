@@ -106,16 +106,10 @@ import { fetch_whatsapp_templates } from "./whatsapp_templates.js"
 import { offer_skill, refresh_skill, skill_command } from "./skill.js"
 import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
 import { api_command, ApiCommandError, error_json } from "./api.js"
+import { CONFIG_FILES, doctor } from "./doctor.js"
 import { dev_command } from "./dev.js"
 import { inspect_command } from "./inspect.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
-
-const CONFIG_FILES = [
-	"postboi.config.ts",
-	"postboi.config.mts",
-	"postboi.config.js",
-	"postboi.config.mjs",
-]
 
 type Prompts = ReturnType<typeof create_prompts>
 
@@ -140,6 +134,7 @@ ${bold("Usage")}
   ${cyan("bunx postboi sync")}     Pull synced team credentials and refresh the generated from/template types
   ${cyan("bunx postboi env")}      The synced credentials ${dim("· push · pull [--force] · remove <KEY>")}
   ${cyan("bunx postboi vapid")}    Mint a VAPID key pair for Web Push, printed to stdout
+  ${cyan("bunx postboi doctor")}   Is this project wired? Token, provider, from address, webhooks, skill ${dim("· --json · exit 1 on a failure")}
   ${cyan("bunx postboi skill")}    Install the agent skill, so AI coding agents know the library
   ${cyan("bunx postboi dev")}      Local inbox for mail sent in development
   ${dim("                          · --port <n> --demo --no-sound --no-intro")}
@@ -1981,6 +1976,7 @@ async function main(): Promise<void> {
 		if (!skill_command()) exit(1)
 		return
 	}
+	if (command === "doctor") return doctor(argv.slice(3))
 	if (command === "vapid") return vapid_command()
 	if (command === "sync") return sync()
 	if (command === "env") return env_command(argv.slice(3))

@@ -150,6 +150,23 @@ export function refresh_skill(target = SKILL_TARGET, skill = bundled_skill()): b
 	return true
 }
 
+/**
+ * Where the installed skill stands, for `postboi doctor`: absent, a link (always current),
+ * a copy that matches the bundled one, or a copy that has fallen behind it.
+ */
+export function skill_state(
+	target = SKILL_TARGET,
+	skill = bundled_skill()
+): "missing" | "linked" | "current" | "stale" {
+	if (!present(target)) return "missing"
+	if (is_link(target)) return "linked"
+	try {
+		return skill !== undefined && readFileSync(target, "utf8") === skill ? "current" : "stale"
+	} catch {
+		return "stale"
+	}
+}
+
 /** Offer to install the agent skill into .claude/skills/; an existing copy is refreshed silently. */
 export async function offer_skill(prompts: Prompts, target = SKILL_TARGET): Promise<void> {
 	const skill = bundled_skill()
