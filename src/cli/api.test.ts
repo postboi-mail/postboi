@@ -428,6 +428,28 @@ describe("--json", () => {
 		expect(JSON.parse(lines[0])).toEqual(list)
 	})
 
+	it("prints nothing after a download that went to stdout — the bytes are the output", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(
+				async () =>
+					new Response("a,b\r\n1,2\r\n", { status: 200, headers: { "Content-Type": "text/csv" } })
+			)
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		const written: Array<Uint8Array> = []
+		const { stdout } = await import("node:process")
+		vi.spyOn(stdout, "write").mockImplementation(((chunk: Uint8Array) => {
+			written.push(chunk)
+			return true
+		}) as never)
+		await api_command("exports", ["download", "--out", "-", "--json"])
+		expect(written).toHaveLength(1)
+		expect(lines).toHaveLength(0)
+	})
+
 	it("is off again for the next command", async () => {
 		const lines = stub({ send_address: "a@send.postboi.email" })
 		await api_command("send-address", ["--json"])

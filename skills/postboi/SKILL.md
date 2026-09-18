@@ -278,31 +278,12 @@ The steps that still involve the human, when they come up later:
 **Custom sending domain — get it from the user or the project, never guess.** If the user named their domain, or the project states it unambiguously (astro `site`, `package.json` `homepage`, a `CNAME` file, wrangler routes, a `SITE_URL` env var — `init --agent` prints what it detected as a suggestion), confirm it and run `bunx postboi domains add <domain>`, which prints the one-click DNS link. **On an unclaimed `--agent` project the API refuses domains until the human claims** (an anonymous token must not squat someone else's domain), so tell your user: claim first, then you'll add the domain — or they run the printed command themselves after claiming. If the domain is ambiguous or absent, ask — one question — or skip it. Interactive `init` offers the same thing itself (prefilled with the detected domain), so don't double-register after a human ran it.
 
 ```bash
-bunx postboi doctor                                # is this project wired? token, provider, from, webhooks, skill — run first and last; exit 1 on a failure, --json for data
-bunx postboi whoami                                # account, plan, usage
-bunx postboi domains add example.com               # prints DNS records + one-click Domain Connect URL
-bunx postboi domains check example.com             # re-check until verified (records land in minutes)
-bunx postboi lists add Newsletter
-bunx postboi recipients Newsletter add a@b.co c@d.co   # upserts contact + membership
-bunx postboi contacts add ada@example.com --data '{"plan":"pro"}'  # one contact, global data, shared across lists
-bunx postboi webhooks add https://example.com/api/events   # · rotate <id> mints a new secret
-bunx postboi forms                                 # the forms submissions are filed under — check before naming a new one, so "contact" doesn't land beside "Contact form"
-bunx postboi notifications Newsletter add --to ops@acme.example --weekly   # a digest of new signups; --on-signup for a note per signup
-bunx postboi lists send Newsletter --subject "News" --file news.html      # a broadcast to a list's subscribed recipients
-bunx postboi testing add --label "welcome v2"      # mints an address to send a test to; `testing <id>` reads back auth, spam score, findings, client screenshots
-bunx postboi domains inbound example.com           # receiving on the domain (prints the MX + TXT to publish)
-bunx postboi sync                                  # writes the webhook secret to POSTBOI_WEBHOOK_SECRET
-bunx postboi members invite colleague@example.com
-bunx postboi suppressions add bounced@example.com
-bunx postboi suppressions add +447788223344         # a number is suppressed per channel: SMS here, --channel whatsapp for the other
-bunx postboi send --to you@example.com --subject "Test" --text "hi"   # one real send from the terminal — prints the id
-bunx postboi messages                              # recent sends with delivery status
-bunx postboi messages <id>                         # one send read back: status, opens, error, a form's fields · `messages cancel <id>` stops a scheduled one
-bunx postboi exports add "Weekly enquiries" --to ops@acme.example --form Contact --weekly   # a CSV of a form's submissions, emailed on a schedule — references/exports.md
-bunx postboi webhooks deliveries <id>              # per-endpoint delivery log for debugging
+bunx postboi doctor                                # is this project wired? run first and last — exit 1 on a failure, --json for data
+bunx postboi send --to you@example.com --subject "Test" --text "hi"   # one real send; prints the id
+bunx postboi messages <id>                         # what happened to it: status, opens, error, a form's fields
 ```
 
-Add `--json` to any account command for the API's response as one JSON document (errors go to stderr as `{ "error": { "message", "code" } }` and exit 1) — parse that rather than the table. Anything richer than the CLI exposes, use the REST API — interactive reference at https://api.postboi.app (OpenAPI at `/openapi.json`). Auth is `Authorization: Bearer $POSTBOI_TOKEN`; errors are always `{ "message", "code" }`.
+Every noun lists bare and takes verbs — `whoami`, `send-address`, `lists` (`add · send · delete`), `recipients`, `contacts`, `domains` (`add · check · inbound · delete`), `webhooks` (`add · rotate · deliveries · delete`), `members`, `messages`, `exports` (`download · add · run · pause · resume · delete`), `suppressions`, `forms`, `notifications`, `testing` — and the **full table with every flag is `references/cli.md`** beside this file (the same content as https://docs.postboi.app/raw/cli). Add `--json` to any of them for the API's response as one JSON document (a failure is `{ "error": { "message", "code" } }` on stderr, exit 1) and branch on the `code`, never the wording.
 
 **Cautions:** deletes are immediate and unprompted (`lists delete` takes the recipients with it). API-key management, member roles and billing are dashboard-only by design — send the user there rather than trying.
 
