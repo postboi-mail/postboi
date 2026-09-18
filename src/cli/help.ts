@@ -75,7 +75,9 @@ export const HELP: Array<HelpSection> = [
 			{
 				command: "send",
 				summary: "One email, now",
-				details: ["--to <emails> --subject <s> --text|--html|--file <body> [--at <ISO>]"],
+				details: [
+					"--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]",
+				],
 			},
 			{
 				command: "send-address",
@@ -86,7 +88,7 @@ export const HELP: Array<HelpSection> = [
 				command: "lists",
 				summary: "Lists",
 				details: [
-					"add <name> · send <list> --subject <s> --text|--html|--file <body> · delete <ref>",
+					"add <name> · send <list> --subject <s> --text, --html or --file <body> · delete <ref>",
 				],
 			},
 			{
@@ -130,7 +132,7 @@ export const HELP: Array<HelpSection> = [
 			{
 				command: "suppressions",
 				summary: "Suppressed addresses",
-				details: ["add <email|+phone> · remove <email|+phone>"],
+				details: ["add <email or +phone> · remove <email or +phone>"],
 			},
 			{
 				command: "forms",
@@ -140,7 +142,7 @@ export const HELP: Array<HelpSection> = [
 			{
 				command: "notifications",
 				summary: "A list's digests",
-				details: ["<list> · <list> add --to <emails> --weekly|--on-signup · <list> delete <id>"],
+				details: ["<list> · <list> add --to <emails> --weekly or --on-signup · <list> delete <id>"],
 			},
 			{
 				command: "testing",
@@ -193,7 +195,9 @@ export function help_markdown(): string {
 		if (section.note) out.push(`${section.note.replace(/: (https?:\S+)/, ": <$1>")}`, "")
 		// Padded to the widest cell, as the formatter would write it, so a generated file
 		// is already in the shape `oxfmt --check` expects.
-		// A `|` inside a cell splits it, code span or not, so it is escaped for the table.
+		// A `|` inside a cell splits it, code span or not, so it is escaped for the table —
+		// and kept out of the help text altogether (see help.test.ts), because mdsvex
+		// renders the escape literally where GitHub renders the pipe.
 		const cell = (text: string) => text.replace(/\|/g, "\\|")
 		const rows: Array<[string, string]> = [["Command", "What it does"]]
 		for (const entry of section.entries) {
