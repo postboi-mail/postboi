@@ -287,7 +287,9 @@ bunx postboi sync                                  # writes the webhook secret t
 bunx postboi members invite colleague@example.com
 bunx postboi suppressions add bounced@example.com
 bunx postboi suppressions add +447788223344         # a number is suppressed per channel: SMS here, --channel whatsapp for the other
+bunx postboi send --to you@example.com --subject "Test" --text "hi"   # one real send from the terminal — prints the id
 bunx postboi messages                              # recent sends with delivery status
+bunx postboi messages <id>                         # one send read back: status, opens, error, a form's fields · `messages cancel <id>` stops a scheduled one
 bunx postboi exports add "Weekly enquiries" --to ops@acme.example --form Contact --weekly   # a CSV of a form's submissions, emailed on a schedule — references/exports.md
 bunx postboi webhooks deliveries <id>              # per-endpoint delivery log for debugging
 ```

@@ -149,6 +149,7 @@ ${bold("Usage")}
 
 ${bold("Account")} ${dim("(Postboi provider — full reference: https://api.postboi.app)")}
   ${cyan("bunx postboi whoami")}          The account behind your token
+  ${cyan("bunx postboi send")}            One email, now ${dim("· --to <emails> --subject <s> --text|--html|--file <body> [--at <ISO>]")}
   ${cyan("bunx postboi send-address")}    Default sending address ${dim("· [name@yourdomain.com]")}
   ${cyan("bunx postboi lists")}           Lists ${dim("· add <name> · delete <ref>")}
   ${cyan("bunx postboi recipients")}      A list's recipients ${dim("· <list> add <email>… · <list> remove <email>")}
@@ -156,7 +157,7 @@ ${bold("Account")} ${dim("(Postboi provider — full reference: https://api.post
   ${cyan("bunx postboi domains")}         Sending domains ${dim("· add <domain> · check <ref> · delete <ref>")}
   ${cyan("bunx postboi webhooks")}        Webhooks ${dim("· add <url> · delete <id> · deliveries <id>")}
   ${cyan("bunx postboi members")}         Members ${dim("· invite <email> · remove <ref> · revoke <ref>")}
-  ${cyan("bunx postboi messages")}        Recent messages ${dim("· [status]")}
+  ${cyan("bunx postboi messages")}        Recent messages ${dim("· [status] · <id> (status, opens, fields) · cancel <id>")}
   ${cyan("bunx postboi exports")}         Exports ${dim("· download [--form <form>] [--xlsx] [--out <file>] · add <name> --to <emails> --weekly · run · pause · resume · delete <id>")}
   ${cyan("bunx postboi suppressions")}    Suppressed addresses ${dim("· add <email|+phone> · remove <email|+phone>")}
   ${dim("                               A bare noun lists; `list` says the same. Add --json to any of")}
