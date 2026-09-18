@@ -283,7 +283,12 @@ bunx postboi domains check example.com             # re-check until verified (re
 bunx postboi lists add Newsletter
 bunx postboi recipients Newsletter add a@b.co c@d.co   # upserts contact + membership
 bunx postboi contacts add ada@example.com --data '{"plan":"pro"}'  # one contact, global data, shared across lists
-bunx postboi webhooks add https://example.com/api/events
+bunx postboi webhooks add https://example.com/api/events   # · rotate <id> mints a new secret
+bunx postboi forms                                 # the forms submissions are filed under — check before naming a new one, so "contact" doesn't land beside "Contact form"
+bunx postboi notifications Newsletter add --to ops@acme.example --weekly   # a digest of new signups; --on-signup for a note per signup
+bunx postboi lists send Newsletter --subject "News" --file news.html      # a broadcast to a list's subscribed recipients
+bunx postboi testing add --label "welcome v2"      # mints an address to send a test to; `testing <id>` reads back auth, spam score, findings, client screenshots
+bunx postboi domains inbound example.com           # receiving on the domain (prints the MX + TXT to publish)
 bunx postboi sync                                  # writes the webhook secret to POSTBOI_WEBHOOK_SECRET
 bunx postboi members invite colleague@example.com
 bunx postboi suppressions add bounced@example.com
@@ -332,11 +337,11 @@ An account does more than send, and each of these is **already built and hosted*
 
 | Feature                                                                                                                                          | From code                                           | CLI                                  | Read                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------ | ------------------------------------- |
-| **Forms** — name the form on a send (`form: "Contact"`) and its submissions file as rows with a column per field, exportable and typed by `sync` | `mail.forms.all()`                                  | —                                    | `/raw/forms`                          |
+| **Forms** — name the form on a send (`form: "Contact"`) and its submissions file as rows with a column per field, exportable and typed by `sync` | `mail.forms.all()`                                  | `forms`                              | `/raw/forms`                          |
 | **Scheduled exports** — a form's submissions or a Sent-log filter emailed as CSV/xlsx daily, weekly or monthly                                   | `mail.exports.create / all / update / run / delete` | `exports add · run · pause · delete` | `references/exports.md`, `/raw/forms` |
-| **List digests** — a recurring email to a list's recipients on a schedule                                                                        | `mail.notifications.create(list, …)`                | —                                    | `/raw/provider` (Notifications)       |
+| **List digests** — a recurring email to a list's recipients on a schedule                                                                        | `mail.notifications.create(list, …)`                | `notifications <list> add`           | `/raw/provider` (Notifications)       |
 | **Message log** — status, opens, cancel and reschedule                                                                                           | `mail.messages.get / all / cancel / reschedule`     | `messages [status]`                  | `/raw/provider` (Delivery status)     |
-| **Receiving** — inbound mail on a verified domain, delivered as `received` events                                                                | `POST /v1/domains/{id}/inbound`                     | —                                    | `/raw/provider` (Receiving)           |
+| **Receiving** — inbound mail on a verified domain, delivered as `received` events                                                                | `POST /v1/domains/{id}/inbound`                     | `domains inbound <domain>`           | `/raw/provider` (Receiving)           |
 
 Every one of them needs a `POSTBOI_TOKEN` — on another provider there is no account, and the honest answer is "that lives in Postboi's hosted side; want to add it?".
 
