@@ -13,7 +13,7 @@
 		"react-dom": "^19"
 	},
 	"devDependencies": {
-		"postboi": "^0.49.1",
+		"postboi": "^0.50.0",
 		"typescript": "^5.9",
 		"@types/react": "^19",
 		"@types/node": "^22"

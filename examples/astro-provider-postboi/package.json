@@ -13,7 +13,7 @@
 		"@astrojs/node": "^9"
 	},
 	"devDependencies": {
-		"postboi": "^0.49.1",
+		"postboi": "^0.50.0",
 		"typescript": "^5.9"
 	}
 }
