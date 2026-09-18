@@ -216,7 +216,46 @@ async function lists(args: Array<string>): Promise<void> {
 		})
 		return say(`${green("✓")} deleted ${bold(ref)} ${dim(`(${gone.id})`)}`)
 	}
-	if (action) throw new ApiCommandError(`Unknown action: lists ${action}. Try add or delete.`)
+	if (action === "send") {
+		const { flags, rest: words } = take_flags(rest, [
+			"subject",
+			"text",
+			"html",
+			"file",
+			"from",
+			"reply-to",
+			"at",
+		])
+		const ref = words.join(" ").trim()
+		const body = flags.file ? body_from_file(flags.file) : { html: flags.html, text: flags.text }
+		if (!ref || !flags.subject || (!body.html && !body.text)) {
+			throw new ApiCommandError(
+				"Usage: postboi lists send <list> --subject <s> (--text <t> | --html <h> | --file <path>|-) [--from <a>] [--reply-to <a>] [--at <ISO time>]"
+			)
+		}
+		const one = (value: string | undefined) => (value ? parse_email_list(value)[0] : undefined)
+		const result = await api<{ ids: Array<string>; recipients: number; scheduled_at?: string }>(
+			`/v1/lists/${encodeURIComponent(ref)}/send`,
+			{
+				method: "POST",
+				body: {
+					subject: flags.subject,
+					html: body.html,
+					text: body.text,
+					from: one(flags.from),
+					reply_to: one(flags["reply-to"]),
+					scheduled_at: flags.at,
+				},
+			}
+		)
+		const verb = result.scheduled_at ? `scheduled for ${result.scheduled_at}` : "sent"
+		return say(
+			`${green("✓")} ${verb} to ${bold(String(result.recipients))} subscribed recipient(s) of ${bold(ref)}`
+		)
+	}
+	if (action) {
+		throw new ApiCommandError(`Unknown action: lists ${action}. Try add, send, or delete.`)
+	}
 
 	const { lists: rows } = await api<{
 		lists: Array<{
@@ -438,6 +477,43 @@ async function domains(args: Array<string>): Promise<void> {
 		})
 		return print_domain_setup(detail)
 	}
+	if (action === "inbound") {
+		const { on, rest } = take_flags(args.slice(1), [], ["off"])
+		const domain = rest[0]
+		if (!domain) throw new ApiCommandError("Usage: postboi domains inbound <domain> [--off]")
+		const path = `/v1/domains/${encodeURIComponent(domain)}/inbound`
+		if (on.has("off")) {
+			await api(path, { method: "DELETE" })
+			return say(`${green("✓")} receiving off for ${bold(domain)}`)
+		}
+		const detail = await api<
+			DomainDetail & {
+				inbound?: {
+					domain: string
+					status: string
+					records: Array<{ type: string; name: string; value: string; priority?: number }>
+				}
+			}
+		>(path, { method: "POST" })
+		const inbound = detail.inbound
+		if (!inbound) return say(`${green("✓")} receiving enabled for ${bold(domain)}`)
+		if (inbound.status === "active") {
+			return say(`${green("✓")} receiving mail on ${bold(inbound.domain)}`)
+		}
+		say(`${yellow("⌛")} receiving on ${bold(inbound.domain)} is ${inbound.status}`)
+		if (inbound.records.length > 0) {
+			say(`\n${bold("Publish these DNS records:")}\n`)
+			table(
+				["TYPE", "NAME", "VALUE"],
+				inbound.records.map((r) => [
+					r.type,
+					r.name,
+					r.priority !== undefined ? `${r.priority} ${r.value}` : r.value,
+				])
+			)
+		}
+		return say(`\n${dim("Then:")} ${cyan(`bunx postboi domains check ${domain}`)}`)
+	}
 	if (action === "delete") {
 		if (!ref) throw new ApiCommandError("Usage: postboi domains delete <domain>")
 		await api(`/v1/domains/${encodeURIComponent(ref)}`, { method: "DELETE" })
@@ -446,7 +522,9 @@ async function domains(args: Array<string>): Promise<void> {
 		)
 	}
 	if (action) {
-		throw new ApiCommandError(`Unknown action: domains ${action}. Try add, check, or delete.`)
+		throw new ApiCommandError(
+			`Unknown action: domains ${action}. Try add, check, inbound, or delete.`
+		)
 	}
 
 	const identity = await api<{ send_address: string; domains: Array<PostboiDomain> }>("/v1/domains")
@@ -485,6 +563,18 @@ async function webhooks(args: Array<string>): Promise<void> {
 		await api(`/v1/webhooks/${encodeURIComponent(ref)}`, { method: "DELETE" })
 		return say(`${green("✓")} deleted ${bold(ref)}`)
 	}
+	if (action === "rotate") {
+		if (!ref) throw new ApiCommandError("Usage: postboi webhooks rotate <id>")
+		const rotated = await api<{ id: string; secret: string }>(
+			`/v1/webhooks/${encodeURIComponent(ref)}/rotate`,
+			{ method: "POST" }
+		)
+		say(`${green("✓")} rotated the secret for ${bold(rotated.id)}`)
+		say(`  ${dim("secret:")} ${rotated.secret}`)
+		return say(
+			`  ${dim("`postboi sync` writes it to POSTBOI_WEBHOOK_SECRET — the old one stops verifying now.")}`
+		)
+	}
 	if (action === "deliveries") {
 		if (!ref) throw new ApiCommandError("Usage: postboi webhooks deliveries <id>")
 		const { deliveries } = await api<{
@@ -513,7 +603,9 @@ async function webhooks(args: Array<string>): Promise<void> {
 		)
 	}
 	if (action) {
-		throw new ApiCommandError(`Unknown action: webhooks ${action}. Try add, delete, or deliveries.`)
+		throw new ApiCommandError(
+			`Unknown action: webhooks ${action}. Try add, rotate, deliveries, or delete.`
+		)
 	}
 
 	const { webhooks: rows } = await api<{
@@ -905,6 +997,31 @@ export function download_target(
 	return out || filename || `export.${format}`
 }
 
+const SCHEDULE_FLAGS = ["day", "month-day", "at", "tz"]
+const FREQUENCY_SWITCHES = ["daily", "weekly", "monthly"]
+
+/**
+ * A schedule as the API takes one, from `--daily|--weekly|--monthly` plus `--day`,
+ * `--month-day`, `--at` and `--tz` — shared by `exports add` and `notifications add`.
+ * Undefined when no frequency switch is on; a caller decides whether that is an error.
+ */
+function schedule_from_flags(
+	flags: Record<string, string>,
+	on: Set<string>,
+	extra: Array<string> = []
+): Record<string, unknown> | undefined {
+	const chosen = [...FREQUENCY_SWITCHES, ...extra].filter((f) => on.has(f))
+	if (chosen.length !== 1) return undefined
+	if (extra.includes(chosen[0])) return { frequency: chosen[0] }
+	return {
+		frequency: chosen[0],
+		days: flags.day ? parse_weekdays(flags.day) : undefined,
+		month_day: flags["month-day"] ? Number(flags["month-day"]) : undefined,
+		send_time: flags.at,
+		timezone: flags.tz,
+	}
+}
+
 const EXPORTS_DOWNLOAD_USAGE = [
 	"Usage: postboi exports download [--out <file>|-] [--xlsx] [--no-fields] [--columns a,b]",
 	"         [--form <form>] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--subject <s>]",
@@ -926,21 +1043,12 @@ async function exports_command(args: Array<string>): Promise<void> {
 	if (action === "add") {
 		const { flags, rest, on } = take_flags(
 			rest_args,
-			["to", "from", "day", "month-day", "at", "tz", "window", ...FILTER_FLAGS],
-			["daily", "weekly", "monthly", "xlsx", "no-fields"]
+			["to", "from", "window", ...SCHEDULE_FLAGS, ...FILTER_FLAGS],
+			[...FREQUENCY_SWITCHES, "xlsx", "no-fields"]
 		)
 		const name = rest.join(" ").trim()
-		const frequencies = ["daily", "weekly", "monthly"].filter((f) => on.has(f))
-		if (!name || !flags.to || frequencies.length !== 1) {
-			throw new ApiCommandError(EXPORTS_ADD_USAGE)
-		}
-		const schedule = {
-			frequency: frequencies[0],
-			days: flags.day ? parse_weekdays(flags.day) : undefined,
-			month_day: flags["month-day"] ? Number(flags["month-day"]) : undefined,
-			send_time: flags.at,
-			timezone: flags.tz,
-		}
+		const schedule = schedule_from_flags(flags, on)
+		if (!name || !flags.to || !schedule) throw new ApiCommandError(EXPORTS_ADD_USAGE)
 		const filter = filter_from_flags(flags)
 		const created = await api<ExportWire>("/v1/exports", {
 			method: "POST",
@@ -1047,6 +1155,247 @@ async function exports_command(args: Array<string>): Promise<void> {
 	)
 }
 
+// ── Forms ──────────────────────────────────────────────────────────────────
+
+/** What submissions are filed under — the names `form:` is typed to by `sync`. */
+async function forms(args: Array<string>): Promise<void> {
+	if (args[0]) {
+		throw new ApiCommandError(
+			'Forms are named from your code (`mail({ form: "Contact" })`) and managed in the dashboard — `postboi forms` lists them.'
+		)
+	}
+	const { forms: rows } = await api<{
+		forms: Array<{ id: string; name: string; kind: string; paused: boolean; created_at: string }>
+	}>("/v1/forms")
+	if (rows.length === 0) {
+		return say(dim('No forms yet — name one on a send: mail({ …, form: "Contact" })'))
+	}
+	table(
+		["NAME", "KIND", "STATE", "CREATED", "ID"],
+		rows.map((f) => [
+			bold(f.name),
+			f.kind === "library" ? "named in code" : "hosted endpoint",
+			f.paused ? yellow("paused") : green("active"),
+			day(f.created_at),
+			dim(f.id),
+		])
+	)
+}
+
+// ── Notifications (a list's digests) ───────────────────────────────────────
+
+interface NotificationWire {
+	id: string
+	recipients: Array<{ email: string; name?: string } | string>
+	subject?: string
+	schedule: ExportSchedule | { frequency: string }
+	next_run_at?: string | null
+	last_run_at?: string | null
+}
+
+const NOTIFICATIONS_ADD_USAGE = [
+	"Usage: postboi notifications <list> add --to <emails> --daily|--weekly|--monthly|--on-signup",
+	"         [--subject <s>] [--body <html>] [--from <a>] [--day mon,fri] [--month-day 1] [--at HH:MM] [--tz Europe/London]",
+].join("\n")
+
+function describe_notification_schedule(schedule: NotificationWire["schedule"]): string {
+	if (schedule.frequency === "subscribe") return "on each signup"
+	return describe_schedule(schedule as ExportSchedule)
+}
+
+/** A list's notifications: a digest of new signups on a schedule, or a note on each one. */
+async function notifications(args: Array<string>): Promise<void> {
+	const [list, action, ...rest_args] = args
+	if (!list) {
+		throw new ApiCommandError("Usage: postboi notifications <list> [add … | delete <id>]")
+	}
+	const path = `/v1/lists/${encodeURIComponent(list)}/notifications`
+
+	if (action === "add") {
+		const { flags, rest, on } = take_flags(
+			rest_args,
+			["to", "subject", "body", "from", ...SCHEDULE_FLAGS],
+			[...FREQUENCY_SWITCHES, "on-signup"]
+		)
+		const schedule = schedule_from_flags(flags, on, ["on-signup"])
+		if (rest.length || !flags.to || !schedule) throw new ApiCommandError(NOTIFICATIONS_ADD_USAGE)
+		if (schedule.frequency === "on-signup") schedule.frequency = "subscribe"
+		const created = await api<NotificationWire>(path, {
+			method: "POST",
+			body: {
+				recipients: flags.to,
+				subject: flags.subject,
+				body: flags.body,
+				from: flags.from,
+				schedule,
+			},
+		})
+		return say(
+			`${green("✓")} notification ${dim(`(${created.id})`)} — ${describe_notification_schedule(created.schedule)}, to ${flags.to}`
+		)
+	}
+	if (action === "delete") {
+		const id = rest_args[0]
+		if (!id) throw new ApiCommandError("Usage: postboi notifications <list> delete <id>")
+		await api(`${path}/${encodeURIComponent(id)}`, { method: "DELETE" })
+		return say(`${green("✓")} deleted ${bold(id)}`)
+	}
+	if (action) {
+		throw new ApiCommandError(`Unknown action: notifications ${list} ${action}. Try add or delete.`)
+	}
+
+	const { notifications: rows } = await api<{ notifications: Array<NotificationWire> }>(path)
+	if (rows.length === 0) {
+		return say(
+			dim(`No notifications on ${list} — postboi notifications ${list} add --to <email> --weekly`)
+		)
+	}
+	table(
+		["SCHEDULE", "TO", "SUBJECT", "NEXT", "ID"],
+		rows.map((n) => [
+			describe_notification_schedule(n.schedule),
+			n.recipients.map((r) => (typeof r === "string" ? r : r.email)).join(","),
+			n.subject ?? "",
+			n.next_run_at ? n.next_run_at.slice(0, 16).replace("T", " ") : "",
+			dim(n.id),
+		])
+	)
+}
+
+// ── Testing (client previews and a report on a real send) ──────────────────
+
+interface TestRun {
+	id: string
+	status: string
+	label?: string
+	address?: string
+	from?: string
+	subject?: string
+	created_at: string
+	received_at?: string
+	expires_at?: string
+}
+
+interface TestReport extends TestRun {
+	source?: string
+	size?: number
+	authentication?: { spf?: string | null; dkim?: string | null; dmarc?: string | null }
+	report?: {
+		status?: string
+		findings?: Array<{ level?: string; title?: string; message?: string }>
+	} | null
+	spam?: { score?: number; rules?: Array<{ score: number; description: string }> } | null
+	previews?: Array<{ client: string; name: string; status: string; error?: string }>
+}
+
+/**
+ * Email testing: `testing add` mints an address to send a real email to; `testing <id>`
+ * reads the report back — authentication, the inspect findings, a spam score and the
+ * client screenshots as they render.
+ */
+async function testing(args: Array<string>): Promise<void> {
+	const [action, ...rest_args] = args
+
+	if (action === "add") {
+		const { flags, rest } = take_flags(rest_args, ["label", "series", "clients"])
+		if (rest.length) {
+			throw new ApiCommandError(
+				"Usage: postboi testing add [--label <name>] [--series <name>] [--clients a,b]"
+			)
+		}
+		const run = await api<TestRun>("/v1/testing", {
+			method: "POST",
+			body: {
+				label: flags.label,
+				series: flags.series,
+				clients: flags.clients ? flags.clients.split(",").map((c) => c.trim()) : undefined,
+			},
+		})
+		say(`${green("✓")} test ${bold(run.id)}${run.label ? dim(` (${run.label})`) : ""}`)
+		say(`  ${dim("send the email to:")} ${cyan(run.address ?? "")}`)
+		if (run.expires_at)
+			say(`  ${dim(`waiting until ${run.expires_at.slice(0, 16).replace("T", " ")}`)}`)
+		return say(`  ${dim(`postboi testing ${run.id} reads the report once it lands.`)}`)
+	}
+	if (action === "clients") {
+		const { data, max_per_test } = await api<{
+			data: Array<{ id: string; name: string; group?: string; default?: boolean }>
+			max_per_test?: number
+		}>("/v1/testing/clients")
+		table(
+			["ID", "NAME", "GROUP", "DEFAULT"],
+			data.map((c) => [c.id, c.name, c.group ?? "", c.default ? green("yes") : ""])
+		)
+		if (max_per_test)
+			say(dim(`\nUp to ${max_per_test} per test — postboi testing add --clients a,b`))
+		return
+	}
+	if (action === "delete") {
+		const id = rest_args[0]
+		if (!id) throw new ApiCommandError("Usage: postboi testing delete <id>")
+		await api(`/v1/testing/${encodeURIComponent(id)}`, { method: "DELETE" })
+		return say(`${green("✓")} deleted ${bold(id)}`)
+	}
+	if (action) {
+		const t = await api<TestReport>(`/v1/testing/${encodeURIComponent(action)}`)
+		say(`${bold(t.label ?? t.id)} ${dim(`(${t.id})`)}`)
+		say(
+			`  status   ${t.status === "received" ? green(t.status) : t.status === "expired" ? red(t.status) : yellow(t.status)}`
+		)
+		if (t.status === "waiting") {
+			return say(`  ${dim("send the email to:")} ${cyan(t.address ?? "")}`)
+		}
+		if (t.from) say(`  from     ${t.from}`)
+		if (t.subject) say(`  subject  ${t.subject}`)
+		if (t.authentication) {
+			const a = t.authentication
+			const mark = (v: string | null | undefined) =>
+				v === "pass" ? green("pass") : v ? red(v) : dim("none")
+			say(`  auth     spf ${mark(a.spf)} · dkim ${mark(a.dkim)} · dmarc ${mark(a.dmarc)}`)
+		}
+		if (t.spam) say(`  spam     score ${t.spam.score ?? "?"}`)
+		if (t.report?.findings?.length) {
+			say(`  findings ${t.report.status ?? ""}`)
+			for (const f of t.report.findings) {
+				say(`    ${f.level === "error" ? red("✗") : yellow("!")} ${f.title ?? f.message ?? ""}`)
+			}
+		}
+		if (t.previews?.length) {
+			say()
+			table(
+				["CLIENT", "PREVIEW", "NOTE"],
+				t.previews.map((p) => [
+					p.name,
+					p.status === "ready"
+						? green("ready")
+						: p.status === "failed"
+							? red("failed")
+							: yellow(p.status),
+					dim(p.error ?? ""),
+				])
+			)
+		}
+		return
+	}
+
+	const { data: rows } = await api<{ data: Array<TestRun> }>("/v1/testing")
+	if (rows.length === 0) return say(dim("No tests yet — postboi testing add"))
+	table(
+		["LABEL", "STATUS", "SUBJECT", "WHEN", "ID"],
+		rows.map((t) => [
+			t.label ?? "",
+			t.status === "received"
+				? green(t.status)
+				: t.status === "expired"
+					? red(t.status)
+					: yellow(t.status),
+			t.subject ?? "",
+			t.created_at.slice(0, 16).replace("T", " "),
+			dim(t.id),
+		])
+	)
+}
+
 // ── Dispatch ───────────────────────────────────────────────────────────────
 
 const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
@@ -1062,6 +1411,9 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	messages,
 	exports: exports_command,
 	suppressions,
+	forms,
+	notifications,
+	testing,
 }
 
 /**
@@ -1078,6 +1430,8 @@ const LISTING = new Set([
 	"messages",
 	"suppressions",
 	"exports",
+	"forms",
+	"testing",
 ])
 
 /** Handle a resource command; false when `command` isn't one (main falls through to help). */

@@ -599,3 +599,203 @@ describe("parse_email_list", () => {
 		expect(parse_email_list("nobody")).toEqual([])
 	})
 })
+
+describe("the nouns the API had and the CLI didn't", () => {
+	function stub(response: unknown, status = 200) {
+		const calls: Array<{ url: string; init?: RequestInit }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({ url, init })
+				return new Response(JSON.stringify(response), { status })
+			})
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		const path = (i = 0) => calls[i].url.replace(/^.*\/v1/, "/v1")
+		const body = (i = 0) => JSON.parse(String(calls[i].init?.body))
+		return { calls, lines, path, body }
+	}
+
+	it("forms lists, and points at the code for anything else", async () => {
+		const { path, lines } = stub({
+			forms: [
+				{
+					id: "frm_1",
+					name: "Contact",
+					kind: "library",
+					paused: false,
+					created_at: "2026-09-01T00:00:00.000Z",
+				},
+			],
+		})
+		expect(await api_command("forms", [])).toBe(true)
+		expect(path()).toBe("/v1/forms")
+		expect(lines.join("\n")).toContain("named in code")
+		await expect(api_command("forms", ["add", "X"])).rejects.toThrow(/named from your code/)
+	})
+
+	it("notifications: list, add on a schedule or on signup, delete", async () => {
+		const { path, body, lines } = stub({
+			id: "ntf_1",
+			recipients: [{ email: "ops@acme.com" }],
+			schedule: {
+				frequency: "weekly",
+				days: [5],
+				month_day: 1,
+				send_time: "09:00",
+				timezone: "UTC",
+			},
+		})
+		await api_command("notifications", [
+			"Newsletter",
+			"add",
+			"--to",
+			"ops@acme.com",
+			"--weekly",
+			"--day",
+			"fri",
+			"--subject",
+			"New signups",
+		])
+		expect(path()).toBe("/v1/lists/Newsletter/notifications")
+		expect(body()).toEqual({
+			recipients: "ops@acme.com",
+			subject: "New signups",
+			schedule: { frequency: "weekly", days: [5] },
+		})
+		expect(lines[0]).toContain("weekly on Friday")
+
+		await api_command("notifications", ["Newsletter", "add", "--to", "ops@acme.com", "--on-signup"])
+		expect(body(1)).toEqual({ recipients: "ops@acme.com", schedule: { frequency: "subscribe" } })
+
+		await api_command("notifications", ["Newsletter", "delete", "ntf_1"])
+		expect(path(2)).toBe("/v1/lists/Newsletter/notifications/ntf_1")
+
+		await expect(
+			api_command("notifications", ["Newsletter", "add", "--to", "a@b.co"])
+		).rejects.toThrow(/Usage/)
+		await expect(api_command("notifications", [])).rejects.toThrow(/Usage/)
+	})
+
+	it("lists send posts a broadcast", async () => {
+		const { path, body, lines } = stub({ ids: ["msg_1", "msg_2"], recipients: 2 })
+		await api_command("lists", [
+			"send",
+			"Newsletter",
+			"--subject",
+			"Hi",
+			"--text",
+			"hello",
+			"--from",
+			"Ops <ops@acme.com>",
+		])
+		expect(path()).toBe("/v1/lists/Newsletter/send")
+		expect(body()).toEqual({
+			subject: "Hi",
+			text: "hello",
+			from: { email: "ops@acme.com", name: "Ops" },
+		})
+		expect(lines[0]).toContain("2")
+		await expect(api_command("lists", ["send", "Newsletter", "--subject", "Hi"])).rejects.toThrow(
+			/Usage: postboi lists send/
+		)
+	})
+
+	it("testing: add mints an address, <id> reads the report, clients lists the farm", async () => {
+		const { path, body, lines } = stub({
+			id: "tst_1",
+			status: "waiting",
+			address: "tst_1@test.postboi.email",
+			created_at: "2026-09-01T00:00:00.000Z",
+		})
+		await api_command("testing", [
+			"add",
+			"--label",
+			"welcome v2",
+			"--clients",
+			"gmail-web, outlook-win",
+		])
+		expect(path()).toBe("/v1/testing")
+		expect(body()).toEqual({ label: "welcome v2", clients: ["gmail-web", "outlook-win"] })
+		expect(lines.join("\n")).toContain("tst_1@test.postboi.email")
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(
+				async () =>
+					new Response(
+						JSON.stringify({
+							id: "tst_1",
+							status: "received",
+							label: "welcome v2",
+							from: "a@acme.com",
+							subject: "Welcome",
+							authentication: { spf: "pass", dkim: "pass", dmarc: "fail" },
+							spam: { score: 1.2 },
+							report: {
+								status: "warnings",
+								findings: [{ level: "warning", title: "Image without alt text" }],
+							},
+							previews: [{ client: "gmail-web", name: "Gmail (web)", status: "ready" }],
+							created_at: "2026-09-01T00:00:00.000Z",
+						}),
+						{ status: 200 }
+					)
+			)
+		)
+		lines.length = 0
+		await api_command("testing", ["tst_1"])
+		const text = lines.join("\n")
+		expect(text).toContain("Image without alt text")
+		expect(text).toContain("Gmail (web)")
+		expect(text).toContain("dmarc")
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(
+				async () =>
+					new Response(
+						JSON.stringify({
+							data: [{ id: "gmail-web", name: "Gmail (web)", group: "Webmail", default: true }],
+							max_per_test: 25,
+						}),
+						{ status: 200 }
+					)
+			)
+		)
+		lines.length = 0
+		await api_command("testing", ["clients"])
+		expect(lines.join("\n")).toContain("gmail-web")
+	})
+
+	it("domains inbound turns receiving on (printing the records) and off", async () => {
+		const { path, lines, calls } = stub({
+			id: "dom_1",
+			domain: "acme.com",
+			status: "verified",
+			records: [],
+			inbound: {
+				domain: "reply.acme.com",
+				status: "pending",
+				records: [{ type: "MX", name: "reply.acme.com", value: "in.postboi.email", priority: 10 }],
+			},
+		})
+		await api_command("domains", ["inbound", "acme.com"])
+		expect(path()).toBe("/v1/domains/acme.com/inbound")
+		expect(calls[0].init?.method).toBe("POST")
+		expect(lines.join("\n")).toContain("10 in.postboi.email")
+		await api_command("domains", ["inbound", "acme.com", "--off"])
+		expect(calls[1].init?.method).toBe("DELETE")
+	})
+
+	it("webhooks rotate prints the new secret and points at sync", async () => {
+		const { path, lines, calls } = stub({ id: "wh_1", secret: "whsec_new" })
+		await api_command("webhooks", ["rotate", "wh_1"])
+		expect(path()).toBe("/v1/webhooks/wh_1/rotate")
+		expect(calls[0].init?.method).toBe("POST")
+		expect(lines.join("\n")).toContain("whsec_new")
+		expect(lines.join("\n")).toContain("postboi sync")
+	})
+})
