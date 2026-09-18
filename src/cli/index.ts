@@ -105,7 +105,7 @@ import {
 import { fetch_whatsapp_templates } from "./whatsapp_templates.js"
 import { offer_skill, refresh_skill, skill_command } from "./skill.js"
 import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
-import { api_command } from "./api.js"
+import { api_command, ApiCommandError, error_json } from "./api.js"
 import { dev_command } from "./dev.js"
 import { inspect_command } from "./inspect.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
@@ -159,7 +159,8 @@ ${bold("Account")} ${dim("(Postboi provider — full reference: https://api.post
   ${cyan("bunx postboi messages")}        Recent messages ${dim("· [status]")}
   ${cyan("bunx postboi exports")}         Exports ${dim("· download [--form <form>] [--xlsx] [--out <file>] · add <name> --to <emails> --weekly · run · pause · resume · delete <id>")}
   ${cyan("bunx postboi suppressions")}    Suppressed addresses ${dim("· add <email|+phone> · remove <email|+phone>")}
-  ${dim("                               A bare noun lists; `list` says the same.")}
+  ${dim("                               A bare noun lists; `list` says the same. Add --json to any of")}
+  ${dim("                               them for the API's response as JSON (errors carry the API's code).")}
 
 ${bold("Options")}
   -h, --help        Show this help
@@ -1997,6 +1998,11 @@ main().catch((error) => {
 		console.log(dim("\nCancelled."))
 		exit(130)
 	}
-	console.error(red(error instanceof Error ? error.message : String(error)))
+	if (argv.includes("--json")) {
+		console.error(error_json(error))
+		exit(1)
+	}
+	const code = error instanceof ApiCommandError && error.code ? dim(` (${error.code})`) : ""
+	console.error(red(error instanceof Error ? error.message : String(error)) + code)
 	exit(1)
 })

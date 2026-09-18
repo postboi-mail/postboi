@@ -2,7 +2,15 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { table, api_command, parse_weekdays, describe_schedule, download_target } from "./api.js"
+import {
+	table,
+	api_command,
+	parse_weekdays,
+	describe_schedule,
+	download_target,
+	error_json,
+	ApiCommandError,
+} from "./api.js"
 
 afterEach(() => {
 	vi.restoreAllMocks()
@@ -381,5 +389,70 @@ describe("`list` as the bare listing", () => {
 		vi.spyOn(console, "log").mockImplementation(() => {})
 		await api_command("recipients", ["list"])
 		expect(calls[0]).toContain("/v1/lists/list")
+	})
+})
+
+describe("--json", () => {
+	function stub(response: unknown, status = 200) {
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response(JSON.stringify(response), { status }))
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		return lines
+	}
+
+	it("prints the API's body and nothing else, on any account command", async () => {
+		const account = {
+			id: "acct_1",
+			name: "Acme",
+			plan: "starter",
+			send_address: "a@send.postboi.email",
+		}
+		const lines = stub(account)
+		expect(await api_command("whoami", ["--json"])).toBe(true)
+		expect(lines).toHaveLength(1)
+		expect(JSON.parse(lines[0])).toEqual(account)
+
+		lines.length = 0
+		const list = { id: "lst_1", name: "News" }
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response(JSON.stringify(list), { status: 200 }))
+		)
+		await api_command("lists", ["add", "News", "--json"])
+		expect(lines).toHaveLength(1)
+		expect(JSON.parse(lines[0])).toEqual(list)
+	})
+
+	it("is off again for the next command", async () => {
+		const lines = stub({ send_address: "a@send.postboi.email" })
+		await api_command("send-address", ["--json"])
+		await api_command("send-address", [])
+		expect(lines).toHaveLength(2)
+		expect(lines[1]).toContain("Send address:")
+	})
+
+	it("a refusal carries the API's code, for people and for JSON", async () => {
+		stub({ message: "That name is taken.", code: "name_taken" }, 409)
+		const failure = await api_command("lists", ["add", "News"]).catch((e: unknown) => e)
+		expect(failure).toBeInstanceOf(ApiCommandError)
+		expect((failure as ApiCommandError).code).toBe("name_taken")
+		expect((failure as ApiCommandError).message).toBe("That name is taken.")
+		expect(JSON.parse(error_json(failure))).toEqual({
+			error: { message: "That name is taken.", code: "name_taken" },
+		})
+	})
+
+	it("a bodiless failure still gets a code from the status", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response("", { status: 502 }))
+		)
+		const failure = await api_command("whoami", []).catch((e: unknown) => e)
+		expect((failure as ApiCommandError).code).toBe("http_502")
 	})
 })
