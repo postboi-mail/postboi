@@ -129,6 +129,52 @@ export interface ExportFilter {
 	until?: string
 }
 
+/** What `exports.download` takes: a filter and the file's shape, no schedule. */
+export interface ExportDownloadOptions {
+	filter?: ExportFilter
+	/** `"csv"` by default. */
+	format?: "csv" | "xlsx"
+	/** Export column keys; the usual set when omitted. */
+	columns?: Array<string>
+	/** One column per form field after the chosen columns. On by default. */
+	fields?: boolean
+}
+
+/** A downloaded export: the bytes, the name the server gave the file, and its media type. */
+export interface ExportFile {
+	filename: string
+	type: string
+	bytes: Uint8Array
+	/**
+	 * The file as UTF-8 text, without the byte-order mark a CSV opens with — for a
+	 * spreadsheet, which is a ZIP, read `bytes` instead.
+	 */
+	text(): string
+}
+
+/**
+ * `exports.download`'s options as the query string `GET /v1/exports/download` reads —
+ * the same words a scheduled export's filter uses, flattened: `status` and `columns`
+ * become comma lists, `fields` is `1` or `0`.
+ */
+export function export_download_params(options: ExportDownloadOptions = {}): URLSearchParams {
+	const params = new URLSearchParams()
+	const filter = options.filter ?? {}
+	for (const key of ["form", "subject", "from", "to", "opens", "since", "until"] as const) {
+		const value = filter[key]
+		if (value !== undefined && value !== null && value !== "") params.set(key, String(value))
+	}
+	if (filter.subject_exact) params.set("subject_exact", "1")
+	if (filter.status !== undefined) {
+		const list = Array.isArray(filter.status) ? filter.status : [filter.status]
+		if (list.length) params.set("status", list.join(","))
+	}
+	if (options.format) params.set("format", options.format)
+	if (options.columns?.length) params.set("columns", options.columns.join(","))
+	if (options.fields !== undefined) params.set("fields", options.fields ? "1" : "0")
+	return params
+}
+
 /** When an export runs: a bare frequency is shorthand (`"weekly"` means Mondays at 09:00 UTC). */
 export type ExportScheduleInput =
 	| "daily"
@@ -905,6 +951,41 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		/** Run a scheduled export now — the file goes within a minute; the schedule carries on. */
 		run: (id: string): Promise<{ id: string; queued: boolean }> =>
 			this.#api(`/exports/${encodeURIComponent(id)}/run`, { method: "POST" }),
+
+		/**
+		 * The file now, without a schedule: the same filter, columns and fields a scheduled
+		 * export takes, handed straight back. A CSV holds up to 50,000 rows, a spreadsheet
+		 * 10,000; days are UTC days.
+		 *
+		 * @example
+		 * ```ts
+		 * const file = await mail.exports.download({ filter: { form: "Contact" } })
+		 * await writeFile(file.filename, file.bytes)
+		 * ```
+		 */
+		download: async (options: ExportDownloadOptions = {}): Promise<ExportFile> => {
+			const token = this.#require_token()
+			const query = export_download_params(options).toString()
+			const response = await this.request({
+				url: `${this.#host}/v1/exports/download${query ? `?${query}` : ""}`,
+				method: "GET",
+				headers: { Authorization: `Bearer ${token}` },
+			})
+			if (!response.ok) {
+				const data = await this.read_json(response)
+				const error = this.error_for(response, data, "/exports/download")
+				if (error) throw error
+			}
+			const bytes = new Uint8Array(await response.arrayBuffer())
+			const disposition = response.headers.get("content-disposition") ?? ""
+			const named = disposition.match(/filename="([^"]+)"/)
+			return {
+				filename: named?.[1] ?? `export.${options.format ?? "csv"}`,
+				type: response.headers.get("content-type") ?? "",
+				bytes,
+				text: () => new TextDecoder().decode(bytes),
+			}
+		},
 
 		/** Delete a scheduled export. */
 		delete: (id: string): Promise<{ id: string; deleted: boolean }> =>

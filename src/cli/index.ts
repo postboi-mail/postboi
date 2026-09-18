@@ -157,7 +157,7 @@ ${bold("Account")} ${dim("(Postboi provider — full reference: https://api.post
   ${cyan("bunx postboi webhooks")}        Webhooks ${dim("· add <url> · delete <id> · deliveries <id>")}
   ${cyan("bunx postboi members")}         Members ${dim("· invite <email> · remove <ref> · revoke <ref>")}
   ${cyan("bunx postboi messages")}        Recent messages ${dim("· [status]")}
-  ${cyan("bunx postboi exports")}         Scheduled exports ${dim("· add <name> --to <emails> --weekly [--form <form>] · run · pause · resume · delete <id>")}
+  ${cyan("bunx postboi exports")}         Exports ${dim("· download [--form <form>] [--xlsx] [--out <file>] · add <name> --to <emails> --weekly · run · pause · resume · delete <id>")}
   ${cyan("bunx postboi suppressions")}    Suppressed addresses ${dim("· add <email|+phone> · remove <email|+phone>")}
   ${dim("                               A bare noun lists; `list` says the same.")}
 

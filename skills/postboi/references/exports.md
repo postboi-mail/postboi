@@ -8,6 +8,18 @@ that pages `/v1/messages` and mails a file is exactly what this replaces.
 Needs a `POSTBOI_TOKEN` in the project (the Postboi provider). A project on Resend, SES or
 another provider has no account to export from.
 
+## Now, or on a schedule
+
+Two shapes of the same thing, with the same filter words:
+
+- **A file now** — `bunx postboi exports download --form Contact` writes the CSV to the
+  current directory under the server's name (`--out enquiries.csv`, or `--out -` for
+  stdout; `--xlsx` for a spreadsheet). From code, `mail.exports.download({ filter })`
+  returns `{ filename, type, bytes, text() }`. This is the answer to "give me the
+  submissions" or "how many bounced last month": read the file, don't build a report.
+- **A file on a calendar** — `bunx postboi exports add …` emails it daily, weekly or
+  monthly. The recipe below.
+
 ## "Send us a CSV of the enquiries every week" — the recipe
 
 1. **Name the form on the existing send.** An unfiltered export is rows of the Sent log —
@@ -43,9 +55,10 @@ another provider has no account to export from.
    })
    ```
 
-3. **Prove it**: `bunx postboi exports run <id>` sends one within a minute; `bunx postboi
-messages` shows it in the log with its file. Then `bunx postboi exports` lists what is
-   scheduled and when it next runs.
+3. **Prove it**: `bunx postboi exports download --form Contact` shows exactly what the
+   emailed file will hold; `bunx postboi exports run <id>` sends one within a minute and
+   `bunx postboi messages` shows it in the log with its file. Then `bunx postboi exports`
+   lists what is scheduled and when it next runs.
 
 ## Defaults to state rather than guess
 
@@ -70,13 +83,15 @@ messages` shows it in the log with its file. Then `bunx postboi exports` lists w
 
 ```bash
 bunx postboi exports                   # (or `exports list`) NAME · SCHEDULE · TO · NEXT · STATE · ID
+bunx postboi exports download [filters] [--xlsx] [--no-fields] [--columns a,b] [--out <file>|-]
 bunx postboi exports run <id>          # one file now; the schedule carries on
 bunx postboi exports pause <id>        # keeps the row, stops the clock (run refuses while paused)
 bunx postboi exports resume <id>
 bunx postboi exports delete <id>       # immediate, unprompted
 ```
 
-`mail.exports.all() / get(id) / update(id, changes) / run(id) / delete(id)` from code, or
+`mail.exports.download(options) / all() / get(id) / update(id, changes) / run(id) /
+delete(id)` from code, or `GET /v1/exports/download?form=…&status=…&format=csv`,
 `GET|POST /v1/exports`, `GET|PATCH|DELETE /v1/exports/:id`, `POST /v1/exports/:id/run`
 with `Authorization: Bearer $POSTBOI_TOKEN` — a `PATCH` is partial, `{ "paused": true }`
 pauses. Client-space keys (`pb_…` minted for a workspace) can't reach it; the token

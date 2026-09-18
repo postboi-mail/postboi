@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs"
 import { stdout } from "node:process"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
@@ -46,6 +47,36 @@ async function api<T>(
 	}
 	if (data === undefined) throw new ApiCommandError("Unexpected empty response from the API.")
 	return data
+}
+
+/** A GET whose answer is a file rather than JSON: the bytes and the name the server gave them. */
+async function api_file(
+	path: string,
+	fetch_fn: FetchLike = fetch
+): Promise<{ filename: string | undefined; bytes: Uint8Array }> {
+	await ensure_env_loaded()
+	const token = read_env("POSTBOI_TOKEN")
+	if (!token) {
+		throw new ApiCommandError("No POSTBOI_TOKEN found — run `postboi init` to sign in first.")
+	}
+	let response: Response
+	try {
+		response = await fetch_fn(`${cloud_base()}${path}`, {
+			headers: { Authorization: `Bearer ${token}` },
+		})
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error)
+		throw new ApiCommandError(`Could not reach ${cloud_base()} (${reason}). Are you online?`)
+	}
+	if (!response.ok) {
+		const data = (await response.json().catch(() => undefined)) as { message?: string } | undefined
+		throw new ApiCommandError(data?.message ?? `The API responded with ${response.status}.`)
+	}
+	const disposition = response.headers.get("content-disposition") ?? ""
+	return {
+		filename: disposition.match(/filename="([^"]+)"/)?.[1],
+		bytes: new Uint8Array(await response.arrayBuffer()),
+	}
 }
 
 /** Visible width — cells may carry ANSI colour codes that padEnd would count. */
@@ -669,6 +700,38 @@ export function describe_schedule(schedule: ExportSchedule): string {
 	return `weekly on ${names.join(", ")} ${when}`
 }
 
+/** The Sent log's filters as flags, shared by `exports add` and `exports download`. */
+const FILTER_FLAGS = ["form", "subject", "from-address", "to-address", "status", "opens"]
+
+function filter_from_flags(flags: Record<string, string>): Record<string, unknown> {
+	return {
+		form: flags.form,
+		subject: flags.subject,
+		from: flags["from-address"],
+		to: flags["to-address"],
+		status: flags.status ? flags.status.split(",").map((s) => s.trim()) : undefined,
+		opens: flags.opens,
+		since: flags.since,
+		until: flags.until,
+	}
+}
+
+/** Where a download lands: `--out` if given, else the name the server gave the file. */
+export function download_target(
+	out: string | undefined,
+	filename: string | undefined,
+	format: "csv" | "xlsx"
+): string {
+	return out || filename || `export.${format}`
+}
+
+const EXPORTS_DOWNLOAD_USAGE = [
+	"Usage: postboi exports download [--out <file>|-] [--xlsx] [--no-fields] [--columns a,b]",
+	"         [--form <form>] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--subject <s>]",
+	"         [--from-address <a>] [--to-address <a>] [--status delivered,bounced]",
+	"         [--opens opened|unopened|untracked]",
+].join("\n")
+
 const EXPORTS_ADD_USAGE = [
 	"Usage: postboi exports add <name> --to <emails> --daily|--weekly|--monthly",
 	"         [--form <form>] [--day mon,fri] [--month-day 1] [--at HH:MM] [--tz Europe/London]",
@@ -683,21 +746,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 	if (action === "add") {
 		const { flags, rest, on } = take_flags(
 			rest_args,
-			[
-				"to",
-				"form",
-				"from",
-				"day",
-				"month-day",
-				"at",
-				"tz",
-				"window",
-				"subject",
-				"from-address",
-				"to-address",
-				"status",
-				"opens",
-			],
+			["to", "from", "day", "month-day", "at", "tz", "window", ...FILTER_FLAGS],
 			["daily", "weekly", "monthly", "xlsx", "no-fields"]
 		)
 		const name = rest.join(" ").trim()
@@ -712,14 +761,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 			send_time: flags.at,
 			timezone: flags.tz,
 		}
-		const filter = {
-			form: flags.form,
-			subject: flags.subject,
-			from: flags["from-address"],
-			to: flags["to-address"],
-			status: flags.status ? flags.status.split(",").map((s) => s.trim()) : undefined,
-			opens: flags.opens,
-		}
+		const filter = filter_from_flags(flags)
 		const created = await api<ExportWire>("/v1/exports", {
 			method: "POST",
 			body: {
@@ -746,6 +788,36 @@ async function exports_command(args: Array<string>): Promise<void> {
 			}${created.format === "xlsx" ? dim(" · xlsx") : ""}${dim(` · ${created.window.replace(/_/g, " ")}`)}`
 		)
 		return console.log(`  ${dim(`postboi exports run ${created.id} sends one now.`)}`)
+	}
+
+	if (action === "download") {
+		const { flags, rest, on } = take_flags(
+			rest_args,
+			["out", "columns", "since", "until", ...FILTER_FLAGS],
+			["xlsx", "no-fields"]
+		)
+		if (rest.length) throw new ApiCommandError(EXPORTS_DOWNLOAD_USAGE)
+		const params = new URLSearchParams()
+		for (const [key, value] of Object.entries(filter_from_flags(flags))) {
+			if (value === undefined) continue
+			params.set(key, Array.isArray(value) ? value.join(",") : String(value))
+		}
+		if (on.has("xlsx")) params.set("format", "xlsx")
+		if (on.has("no-fields")) params.set("fields", "0")
+		if (flags.columns) params.set("columns", flags.columns)
+		const query = params.toString()
+		const file = await api_file(`/v1/exports/download${query ? `?${query}` : ""}`)
+		const rows = on.has("xlsx")
+			? undefined
+			: Math.max(0, new TextDecoder().decode(file.bytes).split("\r\n").length - 2)
+		const count = rows === undefined ? "" : dim(` — ${rows} row${rows === 1 ? "" : "s"}`)
+		if (flags.out === "-") {
+			stdout.write(file.bytes)
+			return
+		}
+		const target = download_target(flags.out, file.filename, on.has("xlsx") ? "xlsx" : "csv")
+		writeFileSync(target, file.bytes)
+		return console.log(`${green("✓")} wrote ${bold(target)}${count}`)
 	}
 
 	if (action === "run" || action === "pause" || action === "resume" || action === "delete") {
@@ -775,7 +847,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 
 	if (action) {
 		throw new ApiCommandError(
-			`Unknown action: exports ${action}. Try add, run, pause, resume, or delete.`
+			`Unknown action: exports ${action}. Try add, download, run, pause, resume, or delete.`
 		)
 	}
 

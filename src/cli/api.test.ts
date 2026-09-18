@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { table, api_command, parse_weekdays, describe_schedule } from "./api.js"
+import { mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { table, api_command, parse_weekdays, describe_schedule, download_target } from "./api.js"
 
 afterEach(() => {
 	vi.restoreAllMocks()
@@ -201,6 +204,65 @@ describe("exports", () => {
 		await expect(
 			api_command("exports", ["add", "X", "--to", "a@b.co", "--daily", "--weekly"])
 		).rejects.toThrow(/Usage/)
+	})
+
+	it("download fetches the file with the filter as a query and writes it where asked", async () => {
+		const calls: Array<string> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		const csv =
+			"\uFEFFSent at,Subject\r\n2026-09-12T08:00:00.000Z,Query\r\n2026-09-13T08:00:00.000Z,Query\r\n"
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string) => {
+				calls.push(url)
+				return new Response(csv, {
+					status: 200,
+					headers: {
+						"Content-Type": "text/csv; charset=utf-8",
+						"Content-Disposition": 'attachment; filename="acme-messages.csv"',
+					},
+				})
+			})
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		const dir = mkdtempSync(join(tmpdir(), "postboi-export-"))
+		const out = join(dir, "enquiries.csv")
+
+		expect(
+			await api_command("exports", [
+				"download",
+				"--form",
+				"Contact",
+				"--since",
+				"2026-09-01",
+				"--status",
+				"delivered, bounced",
+				"--no-fields",
+				"--out",
+				out,
+			])
+		).toBe(true)
+		expect(calls[0].replace(/^.*\/v1/, "/v1")).toBe(
+			"/v1/exports/download?form=Contact&status=delivered%2Cbounced&since=2026-09-01&fields=0"
+		)
+		expect(readFileSync(out, "utf8")).toBe(csv)
+		expect(lines.join("\n")).toContain("enquiries.csv")
+		expect(lines.join("\n")).toContain("2 rows")
+
+		// --xlsx asks for the spreadsheet
+		await api_command("exports", ["download", "--xlsx", "--out", join(dir, "enquiries.xlsx")])
+		expect(calls[1].replace(/^.*\/v1/, "/v1")).toBe("/v1/exports/download?format=xlsx")
+
+		// without --out the server's name is used, then a plain default
+		expect(download_target(undefined, "acme-messages.csv", "csv")).toBe("acme-messages.csv")
+		expect(download_target(undefined, undefined, "xlsx")).toBe("export.xlsx")
+		expect(download_target("mine.csv", "acme-messages.csv", "csv")).toBe("mine.csv")
+
+		// a stray positional is a usage error, not a filter
+		await expect(api_command("exports", ["download", "Contact"])).rejects.toThrow(
+			/Usage: postboi exports download/
+		)
 	})
 
 	it("run, pause, resume and delete hit the item routes", async () => {

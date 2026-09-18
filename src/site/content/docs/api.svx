@@ -64,6 +64,7 @@ await mail.suppressions.remove(email)
 
 // forms & scheduled exports (see Forms)
 await mail.forms.all() // what `form:` is typed to
+await mail.exports.download({ filter?, format?, columns?, fields? }) // the file now: { filename, type, bytes, text() }
 await mail.exports.all()
 await mail.exports.get(id)
 await mail.exports.create({ name, recipients, from?, filter?, format?, columns?, fields?, window?, schedule })

@@ -143,9 +143,11 @@ Every submission — named or posted — keeps its fields as `[name, value]` pai
 email. The form's page in the dashboard shows them as a table with a column per field,
 its Exports tab downloads them as a CSV or spreadsheet, and a schedule emails that file
 every day, week or month: new submissions since the last run, or the previous period
-whole. The same is on the API — `mail.exports.create({ filter: { form: "Home Ownership
-Query" }, recipients, schedule: "weekly" })` — and on the CLI, `bunx postboi exports add
-"Weekly queries" --to ops@acme.example --form "Home Ownership Query" --weekly` — and every
+whole. The same is on the API — `mail.exports.download({ filter: { form: "Home Ownership
+Query" } })` for the file now, `mail.exports.create({ filter: { form: "Home Ownership
+Query" }, recipients, schedule: "weekly" })` for the calendar — and on the CLI, `bunx
+postboi exports download --form "Home Ownership Query"` and `bunx postboi exports add
+"Weekly queries" --to ops@acme.example --form "Home Ownership Query" --weekly`. Every
 [webhook event](/webhooks) about a submission names the form and carries the fields.
 
 ## Notes
