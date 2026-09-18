@@ -1,5 +1,5 @@
-import { writeFileSync } from "node:fs"
-import { stdout } from "node:process"
+import { readFileSync, writeFileSync } from "node:fs"
+import { stdin, stdout } from "node:process"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
@@ -582,10 +582,159 @@ async function members(args: Array<string>): Promise<void> {
 	}
 }
 
+// ── Send ───────────────────────────────────────────────────────────────────
+
+/**
+ * `a@b.co`, `Ada <a@b.co>`, or a comma list of them, as the API's `{ email, name }`
+ * objects — the same shapes `to` takes everywhere else.
+ */
+export function parse_email_list(value: string): Array<{ email: string; name?: string }> {
+	return value.split(/[,;\n]+/).flatMap((part) => {
+		const match = part.match(/^\s*"?(.*?)"?\s*<\s*([^>]+)\s*>\s*$/)
+		const email = (match ? match[2] : part).trim()
+		if (!email.includes("@")) return []
+		const name = match?.[1].trim()
+		return [{ email, name: name || undefined }]
+	})
+}
+
+const SEND_USAGE = [
+	"Usage: postboi send --to <emails> --subject <s> (--text <t> | --html <h> | --file <path>|-)",
+	"         [--from <a>] [--reply-to <a>] [--cc <emails>] [--bcc <emails>] [--at <ISO time>] [--tag a,b]",
+].join("\n")
+
+/** A body from `--file`: HTML when it looks like it, text otherwise. `-` reads stdin. */
+function body_from_file(path: string): { html?: string; text?: string } {
+	const content = path === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(path, "utf8")
+	const looks_html = /\.html?$/i.test(path) || /^\s*</.test(content)
+	return looks_html ? { html: content } : { text: content }
+}
+
+/**
+ * One send from the terminal: the shortest proof that a project is wired, and the way
+ * an agent sends a real message without writing a script. The id it prints is what
+ * `messages <id>` reads back.
+ */
+async function send(args: Array<string>): Promise<void> {
+	const { flags, rest } = take_flags(args, [
+		"to",
+		"subject",
+		"text",
+		"html",
+		"file",
+		"from",
+		"reply-to",
+		"cc",
+		"bcc",
+		"at",
+		"tag",
+	])
+	const body = flags.file ? body_from_file(flags.file) : { html: flags.html, text: flags.text }
+	if (rest.length || !flags.to || !flags.subject || (!body.html && !body.text)) {
+		throw new ApiCommandError(SEND_USAGE)
+	}
+	const to = parse_email_list(flags.to)
+	if (!to.length) throw new ApiCommandError("--to needs at least one email address.")
+	const one = (value: string | undefined) => (value ? parse_email_list(value)[0] : undefined)
+	const result = await api<{
+		id: string
+		sandbox?: boolean
+		claim_url?: string
+		idempotent_replay?: boolean
+	}>("/v1/send", {
+		method: "POST",
+		body: {
+			to,
+			subject: flags.subject,
+			html: body.html,
+			text: body.text,
+			from: one(flags.from),
+			reply_to: one(flags["reply-to"]),
+			cc: flags.cc ? parse_email_list(flags.cc) : undefined,
+			bcc: flags.bcc ? parse_email_list(flags.bcc) : undefined,
+			scheduled_at: flags.at,
+			tags: flags.tag ? flags.tag.split(",").map((t) => t.trim()) : undefined,
+		},
+	})
+	const verb = flags.at ? `scheduled for ${flags.at}` : "sent"
+	say(`${green("✓")} ${verb} ${bold(result.id)} ${dim(`to ${to.map((r) => r.email).join(", ")}`)}`)
+	if (result.claim_url) {
+		say(`  ${yellow("sandbox")} — logged, not delivered until the project is claimed:`)
+		say(`  ${cyan(result.claim_url)}`)
+	} else if (result.sandbox) {
+		say(`  ${yellow("sandbox")} — logged, nothing is delivered`)
+	}
+	say(`  ${dim(`postboi messages ${result.id} shows its delivery status.`)}`)
+}
+
 // ── Messages & suppressions ────────────────────────────────────────────────
 
+const MESSAGE_STATUSES = [
+	"scheduled",
+	"queued",
+	"sent",
+	"delivered",
+	"bounced",
+	"complained",
+	"rejected",
+	"failed",
+	"canceled",
+]
+
+interface MessageWire {
+	id: string
+	from: string
+	to: Array<string>
+	subject: string
+	status: string
+	form?: { id: string; name: string }
+	fields?: Array<[string, string]>
+	error?: string
+	scheduled_at?: string
+	opened_at?: string
+	open_count: number
+	created_at: string
+}
+
+function status_colour(status: string): string {
+	if (status === "delivered" || status === "sent") return green(status)
+	if (["bounced", "complained", "failed", "rejected"].includes(status)) return red(status)
+	return yellow(status)
+}
+
+/** One message, read back: what happened to it, and what it carried. */
+async function show_message(id: string): Promise<void> {
+	const m = await api<MessageWire>(`/v1/messages/${encodeURIComponent(id)}`)
+	say(`${bold(m.subject)} ${dim(`(${m.id})`)}`)
+	say(`  status     ${status_colour(m.status)}${m.error ? dim(` — ${m.error}`) : ""}`)
+	say(`  from       ${m.from}`)
+	say(`  to         ${m.to.join(", ")}`)
+	say(`  created    ${m.created_at.slice(0, 16).replace("T", " ")}`)
+	if (m.scheduled_at) say(`  scheduled  ${m.scheduled_at.slice(0, 16).replace("T", " ")}`)
+	if (m.opened_at) {
+		say(`  opened     ${m.opened_at.slice(0, 16).replace("T", " ")} ${dim(`(${m.open_count}×)`)}`)
+	}
+	if (m.form) say(`  form       ${m.form.name} ${dim(`(${m.form.id})`)}`)
+	if (m.fields?.length) {
+		say(`  fields`)
+		for (const [name, value] of m.fields) say(`    ${dim(name)}  ${value}`)
+	}
+	if (m.status === "scheduled") say(`  ${dim(`postboi messages cancel ${m.id} stops it.`)}`)
+}
+
 async function messages(args: Array<string>): Promise<void> {
-	const status = args[0]
+	const [first, ref] = args
+	if (first === "cancel") {
+		if (!ref) throw new ApiCommandError("Usage: postboi messages cancel <id>")
+		const result = await api<{ id: string; status: string }>(
+			`/v1/messages/${encodeURIComponent(ref)}/cancel`,
+			{ method: "POST" }
+		)
+		return say(`${green("✓")} canceled ${bold(result.id)}`)
+	}
+	// A word that isn't a status is an id: `messages msg_k3v9…` reads one back.
+	if (first && !MESSAGE_STATUSES.includes(first)) return show_message(first)
+	const status = first
 	const query = status ? `?status=${encodeURIComponent(status)}` : ""
 	const { messages: rows } = await api<{
 		messages: Array<{
@@ -603,11 +752,7 @@ async function messages(args: Array<string>): Promise<void> {
 			m.created_at.slice(0, 16).replace("T", " "),
 			m.to.join(","),
 			m.subject,
-			m.status === "delivered" || m.status === "sent"
-				? green(m.status)
-				: ["bounced", "complained", "failed", "rejected"].includes(m.status)
-					? red(m.status)
-					: yellow(m.status),
+			status_colour(m.status),
 			dim(m.id),
 		])
 	)
@@ -906,6 +1051,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 
 const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	whoami: () => whoami(),
+	send,
 	"send-address": send_address,
 	lists,
 	recipients,

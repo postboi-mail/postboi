@@ -10,6 +10,7 @@ import {
 	download_target,
 	error_json,
 	ApiCommandError,
+	parse_email_list,
 } from "./api.js"
 
 afterEach(() => {
@@ -454,5 +455,147 @@ describe("--json", () => {
 		)
 		const failure = await api_command("whoami", []).catch((e: unknown) => e)
 		expect((failure as ApiCommandError).code).toBe("http_502")
+	})
+})
+
+describe("send", () => {
+	function stub(response: unknown, status = 200) {
+		const calls: Array<{ url: string; init?: RequestInit }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({ url, init })
+				return new Response(JSON.stringify(response), { status })
+			})
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		return { calls, lines }
+	}
+
+	it("POSTs /v1/send with the recipients parsed and the body as given", async () => {
+		const { calls, lines } = stub({ id: "msg_1" })
+		expect(
+			await api_command("send", [
+				"--to",
+				"Ada <ada@acme.com>, bob@acme.com",
+				"--subject",
+				"Hello",
+				"--text",
+				"hi there",
+				"--from",
+				"Ops <ops@acme.com>",
+				"--tag",
+				"welcome, v2",
+			])
+		).toBe(true)
+		expect(calls[0].url).toContain("/v1/send")
+		expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+			to: [{ email: "ada@acme.com", name: "Ada" }, { email: "bob@acme.com" }],
+			subject: "Hello",
+			text: "hi there",
+			from: { email: "ops@acme.com", name: "Ops" },
+			tags: ["welcome", "v2"],
+		})
+		expect(lines[0]).toContain("msg_1")
+		expect(lines.join("\n")).toContain("postboi messages msg_1")
+	})
+
+	it("surfaces the claim URL on a sandboxed send, as the skill requires", async () => {
+		const { lines } = stub({ id: "msg_1", sandbox: true, claim_url: "https://postboi.app/claim/x" })
+		await api_command("send", ["--to", "a@b.co", "--subject", "s", "--html", "<p>x</p>"])
+		expect(lines.join("\n")).toContain("https://postboi.app/claim/x")
+	})
+
+	it("reads a body from a file, HTML by its look", async () => {
+		const { calls } = stub({ id: "msg_1" })
+		const dir = mkdtempSync(join(tmpdir(), "postboi-send-"))
+		const { writeFileSync } = await import("node:fs")
+		writeFileSync(join(dir, "body.txt"), "<p>looks like html</p>")
+		await api_command("send", ["--to", "a@b.co", "--subject", "s", "--file", join(dir, "body.txt")])
+		expect(JSON.parse(String(calls[0].init?.body))).toMatchObject({
+			html: "<p>looks like html</p>",
+		})
+		writeFileSync(join(dir, "body.txt"), "plain words")
+		await api_command("send", ["--to", "a@b.co", "--subject", "s", "--file", join(dir, "body.txt")])
+		expect(JSON.parse(String(calls[1].init?.body))).toMatchObject({ text: "plain words" })
+	})
+
+	it("refuses without a recipient, a subject or a body", async () => {
+		stub({ id: "msg_1" })
+		await expect(api_command("send", ["--to", "a@b.co", "--subject", "s"])).rejects.toThrow(
+			/Usage: postboi send/
+		)
+		await expect(api_command("send", ["--subject", "s", "--text", "t"])).rejects.toThrow(/Usage/)
+		await expect(
+			api_command("send", ["--to", "nobody", "--subject", "s", "--text", "t"])
+		).rejects.toThrow(/at least one email/)
+	})
+})
+
+describe("messages <id> and cancel", () => {
+	function stub(response: unknown, status = 200) {
+		const calls: Array<{ url: string; init?: RequestInit }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({ url, init })
+				return new Response(JSON.stringify(response), { status })
+			})
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		return { calls, lines }
+	}
+
+	it("a word that isn't a status is an id, read back with its fields", async () => {
+		const { calls, lines } = stub({
+			id: "msg_1",
+			from: "forms@acme.com",
+			to: ["me@acme.com"],
+			subject: "Query",
+			status: "delivered",
+			form: { id: "frm_1", name: "Contact" },
+			fields: [
+				["name", "Ada"],
+				["interest", "web"],
+			],
+			open_count: 2,
+			opened_at: "2026-09-12T09:00:00.000Z",
+			created_at: "2026-09-12T08:00:00.000Z",
+		})
+		await api_command("messages", ["msg_1"])
+		expect(calls[0].url.replace(/^.*\/v1/, "/v1")).toBe("/v1/messages/msg_1")
+		const text = lines.join("\n")
+		expect(text).toContain("Contact")
+		expect(text).toContain("Ada")
+		expect(text).toContain("2×")
+	})
+
+	it("a status still lists", async () => {
+		const { calls } = stub({ messages: [] })
+		await api_command("messages", ["bounced"])
+		expect(calls[0].url.replace(/^.*\/v1/, "/v1")).toBe("/v1/messages?status=bounced")
+	})
+
+	it("cancel POSTs the cancel route and says so", async () => {
+		const { calls, lines } = stub({ id: "msg_1", status: "canceled" })
+		await api_command("messages", ["cancel", "msg_1"])
+		expect(calls[0].url.replace(/^.*\/v1/, "/v1")).toBe("/v1/messages/msg_1/cancel")
+		expect(calls[0].init?.method).toBe("POST")
+		expect(lines[0]).toContain("canceled")
+	})
+})
+
+describe("parse_email_list", () => {
+	it("takes bare, named and comma-separated addresses", () => {
+		expect(parse_email_list("a@b.co")).toEqual([{ email: "a@b.co" }])
+		expect(parse_email_list('"Ada L" <ada@b.co>; bob@b.co')).toEqual([
+			{ email: "ada@b.co", name: "Ada L" },
+			{ email: "bob@b.co" },
+		])
+		expect(parse_email_list("nobody")).toEqual([])
 	})
 })
