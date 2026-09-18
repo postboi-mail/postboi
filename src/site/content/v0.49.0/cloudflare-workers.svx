@@ -1,0 +1,122 @@
+---
+title: Cloudflare Workers
+name: Cloudflare Workers
+description: Send email, push and every other channel from a Worker. Bindings are read automatically, so there's nothing to pass in.
+category: Frameworks
+---
+
+Workers pass configuration as bindings rather than ambient env vars, but Postboi reads them
+off `cloudflare:workers` for you — a `POSTBOI_TOKEN` binding is picked up exactly like a
+`POSTBOI_TOKEN` env var anywhere else, so there's nothing to wire up. Read the request's
+`FormData` and hand it to `mail()`. Postboi extracts the
+[special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
+
+```typescript
+// src/index.ts
+import { mail } from 'postboi'
+
+export default {
+	async fetch(request: Request): Promise<Response> {
+		const url = new URL(request.url)
+
+		if (request.method === 'POST' && url.pathname === '/contact') {
+			await mail({ body: request.formData(), to: 'team@example.com' })
+			return Response.redirect(new URL('/?sent=1', url).toString(), 303)
+		}
+
+		return new Response(/* the contact form */)
+	},
+}
+```
+
+Point a `multipart/form-data` form at `/contact`. Include hidden `_subject` and `_reply_to`
+fields, and mirror the email into `_reply_to` with a one-line `oninput` so replying reaches
+the sender. Field names use the [`fieldset→field`](/formdata#grouped-fields) syntax.
+
+Set the token as a secret (`wrangler secret put POSTBOI_TOKEN`, or `.dev.vars` for local
+dev), and turn on `nodejs_compat` in `wrangler.jsonc`. Swap providers with a
+`POSTBOI_PROVIDER` binding plus that provider's credential — or construct one explicitly,
+which still works: `new Postboi({ token: env.POSTBOI_TOKEN })`. See [Providers](/providers).
+
+## The config file
+
+Bindings arrive on their own, but a Worker has no filesystem, so `postboi.config.ts` can't
+be read at runtime. If you build with Vite — SvelteKit, Nuxt, Astro, Remix, or plain Vite —
+add the plugin and it travels in the bundle instead:
+
+```typescript
+// vite.config.ts
+import { postboi } from 'postboi/vite'
+
+export default defineConfig({ plugins: [sveltekit(), postboi()] })
+```
+
+That's the whole setup: `mail()` picks up your `default.from`, hooks and captcha settings
+with nothing imported anywhere. The plugin also adds the `optimizeDeps` exclude that
+[remote forms](/sveltekit#remote-functions) need, so it replaces that line too.
+
+Building with wrangler alone (no Vite), import the config file once from your entry point —
+`config()` registers it as a side effect and esbuild inlines it:
+
+```typescript
+// src/index.ts
+import '../postboi.config'
+import { mail } from 'postboi'
+```
+
+Or skip the file and call [`configure()`](/config) at startup.
+
+## The other channels
+
+Nothing above is email-specific — [`push()`](/push), [`sms()`](/sms),
+[`whatsapp()`](/whatsapp) and the chat functions read their bindings the same way. Web Push
+is the one worth spelling out, because it's the channel a Worker most often *is*: a
+background job that notifies someone.
+
+```bash
+bunx postboi vapid                      # mint the pair
+wrangler secret put VAPID_PUBLIC_KEY
+wrangler secret put VAPID_PRIVATE_KEY
+wrangler secret put VAPID_SUBJECT
+```
+
+That's the whole setup — three secrets and no `POSTBOI_PUSH_PROVIDER`. A full VAPID trio
+can only mean Web Push, so postboi infers the provider from it. Set the var anyway if you
+also carry FCM or APNs credentials in the same Worker, where the credentials no longer
+answer the question on their own.
+
+```typescript
+// src/index.ts
+import { push } from 'postboi'
+
+export default {
+	async scheduled() {
+		await push({ to: subscription, title: 'Build finished', message: 'main is green' })
+			.catch((error) => {
+				// The routine failure: the browser dropped the subscription. Forget your copy.
+				if (push.expired(error)) forget(subscription)
+				else throw error
+			})
+	},
+}
+```
+
+No `nodejs_compat` needed for Web Push — VAPID signing and payload encryption are Web
+Crypto. (Email needs it, and so does APNs, which speaks HTTP/2.)
+
+### Bundle size
+
+`push()` from the package root carries the resolution graph and all four push providers, so
+a bundler that can't split adds roughly 30 KB raw / 9 KB gzipped over importing the one
+provider directly:
+
+```typescript
+import WebPush from 'postboi/webpush'
+
+const notify = new WebPush({ public_key: env.VAPID_PUBLIC_KEY, /* … */ })
+```
+
+Immaterial against a 3 MB Worker limit, and the zero-config form is the one to reach for.
+Worth knowing if you're counting bytes — the same trade exists on every channel.
+
+**Runnable example:** [`examples/cloudflare-workers-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/cloudflare-workers-provider-postboi).

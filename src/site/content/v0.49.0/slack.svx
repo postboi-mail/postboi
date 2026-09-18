@@ -1,0 +1,72 @@
+---
+title: Slack
+name: Slack
+description: Post to Slack from your app with slack() — one webhook URL, zero config, the same shape as mail() and sms().
+category: Channels
+---
+
+```typescript
+import { slack } from "postboi"
+
+await slack({ title: "Deploy", message: "Finished in 42s" })
+```
+
+One env var and your app can talk to the team. The webhook URL carries the destination
+channel inside it, so there's usually nothing to pass but the message.
+
+## Setup
+
+The fast way: `bunx postboi init --chat`, pick Slack, choose **Connect in the browser**.
+Slack's own consent screen asks which channel to post to, and the webhook lands in your
+env file without you ever seeing it. Signed in to Postboi, it also
+[syncs to your team](/provider#team-credentials), so nobody else sets it up at all.
+
+Or create an [incoming webhook](https://api.slack.com/messaging/webhooks) yourself and
+paste it:
+
+```bash
+# .env
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/…
+```
+
+**Treat the URL as a secret** — anyone holding it can post to your channel. It's exactly
+the kind of credential team sync exists for.
+
+## Titles
+
+`title` renders as bold mrkdwn above the message:
+
+```typescript
+await slack({ title: "Build failed", message: "3 tests failing on main" })
+```
+
+## Posting to more than one channel
+
+`to` overrides the webhook per message, so one app can serve several channels:
+
+```typescript
+await slack([
+	{ to: process.env.SLACK_ALERTS, message: "🔴 Checkout is down" },
+	{ to: process.env.SLACK_DEPLOYS, message: "Deployed abc123" },
+])
+```
+
+Each gets its own result — one failure never loses the rest.
+
+## Development posts for real
+
+Unlike [SMS](/sms), Slack is not intercepted in development: posting to your own channel
+while building is usually the point, costs nothing, and can be deleted. With no
+`SLACK_WEBHOOK_URL` configured, messages are captured by the [dev inbox](/dev-inbox)
+(or logged) instead of erroring.
+
+## Worth knowing
+
+- Slack replies to a failed post with a **plain-text reason** (`no_service`,
+  `invalid_payload`) rather than JSON — that's what lands in `error.code`.
+- In a multi-channel [`send()`](/send), the chat leg posts to whichever platform
+  `chat.provider` names in your [config](/config). Your own code just calls `slack()`.
+
+**Runnable example:** [`examples/scripts/chat.ts`](https://github.com/postboi-mail/postboi/tree/main/examples/scripts/chat.ts) posts to each
+platform in turn. The framework apps reach it through their `POST /notify` route — see
+the [SvelteKit app](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi).
