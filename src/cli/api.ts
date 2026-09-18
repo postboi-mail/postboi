@@ -39,7 +39,7 @@ function say(line = ""): void {
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
-async function api<T>(
+export async function api<T>(
 	path: string,
 	init: { method?: string; body?: unknown } = {},
 	fetch_fn: FetchLike = fetch

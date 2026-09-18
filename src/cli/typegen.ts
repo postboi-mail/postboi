@@ -299,6 +299,11 @@ export function config_provider(source: string): string | undefined {
 	return undefined
 }
 
+/** Read `default.from` out of a `postboi.config.*` source — the address the project sends as. */
+export function config_default_from(source: string): string | undefined {
+	return /\bdefault\s*:\s*\{[^}]*?\bfrom\s*:\s*["']([^"']+)["']/.exec(source)?.[1]
+}
+
 /** Read the publishable key out of a `postboi.config.*` source (`captcha: { key }`). */
 export function config_captcha_key(source: string): string | undefined {
 	return /captcha\s*:\s*\{[^}]*?\bkey\s*:\s*["']([^"']+)["']/.exec(source)?.[1]
