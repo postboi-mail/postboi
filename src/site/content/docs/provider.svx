@@ -211,11 +211,47 @@ await mail({
 })
 ```
 
-Inside the shell the composer's own block vocabulary works from code as well, because
-it is the same renderer: `<div data-button="yellow"><a href="…">View it</a></div>`
-becomes a table-based key every client agrees on, `<div data-spacer="32"></div>` a
-measured gap, `<div data-section="ink">…</div>` a coloured band around whatever it
-holds.
+### Buttons and other blocks
+
+Inside the shell the composer's own blocks work from code too, because it is the same
+renderer. You write a plain `div` with a `data-*` attribute, and it comes back as the
+same table-based markup a dashboard send gets. Every client draws it the same way, and it
+picks up your team's brand (accent colour, button shape, corner radius) and the dark
+palette.
+
+```ts
+await mail({
+	to: "someone@example.com",
+	subject: "Your magic link",
+	shell: true,
+	body: `
+		<p>Click the button to sign in:</p>
+		<div data-button="yellow"><a href="${url}">Sign in</a></div>
+		<p>Or paste this link into your browser: <a href="${url}">${url}</a></p>
+	`,
+})
+```
+
+| Block   | Markup                                                        | Values                                                                                  |
+| ------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Button  | `<div data-button="yellow"><a href="…">Label</a></div>`       | `yellow` (your accent), `ink`, `outline`, `c1`–`c6` (your brand palette), or `#rrggbb` |
+| Band    | `<div data-section="ink">…any blocks…</div>`                  | `ink`, `yellow`, `tint`, `paper`, `c1`–`c6`, or `#rrggbb`                               |
+| Spacer  | `<div data-spacer="32"></div>`                                | height in px, 4–200                                                                     |
+| Stamp   | `<div data-stamp>Paid</div>`                                  | the label                                                                               |
+| Colour  | `<span data-colour="c2">…</span>`                             | `c1`–`c6` or `#rrggbb`                                                                  |
+| Align   | `data-align="center"` on a button, `p`, heading or `img`      | `left`, `center`, `right`                                                               |
+
+A button's `div` holds exactly one `<a>` and nothing else. The label runs to the first
+`</a>`. Anything the renderer doesn't recognise loses its `data-*` attributes and stays
+a plain `div`. So a typo gives you an unstyled link, never a broken email.
+
+**The blocks only render inside the shell.** Without `shell: true` your HTML is sent
+exactly as you wrote it, so the `data-*` attributes do nothing. Classes such as
+`pb-button` don't do anything either way: the renderer adds `pb-*` classes to its own
+output for the dark palette, and never reads them from yours.
+
+Long words and bare URLs wrap inside the column rather than widening it, so a fallback
+"paste this link" line is safe to write as it is.
 
 The shell **sets** the body rather than wrapping it — that is how a bare `<p>` comes
 back typeset — but what you wrote still wins. Its typesetting is written behind your own
