@@ -298,6 +298,35 @@ be the preview. It needs no shell, and a long one is clipped rather than refused
 All four options are the Postboi provider's own — what they ask for lives on your
 account — so naming one under any other provider is a type error.
 
+### Saying it once
+
+How mail looks is usually a project-level decision, not a per-call one. Three of the
+four can be defaulted, and a send that names one still wins:
+
+```ts
+// postboi.config.ts
+export default config({
+	default: { from: "hello@acme.com", letterhead: true, style: "plain" },
+})
+```
+
+`POSTBOI_LETTERHEAD`, `POSTBOI_SHELL` and `POSTBOI_STYLE` say the same thing from the
+environment and win over the file. **Reach for those in a runtime that bundles its own
+server code** — a Convex deployment, say: there is no filesystem to read
+`postboi.config.ts` from and no bundler plugin to inline it, so the file is simply
+absent at runtime, and unlike a missing `from` an unread letterhead throws nothing. It
+just looks wrong a fortnight later. `bunx postboi doctor` says so when it spots that
+shape, and importing the config from the file that sends (`import "../postboi.config"`)
+is the other way out — importing it registers it.
+
+`preheader` is deliberately not defaultable: it describes one message, and the same
+line on every email is worse than none.
+
+There is a third place to say it, and it reaches every runtime because none of this is
+involved: the **Sends from your code** switch on the dashboard's Letterhead page. That
+is the team saying "our API mail wears the letterhead" once, server-side, for sends that
+don't mention it either way — `letterhead: false` on a send still sends bare.
+
 ## Team credentials
 
 Your channel credentials — a Resend key, a Twilio SID, a Slack webhook — sync through

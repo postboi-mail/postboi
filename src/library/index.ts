@@ -527,6 +527,23 @@ export type Defaults = {
 	cc?: Array<Email> | Email
 	bcc?: Array<Email> | Email
 	reply_to?: Array<Email> | Email
+	/**
+	 * Wear the team's letterhead on every send — see {@link SendOptions.letterhead}. How
+	 * mail looks is a project-level decision, so it is said here once rather than on
+	 * forty call sites. `POSTBOI_LETTERHEAD` says the same thing from the environment,
+	 * and wins; a send that names it wins over both.
+	 *
+	 * A runtime with no filesystem and no bundler we can hook — a Convex deployment, say
+	 * — never sees `postboi.config.ts` at all, and an unread config is silent about
+	 * something nobody would notice for weeks. Use the environment variable there, or
+	 * the team-wide switch in the Postboi dashboard, which every runtime reaches because
+	 * the server reads it.
+	 */
+	letterhead?: LetterheadOption
+	/** Set every send's HTML in Postboi's shell — see {@link SendOptions.shell}. `POSTBOI_SHELL` from the environment. */
+	shell?: ShellOption
+	/** The cut every send is rendered in — see {@link SendOptions.style}. `POSTBOI_STYLE` from the environment. */
+	style?: StyleOption
 }
 
 /**
@@ -1219,7 +1236,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 		if (!from && this.requires_from) {
 			throw new PostboiError({
 				provider: this.provider,
-				message: "No sender address provided (from or default.from)",
+				message: `No sender address provided (from or default.from)${missing_config_hint()}`,
 			})
 		}
 
@@ -1266,9 +1283,10 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			tracking: options.tracking,
 			captcha,
 			form: options.form,
-			letterhead: options.letterhead,
-			shell: options.shell,
-			style: options.style,
+			// Presentation falls back to the project's own defaults, the way an address does.
+			letterhead: options.letterhead ?? this.defaults.letterhead,
+			shell: options.shell ?? this.defaults.shell,
+			style: options.style ?? this.defaults.style,
 			preheader: options.preheader,
 			fields,
 		}
