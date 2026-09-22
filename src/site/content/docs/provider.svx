@@ -217,13 +217,29 @@ becomes a table-based key every client agrees on, `<div data-spacer="32"></div>`
 measured gap, `<div data-section="ink">…</div>` a coloured band around whatever it
 holds.
 
-One caveat worth reading twice: the shell **sets** what it is given. It replaces the
-styles on every tag it knows — `p`, `a`, `h1`–`h3`, `ul`, `li`, `table`, `img` and the
-rest — so a body that is already a designed email would come out with its design
-deleted. Rather than do that quietly, the API refuses: a body that is a whole HTML page,
-or that carries a `style` attribute on one of those tags, comes back as a `400` naming
-what it found. If you render your own email with [Maizzle, React Email or MJML](/templates),
-the shell is not the option you want — the letterhead on its own is.
+The shell **sets** the body rather than wrapping it — that is how a bare `<p>` comes
+back typeset — but what you wrote still wins. Its typesetting is written behind your own
+declarations, so this stays red:
+
+```ts
+await mail({
+	shell: true,
+	letterhead: true,
+	style: "styled",
+	body: `<p style="color: red">Still red!</p>`,
+})
+```
+
+One consequence worth knowing: a tag you colour keeps that colour on a device in dark
+mode, where a tag you left alone is re-inked along with the rest. That is the same rule
+the renderer already follows for its own fixed-colour bands — a colour somebody chose is
+not ours to overrule.
+
+The one thing the shell refuses is a body that is already a **whole HTML document**. The
+shell is the page, doctype and all, so what it wraps has to be a fragment; send the
+contents rather than the page, and you get a `400` saying so if you don't. If you render
+a complete email with [Maizzle, React Email or MJML](/templates), the letterhead on its
+own is the option you want.
 
 ### The cut
 
@@ -239,6 +255,24 @@ one cut covers the letterhead and the shell together so they can't disagree.
 
 There is no theme to pick. Light or dark is the recipient's device's to decide, so it is
 never a setting on a message; both palettes go out and the device chooses.
+
+### The preheader
+
+`preheader` is the line an inbox shows after the subject and the message itself never
+does — "Your order is on its way", where the subject is the order number:
+
+```ts
+await mail({
+	to: "someone@example.com",
+	subject: "Order #1024",
+	body: "<p>Thanks for your order.</p>",
+	preheader: "Your order is on its way",
+})
+```
+
+It is written into your HTML as a hidden div, first — ahead of a letterhead's masthead,
+because what an inbox previews is the first text it finds, and a masthead would otherwise
+be the preview. It needs no shell, and a long one is clipped rather than refused.
 
 A `{unsubscribe_url}` in the footer — the usual reason to write one — fills from
 `unsubscribe_url` on the same send, the option that also sets the

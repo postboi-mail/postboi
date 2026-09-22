@@ -75,13 +75,15 @@ export interface SendParams {
 	 */
 	letterhead?: boolean
 	/**
-	 * Set `html` in the 600px column the dashboard composer sends in. Refused by the API
-	 * when the html is already a whole page or already styled — the shell sets what it
-	 * is given.
+	 * Set `html` in the 600px column the dashboard composer sends in. Styles the html
+	 * already carries survive it and win; html that is already a whole page is refused,
+	 * because the shell is the page.
 	 */
 	shell?: boolean
 	/** The cut the letterhead and the shell are set in; `styled` when omitted. */
 	style?: "styled" | "plain"
+	/** The line an inbox shows after the subject, written into `html` as a hidden div. */
+	preheader?: string
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -1099,6 +1101,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			letterhead: message.letterhead,
 			shell: message.shell,
 			style: message.style,
+			preheader: message.preheader,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}

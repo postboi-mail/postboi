@@ -199,6 +199,9 @@ export type ShellOption = PostboiOption<boolean>
 /** The cut a send is rendered in — see {@link SendOptions.style}. */
 export type StyleOption = PostboiOption<EmailStyle>
 
+/** The line an inbox shows after the subject — see {@link SendOptions.preheader}. */
+export type PreheaderOption = PostboiOption<string>
+
 /**
  * The variables one WhatsApp template takes, per the generated types — the placeholder
  * names in its approved body, so they're required rather than guessed at. Any
@@ -362,10 +365,13 @@ export interface SendOptions {
 	 * faces, and the dark palette for a recipient whose device asks for one. Hand it
 	 * plain semantic HTML and it comes back a designed email.
 	 *
-	 * The shell *sets* what it is given, replacing the styles on every tag it knows, so
-	 * a body that is already a whole page or already styled is **refused** rather than
-	 * redesigned — if you render your own email (Maizzle, React Email, MJML), this is
-	 * not the option you want. Ignored by every other provider.
+	 * The shell *sets* the body rather than wrapping it, but what you wrote still wins:
+	 * its typesetting is written behind your own declarations, so `<p style="color:red">`
+	 * stays red. A tag you coloured also keeps that colour on a device in dark mode,
+	 * where one you left alone is re-inked with the rest.
+	 *
+	 * The body has to be a fragment, though — the shell is the page, doctype and all, so
+	 * HTML that is already a whole document is refused. Ignored by every other provider.
 	 */
 	shell?: ShellOption
 	/**
@@ -378,6 +384,16 @@ export interface SendOptions {
 	 * setting on a message. Ignored by every other provider.
 	 */
 	style?: StyleOption
+	/**
+	 * The line an inbox shows after the subject, and the message itself never does —
+	 * "Your order is on its way", where the subject is the order number.
+	 *
+	 * Written into the HTML as a hidden div, first, ahead of a letterhead's masthead,
+	 * because what an inbox previews is the first text it finds. It needs no
+	 * {@link SendOptions.shell}, and a long one is clipped rather than refused. Ignored
+	 * by every other provider.
+	 */
+	preheader?: PreheaderOption
 }
 
 /**
@@ -486,6 +502,8 @@ export interface PreparedMessage {
 	shell?: boolean
 	/** The cut the two above are set in — see {@link SendOptions.style}. */
 	style?: EmailStyle
+	/** The line an inbox shows after the subject — see {@link SendOptions.preheader}. */
+	preheader?: string
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
 	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi
@@ -1251,6 +1269,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			letterhead: options.letterhead,
 			shell: options.shell,
 			style: options.style,
+			preheader: options.preheader,
 			fields,
 		}
 	}

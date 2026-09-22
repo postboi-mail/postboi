@@ -260,6 +260,21 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.letterhead).toBe(true)
 	})
 
+	it("forwards a preheader, which needs no shell", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().preheader).toBeUndefined()
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: "<p>x</p>",
+			preheader: "Your order is on its way",
+		})
+		expect(sent_json().preheader).toBe("Your order is on its way")
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
