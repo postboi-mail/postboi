@@ -68,6 +68,22 @@ export interface SendParams {
 	form?: boolean | string
 	/** The submission's `[name, value]` entries, the data the table in `html` was drawn from. */
 	fields?: Array<[string, string]>
+	/**
+	 * Put the account's letterhead — the header and footer written in the dashboard —
+	 * around `html`. The API leaves the document itself alone; a footer's
+	 * `{unsubscribe_url}` is filled from the `List-Unsubscribe` header.
+	 */
+	letterhead?: boolean
+	/**
+	 * Set `html` in the 600px column the dashboard composer sends in. Styles the html
+	 * already carries survive it and win; html that is already a whole page is refused,
+	 * because the shell is the page.
+	 */
+	shell?: boolean
+	/** The cut the letterhead and the shell are set in; `styled` when omitted. */
+	style?: "styled" | "plain"
+	/** The line an inbox shows after the subject, written into `html` as a hidden div. */
+	preheader?: string
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -1082,6 +1098,10 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			captcha_token: message.captcha?.token,
 			captcha_ip: message.captcha?.remoteip,
 			form: message.form ?? (message.captcha ? true : undefined),
+			letterhead: message.letterhead,
+			shell: message.shell,
+			style: message.style,
+			preheader: message.preheader,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}

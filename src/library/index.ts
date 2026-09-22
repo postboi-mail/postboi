@@ -176,6 +176,33 @@ type GeneratedFormName = Register extends { form: infer F extends string }
 	: string
 
 /**
+ * An option only the Postboi provider has, for the same reason {@link FormName} is one:
+ * what it asks for lives on the account. Under any other provider it is `never` — a type
+ * error rather than an option that quietly does nothing — and with nothing generated at
+ * all it stays open, so a build with no token doesn't fail on the types being absent.
+ */
+type PostboiOption<T> = Register extends { provider: infer P }
+	? P extends "postboi" | "mock"
+		? T
+		: never
+	: T
+
+/** The two cuts a Postboi-rendered email is set in. */
+export type EmailStyle = "styled" | "plain"
+
+/** Whether a send asks for the team's letterhead — see {@link SendOptions.letterhead}. */
+export type LetterheadOption = PostboiOption<boolean>
+
+/** Whether a send asks for Postboi's shell — see {@link SendOptions.shell}. */
+export type ShellOption = PostboiOption<boolean>
+
+/** The cut a send is rendered in — see {@link SendOptions.style}. */
+export type StyleOption = PostboiOption<EmailStyle>
+
+/** The line an inbox shows after the subject — see {@link SendOptions.preheader}. */
+export type PreheaderOption = PostboiOption<string>
+
+/**
  * The variables one WhatsApp template takes, per the generated types — the placeholder
  * names in its approved body, so they're required rather than guessed at. Any
  * `Record<string, string>` when nothing has been generated, or when the template isn't one
@@ -323,6 +350,50 @@ export interface SendOptions {
 	 * other provider.
 	 */
 	form?: FormName
+	/**
+	 * Put your team's letterhead — the header and footer written in the Postboi dashboard
+	 * under Messages → Templates → Letterhead — around this send's HTML. Off unless you
+	 * ask for it: the body of an API send is your document, not ours. A
+	 * `{unsubscribe_url}` in the footer is filled from {@link SendOptions.unsubscribe_url}
+	 * when the send carries one. A team with no letterhead, or a send with no HTML, is a
+	 * no-op. Ignored by every other provider.
+	 */
+	letterhead?: LetterheadOption
+	/**
+	 * Set this send's HTML in Postboi's shell: the 600px column the dashboard composer
+	 * sends in — on its ground, with the drawn edge and its offset shadow, the brand's
+	 * faces, and the dark palette for a recipient whose device asks for one. Hand it
+	 * plain semantic HTML and it comes back a designed email.
+	 *
+	 * The shell *sets* the body rather than wrapping it, but what you wrote still wins:
+	 * its typesetting is written behind your own declarations, so `<p style="color:red">`
+	 * stays red. A tag you coloured also keeps that colour on a device in dark mode,
+	 * where one you left alone is re-inked with the rest.
+	 *
+	 * The body has to be a fragment, though — the shell is the page, doctype and all, so
+	 * HTML that is already a whole document is refused. Ignored by every other provider.
+	 */
+	shell?: ShellOption
+	/**
+	 * The cut anything Postboi renders on this send is set in — the letterhead's halves,
+	 * the shell — and `"styled"` by default. `"plain"` is the same blocks in the
+	 * client's own face, flat, asking for no fonts.
+	 *
+	 * It renders nothing by itself; it says how, not what. There is deliberately no
+	 * theme to pick either: light or dark is the recipient's device's to decide, never a
+	 * setting on a message. Ignored by every other provider.
+	 */
+	style?: StyleOption
+	/**
+	 * The line an inbox shows after the subject, and the message itself never does —
+	 * "Your order is on its way", where the subject is the order number.
+	 *
+	 * Written into the HTML as a hidden div, first, ahead of a letterhead's masthead,
+	 * because what an inbox previews is the first text it finds. It needs no
+	 * {@link SendOptions.shell}, and a long one is clipped rather than refused. Ignored
+	 * by every other provider.
+	 */
+	preheader?: PreheaderOption
 }
 
 /**
@@ -425,6 +496,14 @@ export interface PreparedMessage {
 	captcha?: { token?: string; remoteip?: string }
 	/** The Postboi form the send names — see {@link SendOptions.form}. */
 	form?: string
+	/** Whether the send asks for the team's letterhead — see {@link SendOptions.letterhead}. */
+	letterhead?: boolean
+	/** Whether the send asks for Postboi's shell — see {@link SendOptions.shell}. */
+	shell?: boolean
+	/** The cut the two above are set in — see {@link SendOptions.style}. */
+	style?: EmailStyle
+	/** The line an inbox shows after the subject — see {@link SendOptions.preheader}. */
+	preheader?: string
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
 	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi
@@ -1187,6 +1266,10 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			tracking: options.tracking,
 			captcha,
 			form: options.form,
+			letterhead: options.letterhead,
+			shell: options.shell,
+			style: options.style,
+			preheader: options.preheader,
 			fields,
 		}
 	}

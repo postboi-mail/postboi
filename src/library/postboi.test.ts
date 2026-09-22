@@ -219,6 +219,62 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.fields).toBeUndefined()
 	})
 
+	it("asks for the letterhead only when told to, and hands it the unsubscribe link", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().letterhead).toBeUndefined()
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: "<p>x</p>",
+			letterhead: true,
+			unsubscribe_url: "https://postboi.app/u/abc",
+		})
+		const body = sent_json()
+		expect(body.letterhead).toBe(true)
+		// What the API fills a footer's {unsubscribe_url} from.
+		expect(body.headers["List-Unsubscribe"]).toBe("<https://postboi.app/u/abc>")
+	})
+
+	it("asks for the shell and the cut it is set in, and neither by default", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().shell).toBeUndefined()
+		expect(sent_json().style).toBeUndefined()
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: "<p>x</p>",
+			letterhead: true,
+			shell: true,
+			style: "plain",
+		})
+		const body = sent_json()
+		expect(body.shell).toBe(true)
+		// One cut for everything the send asks to be drawn — never one each.
+		expect(body.style).toBe("plain")
+		expect(body.letterhead).toBe(true)
+	})
+
+	it("forwards a preheader, which needs no shell", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().preheader).toBeUndefined()
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: "<p>x</p>",
+			preheader: "Your order is on its way",
+		})
+		expect(sent_json().preheader).toBe("Your order is on its way")
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
