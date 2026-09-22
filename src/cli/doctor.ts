@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { cwd, exit } from "node:process"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 import { api, ApiCommandError } from "./api.js"
@@ -27,6 +27,12 @@ export const CONFIG_FILES = [
 export interface DoctorFacts {
 	/** The config file found, or undefined for none. */
 	config_file?: string
+	/**
+	 * The runtime this project deploys server code to that **can't read** the config
+	 * file, when there is one and nothing hands it over — "Convex", today. Undefined
+	 * when the config will reach the runtime, or when there is no config to reach it.
+	 */
+	config_unreachable?: string
 	/** The provider the project sends through, resolved as `mail()` does. */
 	provider?: string
 	default_from?: string
@@ -80,19 +86,30 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 				}
 	)
 
+	// A config file that exists and a config file that arrives are different facts. The
+	// second one is what a send actually reads, and the runtimes where they come apart
+	// have no filesystem to be told off about it — so it is said here, at dev time,
+	// where it is still cheap.
 	checks.push(
-		facts.config_file
+		!facts.config_file
 			? {
-					name: "config",
-					level: "ok",
-					detail: `${facts.config_file} — provider ${facts.provider ?? "postboi"}${facts.default_from ? `, from ${facts.default_from}` : ""}`,
-				}
-			: {
 					name: "config",
 					level: "warn",
 					detail: "no postboi.config.* — mail() runs on defaults",
 					fix: "bunx postboi init",
 				}
+			: facts.config_unreachable
+				? {
+						name: "config",
+						level: "warn",
+						detail: `${facts.config_file} — ${facts.config_unreachable} bundles its own server code and can't read it, so its defaults and hooks never reach a send made there`,
+						fix: `import "../${facts.config_file.replace(/\.\w+$/, "")}" in the file that sends, or set POSTBOI_* in the ${facts.config_unreachable} dashboard`,
+					}
+				: {
+						name: "config",
+						level: "ok",
+						detail: `${facts.config_file} — provider ${facts.provider ?? "postboi"}${facts.default_from ? `, from ${facts.default_from}` : ""}`,
+					}
 	)
 
 	if (!hosted) {
@@ -229,6 +246,33 @@ function skill_check(state: DoctorFacts["skill"]): Omit<Check, "name"> {
 	}
 }
 
+/**
+ * A runtime in this project that bundles server code without a filesystem and without a
+ * bundler plugin we can install — Convex, whose own bundle takes none — and that nothing
+ * has handed the config to. `read_disk` returns `{}` there, so the file is simply absent
+ * at runtime: no error, no hook, no defaults, and mail that looks wrong a fortnight
+ * later. Importing the config anywhere in that tree is enough, because `config()`
+ * registers as a side effect.
+ */
+function unreachable_runtime(dir: string): string | undefined {
+	const functions = `${dir}/convex`
+	if (!existsSync(functions)) return undefined
+	try {
+		const files = readdirSync(functions, { recursive: true }) as Array<string>
+		const carried = files
+			.filter((file) => /\.(ts|mts|js|mjs)$/.test(file))
+			.slice(0, 200)
+			.some((file) => {
+				const source = readFileSync(`${functions}/${file}`, "utf8")
+				return source.includes("postboi.config") || /\bconfigure\s*\(/.test(source)
+			})
+		return carried ? undefined : "Convex"
+	} catch {
+		// An unreadable tree is not a diagnosis. Say nothing rather than guess.
+		return undefined
+	}
+}
+
 /** Collect the facts from the project directory and, with a token, the account. */
 export async function gather(dir = cwd()): Promise<DoctorFacts> {
 	await ensure_env_loaded()
@@ -238,6 +282,7 @@ export async function gather(dir = cwd()): Promise<DoctorFacts> {
 	const token = read_env("POSTBOI_TOKEN")
 	const facts: DoctorFacts = {
 		config_file,
+		config_unreachable: config_file ? unreachable_runtime(dir) : undefined,
 		provider,
 		default_from: source ? config_default_from(source) : undefined,
 		installed: existsSync(`${dir}/${TYPES_TARGET}`),

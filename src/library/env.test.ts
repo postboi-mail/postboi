@@ -50,6 +50,42 @@ describe("env fallback", () => {
 		expect(env_defaults().from).toBe("hi@example.com")
 	})
 
+	it("reads how mail should look from the environment, for runtimes with no config file", async () => {
+		bindings.current = {
+			POSTBOI_LETTERHEAD: "true",
+			POSTBOI_SHELL: "1",
+			POSTBOI_STYLE: "plain",
+		}
+		const { ensure_env_loaded, env_defaults } = await load_env()
+
+		await ensure_env_loaded()
+
+		expect(env_defaults()).toMatchObject({ letterhead: true, shell: true, style: "plain" })
+	})
+
+	it("a flag that is neither yes nor no is said out loud and ignored", async () => {
+		bindings.current = { POSTBOI_LETTERHEAD: "treu", POSTBOI_STYLE: "fancy" }
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		const { ensure_env_loaded, env_defaults } = await load_env()
+
+		await ensure_env_loaded()
+		const defaults = env_defaults()
+
+		// Silently reading "treu" as off is a fortnight of unbranded mail nobody notices.
+		expect(defaults.letterhead).toBeUndefined()
+		expect(defaults.style).toBeUndefined()
+		expect(warn).toHaveBeenCalledTimes(2)
+	})
+
+	it("off is an answer, not an absence", async () => {
+		bindings.current = { POSTBOI_LETTERHEAD: "false" }
+		const { ensure_env_loaded, env_defaults } = await load_env()
+
+		await ensure_env_loaded()
+
+		expect(env_defaults().letterhead).toBe(false)
+	})
+
 	it("reads Cloudflare's `.dev.vars` so a Vite/Node dev server sees a Worker's token", async () => {
 		// adapter-cloudflare's dev proxy reads .dev.vars but never puts it on process.env,
 		// and `cloudflare:workers` doesn't resolve outside workerd — so this file is the

@@ -32,9 +32,58 @@ const wired: DoctorFacts = {
 const by_name = (checks: ReturnType<typeof diagnose>) =>
 	Object.fromEntries(checks.map((c) => [c.name, c]))
 
+describe("gather: does the config reach the runtime", () => {
+	function project(files: Record<string, string>): string {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-doctor-"))
+		for (const [path, source] of Object.entries(files)) {
+			const full = join(dir, path)
+			mkdirSync(join(full, ".."), { recursive: true })
+			writeFileSync(full, source)
+		}
+		return dir
+	}
+
+	it("a Convex project whose functions never import the config is named", async () => {
+		const dir = project({
+			"postboi.config.ts": "export default config({})",
+			"convex/email.ts": "import { mail } from 'postboi'\nexport const send = mail",
+		})
+		expect((await gather(dir)).config_unreachable).toBe("Convex")
+	})
+
+	it("importing the config anywhere in that tree is enough", async () => {
+		const dir = project({
+			"postboi.config.ts": "export default config({})",
+			"convex/email.ts": "import '../postboi.config'\nimport { mail } from 'postboi'",
+		})
+		expect((await gather(dir)).config_unreachable).toBeUndefined()
+	})
+
+	it("a project with no Convex functions has nothing to say", async () => {
+		const dir = project({ "postboi.config.ts": "export default config({})" })
+		expect((await gather(dir)).config_unreachable).toBeUndefined()
+	})
+
+	it("no config file means there is nothing to fail to arrive", async () => {
+		const dir = project({ "convex/email.ts": "import { mail } from 'postboi'" })
+		expect((await gather(dir)).config_unreachable).toBeUndefined()
+	})
+})
+
 describe("diagnose", () => {
 	it("a wired project is all ok", () => {
 		expect(diagnose(wired).every((c) => c.level === "ok")).toBe(true)
+	})
+
+	it("a config that can't reach the runtime is a warning naming the runtime", () => {
+		const checks = by_name(diagnose({ ...wired, config_unreachable: "Convex" }))
+		expect(checks.config.level).toBe("warn")
+		expect(checks.config.detail).toContain("Convex")
+		expect(checks.config.fix).toContain("postboi.config")
+		// It is the config check itself, not a second one somebody has to notice.
+		expect(
+			diagnose({ ...wired, config_unreachable: "Convex" }).filter((c) => c.name === "config")
+		).toHaveLength(1)
 	})
 
 	it("no token is a failure with the agent's init as the fix", () => {

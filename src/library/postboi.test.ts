@@ -260,6 +260,21 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.letterhead).toBe(true)
 	})
 
+	it("takes the look from the project's defaults, and a send still wins", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+		const provider = () =>
+			new Postboi({ default: { from: "from@test.com", letterhead: true, style: "plain" } })
+
+		await provider().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json()).toMatchObject({ letterhead: true, style: "plain" })
+
+		// Said on the send, the send is the answer — a default is only for the ones that
+		// don't say, exactly as `from` works.
+		await provider().send({ to: "to@test.com", body: "<p>x</p>", letterhead: false })
+		expect(sent_json().letterhead).toBe(false)
+	})
+
 	it("forwards a preheader, which needs no shell", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))

@@ -100,8 +100,24 @@ export function read_env(name: string): string | undefined {
  * Read the default field values shared by every provider from the environment. Only defined
  * values are included, so an unset env var never clobbers a default from postboi.config.ts.
  */
+type AddressDefault = "from" | "to" | "cc" | "bcc" | "reply_to"
+
+/**
+ * A flag from the environment, or undefined for one that isn't set. A value that is
+ * neither yes nor no is **said out loud and then ignored**: these decide how mail looks,
+ * and a typo that quietly meant "no" is a fortnight of unbranded email nobody notices.
+ */
+function read_flag(name: string): boolean | undefined {
+	const value = read_env(name)?.trim().toLowerCase()
+	if (value === undefined || value === "") return undefined
+	if (["1", "true", "on", "yes"].includes(value)) return true
+	if (["0", "false", "off", "no"].includes(value)) return false
+	console.warn(`postboi: ${name} is "${value}", which is neither true nor false — ignoring it.`)
+	return undefined
+}
+
 export function env_defaults(): Defaults {
-	const env: Record<keyof Defaults, string> = {
+	const env: Record<AddressDefault, string> = {
 		from: "POSTBOI_FROM",
 		to: "POSTBOI_TO",
 		cc: "POSTBOI_CC",
@@ -109,11 +125,27 @@ export function env_defaults(): Defaults {
 		reply_to: "POSTBOI_REPLY_TO",
 	}
 	const out: Defaults = {}
-	for (const [key, name] of Object.entries(env) as Array<[keyof Defaults, string]>) {
+	for (const [key, name] of Object.entries(env) as Array<[AddressDefault, string]>) {
 		const value = read_env(name)
 		// `as never`: writing through a union key demands the intersection of field types,
 		// which a project-level `Register` augmentation can narrow below `string`.
 		if (value !== undefined) out[key] = value as never
+	}
+
+	// How a Postboi send looks, for the runtimes a config file can't reach. An edge
+	// worker or a Convex deployment has no filesystem and often no bundler we can hook,
+	// so postboi.config.ts is simply absent there — but every one of them has environment
+	// variables, which is why these three are worth reading twice.
+	const letterhead = read_flag("POSTBOI_LETTERHEAD")
+	if (letterhead !== undefined) out.letterhead = letterhead as never
+	const shell = read_flag("POSTBOI_SHELL")
+	if (shell !== undefined) out.shell = shell as never
+	const style = read_env("POSTBOI_STYLE")?.trim().toLowerCase()
+	if (style === "styled" || style === "plain") out.style = style as never
+	else if (style) {
+		console.warn(
+			`postboi: POSTBOI_STYLE is "${style}" — it takes "styled" or "plain". Ignoring it.`
+		)
 	}
 	return out
 }
