@@ -18,7 +18,7 @@
 		"isbot": "^5"
 	},
 	"devDependencies": {
-		"postboi": "^0.51.0",
+		"postboi": "^0.52.0",
 		"@remix-run/dev": "^2.15",
 		"vite": "^6",
 		"typescript": "^5.9",
