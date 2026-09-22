@@ -176,17 +176,25 @@ type GeneratedFormName = Register extends { form: infer F extends string }
 	: string
 
 /**
- * Whether a send may ask for the team's letterhead. Postboi's own, for the same reason
- * {@link FormName} is: the header and footer live on the account, so under any other
- * provider this is `never` — a type error rather than an option that quietly does
- * nothing. Nothing generated at all leaves it a boolean, so a build with no token
- * doesn't fail on the types being absent.
+ * How a send asks for the team's letterhead: on or off, or the cut it is set in —
+ * `styled` (the brand's faces, keys that press into their own shadow) or `plain` (the
+ * client's own face, flat), the same switch the dashboard composer offers. `true` means
+ * the composer's default, `styled`. A flag or a name, exactly as {@link SendOptions.form}
+ * is.
+ *
+ * Postboi's own, for the same reason {@link FormName} is: the header and footer live on
+ * the account, so under any other provider this is `never` — a type error rather than an
+ * option that quietly does nothing. Nothing generated at all leaves it open, so a build
+ * with no token doesn't fail on the types being absent.
  */
 export type LetterheadOption = Register extends { provider: infer P }
 	? P extends "postboi" | "mock"
-		? boolean
+		? boolean | EmailStyle
 		: never
-	: boolean
+	: boolean | EmailStyle
+
+/** The two cuts a Postboi-rendered piece of an email can be set in. */
+export type EmailStyle = "styled" | "plain"
 
 /**
  * The variables one WhatsApp template takes, per the generated types — the placeholder
@@ -342,8 +350,12 @@ export interface SendOptions {
 	 * ask for it: the body of an API send is your document, not ours, so the two halves
 	 * are styled and placed inside it and nothing else about the message changes. A
 	 * `{unsubscribe_url}` in the footer is filled from {@link SendOptions.unsubscribe_url}
-	 * when the send carries one. A team with no letterhead, or a send with no HTML, is a
-	 * no-op. Ignored by every other provider.
+	 * when the send carries one.
+	 *
+	 * `true` sets them in the brand's faces, the cut the composer starts in; `"plain"`
+	 * leaves them in the client's own, flat. There is no theme to pick: light or dark is
+	 * the recipient's device's to decide. A team with no letterhead, or a send with no
+	 * HTML, is a no-op. Ignored by every other provider.
 	 */
 	letterhead?: LetterheadOption
 }
@@ -448,8 +460,8 @@ export interface PreparedMessage {
 	captcha?: { token?: string; remoteip?: string }
 	/** The Postboi form the send names — see {@link SendOptions.form}. */
 	form?: string
-	/** Whether the send asks for the team's letterhead — see {@link SendOptions.letterhead}. */
-	letterhead?: boolean
+	/** Whether the send asks for the team's letterhead, and in which cut — see {@link SendOptions.letterhead}. */
+	letterhead?: boolean | EmailStyle
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
 	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi

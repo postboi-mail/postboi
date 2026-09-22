@@ -70,10 +70,11 @@ export interface SendParams {
 	fields?: Array<[string, string]>
 	/**
 	 * Put the account's letterhead — the header and footer written in the dashboard —
-	 * around `html`. The API leaves the document itself alone; a footer's
-	 * `{unsubscribe_url}` is filled from the `List-Unsubscribe` header.
+	 * around `html`, in the cut named or the composer's default. The API leaves the
+	 * document itself alone; a footer's `{unsubscribe_url}` is filled from the
+	 * `List-Unsubscribe` header.
 	 */
-	letterhead?: boolean
+	letterhead?: boolean | "styled" | "plain"
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**

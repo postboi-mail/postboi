@@ -236,6 +236,10 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.letterhead).toBe(true)
 		// What the API fills a footer's {unsubscribe_url} from.
 		expect(body.headers["List-Unsubscribe"]).toBe("<https://postboi.app/u/abc>")
+
+		// The cut rides the same option, the way a form's name rides `form`.
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", letterhead: "plain" })
+		expect(sent_json().letterhead).toBe("plain")
 	})
 
 	it("string bodies carry no captcha fields", async () => {

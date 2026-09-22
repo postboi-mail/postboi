@@ -195,6 +195,18 @@ The two halves are styled and put around your HTML — *inside* `<body>` when th
 a whole document, so nothing ends up before the doctype. Nothing else about the message
 changes: no column drawn around it, no fonts it didn't ask for.
 
+Since the halves are the only thing we render, the dashboard's **style** switch is the
+one that has anything to act on here, and it rides the same option — a flag or a cut,
+the way `form` is a flag or a name:
+
+```ts
+await mail({ …, letterhead: "plain" }) // the client's own face, flat keys
+await mail({ …, letterhead: true }) // the brand's faces — same as "styled"
+```
+
+There is no theme to pick. Light or dark is the recipient's device's to decide, so it is
+never a setting on a message.
+
 A `{unsubscribe_url}` in the footer — the usual reason to write one — fills from
 `unsubscribe_url` on the same send, the option that also sets the
 [List-Unsubscribe headers](/tracking):
