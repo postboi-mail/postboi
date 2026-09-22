@@ -1,0 +1,115 @@
+---
+title: Global config
+name: Global config
+description: Set hooks, defaults, and behaviour once with postboi.config.ts, applied to every send.
+category: Guides
+---
+
+Set your provider, defaults, and behaviour once and have them apply to every send. A
+**`postboi.config.ts`** at your project root is the committed home for everything except
+secrets. `bunx postboi init` writes it for you. It's also the only place [hooks](/hooks)
+can live, since they're functions.
+
+```typescript
+// postboi.config.ts
+import { config } from 'postboi'
+
+export default config({
+	provider: 'resend',
+	default: { from: 'no-reply@example.com' },
+	options: { domain: 'mg.example.com' }, // non-secret provider options
+	sms: { provider: 'smsworks', default: { from: 'POSTBOI', country: 'GB' } },
+	retries: 2,
+	hooks: {
+		on: {
+			error: ({ error }) => Sentry.captureException(error) // fires for every channel
+		}
+	}
+})
+```
+
+It auto-loads on the first send (Node/Bun) — `mail()`, `sms()`, or any other channel.
+
+| Field      | What it sets                                                                       |
+| ---------- | --------------------------------------------------------------------------------- |
+| `provider` | which provider `mail()` uses (`resend`, `mailgun`, …)                              |
+| `default`  | `from` / `to` / `cc` / `bcc` / `reply_to` applied when a send omits them           |
+| `options`  | non-secret provider constructor options (Mailgun domain, SES region, SMTP host…)  |
+| `sms`, `whatsapp`, `chat`, `push` | each channel's own `provider`, `default` and `options` — same shape, one block per channel |
+| `hooks`    | lifecycle [hooks](/hooks) run around every send, on every channel                 |
+| `captcha`  | [spam protection](/spam): the publishable `key` for `<Captcha />`, honeypot name, Turnstile |
+| `dev`      | development behaviour: the [inbox](/dev-inbox), and the [SMS](/sms#development-sends-nothing)/[WhatsApp](/whatsapp#development-sends-nothing) interception opt-outs |
+| _behaviour_ | `retries`, `retry_delay`, `timeout`, `auto_text`                                  |
+
+Keep **secrets out of this file**: API keys and tokens belong in the environment. To vary
+the provider per environment, see [Per-environment config](/manual-setup#per-environment-config).
+
+## Precedence
+
+Lowest to highest (later sources win):
+
+1. `postboi.config.ts`
+2. environment variables: `POSTBOI_PROVIDER`, `POSTBOI_*` defaults, and each provider's own
+   field vars (e.g. `MAILGUN_DOMAIN`)
+3. options passed explicitly to `mail()` or a provider constructor
+
+### `options` belong to the provider you named
+
+`options` is keyed by option name, not by provider, and those names repeat across vendors —
+`api_key` on fifteen email providers, `webhook_url` on Slack, Discord and Teams. So the bag
+is scoped to the `provider` sitting beside it: if `POSTBOI_PROVIDER` (or a platform function
+like `discord()`) selects a different one, the options you wrote for the first don't travel
+to it, and the second asks for its own credential in the environment.
+
+```typescript
+export default config({
+	provider: 'mailgun',
+	options: { api_key: '…', domain: 'mg.example.com' },
+})
+```
+
+With `POSTBOI_PROVIDER=resend` set against that file, Resend wants `RESEND_API_KEY` and says
+so — it does not inherit Mailgun's key. A config file that names **no** provider keeps its
+options unscoped, since they can only have been meant for whichever provider runs.
+
+## Bundled and deployed servers
+
+The config file is found by walking up from `process.cwd()` at runtime. That covers local
+dev and any long-running server started from the project root — but **not** a deployed
+bundle. Nothing imports `postboi.config.*`, so file tracing leaves it out of a serverless
+function, and cwd isn't the project root either. Edge runtimes (Cloudflare Workers) have no
+filesystem at all.
+
+The symptom is confusing, because it looks like the config is wrong rather than absent:
+everything works locally, then every send in production fails with
+`No recipient address provided (to or default.to)` even though `default.to` is right there
+in the file. Only the file's contents go missing — `POSTBOI_TOKEN` still selects the
+provider, and the captcha key is baked into the installed package at build time.
+
+Building with Vite? Add the plugin and the config ships inside the server bundle — nothing
+else changes:
+
+```typescript
+// vite.config.ts
+import { postboi } from 'postboi/vite'
+
+export default defineConfig({ plugins: [sveltekit(), postboi()] })
+```
+
+It bundles the first `postboi.config.*` it finds from the Vite root upward (pass
+`postboi({ config: 'path/to/config.ts' })` to point elsewhere, or `config: false` to skip
+it), and only into the server build — a config file with hooks and secrets in it never
+reaches the browser. The plugin also carries the `optimizeDeps` exclude that
+[remote forms](/sveltekit#remote-functions) need.
+
+Without a bundler in the picture, register config at startup instead with
+`configure({ ... })`:
+
+```typescript
+import { configure } from 'postboi'
+
+configure({
+	default: { from: 'no-reply@example.com' },
+	retries: 2
+})
+```

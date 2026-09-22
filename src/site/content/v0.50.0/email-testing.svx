@@ -1,0 +1,217 @@
+---
+title: Email testing
+name: Email testing
+description: Lint an email before anyone receives it — client compatibility from real support data, Gmail clipping, accessibility, deliverability signals — with one synchronous function and zero dependencies.
+category: Guides
+---
+
+An email that renders beautifully in your browser can still collapse in Outlook, get
+clipped by Gmail, or read as blank to a screen reader. Finding that out from a customer
+is the expensive way.
+
+`postboi/inspect` is the cheap way: static analysis for email HTML. One synchronous
+call, no network, no dependencies — the same analysis runs in a test, a CI job, a
+Worker or the CLI.
+
+```ts
+import { analyze } from 'postboi/inspect'
+
+const report = analyze({
+	html: '<div style="display: flex">…</div>',
+	text: undefined,
+	subject: 'Hello'
+})
+
+report.status // "warning"
+report.findings[0].message
+// display:flex is used but not supported in Outlook (Windows) …
+```
+
+## In your test suite
+
+The natural pairing is the [mock provider](/providers#mock-provider): send with your
+real code, analyze what would have gone out.
+
+```ts
+import Mock from 'postboi/mock'
+import { analyze } from 'postboi/inspect'
+
+const mail = new Mock({ default: { from: 'no-reply@example.com' } })
+await mail.send({ to: 'ada@example.com', subject: 'Welcome', body: welcome_template })
+
+const report = analyze({
+	html: mail.last?.html,
+	text: mail.last?.text,
+	subject: mail.last?.subject
+})
+
+expect(report.status).not.toBe('error')
+expect(report.findings.filter((f) => f.severity === 'warning')).toEqual([])
+```
+
+Pass what you have. Every input is optional, and a check that needs a missing input
+stays silent instead of guessing — a bare HTML string is never nagged about headers it
+couldn't possibly carry.
+
+## What it checks
+
+**Client compatibility.** The document is matched against a support matrix derived from
+the [Can I email](https://www.caniemail.com) project's data (CC BY-SA 4.0) — fifty-odd
+CSS and HTML features that actually vary, across Gmail (web, iOS, Android), Outlook
+(Windows and Outlook.com), Apple Mail, iOS Mail and Yahoo. Using flexbox, `max-width`,
+background images, `@media`, `:hover`, `<video>`, WebP…&nbsp;each becomes one finding
+naming exactly which clients lose it, with a link to the caniemail page as evidence.
+
+**Size.** Gmail clips messages whose HTML passes ~102KB, hiding everything below the
+fold — including, typically, the unsubscribe link. `report.size.gmail_clip` says whether
+you're over.
+
+**Accessibility.** Images without `alt` (an empty `alt=""` opts a decorative image
+out), a missing `lang` on the root element.
+
+**Deliverability signals.** A missing plain-text alternative, `http:` links, an empty
+subject. When you pass `headers`, a missing `List-Unsubscribe` and — for one-click
+unsubscribe, which Gmail requires of bulk senders — a missing `List-Unsubscribe-Post`
+(RFC 8058). If you set [`unsubscribe_url`](/tracking), Postboi already sends both.
+
+**Housekeeping.** Links that go nowhere (no `href`, `"#"`, `javascript:`), images
+without declared dimensions, subjects that will truncate in the inbox.
+
+Every finding carries a stable `id`, a `severity` (`error` / `warning` / `info`) and a
+human sentence; compatibility findings add the feature slug and the per-client impact.
+`report.status` is the worst severity present, or `"pass"`. The report also inventories
+every link and image it saw, which is what the next section is for.
+
+## Checking links for real
+
+`analyze()` never touches the network. When you *want* the network — a test suite, a
+release check — `check_links` fetches every `http(s)` link and reports which ones
+answer:
+
+```ts
+import { analyze, check_links } from 'postboi/inspect'
+
+const report = analyze({ html })
+const results = await check_links(report.links)
+
+for (const link of results) {
+	expect(link, link.url).toMatchObject({ ok: true })
+}
+```
+
+It deduplicates, runs a few requests at a time (`concurrency`), gives each ten seconds
+(`timeout_ms`), and takes an injectable `fetch` for stubbing. Run it where outbound
+requests are cheap — not on every render.
+
+## At the command line
+
+The same analysis, as a CI step:
+
+```bash
+bunx postboi inspect build/welcome.html
+```
+
+Findings print one per line; the exit code is the contract — 0 when the email passes,
+1 on warnings or errors, so the command drops straight into a pipeline. `--links`
+also fetches every link, `--subject "…"` includes the subject in the analysis,
+`--json` emits the full report, and `-` reads stdin. (One check is deliberately
+skipped here: an HTML file has nowhere to carry a plain-text part, so its absence
+proves nothing at the command line.)
+
+## In the dev inbox
+
+Every message the [dev inbox](/dev-inbox) captures gets a **Report** tab — the same
+findings, computed on the spot over what your code actually sent. Send from your app,
+click the capture, read the verdict; no configuration, nothing leaves your machine.
+
+## How detection works
+
+No HTML parser and no DOM: email HTML is table soup, and repairing it into a tree means
+guessing along with the clients. Instead the document is tokenized in one pass — tags,
+attributes, `<style>` bodies — and features are detected from that flat view. Detection
+is deliberately coarse: it answers "does this email use flexbox?", not "is this
+declaration reachable?". A false positive costs a glance at a finding that links to its
+evidence; a false negative costs a broken email.
+
+Outlook conditional comments (`<!--[if mso]>…<![endif]-->`) are invisible to the
+analysis, as they are to every client but Outlook — the downlevel-revealed form
+(`<!--[if !mso]><!-->…`) is read like any other markup.
+
+## Testing against real clients
+
+Static analysis tells you what will degrade; it can't show you the pixels. That's what
+[Postboi](https://postboi.email)'s hosted testing is for: create a test in the
+dashboard, send your email to the address it gives you — from any sender, any
+provider — and read the full report: this same analysis over the exact bytes that
+arrived, plus SPF, DKIM and DMARC verdicts from a real receiving mail server, your
+actual DNS records, a real SpamAssassin score, and real-client screenshots (Outlook
+on Windows, Gmail, Apple Mail and friends) where rendering is enabled.
+
+No sender handy? Paste the HTML straight into the run (or `POST` it to
+`/v1/testing/{id}/source`) and the report and screenshots run on it directly — the
+transport-dependent panels stay empty, because nothing travelled.
+
+### From code
+
+Name a test instead of addressing a person, and `mail()` sends it to the proving
+house instead:
+
+```ts
+import { mail } from 'postboi'
+
+const test = await mail({ test: 'welcome', subject: 'Welcome v3', body: html })
+
+test.report?.status // "pass" | "info" | "warning" | "error"
+test.url // the run's dashboard page — screenshots develop there
+```
+
+The name is the entry. Edit the HTML, call again with the same name, and it's a new
+attempt on the same dashboard entry — the edit-and-re-run loop, from code:
+
+```ts
+await mail({ test: 'welcome', body: v1 }) // starts the entry
+await mail({ test: 'welcome', body: v2 }) // attempt №2 on it, clients carried over
+```
+
+The types keep the two kinds of send apart: `to` next to `test` is a compile error
+(a test has readers, not recipients), and `clients` — screenshot client ids from
+`GET /v1/testing/clients` — only exists on a test send. Omit `clients` and a
+continued entry keeps its previous pick; a fresh one gets the curated set. It needs
+`POSTBOI_TOKEN` set (create a token under **Account → API tokens**), whatever
+provider your real mail uses.
+
+**Testing the transport too.** `mail({ test })` proves the email itself — rendering,
+compatibility, screenshots — without anything travelling. When you want SPF, DKIM,
+DMARC and a SpamAssassin score judged over real bytes, `hosted_test` from
+`postboi/inspect` mints the run's address for your actual sending path:
+
+```ts
+import { hosted_test } from 'postboi/inspect'
+import { mail } from 'postboi'
+
+const test = await hosted_test({ label: 'welcome v3' })
+await mail({ to: test.address, subject: 'Welcome', body: html })
+
+const done = await test.wait() // polls until the email lands
+done.authentication?.spf // "pass"
+done.spam?.score // 0.1
+```
+
+(`hosted_test` is also the lower-level client under `mail({ test })` — paste with
+`html`, tune `wait()`'s polling, point `api` somewhere else.)
+
+Every run counts against the account's daily cap and every screenshot client draws
+from the monthly rendering allowance, so a suite that runs on every commit wants
+this behind a flag — keep the free, local `analyze()` in the hot path and save the
+hosted run for release checks:
+
+```ts
+if (process.env.HOSTED_TEST) {
+	const test = await mail({ test: 'welcome', body: mock.last?.html ?? '' })
+	expect(test.report?.status).not.toBe('error')
+}
+```
+
+And in the [dev inbox](/dev-inbox), the same thing with no code at all: with
+`POSTBOI_TOKEN` set, every capture's Report tab grows a **Photograph in real
+clients** button that orders screenshots for exactly what your app just sent.

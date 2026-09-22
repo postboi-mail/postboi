@@ -1,0 +1,160 @@
+---
+title: Forms
+name: Forms
+description: What submissions are filed under — named from your code, or posted to at a hosted endpoint — with every one kept as data.
+category: Guides
+---
+
+A form is what submissions are filed under. Every submission it receives is a row with
+its fields as data, readable in the dashboard, exportable as a CSV or spreadsheet with a
+column per field, and emailed on a schedule if you want it to be. A form is fed one of
+two ways.
+
+## Named from your code
+
+Your app already sends the submission with the library; name the form and it's filed:
+
+```ts
+import { action } from "postboi/kit"
+
+export const actions = {
+	default: action({ to: "housing@acme.example", form: "Home Ownership Query" }),
+}
+```
+
+Or on any `mail()` call: `mail({ to, body: request.formData(), form: "Home Ownership Query" })`.
+A name is created on first use and matched case-insensitively; `bunx postboi sync` types
+`form` to your account's forms, so a renamed or misspelled one is a type error. See
+[Naming the form](/formdata#naming-the-form) for the details, including what a rename does.
+
+## A hosted endpoint
+
+For a page with no code behind it, a form can be a URL instead. Create one in the
+[dashboard](https://postboi.app/dashboard/forms), choose which team member's inbox
+receives submissions, and point a plain `<form>` at the endpoint you get, like
+`https://postboi.app/f/form_k3v9x2m1p8q4`. Submissions arrive as the same tidy email the
+library renders, and are filed under the form like any other.
+
+Submissions can only be delivered to a **team member's sign-in email**, an address
+verified at sign-in (magic link or SSO), so a public endpoint can never be pointed at
+someone else's inbox. If that member leaves the team, the form stops delivering until
+you point it at a current member.
+
+## The HTML
+
+```html
+<form action="https://postboi.app/f/form_k3v9x2m1p8q4" method="POST">
+	<input name="name" placeholder="Your name" required>
+	<input name="email" type="email" placeholder="Your email" required>
+	<textarea name="message" placeholder="Your message" required></textarea>
+
+	<!-- honeypot: hidden from humans; bots fill it and get dropped -->
+	<input name="_honey" style="position:absolute;left:-9999px;height:0;width:0;opacity:0"
+		tabindex="-1" autocomplete="off" aria-hidden="true">
+
+	<button>Send</button>
+</form>
+```
+
+That's the whole integration. On submit, the visitor lands on a hosted thank-you page,
+or set a **redirect URL** (https) on the form in the dashboard to send them back to your
+own site.
+
+The email arrives with fields rendered as a table, and an `email` field is automatically
+used as the **Reply-To**: hitting Reply in your inbox goes straight back to the sender.
+File inputs (`<input type="file">` with `enctype="multipart/form-data"`) become
+attachments, up to 5&nbsp;MB per submission.
+
+## Special fields
+
+The endpoint speaks the library's [FormData dialect](/formdata):
+
+| Field           | Effect                                                              |
+| --------------- | ------------------------------------------------------------------- |
+| `_subject`      | Sets the email's subject line                                       |
+| `_reply_to`     | Sets Reply-To explicitly (wins over an `email` field)               |
+| `_honey`        | The honeypot: include it hidden; filled submissions are dropped    |
+| `fieldset→field`| Groups fields into titled sections in the email                     |
+
+```html
+<input type="hidden" name="_subject" value="New enquiry from the pricing page">
+<input name="contact→name" placeholder="Your name">
+<input name="contact→email" type="email" placeholder="Your email">
+<textarea name="details→message"></textarea>
+```
+
+`_to`, `_from`, `_cc` and `_bcc` are ignored: the recipient is fixed by the form's
+configuration, so a bot can't repoint the mail.
+
+## Spam protection
+
+Two layers, same as the library's [spam protection](/spam):
+
+- **Honeypot**: include the hidden `_honey` field and bot submissions are silently dropped.
+  The bot even receives a success response, so it learns nothing.
+- **Managed captcha**: enable *Require captcha* on the form and add the captcha
+  `<script>` tag (from the dashboard) to the page. Postboi renders an invisible
+  Turnstile challenge and verifies every submission server-side. No Cloudflare account
+  needed.
+
+Endpoints are also rate-limited per form (10 submissions a minute, 500 a day) on top
+of your plan's limits, so a bot can't drain your quota (or your overage bill) through a
+public URL.
+
+## Open & click tracking
+
+Tick **Track opens & clicks** on a form and its notification emails opt into
+[engagement tracking](/tracking): opens and link clicks show up on the message in your
+log, exactly like a tracked API send. Left unticked, the form follows your account's
+tracking default.
+
+## Posting with fetch
+
+Prefer to stay on the page? Ask for JSON and you get `{ ok: true }` instead of a redirect
+(CORS is open, so static sites can post from their own origins):
+
+```ts
+const response = await fetch(form.action, {
+	method: "POST",
+	body: new FormData(form),
+	headers: { accept: "application/json" },
+})
+const result = await response.json() // { ok: true, id: "msg_…" }
+```
+
+A JSON request body works too: `POST` with `content-type: application/json` and a flat
+object of fields.
+
+Errors come back as `{ ok: false, code, message }` with a matching HTTP status:
+
+| Code                     | Status | Meaning                                            |
+| ------------------------ | ------ | -------------------------------------------------- |
+| `not_found`              | 404    | No such form                                       |
+| `form_disabled`          | 410    | The form (or its account) isn't accepting mail     |
+| `captcha_failed`         | 403    | Required captcha token missing or invalid          |
+| `captcha_misconfigured`  | 403    | Captcha required but its script hasn't run yet     |
+| `rate_limited`           | 429    | Form or plan burst limit hit                       |
+| `daily_limit_exceeded`   | 429    | Form daily cap (500), or the free tier's (100)     |
+| `monthly_limit_exceeded` | 429    | Free-tier monthly wall                             |
+
+## Submissions as data
+
+Every submission — named or posted — keeps its fields as `[name, value]` pairs beside the
+email. The form's page in the dashboard shows them as a table with a column per field,
+its Exports tab downloads them as a CSV or spreadsheet, and a schedule emails that file
+every day, week or month: new submissions since the last run, or the previous period
+whole. The same is on the API — `mail.exports.download({ filter: { form: "Home Ownership
+Query" } })` for the file now, `mail.exports.create({ filter: { form: "Home Ownership
+Query" }, recipients, schedule: "weekly" })` for the calendar — and on the CLI, `bunx
+postboi exports download --form "Home Ownership Query"` and `bunx postboi exports add
+"Weekly queries" --to ops@acme.example --form "Home Ownership Query" --weekly`. Every
+[webhook event](/webhooks) about a submission names the form and carries the fields.
+
+## Notes
+
+- Submissions are ordinary sends: they appear in the dashboard's
+  [message log](https://postboi.app/dashboard/messages/sent) and count towards your
+  plan's volume. The free tier's 3,000/mo covers a lot of contact form.
+- Pause a form from the dashboard and sends naming it are refused, or its endpoint stops
+  accepting (410), until it's resumed. Delete a hosted form and the URL is gone for good;
+  delete a named one and the next send naming it starts a fresh form.
