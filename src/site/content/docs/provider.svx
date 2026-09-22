@@ -175,6 +175,45 @@ await mail({
 })
 ```
 
+## Letterhead
+
+The **letterhead** — the header and footer your team writes once in the dashboard under
+*Messages → Templates → Letterhead* — can go on a send from code as well as on one
+written in the composer. It's off unless you ask for it, because the body of an API send
+is your document rather than ours:
+
+```ts
+await mail({
+	to: "someone@example.com",
+	subject: "Your receipt",
+	body: "<p>Thanks for your order.</p>",
+	letterhead: true,
+})
+```
+
+The two halves are styled and put around your HTML — *inside* `<body>` when the body is
+a whole document, so nothing ends up before the doctype. Nothing else about the message
+changes: no column drawn around it, no fonts it didn't ask for.
+
+A `{unsubscribe_url}` in the footer — the usual reason to write one — fills from
+`unsubscribe_url` on the same send, the option that also sets the
+[List-Unsubscribe headers](/tracking):
+
+```ts
+await mail({
+	to: "someone@example.com",
+	subject: "This month",
+	body: "<p>…</p>",
+	letterhead: true,
+	unsubscribe_url: "https://example.com/unsubscribe/abc",
+})
+```
+
+A team with no letterhead saved, or a send carrying only `text`, is a no-op rather than
+an error. A key scoped to a client workspace gets that workspace's letterhead, never the
+agency's. It's the Postboi provider's own option — the letterhead lives on your account
+— so `letterhead` is a type error under any other provider.
+
 ## Team credentials
 
 Your channel credentials — a Resend key, a Twilio SID, a Slack webhook — sync through

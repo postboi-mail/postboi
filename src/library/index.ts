@@ -176,6 +176,19 @@ type GeneratedFormName = Register extends { form: infer F extends string }
 	: string
 
 /**
+ * Whether a send may ask for the team's letterhead. Postboi's own, for the same reason
+ * {@link FormName} is: the header and footer live on the account, so under any other
+ * provider this is `never` — a type error rather than an option that quietly does
+ * nothing. Nothing generated at all leaves it a boolean, so a build with no token
+ * doesn't fail on the types being absent.
+ */
+export type LetterheadOption = Register extends { provider: infer P }
+	? P extends "postboi" | "mock"
+		? boolean
+		: never
+	: boolean
+
+/**
  * The variables one WhatsApp template takes, per the generated types — the placeholder
  * names in its approved body, so they're required rather than guessed at. Any
  * `Record<string, string>` when nothing has been generated, or when the template isn't one
@@ -323,6 +336,16 @@ export interface SendOptions {
 	 * other provider.
 	 */
 	form?: FormName
+	/**
+	 * Put your team's letterhead — the header and footer written in the Postboi dashboard
+	 * under Messages → Templates → Letterhead — around this send's HTML. Off unless you
+	 * ask for it: the body of an API send is your document, not ours, so the two halves
+	 * are styled and placed inside it and nothing else about the message changes. A
+	 * `{unsubscribe_url}` in the footer is filled from {@link SendOptions.unsubscribe_url}
+	 * when the send carries one. A team with no letterhead, or a send with no HTML, is a
+	 * no-op. Ignored by every other provider.
+	 */
+	letterhead?: LetterheadOption
 }
 
 /**
@@ -425,6 +448,8 @@ export interface PreparedMessage {
 	captcha?: { token?: string; remoteip?: string }
 	/** The Postboi form the send names — see {@link SendOptions.form}. */
 	form?: string
+	/** Whether the send asks for the team's letterhead — see {@link SendOptions.letterhead}. */
+	letterhead?: boolean
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
 	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi
@@ -1187,6 +1212,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			tracking: options.tracking,
 			captcha,
 			form: options.form,
+			letterhead: options.letterhead,
 			fields,
 		}
 	}

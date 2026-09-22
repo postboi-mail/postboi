@@ -68,6 +68,12 @@ export interface SendParams {
 	form?: boolean | string
 	/** The submission's `[name, value]` entries, the data the table in `html` was drawn from. */
 	fields?: Array<[string, string]>
+	/**
+	 * Put the account's letterhead — the header and footer written in the dashboard —
+	 * around `html`. The API leaves the document itself alone; a footer's
+	 * `{unsubscribe_url}` is filled from the `List-Unsubscribe` header.
+	 */
+	letterhead?: boolean
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -1082,6 +1088,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			captcha_token: message.captcha?.token,
 			captcha_ip: message.captcha?.remoteip,
 			form: message.form ?? (message.captcha ? true : undefined),
+			letterhead: message.letterhead,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}

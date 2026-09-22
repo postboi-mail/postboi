@@ -219,6 +219,25 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.fields).toBeUndefined()
 	})
 
+	it("asks for the letterhead only when told to, and hands it the unsubscribe link", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().letterhead).toBeUndefined()
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: "<p>x</p>",
+			letterhead: true,
+			unsubscribe_url: "https://postboi.app/u/abc",
+		})
+		const body = sent_json()
+		expect(body.letterhead).toBe(true)
+		// What the API fills a footer's {unsubscribe_url} from.
+		expect(body.headers["List-Unsubscribe"]).toBe("<https://postboi.app/u/abc>")
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
