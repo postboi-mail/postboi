@@ -13,6 +13,11 @@ Postboi deliberately doesn't ship a templating language. `body` is just HTML (a 
 a **promise resolving to one**), so any tool that renders HTML works, and swapping
 templating stacks never touches your sending code.
 
+**On the Postboi provider you may not need a template tool at all.** `shell: true` sets
+plain HTML in the same column the dashboard composer sends in. A short `data-*`
+vocabulary gives you branded buttons, bands and spacers that work in every client. See
+[Buttons and other blocks](/provider#buttons-and-other-blocks).
+
 For anything fancier than [FormData tables](/formdata), our favourite pairing is
 **[Maizzle](https://maizzle.com)**, enough so that Postboi ships an optional
 [`postboi/maizzle`](#send-it) helper for it. Think of it as Postboi's answer to Resend +

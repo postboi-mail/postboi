@@ -38,12 +38,13 @@ import { mail } from "postboi"
 await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
-| Field                             | Takes                                                                                                            |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `body`                            | HTML string, `FormData`, plain object of fields, or a **promise** of any (`body: request.formData()` — no await) |
-| `attachments`                     | one `File` or an array of them, straight from a file input                                                       |
-| `to` `from` `cc` `bcc` `reply_to` | `"a@b.c"`, `"Name <a@b.c>"`, `{ address, name }`, or arrays                                                      |
-| rest of `SendOptions`             | `headers`, `tags`, `idempotency_key`, `scheduled_at`, `tracking`, `unsubscribe_url`, `captcha` — `/raw/api`      |
+| Field                                    | Takes                                                                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `body`                                   | HTML string, `FormData`, plain object of fields, or a **promise** of any (`body: request.formData()` — no await) |
+| `attachments`                            | one `File` or an array of them, straight from a file input                                                       |
+| `to` `from` `cc` `bcc` `reply_to`        | `"a@b.c"`, `"Name <a@b.c>"`, `{ address, name }`, or arrays                                                      |
+| rest of `SendOptions`                    | `headers`, `tags`, `idempotency_key`, `scheduled_at`, `tracking`, `unsubscribe_url`, `captcha` — `/raw/api`      |
+| `shell` `letterhead` `style` `preheader` | Postboi provider only: branded column, header/footer, and `data-button` blocks. See [Templates](#templates)      |
 
 A plain-text alternative is derived from the HTML automatically (`auto_text`, on by default).
 
@@ -257,6 +258,37 @@ Cloudflare Workers, and anything else without a filesystem. `/raw/cloudflare-wor
 ## Templates
 
 `body` is just HTML — any renderer works. For designed emails the blessed pairing is Maizzle via the optional `postboi/maizzle` helper: `body: maizzle("./emails/welcome.vue", { name: "Ava" })`. Needs Node/Bun, not edge. React Email / MJML output drops into `body` the same way. `/raw/templates`
+
+**On the Postboi provider, try the shell before you reach for a template tool.** `shell: true` sets a plain HTML fragment in the dashboard composer's 600px column, in the team's brand and with a dark palette. Inside it, a small `data-*` vocabulary turns into email-safe, table-based blocks. Don't hand-roll button tables or invent classes (`class="pb-button"` does nothing):
+
+```ts
+await mail({
+	to,
+	subject: "Your magic link",
+	shell: true,
+	body: `<p>Click the button to sign in:</p>
+	<div data-button="yellow" data-align="center"><a href="${url}">Sign in</a></div>
+	<p>Or paste this link: <a href="${url}">${url}</a></p>`,
+})
+```
+
+| Block  | Markup                                                  | Values                                                    |
+| ------ | ------------------------------------------------------- | --------------------------------------------------------- |
+| Button | `<div data-button="yellow"><a href="…">Label</a></div>` | `yellow` (accent), `ink`, `outline`, `c1`–`c6`, `#rrggbb` |
+| Band   | `<div data-section="ink">…blocks…</div>`                | `ink`, `yellow`, `tint`, `paper`, `c1`–`c6`, `#rrggbb`    |
+| Spacer | `<div data-spacer="32"></div>`                          | px, 4–200                                                 |
+| Stamp  | `<div data-stamp>Paid</div>`                            | label                                                     |
+| Colour | `<span data-colour="c2">…</span>`                       | `c1`–`c6`, `#rrggbb`                                      |
+| Align  | `data-align` on a button, `p`, heading or `img`         | `left` `center` `right`                                   |
+
+- **Blocks only render with `shell: true`.** Without it the body is sent exactly as written.
+- **A button's `div` holds exactly one `<a>`.**
+- **The body must be a fragment.** A whole `<!doctype>` document is a 400.
+- **Styles you write inline still win** over the shell's.
+- `letterhead: true` adds the team's header and footer. `style: "plain"` gives the same blocks without the brand's drawing. `preheader` sets the inbox preview line.
+- **Long URLs wrap inside the column**, so a "paste this link" fallback is fine as it is.
+
+If a complete document is already rendered (Maizzle, React Email, MJML), use `letterhead` on its own, not the shell. `/raw/provider` (Letterhead & the shell)
 
 ## Account setup & migration (CLI + REST API)
 
