@@ -1,0 +1,63 @@
+---
+title: REST API
+name: REST API
+description: Everything the dashboard can do, over HTTP — send, lists, contacts, domains, webhooks, members, suppressions.
+category: Reference
+---
+
+Everything the Postboi dashboard can do is also a REST endpoint. Authenticate with the
+same `POSTBOI_TOKEN` the CLI writes (or any API key from **Dashboard → Keys**):
+
+```bash
+curl https://api.postboi.app/v1/lists \
+	-H "Authorization: Bearer $POSTBOI_TOKEN"
+```
+
+The full interactive reference lives at
+**[api.postboi.app](https://api.postboi.app)** — every endpoint with schemas and
+copy-paste examples in curl, JavaScript, Python, and more.
+
+Alongside the per-list `/v1/lists/{id}/recipients` endpoints, `/v1/contacts` is your
+whole **audience** — one contact per address, with global `name`/`data` and its list
+memberships:
+
+```bash
+# Upsert a contact
+curl https://api.postboi.app/v1/contacts \
+	-H "Authorization: Bearer $POSTBOI_TOKEN" \
+	-d '{"email":"ada@example.com","name":"Ada","data":{"plan":"pro"}}'
+
+# Which lists is Ada on?
+curl https://api.postboi.app/v1/contacts/ada@example.com/lists \
+	-H "Authorization: Bearer $POSTBOI_TOKEN"
+```
+
+`/v1/inbound` is the other direction — mail that arrived at your
+[sending address](/provider#replies) or your
+[reply subdomain](/provider#receiving-on-your-own-domain), newest first, with `/v1/inbound/{id}` for one
+message and its body:
+
+```bash
+curl https://api.postboi.app/v1/inbound \
+	-H "Authorization: Bearer $POSTBOI_TOKEN"
+```
+
+Errors always come back as `{ "message": "…", "code": "…" }` with a matching HTTP
+status, so error handling is one shape everywhere.
+
+## …or skip HTTP entirely
+
+The CLI wraps the same API, so quick account chores never need a dashboard tab:
+
+```bash
+bunx postboi whoami
+bunx postboi lists add Newsletter
+bunx postboi recipients Newsletter add bob@example.com
+bunx postboi contacts add ada@example.com --name Ada --data '{"plan":"pro"}'
+bunx postboi domains add example.com   # prints the DNS records + a one-click setup link
+bunx postboi webhooks add https://example.com/api/events
+bunx postboi members invite colleague@example.com
+```
+
+Run `bunx postboi --help` for the full command list. And for sending itself, the
+[library](/api) is the nicer surface — `mail()` speaks this API for you.

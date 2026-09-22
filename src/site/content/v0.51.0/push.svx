@@ -1,0 +1,678 @@
+---
+title: Push
+name: Push
+description: Web Push, FCM, APNs, Huawei and Expo with push() — the only channel that costs nothing per message, and the only one where the address has to be registered first.
+category: Channels
+---
+
+```typescript
+import { push } from "postboi"
+
+await push({ to: subscription, title: "Order shipped", message: "On its way" })
+```
+
+Push is the odd one out in two ways, and both shape how you use it.
+
+**It costs nothing.** FCM, APNs, Push Kit, Expo's push service and Web Push are free from Google, Apple, Huawei, Expo
+and the browser vendors — there is no carrier and no termination fee anywhere in the chain. That's why push
+sits first in [`send()`'s cost ordering](/send#cheapest-first): routing a message to push
+instead of SMS doesn't save a percentage, it saves the entire cost.
+
+**The address has to be registered first.** An email address or a phone number is something
+you can be told. A push target only exists once the device has subscribed and handed it to
+you — so you have to store it, and it will expire.
+
+## Setup
+
+```bash
+# .env
+VAPID_PUBLIC_KEY=…
+VAPID_PRIVATE_KEY=…
+VAPID_SUBJECT=mailto:you@example.com
+```
+
+No `POSTBOI_PUSH_PROVIDER` — a full VAPID trio can only mean Web Push, so postboi infers
+it. Set it when you carry another push provider's credentials in the same deploy, where
+the credentials stop answering the question on their own; the same inference covers FCM,
+APNs and HMS from theirs.
+
+The VAPID key pair identifies **you** to the push service. No dashboard hands one out —
+`bunx postboi init --push` generates it for you. The public half is also what the browser
+subscribes with, so the two must match — mismatched keys are rejected on every send with a
+401 that explains nothing.
+
+When the secrets don't belong in a `.env` — a Worker's `wrangler secret put`, a CI secret
+store, a password manager — `bunx postboi vapid` prints a pair to stdout instead of writing
+one, and `generate_vapid_keys()` from `postboi/webpush` mints the same pair in code. Mint
+once: a second pair orphans every subscription collected under the first, silently.
+
+```bash
+bunx postboi vapid
+```
+
+On Cloudflare Workers the three vars are read straight off your bindings, so a push Worker
+is three `wrangler secret put`s and no config file at all — see
+[Web Push on Workers](/cloudflare-workers#the-other-channels).
+
+`VAPID_SUBJECT` is required by RFC 8292 so a push service operator can reach you about
+misbehaving traffic. `mailto:` or an https URL — your address on its own is fine too and
+becomes a `mailto:`. Anything else throws when the provider is built, rather than reaching
+a push service that answers 401 without saying why.
+
+| Provider | Import | Reaches |
+| --- | --- | --- |
+| Web Push | `postboi/webpush` | Every modern browser, desktop and mobile |
+| FCM | `postboi/fcm` | [Android](#android) apps — the only route to them, and it reaches iOS too |
+| APNs | `postboi/apns` | Apple apps, [direct](#ios) — no Firebase in the middle |
+| HMS | `postboi/hms` | [Huawei](#android) phones, which have no Play Services |
+| Expo | `postboi/expo` | [Expo and React Native](#expo-and-react-native) apps on both platforms, with Expo holding the FCM and APNs credentials |
+
+Those are the **server** imports — the senders. The client half is a different import
+on purpose: `postboi/push`, next, carries no provider and no private key, so neither can
+end up in a client bundle by accident. A phone gets the same helper as `postboi/push/expo`,
+[below](#in-the-app).
+
+## Subscribing, in the browser
+
+```typescript
+import { subscribe } from "postboi/push"
+
+async function enable() {
+	const subscription = await subscribe()
+	await fetch("/api/push/register", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(subscription),
+	})
+}
+```
+
+No key in sight because `bunx postboi sync` bakes `VAPID_PUBLIC_KEY` from your env into
+the package — the same trick that makes `<Captcha />` prop-free. That kills the whole
+per-framework ceremony of smuggling the public key to the browser (server-component
+props, loaders, runtime config, data attributes). Pass `{ key }` to override, and rerun
+sync after rotating the pair.
+
+One import for every framework: `postboi/push` is plain DOM, so Svelte, React, Vue and no
+framework at all get the same line.
+
+**Call it from a click.** Browsers auto-deny a permission prompt that isn't tied to a user
+gesture, and once denied **you cannot ask again** — the user has to change it in site
+settings. That's the single most common way to permanently lose a subscriber.
+
+The helper requests permission if needed, registers your service worker (found on its
+own — an already-registered worker first, then `/sw.js` and SvelteKit's
+`/service-worker.js`), waits for it to be *active* rather than merely registered, and
+reuses an existing subscription — so calling it on every page load is safe.
+
+Three questions a UI wants answered before it can render the button, none of which prompt:
+
+| Call | Answers |
+| --- | --- |
+| `subscribe.supported()` | Is there any Web Push in this browser? |
+| `subscribe.permission()` | `"granted"`, `"denied"`, `"default"` or `"unsupported"` |
+| `subscribe.current()` | The subscription this browser already has, or null |
+
+The last one is the difference between a toggle that's right and one that lies: permission
+stays `"granted"` after someone unsubscribes, so a browser that is granted-but-not-subscribed
+looks identical to a subscribed one until you ask.
+
+```typescript
+const on = Boolean(await subscribe.current())
+```
+
+`unsubscribe()` removes the subscription and hands back the copy you stored, so you know
+which row to delete.
+
+### The toggle, without the choreography
+
+Every settings page that offers a push switch re-implements the same state machine:
+`current()` on mount, busy and error state, subscribe-then-register, rollback when the
+server never learned the address. `subscription` is that machine written once, with one
+wrapper per framework so the state is reactive in each one's own idiom.
+
+Svelte's is reactive properties — `on`, `busy`, `supported` and `reason` read plainly,
+no `$` prefix and nothing to unwrap, and they only start watching when something
+actually renders them:
+
+```svelte
+<script lang="ts">
+	import { subscription } from "postboi/svelte"
+
+	const push = subscription({ register: "/push/subscriptions" })
+</script>
+
+<button onclick={push.toggle} disabled={push.busy}>
+	{push.on ? "Unsubscribe" : "Subscribe"}
+</button>
+```
+
+React gets it as `usePush` from `postboi/react` — camelCase because the hooks linter
+and the React Compiler recognize hooks by the `/^use[A-Z]/ ` name pattern, and a hook
+they can't see is a hook they can't protect. Vue has no such enforcement, so
+`postboi/vue` keeps house style with `use_push`:
+
+```tsx
+const push = usePush({ register: "/push/subscriptions" })
+
+<button onClick={push.toggle} disabled={push.busy}>
+	{push.on ? "Unsubscribe" : "Subscribe"}
+</button>
+```
+
+`toggle()` is the one a switch wants — subscribe if this browser isn't, unsubscribe if it
+is — and handing it to a click handler by name is safe. `enable()` and
+`disable()` are there when the UI is two buttons rather than one. Call whichever **from a
+click**, for the same reason `subscribe()` has to be.
+
+`register` is a URL the subscription is POSTed to (or a function, for anything beyond
+that); `unregister`, when given, unfiles it on disable. A register call that fails rolls
+the browser subscription back, so there's never an address the server doesn't know.
+
+| Framework | Import | Shape |
+| --- | --- | --- |
+| Svelte | `subscription` from `postboi/svelte` | Reactive — `push.on` |
+| React | `usePush` from `postboi/react` | Hook — `push.on` |
+| Vue | `use_push` from `postboi/vue` | Composable — `on.value` |
+| Expo / React Native | `usePush` from `postboi/push/expo` | Hook — `push.on`, over the phone's [registration](#expo-and-react-native) |
+| Anything else | `subscription` from `postboi/push` | Store contract — `push.subscribe(fn)`, plain `push.on` reads |
+
+The last row is the machine the other three wrap, framework-neutral and plain DOM. Reach
+for it from vanilla JS, or from a framework we don't ship a wrapper for.
+
+**Runnable example:** [`examples/sveltekit-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi)
+does Web Push end to end — the toggle above, the endpoint it registers with, the send, and
+the service worker that shows the notification. Nuxt, Next.js, Astro and Remix carry the
+same page in their own idiom.
+
+### When a subscribe fails
+
+`subscribe.reason(error)` says which wall was hit, the way `push.expired(error)` does on the
+server — null for anything that didn't come from the subscribe call, so it's safe on a bare
+`catch`:
+
+```typescript
+import { subscribe } from "postboi/push"
+
+try {
+	await subscribe({ key })
+} catch (error) {
+	switch (subscribe.reason(error)) {
+		case "permission_denied": show_settings_hint(); break
+		case "unsupported": hide_the_button(); break
+		default: throw error
+	}
+}
+```
+
+| Reason | What happened |
+| --- | --- |
+| `permission_denied` | The user said no. The browser will not ask again. |
+| `permission_dismissed` | The prompt was closed without an answer (Android reports a backed-out prompt as denied-but-can-ask-again, and that counts). You can ask again later. |
+| `unsupported` | No Web Push in this browser. `subscribe.supported()` tells you first. |
+| `missing_key` | No `{ key }` and nothing baked — run `bunx postboi sync` with `VAPID_PUBLIC_KEY` set. |
+| `no_service_worker` | No worker at `/sw.js` or `/service-worker.js` (or at the `sw` you passed). |
+| `failed` | The push service refused the subscription. |
+
+The reasons are a typed union, so a mistyped `case` is a compile error rather than a branch
+that never runs. `PushSubscribeError` is exported too if you prefer `instanceof`.
+
+## Your service worker
+
+Push notifications are delivered to a service worker, and the handlers inside it are the
+same in every app. `bunx postboi init --push` offers to write them — it finds the worker
+your framework already has, or creates one where that framework expects it:
+
+```
+✓ created public/sw.js (handlers written out — this file is served as-is and can't import)
+
+  On the page:
+    subscription({ register: "/push/subscriptions" })
+```
+
+It never appends to a worker that already handles `push` itself — two handlers means two
+notifications for one send — and it tells you instead.
+
+### The two shapes
+
+Which shape you get depends on whether your worker file is **built** or **served
+verbatim**, and that's a per-framework fact rather than a preference:
+
+| Framework | Worker file | Shape |
+| --- | --- | --- |
+| SvelteKit | `src/service-worker.ts` | Built — imports `postboi/push/sw` |
+| Next.js, Nuxt, Astro, Remix | `public/sw.js` | Served as-is — handlers written out |
+| Vite / webpack worker entry | your entry | Built — imports `postboi/push/sw` |
+
+A built worker is four lines:
+
+```typescript
+// src/service-worker.ts
+import { receive } from "postboi/push/sw"
+
+receive({ register: "/push/subscriptions" })
+```
+
+A served-as-is file can't `import` — an import statement there is a syntax error at worker
+startup, with nothing pointing at the cause — so the CLI writes the same handlers out
+instead, with your VAPID public key baked in. postboi's test suite drives both through one
+fake worker and compares what they do, so the generated copy can't drift from `receive()`.
+
+Either way you get `push` (show the notification), `notificationclick` (open the thing, or
+focus the tab already showing it) and `pushsubscriptionchange` — the one that only exists
+inside a worker, and the one everybody skips. Nothing else: no fetch handler, no caching,
+no claiming clients. A worker that intercepts requests is a different feature, and yours
+may already be one.
+
+**`subscribe()` finds your worker on its own.** A worker already registered for the page
+is reused — SvelteKit registers the one it builds — and otherwise `/sw.js` and
+`/service-worker.js` are tried in turn, which covers every framework here with nothing
+passed. Only a worker served somewhere unconventional needs `sw` with its path.
+
+### Adjusting the notification
+
+`notification` returns the fields to override, merged over the defaults. The two things the
+payload can't carry are an app-name fallback for a send with no title, and
+`tag`/`renotify`/`actions`:
+
+```typescript
+receive({
+	register: "/push/subscriptions",
+	notification: (payload) => ({ title: payload.title ?? "Acme", tag: "orders" }),
+})
+```
+
+In a generated worker the same thing is a literal edit — the file is yours from the moment
+it's written, and the `""` fallback title is commented where it sits.
+
+### Taking over the click
+
+The default click is deliberately conservative: focus the tab already showing the
+notification's `url` **exactly**, or open a new one — anything looser would pull someone
+off the page they were on. When your app knows its own clicks better, `click` replaces
+that entirely, called with the notification's `data` (the payload's `data` plus `url`)
+and the action button pressed (`""` for the body of the notification):
+
+```typescript
+receive({
+	register: "/push/subscriptions",
+	// A single-window PWA: bring the one open tab here rather than minting another.
+	click: async (data) => {
+		const [tab] = await clients.matchAll({ type: "window", includeUncontrolled: true })
+		if (!tab) return void clients.openWindow(data.url ?? "/")
+		await tab.navigate?.(data.url ?? "/")
+		await tab.focus()
+	},
+})
+```
+
+The notification is closed before `click` runs — that part every handler owes the user —
+and `clients` is a worker global, so the callback reaches for it directly.
+
+### Rotations, and why they matter
+
+Subscriptions rotate. Browsers replace them on their own schedule, and when that happens
+the address you stored is dead while the browser holds a replacement nobody has told you
+about. `pushsubscriptionchange` fires **only** inside the worker, which is why a page-side
+helper can't cover it and why this is the piece worth wiring.
+
+Without a handler the gap does close on its own — the next send answers 410, and
+`push.expired()` deletes the row — but only *after* one notification has silently gone
+nowhere. `receive` re-subscribes and POSTs the replacement to `register`, carrying
+`old_endpoint` when the browser says which subscription it replaced:
+
+```json
+{
+	"endpoint": "https://push.example/new",
+	"keys": { "p256dh": "…", "auth": "…" },
+	"old_endpoint": "https://push.example/old"
+}
+```
+
+Delete the row for `old_endpoint`, then store the rest — that's a swap rather than a leak.
+The field is absent on browsers that don't hand the old subscription over, and a register
+endpoint that ignores it still works.
+
+Re-subscribing needs the VAPID public key, and some setups only hold it at runtime — a
+per-deployment pair in a Workers secret, handed to the page by an endpoint rather than
+baked in by `bunx postboi sync`. For those, `key` takes a function instead of a string,
+called only when a rotation actually needs to mint (a replacement the browser hands over
+needs no key). It resolves at the moment the event fires on purpose: a rotation can wake
+the worker cold, so a fetch at worker startup would lose exactly the race that matters.
+
+```typescript
+receive({
+	register: "/push/subscriptions",
+	// The same answer the page subscribes off.
+	key: async () => {
+		const res = await fetch("/push/key")
+		return res.ok ? (await res.json()).key : null
+	},
+})
+```
+
+### Writing it yourself
+
+Nothing stops you. The minimum is:
+
+```javascript
+// public/sw.js
+self.addEventListener("push", (event) => {
+	const { title, body, icon, url } = event.data.json()
+	event.waitUntil(
+		self.registration.showNotification(title ?? "", { body, icon, data: { url } })
+	)
+})
+
+self.addEventListener("notificationclick", (event) => {
+	event.notification.close()
+	if (event.notification.data?.url) event.waitUntil(clients.openWindow(event.notification.data.url))
+})
+```
+
+You **must** show a notification for every push. `userVisibleOnly` is mandatory in Chrome,
+and a browser that sees you receive pushes without showing anything will revoke the
+permission. That's also why `receive` shows an empty notification rather than throwing on a
+payload it can't parse — and why the version above, which throws on any payload that isn't
+JSON, is a subscriber you lose eventually.
+
+## Subscriptions expire — plan for it
+
+This is routine, not an error case. Users clear site data, reinstall browsers, and don't
+open your app for months. The push service answers **410 Gone** and the right response is to
+**delete your stored copy** — not to retry, and not to alert:
+
+```typescript
+import { push } from "postboi"
+
+try {
+	await push({ to: subscription, message: "…" })
+} catch (error) {
+	if (push.expired(error)) await forget_subscription(subscription.endpoint)
+	else throw error
+}
+```
+
+The check hangs off `push` itself, so the send and its routine failure are one import.
+Sending to many at once, the same check applies per result:
+
+```typescript
+const results = await push(subscriptions.map((to) => ({ to, message: "…" })))
+
+for (const [i, result] of results.entries()) {
+	if (!result.ok && push.expired(result.error)) {
+		await forget_subscription(subscriptions[i].endpoint)
+	}
+}
+```
+
+(Holding a provider instance directly? The same check is `PushProvider.is_expired()`.)
+
+## Payload size
+
+One encrypted record holds **3993 bytes** of plaintext, and that's the whole payload — title,
+body, icon URL and data together. Postboi checks before encrypting and tells you the real
+number, rather than letting the push service reject it with a bare 400.
+
+If you're near the limit, send an id and fetch the detail in the service worker. That's
+better practice anyway: the payload is stored on someone else's server until it's delivered.
+
+## Urgency and TTL
+
+```typescript
+await push({
+	to: subscription,
+	message: "Your code is 4291",
+	urgency: "high", // ask the push service not to delay for battery
+	ttl: 60, // give up after a minute — a stale code is worse than none
+})
+```
+
+`ttl` defaults to 28 days. For anything time-sensitive, set it low: a notification that
+arrives two days late is usually worse than one that never arrives.
+
+## Android
+
+**FCM** (`postboi/fcm`) is the only way to reach an Android phone. Not the recommended way —
+the only one. Push on Android goes through Google Play Services, and nothing else has access
+to that transport.
+
+Which leaves the phones that don't have Play Services. **Huawei** has shipped without it
+since 2020, and on those devices FCM doesn't fail loudly, it simply never arrives. Push Kit
+(`postboi/hms`) is the route to them:
+
+```bash
+# .env
+POSTBOI_PUSH_PROVIDER=hms
+HMS_APP_ID=…
+HMS_APP_SECRET=…
+```
+
+Both from AppGallery Connect. Same `push()` call, same `push.expired(error)` check.
+
+One quirk worth knowing about, though Postboi handles it for you: **Push Kit answers HTTP
+200 even when the send failed** — the real outcome is a result code in the body. Anything
+that only checked the status code would report a silent non-delivery as a success. Postboi
+reads the code, so a failure throws like it does everywhere else.
+
+Serving both? Store which one a device registered with, and pick the provider per device —
+a token from one is meaningless to the other.
+
+## iOS
+
+Two routes, and the difference is whether Google sits in the middle.
+
+**APNs** (`postboi/apns`) talks to Apple directly, with a `.p8` key from your developer
+account and nothing else in the chain. **FCM** forwards to APNs on your behalf, which is
+worth it if you're already sending to Android and would rather hold one credential than
+two. If iOS is all you ship, there's no reason to route it through Firebase.
+
+```bash
+# .env
+POSTBOI_PUSH_PROVIDER=apns
+APNS_KEY_ID=ABC1234567
+APNS_TEAM_ID=DEF1234567
+APNS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIGT…\n-----END PRIVATE KEY-----"
+APNS_TOPIC=com.example.app
+```
+
+`APNS_TOPIC` is your app's bundle ID. The key is the `.p8` you download **once** — Apple
+won't show it again — from Certificates, Identifiers & Profiles → Keys.
+
+**Or don't type any of it.** `bunx postboi init --push` looks for the `AuthKey_*.p8` you
+just downloaded — in the current directory and in `~/Downloads` — and offers it. Pick one
+and it fills the key *and* `APNS_KEY_ID`, because Apple puts the key ID in the filename.
+It writes the PEM's newlines as `\n` inside double quotes too, since a `.env` value is a
+single line.
+
+Then it checks the credentials against APNs before writing anything, by sending to a
+device token that can't exist. Apple validates the key, team and topic before it looks at
+the device, so a rejected *token* means everything else was accepted — and if something is
+wrong, you're told which thing:
+
+```
+✓ read the key, and took APNS_KEY_ID from its filename
+
+Checking the credentials with APNs…
+! APNs rejected the topic — is com.example.app really the app's bundle ID?
+  Save them anyway? (y/N)
+```
+
+There is no OAuth to offer here and there won't be: Apple has no API that creates an APNs
+key, the App Store Connect API's own credential is another `.p8` you download by hand, and
+its terms forbid using it to provide services to third parties. Finding the file and
+checking what you typed is the ceiling.
+
+Set `APNS_ENVIRONMENT=sandbox` while you're testing against a development build. A token
+from a debug build is only valid against the sandbox and a TestFlight or App Store token is
+only valid against production; cross them and every send fails as `BadDeviceToken`, which
+reads like a broken token rather than a wrong setting. It's the first thing to check.
+
+`push.expired(error)` covers APNs too. Apple reports a dead token two ways — `Unregistered`
+as a 410, and `BadDeviceToken` as a **400** — and both mean the same thing: delete your
+stored copy.
+
+One note on how this works, because it's the reason most libraries hand you Firebase
+instead. APNs refuses HTTP/1.1, and Node's built-in `fetch` only speaks HTTP/1.1 — so
+Postboi sends over `node:http2` on Node and Bun, and over the global `fetch` on Workers and
+Deno, where it already negotiates HTTP/2. There's nothing to configure, and no dependency
+either way.
+
+Web Push also works on iOS 16.4+, but **only for a home-screen web app**, and the user has
+to add it to their home screen first. Worth knowing before you build a flow around it.
+
+## Expo and React Native
+
+Two halves, like the browser: the app registers, the server sends. Both are JavaScript,
+so both ship in this package — there is no native SDK to install, and none coming. The
+app already has everything registration needs in `expo-notifications`; what was missing
+was the same small helper the browser gets, so the two apps read the same.
+
+### In the app
+
+```typescript
+import { subscribe } from "postboi/push/expo"
+
+const registration = await subscribe()
+await fetch("https://example.com/api/push/register", {
+	method: "POST",
+	headers: { "Content-Type": "application/json" },
+	body: JSON.stringify(registration), // { token, provider: "expo", platform }
+})
+```
+
+`token` is an `ExponentPushToken[…]` — what `postboi/expo` sends to — and `provider` says
+so, because a token from one push provider is meaningless to the others. Store both.
+
+When to call it depends on whether the app has a switch. An app that always pushes calls
+`subscribe()` on every launch: it reuses the token the device has, the OS asks at most
+once, and tokens rotate so the server should hear the latest. An app with a switch calls
+it when the user says yes, and on later launches re-posts `subscribe.current()` instead —
+`subscribe()` at launch would quietly undo an opt-out.
+
+Same surface as the browser, with the same names, so a settings screen shared between
+the two apps reads alike:
+
+| Call | Answers |
+| --- | --- |
+| `subscribe.supported()` | Is push available here? Not on the web build, not in Expo Go on Android |
+| `subscribe.permission()` | `"granted"`, `"denied"`, `"undetermined"` or `"unsupported"` — async, the OS is asked |
+| `subscribe.current()` | The registration this device holds, or null. Never prompts, never hits the network |
+| `subscribe.reason(error)` | Which wall a subscribe hit, or null for an error that wasn't ours |
+
+`unsubscribe()` unregisters the device and hands back the registration so you know which
+row to delete.
+
+On Android the helper creates the `default` notification channel **before** asking — on
+Android 13+ there is no permission prompt without one, and the OS answers "denied" as
+though the user had. It's created at full importance, because it's the channel Expo
+delivers to, and the one Expo would otherwise create at default importance the first
+time a notification arrived.
+
+| Reason | What happened |
+| --- | --- |
+| `permission_denied` | The user said no. The OS will not ask again — they change it in Settings. |
+| `permission_dismissed` | The prompt was closed without an answer (Android reports a backed-out prompt as denied-but-can-ask-again, and that counts). You can ask again later. |
+| `unsupported` | The web build (use `postboi/push`), or Expo Go on Android, which lost remote push in SDK 53 — use a development build. |
+| `missing_project` | No EAS project id. `eas init` writes one to `app.json`, or pass `{ project_id }`. |
+| `failed` | Expo couldn't mint a token. |
+
+Simulators are fine: iOS since Xcode 14, Android emulators with Play services. That's
+new enough that older guides still tell you to check for a physical device; this helper
+doesn't.
+
+#### The toggle
+
+React Native is React, so the toggle is `usePush` — same shape as `postboi/react`'s, over
+the phone's registration:
+
+```tsx
+import { usePush } from "postboi/push/expo"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+
+const push = usePush({
+	register: "https://example.com/push/registrations",
+	unregister: "https://example.com/push/registrations",
+	storage: AsyncStorage,
+})
+
+<Switch value={push.on} disabled={push.busy || !push.supported} onValueChange={push.toggle} />
+```
+
+Two things differ from the browser. `register` needs an **absolute URL** — a phone has no
+origin to resolve a relative one against, and a relative one is refused up front rather
+than surfacing as a bare `register_failed`. And `storage` is where the registration is
+remembered: a browser's `PushManager` holds its subscription, but the OS holds only
+*permission* — granted by default on Android 12 and below, and left granted after
+someone turns push off in your app — so "is this device registered?" is something the
+helper has to remember for itself, and it's what `current()` answers from without a
+network round-trip. Anything with AsyncStorage's `getItem`/`setItem`/`removeItem` will
+do; without it the memory lasts one launch, and the switch comes up off after a restart.
+`subscription()` is the same machine for anything that isn't a component.
+
+The phone does have one thing the browser page lacks: it hears when the OS rotates the
+token underneath a running app. While something is rendering the toggle, a rotated token
+is re-filed at `register` on its own — the page-side twin of what the service worker does
+on `pushsubscriptionchange`.
+
+#### Raw device tokens instead
+
+If the server already sends through `postboi/fcm` and `postboi/apns`, skip Expo's service:
+
+```typescript
+const registration = await subscribe({ native: true })
+// { token: "…", provider: "apns" | "fcm", platform: "ios" | "android" }
+```
+
+`provider` follows the platform, and it's what to pick the sender by — the reason to store
+it. This is the route with two credentials on the server instead of none; Expo's is the
+one below.
+
+### On the server
+
+```bash
+# .env
+POSTBOI_PUSH_PROVIDER=expo
+```
+
+And that's the setup. Expo's push service holds your FCM and APNs credentials — set up
+once with `eas credentials`, where the app's build already needs them — and forwards to
+both, so the server carries nothing. The one credential that exists is optional:
+`EXPO_ACCESS_TOKEN`, only once **Enhanced Security for Push Notifications** is switched
+on for the project. This is the one push provider that has to be named: there is no
+credential to infer it from, and the token's name is the one `expo-server-sdk` users
+already set for their own sends.
+
+```typescript
+import { push } from "postboi"
+
+await push({ to: registration.token, title: "Order shipped", message: "On its way" })
+```
+
+`push.expired(error)` covers Expo too — its `DeviceNotRegistered` is the same instruction
+as a 410: delete your stored copy.
+
+**A 200 is a ticket, not a delivery.** Expo has taken the message and will pass it on;
+whether Apple or Google took it shows up in a **receipt** Expo keeps for a day, and that's
+where `DeviceNotRegistered` usually arrives. Fetch them at least once — a job an hour
+later is plenty:
+
+```typescript
+import Expo from "postboi/expo"
+
+const notify = new Expo()
+const { id } = await notify.send({ to: token, message: "…" })
+
+// Later.
+const receipts = await notify.receipts([id])
+const receipt = receipts[id] // absent until Expo hears back
+if (receipt && !receipt.ok && Expo.is_expired(receipt.error)) await forget_token(token)
+```
+
+Each receipt is `{ ok: true }` or carries the same `PostboiError` the send would have
+thrown, so the expiry check is the one you already have.
+
+Payloads are capped at **4096 bytes** of title, body and data together — checked before
+sending, like the other providers. Expo also rate-limits at 600 notifications a second
+per project and answers 429 past it; set `retries` and the built-in backoff honours its
+`Retry-After`.

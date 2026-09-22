@@ -1,0 +1,62 @@
+---
+title: Bluesky
+name: Bluesky
+description: Post to Bluesky from your app with bluesky() — a handle and an app password, zero config.
+category: Channels
+---
+
+```typescript
+import { bluesky } from "postboi"
+
+await bluesky({ message: "Postboi 0.25 is out — https://postboi.app" })
+```
+
+## Setup
+
+Create an app password in [Settings → App Passwords](https://bsky.app/settings/app-passwords)
+— never your account password — and give Postboi the pair:
+
+```bash
+# .env
+BLUESKY_HANDLE=you.bsky.social
+BLUESKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+```
+
+Self-hosting your own PDS? Set `BLUESKY_SERVICE` to it. Everyone else can leave it alone.
+
+## This one is public
+
+Every other chat platform posts somewhere private: a channel, a server, a conversation.
+Bluesky posts to **your own feed**, where anyone can read it. There is no destination to
+choose, which is why `to` does nothing here — the post lands on the account the
+credentials belong to.
+
+Worth remembering if you put Bluesky behind a multi-channel [`send()`](/send): a fallback
+chain that ends in a public post is not the same kind of fallback as one that ends in an
+email.
+
+## Titles, links and length
+
+`title` becomes the first line, with the body below it — a post record has no formatting
+of its own.
+
+Links are made clickable for you. Bluesky doesn't linkify anything itself: a URL is dead
+text unless the post carries a *facet* pointing at it, measured in UTF-8 bytes, so Postboi
+builds those from the text you send. Mentions and hashtags are not detected.
+
+A post is **300 graphemes**, not characters — one emoji family counts once. Postboi counts
+before sending, so an over-long post fails with a `too_long` error instead of a 400.
+
+## Sessions, not API keys
+
+The AT Protocol trades your app password for a session token lasting a couple of hours,
+and minting one is rate-limited to 300 a day — so a session per post would become the
+ceiling. Postboi keeps the session and re-mints it only when the server says it expired.
+Nothing to configure.
+
+## Development posts for real
+
+Like the rest of [chat](/slack), Bluesky is not intercepted in development. With no
+`BLUESKY_APP_PASSWORD` configured, posts are captured by the [dev inbox](/dev-inbox) (or
+logged) instead of erroring — with one set, they go out publicly, so keep a second account
+for that.
