@@ -1,6 +1,8 @@
 import type {
 	PreparedMessage,
 	CommonProviderOptions,
+	Defaults,
+	SendOptions,
 	ProviderError,
 	RequestSpec,
 	CancelResponse,
@@ -11,7 +13,7 @@ import type {
 	FormName,
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
-import { read_env, env_defaults } from "./env.js"
+import { read_env, env_defaults, ensure_env_loaded } from "./env.js"
 
 /** Options for the Postboi provider. */
 export type PostboiOptions = CommonProviderOptions & {
@@ -525,15 +527,33 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	#token: string | undefined
 	#host: string
 	#send_via: string | undefined
+	#own_default: Defaults | undefined
 
 	constructor({ token, base_url, send_via, ...options }: PostboiOptions = {}) {
 		// Defaults can come from the environment (POSTBOI_FROM, …); anything passed
 		// explicitly via `default` wins.
 		super({ ...options, default: { ...env_defaults(), ...options.default } })
+		// Kept so the environment can be re-read late without losing to it — see prepare_send.
+		this.#own_default = options.default
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
 		this.#send_via = send_via
 		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://postboi.app"
 		this.#host = host.replace(/\/$/, "")
+	}
+
+	/**
+	 * Re-read the environment's defaults on the send path as well as at construction, for
+	 * the same reason `#require_token` re-reads the token: on Workers the
+	 * bindings only reach the env cache once `ensure_env_loaded()` has run, and a
+	 * constructor cannot await it. Without this the first send of an isolate quietly
+	 * ignores POSTBOI_FROM, POSTBOI_LETTERHEAD and their kin, and the next one honours
+	 * them — which is worse than either answer. The layering is the constructor's:
+	 * config file, then environment, then what the caller passed.
+	 */
+	protected override async prepare_send(options: SendOptions): Promise<PreparedMessage> {
+		await ensure_env_loaded()
+		this.defaults = { ...this.defaults, ...env_defaults(), ...this.#own_default }
+		return super.prepare_send(options)
 	}
 
 	#require_token(): string {

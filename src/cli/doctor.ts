@@ -103,7 +103,7 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 						name: "config",
 						level: "warn",
 						detail: `${facts.config_file} — ${facts.config_unreachable} bundles its own server code and can't read it, so its defaults and hooks never reach a send made there`,
-						fix: `import "../${facts.config_file.replace(/\.\w+$/, "")}" in the file that sends, or set POSTBOI_* in the ${facts.config_unreachable} dashboard`,
+						fix: `import the config from the file that sends (e.g. \`import "../${facts.config_file.replace(/\.\w+$/, "")}"\`, relative to that file), or set POSTBOI_* in the ${facts.config_unreachable} dashboard`,
 					}
 				: {
 						name: "config",
@@ -246,6 +246,9 @@ function skill_check(state: DoctorFacts["skill"]): Omit<Check, "name"> {
 	}
 }
 
+/** How many source files under `convex/` are worth reading before giving up on an answer. */
+const SCAN_CAP = 200
+
 /**
  * A runtime in this project that bundles server code without a filesystem and without a
  * bundler plugin we can install — Convex, whose own bundle takes none — and that nothing
@@ -259,13 +262,15 @@ function unreachable_runtime(dir: string): string | undefined {
 	if (!existsSync(functions)) return undefined
 	try {
 		const files = readdirSync(functions, { recursive: true }) as Array<string>
-		const carried = files
-			.filter((file) => /\.(ts|mts|js|mjs)$/.test(file))
-			.slice(0, 200)
-			.some((file) => {
-				const source = readFileSync(`${functions}/${file}`, "utf8")
-				return source.includes("postboi.config") || /\bconfigure\s*\(/.test(source)
-			})
+		const sources = files.filter((file) => /\.(ts|mts|js|mjs)$/.test(file))
+		// The cap bounds the reading, not the answer. Stopping early and then warning
+		// anyway would name the one import we skipped — somebody being told to add a line
+		// their code already has is worse than not being told anything.
+		if (sources.length > SCAN_CAP) return undefined
+		const carried = sources.some((file) => {
+			const source = readFileSync(`${functions}/${file}`, "utf8")
+			return source.includes("postboi.config") || /\bconfigure\s*\(/.test(source)
+		})
 		return carried ? undefined : "Convex"
 	} catch {
 		// An unreadable tree is not a diagnosis. Say nothing rather than guess.

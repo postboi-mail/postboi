@@ -103,6 +103,20 @@ export function read_env(name: string): string | undefined {
 type AddressDefault = "from" | "to" | "cc" | "bcc" | "reply_to"
 
 /**
+ * Variables already complained about. `env_defaults()` runs once per send — `mail()`
+ * resolves its provider each time — so an unguarded warning here is one log line per
+ * email, which is how a real one stops being read. Once per name per process, the same
+ * bargain `warned_shadowed_from` strikes in mail.ts.
+ */
+const warned = new Set<string>()
+
+function warn_once(name: string, message: string): void {
+	if (warned.has(name)) return
+	warned.add(name)
+	console.warn(message)
+}
+
+/**
  * A flag from the environment, or undefined for one that isn't set. A value that is
  * neither yes nor no is **said out loud and then ignored**: these decide how mail looks,
  * and a typo that quietly meant "no" is a fortnight of unbranded email nobody notices.
@@ -112,7 +126,7 @@ function read_flag(name: string): boolean | undefined {
 	if (value === undefined || value === "") return undefined
 	if (["1", "true", "on", "yes"].includes(value)) return true
 	if (["0", "false", "off", "no"].includes(value)) return false
-	console.warn(`postboi: ${name} is "${value}", which is neither true nor false — ignoring it.`)
+	warn_once(name, `postboi: ${name} is "${value}", which is neither true nor false — ignoring it.`)
 	return undefined
 }
 
@@ -143,7 +157,8 @@ export function env_defaults(): Defaults {
 	const style = read_env("POSTBOI_STYLE")?.trim().toLowerCase()
 	if (style === "styled" || style === "plain") out.style = style as never
 	else if (style) {
-		console.warn(
+		warn_once(
+			"POSTBOI_STYLE",
 			`postboi: POSTBOI_STYLE is "${style}" — it takes "styled" or "plain". Ignoring it.`
 		)
 	}
