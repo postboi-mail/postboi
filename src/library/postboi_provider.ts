@@ -70,11 +70,18 @@ export interface SendParams {
 	fields?: Array<[string, string]>
 	/**
 	 * Put the account's letterhead — the header and footer written in the dashboard —
-	 * around `html`, in the cut named or the composer's default. The API leaves the
-	 * document itself alone; a footer's `{unsubscribe_url}` is filled from the
-	 * `List-Unsubscribe` header.
+	 * around `html`. The API leaves the document itself alone; a footer's
+	 * `{unsubscribe_url}` is filled from the `List-Unsubscribe` header.
 	 */
-	letterhead?: boolean | "styled" | "plain"
+	letterhead?: boolean
+	/**
+	 * Set `html` in the 600px column the dashboard composer sends in. Refused by the API
+	 * when the html is already a whole page or already styled — the shell sets what it
+	 * is given.
+	 */
+	shell?: boolean
+	/** The cut the letterhead and the shell are set in; `styled` when omitted. */
+	style?: "styled" | "plain"
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -1090,6 +1097,8 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			captcha_ip: message.captcha?.remoteip,
 			form: message.form ?? (message.captcha ? true : undefined),
 			letterhead: message.letterhead,
+			shell: message.shell,
+			style: message.style,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}

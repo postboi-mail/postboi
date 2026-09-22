@@ -175,12 +175,13 @@ await mail({
 })
 ```
 
-## Letterhead
+## Letterhead & the shell
 
-The **letterhead** — the header and footer your team writes once in the dashboard under
-*Messages → Templates → Letterhead* — can go on a send from code as well as on one
-written in the composer. It's off unless you ask for it, because the body of an API send
-is your document rather than ours:
+The body of a send from code is **your** document, so Postboi writes nothing into it
+unless you ask. Two things can be asked for, and a send can ask for both.
+
+**The letterhead** is the header and footer your team writes once in the dashboard under
+*Messages → Templates → Letterhead* — the masthead, the footer with the unsubscribe line:
 
 ```ts
 await mail({
@@ -193,19 +194,51 @@ await mail({
 
 The two halves are styled and put around your HTML — *inside* `<body>` when the body is
 a whole document, so nothing ends up before the doctype. Nothing else about the message
-changes: no column drawn around it, no fonts it didn't ask for.
+changes.
 
-Since the halves are the only thing we render, the dashboard's **style** switch is the
-one that has anything to act on here, and it rides the same option — a flag or a cut,
-the way `form` is a flag or a name:
+**The shell** is the 600px column the dashboard composer sends in: the sheet on its
+ground, the drawn edge with its offset shadow, the brand's three faces, and the dark
+palette for a recipient whose device asks for one. Hand it plain semantic HTML and it
+comes back a designed email:
 
 ```ts
-await mail({ …, letterhead: "plain" }) // the client's own face, flat keys
-await mail({ …, letterhead: true }) // the brand's faces — same as "styled"
+await mail({
+	to: "someone@example.com",
+	subject: "Your receipt",
+	body: "<p>Thanks for your order.</p><p><a href='https://example.com/orders/1'>View it</a></p>",
+	shell: true,
+	letterhead: true,
+})
 ```
 
+Inside the shell the composer's own block vocabulary works from code as well, because
+it is the same renderer: `<div data-button="yellow"><a href="…">View it</a></div>`
+becomes a table-based key every client agrees on, `<div data-spacer="32"></div>` a
+measured gap, `<div data-section="ink">…</div>` a coloured band around whatever it
+holds.
+
+One caveat worth reading twice: the shell **sets** what it is given. It replaces the
+styles on every tag it knows — `p`, `a`, `h1`–`h3`, `ul`, `li`, `table`, `img` and the
+rest — so a body that is already a designed email would come out with its design
+deleted. Rather than do that quietly, the API refuses: a body that is a whole HTML page,
+or that carries a `style` attribute on one of those tags, comes back as a `400` naming
+what it found. If you render your own email with [Maizzle, React Email or MJML](/templates),
+the shell is not the option you want — the letterhead on its own is.
+
+### The cut
+
+`style` is the cut anything rendered on the send is set in, `"styled"` by default:
+
+```ts
+await mail({ …, shell: true, style: "plain" })
+```
+
+`"plain"` is the same blocks in the client's own face — flat keys, no ground, no drawn
+column, no fonts asked for. It says how, not what: on its own it renders nothing, and
+one cut covers the letterhead and the shell together so they can't disagree.
+
 There is no theme to pick. Light or dark is the recipient's device's to decide, so it is
-never a setting on a message.
+never a setting on a message; both palettes go out and the device chooses.
 
 A `{unsubscribe_url}` in the footer — the usual reason to write one — fills from
 `unsubscribe_url` on the same send, the option that also sets the
@@ -221,10 +254,13 @@ await mail({
 })
 ```
 
+Braces anywhere else are yours: the fill runs on the letterhead's halves and never on
+the body you wrote.
+
 A team with no letterhead saved, or a send carrying only `text`, is a no-op rather than
 an error. A key scoped to a client workspace gets that workspace's letterhead, never the
-agency's. It's the Postboi provider's own option — the letterhead lives on your account
-— so `letterhead` is a type error under any other provider.
+agency's. All three options are the Postboi provider's own — what they ask for lives on
+your account — so naming one under any other provider is a type error.
 
 ## Team credentials
 

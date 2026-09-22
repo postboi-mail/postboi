@@ -236,10 +236,28 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.letterhead).toBe(true)
 		// What the API fills a footer's {unsubscribe_url} from.
 		expect(body.headers["List-Unsubscribe"]).toBe("<https://postboi.app/u/abc>")
+	})
 
-		// The cut rides the same option, the way a form's name rides `form`.
-		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", letterhead: "plain" })
-		expect(sent_json().letterhead).toBe("plain")
+	it("asks for the shell and the cut it is set in, and neither by default", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().shell).toBeUndefined()
+		expect(sent_json().style).toBeUndefined()
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: "<p>x</p>",
+			letterhead: true,
+			shell: true,
+			style: "plain",
+		})
+		const body = sent_json()
+		expect(body.shell).toBe(true)
+		// One cut for everything the send asks to be drawn — never one each.
+		expect(body.style).toBe("plain")
+		expect(body.letterhead).toBe(true)
 	})
 
 	it("string bodies carry no captcha fields", async () => {
