@@ -256,24 +256,6 @@ one cut covers the letterhead and the shell together so they can't disagree.
 There is no theme to pick. Light or dark is the recipient's device's to decide, so it is
 never a setting on a message; both palettes go out and the device chooses.
 
-### The preheader
-
-`preheader` is the line an inbox shows after the subject and the message itself never
-does — "Your order is on its way", where the subject is the order number:
-
-```ts
-await mail({
-	to: "someone@example.com",
-	subject: "Order #1024",
-	body: "<p>Thanks for your order.</p>",
-	preheader: "Your order is on its way",
-})
-```
-
-It is written into your HTML as a hidden div, first — ahead of a letterhead's masthead,
-because what an inbox previews is the first text it finds, and a masthead would otherwise
-be the preview. It needs no shell, and a long one is clipped rather than refused.
-
 A `{unsubscribe_url}` in the footer — the usual reason to write one — fills from
 `unsubscribe_url` on the same send, the option that also sets the
 [List-Unsubscribe headers](/tracking):
@@ -293,8 +275,28 @@ the body you wrote.
 
 A team with no letterhead saved, or a send carrying only `text`, is a no-op rather than
 an error. A key scoped to a client workspace gets that workspace's letterhead, never the
-agency's. All three options are the Postboi provider's own — what they ask for lives on
-your account — so naming one under any other provider is a type error.
+agency's.
+
+### The preheader
+
+`preheader` is the line an inbox shows after the subject and the message itself never
+does — "Your order is on its way", where the subject is the order number:
+
+```ts
+await mail({
+	to: "someone@example.com",
+	subject: "Order #1024",
+	body: "<p>Thanks for your order.</p>",
+	preheader: "Your order is on its way",
+})
+```
+
+It is written into your HTML as a hidden div, first — ahead of a letterhead's masthead,
+because what an inbox previews is the first text it finds, and a masthead would otherwise
+be the preview. It needs no shell, and a long one is clipped rather than refused.
+
+All four options are the Postboi provider's own — what they ask for lives on your
+account — so naming one under any other provider is a type error.
 
 ## Team credentials
 
