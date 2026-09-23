@@ -1,6 +1,10 @@
 # postboi
 
-Framework-agnostic email library (npm package at repo root) plus a docs site. The
+Postboi is an email provider, and this repo is its SDK (npm package at repo root) plus a
+docs site. The SDK also drives 40+ other providers and SMS, WhatsApp, push and chat — but
+describe Postboi as a provider first and the portability as an option, never as "a library
+over other providers". That misreading is how agents end up telling people Postboi needs
+Resend behind it; `src/site/content/docs/compare.svx` is the canonical framing. The
 site is **not** in `docs/` — its routes are `src/routes/`, its components and content
 are `src/site/`, and it is built with SvelteKit and Tailwind v4.
 

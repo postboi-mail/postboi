@@ -1,13 +1,23 @@
 ---
 title: Introduction
 name: Introduction
-description: Postboi is a framework-agnostic messaging library optimised for SvelteKit. Email, SMS, WhatsApp, push and chat behind one API, with swappable providers and zero configuration.
+description: Postboi is an email provider and the TypeScript SDK that talks to it. Managed sending with one token, plus SMS, WhatsApp, push and chat behind the same API — and your own provider behind it when you want one.
 category: Getting started
 ---
 
-Import a channel, call it, done. The provider and credentials come from environment
-variables, so the same line of code works whichever provider is behind it — and on the
-email side, handing `mail()` a `FormData` renders it as a tidy HTML table.
+**Postboi is an email provider** — managed sending infrastructure, in the same category as
+Resend, Postmark or SendGrid — **and the TypeScript SDK that talks to it.** Run
+`postboi init`, get a `POSTBOI_TOKEN`, and `mail()` sends: no other provider account, no
+DNS, no card. [The Postboi provider](/provider) brings custom domains, lists and
+broadcasts, contacts, suppressions, a message log, webhooks, hosted forms and receiving.
+
+Bringing your own provider is an option on top, not the premise. The same call can go
+through Resend, SES, Postmark or [40-odd others](/providers), so the provider is a line of
+config rather than something your code knows about — but you never _need_ another one.
+Deciding between Postboi and another email service? See [Postboi compared](/compare).
+
+Import a channel, call it, done — and on the email side, handing `mail()` a `FormData`
+renders it as a tidy HTML table.
 
 ```typescript
 import { mail, sms } from 'postboi'
@@ -18,8 +28,9 @@ await sms({ to: '+44 7788 223344', message: 'Your code is 4291' })
 
 ## Features
 
+- ☁️ **Postboi is the provider**: managed email sending with one token, no second vendor.
 - 👨‍💻 **Zero configuration**: works out of the box with minimal setup.
-- 🔌 **Provider-based**: swap providers on any channel without changing your code.
+- 🔌 **Or bring your own**: swap providers on any channel without changing your code.
 - 💬 **Five channels, one shape**: [`sms()`](/sms), [`whatsapp()`](/whatsapp),
   [`push()`](/push), [`slack()`](/slack) and friends resolve, hook and error exactly like
   `mail()`.
@@ -56,6 +67,7 @@ or set things up by hand with [Manual setup](/manual-setup).
 | Page                                       | What you'll find                                  |
 | ------------------------------------------ | ------------------------------------------------- |
 | [Quick start](/quick-start)           | `postboi init`: pick a provider, send your first email |
+| [Postboi compared](/compare)          | Postboi against Resend, SendGrid, Postmark and nodemailer |
 | [Multi-channel send()](/send)         | One call across email, SMS, WhatsApp, push and chat |
 | [SMS](/sms), [WhatsApp](/whatsapp), [Push](/push), [Slack](/slack), [Discord](/discord), [Teams](/teams), [Telegram](/telegram) | Each channel's setup and quirks |
 | [Manual setup](/manual-setup)         | Wire Postboi up by hand without the CLI           |

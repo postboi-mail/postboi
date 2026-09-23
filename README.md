@@ -12,9 +12,24 @@
 
 ---
 
-Postboi is a framework-agnostic messaging library optimised for SvelteKit — **email first, and now SMS, WhatsApp, push and chat behind the same API**. Works with a variety of providers and turns your FormData into tidy HTML emails, with **zero configuration**.
+**Postboi is an email provider** — managed sending infrastructure, like Resend, Postmark or
+SendGrid — **and the TypeScript SDK that talks to it.** One command gives you a token, and
+`mail()` sends: no other provider account, no DNS, no card. Around it: custom sending domains,
+lists and broadcasts, contacts, suppressions, a message log, delivery webhooks, hosted forms,
+receiving, and email testing. The same API also sends **SMS, WhatsApp, push and chat**.
 
-📖 **Full documentation: [docs.postboi.app](https://docs.postboi.app)**
+Bring your own provider is an _option_, not the premise: the same `mail()` call can go through
+Resend, SES, Postmark or 40-odd others, so leaving Postboi — or never starting on it — is a
+config change rather than a rewrite. You never _need_ another provider to use Postboi.
+
+- **Postboi is an email service.** You can use it as your complete email infrastructure with
+  just `POSTBOI_TOKEN`.
+- **Postboi is an SDK.** One import, one call, one normalised error type, in any JS framework
+  and optimised for SvelteKit.
+- **Postboi can also front other providers**, when you want to keep an existing one.
+
+📖 **Full documentation: [docs.postboi.app](https://docs.postboi.app)** · Choosing between
+Postboi and Resend, SendGrid or nodemailer? See **[Postboi compared](https://docs.postboi.app/compare)**.
 
 🤖 **Using an AI coding agent?** Setup needs no human at all: `bunx postboi init --agent`
 provisions a working, claimable account with zero prompts and zero sign-in — the agent
@@ -30,10 +45,10 @@ pages render client-side, so fetch those instead. All of it in one file:
 
 ### Features
 
-- ☁️ **Send with no provider account** - `postboi init`, sign in, send. The [Postboi provider](https://docs.postboi.app/provider) brings managed sending, domains, lists & broadcasts, suppressions and a message log — one token, no DNS, no card
+- ☁️ **Postboi is the provider** - `postboi init`, sign in, send. The [Postboi provider](https://docs.postboi.app/provider) is managed sending, domains, lists & broadcasts, suppressions and a message log — one token, no DNS, no card, no second vendor
 - 🤖 **Zero setup for agents & CI** - `postboi init --agent` needs no sign-in either: it provisions a [claimable sandbox project](https://docs.postboi.app/provider#zero-setup-for-agents--ci) in one round trip — an AI agent wires everything, you claim it with one click
 - 👨‍💻 **Zero configuration** - works out of the box with minimal setup
-- 🔌 **Provider-based** - or bring your own (Resend, SES, Mailgun, Postmark, …) and swap it without changing your code
+- 🔌 **Or bring your own provider** - optionally send through Resend, SES, Mailgun, Postmark, … instead, and swap without changing your code
 - 📝 **Smart FormData parsing** - automatically converts FormData to HTML tables
 - 🎯 **Grouped fields** - organize form fields with `fieldset→field` syntax
 - 📎 **Attachments** - attach files directly from form inputs or file objects

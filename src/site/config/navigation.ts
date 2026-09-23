@@ -46,6 +46,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "", name: "Introduction" },
 					{ slug: "quick-start", name: "Quick start" },
 					{ slug: "provider", name: "The Postboi provider" },
+					{ slug: "compare", name: "Postboi compared" },
 					{ slug: "manual-setup", name: "Manual setup" },
 				],
 			},

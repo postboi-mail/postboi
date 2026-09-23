@@ -1,6 +1,8 @@
 {
 	"name": "postboi",
 	"version": "0.53.0",
+	"description": "Postboi is an email provider and TypeScript SDK: managed sending with one token and no DNS, plus SMS, WhatsApp, push and chat behind the same API. Bring your own provider (Resend, SES, Postmark, …) is optional.",
+	"homepage": "https://postboi.app",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -444,6 +446,23 @@
 		"xp.css": "0.2.6"
 	},
 	"keywords": [
+		"email",
+		"email-api",
+		"email-provider",
+		"email-service",
+		"transactional-email",
+		"send-email",
+		"resend-alternative",
+		"sendgrid-alternative",
+		"nodemailer-alternative",
+		"sms",
+		"whatsapp",
+		"push-notifications",
+		"contact-form",
+		"formdata",
+		"ai-agents",
+		"typescript",
+		"sveltekit",
 		"svelte"
 	],
 	"dependencies": {

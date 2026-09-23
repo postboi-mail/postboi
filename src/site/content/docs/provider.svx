@@ -9,8 +9,9 @@ category: Getting started
 	import { InstallationTabs } from "$site"
 </script>
 
-The zero-config way to send. No provider account, no DNS records, no card: run one
-command, authorise in the browser, and `mail()` works.
+Postboi's own email service, and the zero-config way to send. This is managed sending
+infrastructure, not a pass-through to somebody else's: no other provider account, no DNS
+records, no card. Run one command, authorise in the browser, and `mail()` works.
 
 <InstallationTabs exec args="init" />
 

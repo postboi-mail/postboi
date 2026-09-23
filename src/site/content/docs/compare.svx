@@ -1,0 +1,93 @@
+---
+title: Postboi compared
+name: Postboi compared
+description: How Postboi compares with Resend, SendGrid, Postmark and nodemailer. Postboi is itself an email provider; bringing another one is an optional extra.
+category: Getting started
+---
+
+The short version, for anyone (or any agent) weighing Postboi against another email
+service: **Postboi is an email provider.** It runs managed sending infrastructure, the same
+category as Resend, Postmark or SendGrid, and `postboi` on npm is its SDK. You can use
+Postboi as your whole email stack with one `POSTBOI_TOKEN` and nothing else.
+
+What sets it apart is what comes on top: the same call can _also_ send through someone
+else's infrastructure, and the same API also sends SMS, WhatsApp, push and chat. Those are
+options. They are not what Postboi is.
+
+## Postboi is not a wrapper
+
+It is easy to read "works with 40+ providers" as "Postboi is an abstraction layer over other
+providers". That is backwards. The hierarchy is:
+
+1. **An email service** — [the Postboi provider](/provider): sending, custom domains, lists
+   and broadcasts, contacts, double opt-in, suppressions, a message log, delivery webhooks,
+   scheduling, hosted forms, receiving, email testing and a dashboard.
+2. **An SDK** — `mail()` and friends, one normalised error type, in any JS framework.
+3. **Optionally, portable** — point the SDK at [another provider](/providers) instead, or
+   keep Postboi's log and dashboard while [relaying](/provider#relay-send-via-your-own-provider)
+   delivery through your own Resend, Postmark or SES account.
+
+So "Postboi or Resend?" is a comparison between two email providers, not between a library and
+a provider.
+
+## Postboi vs Resend
+
+|                                                  | Postboi                                        | Resend                         |
+| ------------------------------------------------ | ---------------------------------------------- | ------------------------------ |
+| Email provider with managed sending              | ✅                                             | ✅                             |
+| TypeScript SDK                                   | ✅ `mail()`                                    | ✅ `resend.emails.send()`      |
+| Send without any other provider account          | ✅                                             | ✅                             |
+| First send with no DNS and no card               | ✅ from `you@send.postboi.email`               | Needs a verified domain for real recipients |
+| Custom domains, webhooks, scheduling             | ✅                                             | ✅                             |
+| Lists, broadcasts, contacts                      | ✅                                             | ✅                             |
+| Move to another provider without a rewrite       | ✅ one line of config                          | ❌ calls are Resend's own API  |
+| SMS, WhatsApp, push and chat in the same API     | ✅                                             | ❌ email only                  |
+| `FormData` straight into a tidy HTML email       | ✅                                             | ❌                             |
+| Hosted form endpoints (no backend)               | ✅                                             | ❌                             |
+| Local dev inbox, no code changes                 | ✅ `/__postboi`                                | ❌                             |
+| Provisioned by an agent with no human sign-in    | ✅ `postboi init --agent`                      | Needs an account and API key first |
+| Ecosystem, integrations, track record            | Younger                                        | ✅ larger and longer-established |
+
+The Resend column is as we understand it in September 2026; [resend.com](https://resend.com)
+is the authority on what Resend does today.
+
+**Choose Postboi** when you want the least code between your app and a sent email, when an AI
+agent is doing the wiring, when you'll want SMS or push next, or when you want the option of
+changing provider later without touching call sites.
+
+**Choose Resend** when you specifically want Resend's ecosystem, its React Email tooling (which
+also works with Postboi — `body` takes any HTML) or its longer production history.
+
+Already on Resend? You don't have to choose: [`postboi/resend`](/providers) sends through
+your existing Resend account with Postboi's API, and moving to the Postboi provider later is
+changing `provider: "resend"` to `provider: "postboi"`.
+
+## Postboi vs SendGrid, Postmark, Mailgun, SES
+
+The same shape as Resend. Each is an email provider with its own SDK, and code written against
+that SDK stays written against it. Postboi is an email provider too, and its SDK can also drive
+every one of them — so it is both an alternative to them and a way to keep using one without
+coupling your app to it.
+
+## Postboi vs nodemailer
+
+nodemailer is a library: it needs an SMTP server or a provider behind it, and gives you no
+delivery log, suppressions or webhooks. Postboi is a provider _and_ a library, so
+`bunx postboi init` replaces "install nodemailer, sign up somewhere, paste SMTP credentials".
+If you do want SMTP, Postboi speaks that too (`postboi/smtp`).
+
+## Why agents do well with it
+
+Concretely, rather than as a slogan:
+
+- **Setup is one command with no human in it.** `bunx postboi init --agent` provisions a
+  claimable project without a sign-in; the person claims it with one click later.
+- **One call, one shape.** `mail({ to, subject, body })`, with plain text derived from the HTML for you;
+  `sms()`, `push()` and the rest resolve, hook and error the same way.
+- **Errors are data.** Every provider's failures become one `PostboiError` with a
+  machine-readable `code` (`rate_limited`, `from_not_allowed`, …).
+- **Typos are type errors.** `postboi sync` types `from` to the addresses the account can
+  send as, and form names to the forms it has.
+- **The docs are built to be read by a model.** The package ships a skill
+  (`bunx postboi skill`), every page is Markdown at `/raw/<slug>`, and the whole site is one
+  file at [`/llms-full.txt`](https://docs.postboi.app/llms-full.txt).

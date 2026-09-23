@@ -11,13 +11,18 @@ export const siteConfig = {
 	url: "https://docs.postboi.app",
 	/** Default SEO description for the homepage and fallback metadata. */
 	description:
-		"A framework-agnostic messaging library optimised for SvelteKit. Email, SMS, WhatsApp, push and chat behind one API — swappable providers, zero configuration.",
+		"An email provider and TypeScript SDK: managed sending with one token and no DNS, plus SMS, WhatsApp, push and chat behind the same API. Bringing your own provider is optional.",
 	/** Author shown in metadata and structured data. */
 	author: "Darby Manning",
 	/** Primary SEO keywords for indexing and discovery. */
 	keywords: [
 		"postboi",
 		"email",
+		"email provider",
+		"email service",
+		"resend alternative",
+		"sendgrid alternative",
+		"email for ai agents",
 		"send sms javascript",
 		"whatsapp api javascript",
 		"web push notifications library",

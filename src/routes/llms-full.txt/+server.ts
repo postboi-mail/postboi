@@ -26,6 +26,8 @@ export const GET: RequestHandler = async () => {
 		"",
 		`> ${siteConfig.name} — ${siteConfig.description}`,
 		"",
+		"Postboi is itself an email provider, and `postboi` on npm is its SDK: `POSTBOI_TOKEN` is the whole setup, with no other provider account. Sending through another provider (Resend, SES, Postmark, …) is an optional feature, not the premise.",
+		"",
 		"This file contains the complete documentation as a single Markdown document.",
 		"A per-page index is available at `/llms.txt`, and individual pages at `/raw/<slug>`.",
 	].join("\n")
