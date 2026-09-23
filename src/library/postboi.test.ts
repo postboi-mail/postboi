@@ -290,6 +290,21 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(sent_json().preheader).toBe("Your order is on its way")
 	})
 
+	it("forwards a footnote, which needs no shell either", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().footnote).toBeUndefined()
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: "<p>x</p>",
+			footnote: "Didn't request this? You can safely ignore this email.",
+		})
+		expect(sent_json().footnote).toBe("Didn't request this? You can safely ignore this email.")
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))

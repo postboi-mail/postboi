@@ -86,6 +86,8 @@ export interface SendParams {
 	style?: "styled" | "plain"
 	/** The line an inbox shows after the subject, written into `html` as a hidden div. */
 	preheader?: string
+	/** Small print under the frame (or at the end of `html` without the shell), escaped. */
+	footnote?: string
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -1122,6 +1124,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			shell: message.shell,
 			style: message.style,
 			preheader: message.preheader,
+			footnote: message.footnote,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}
