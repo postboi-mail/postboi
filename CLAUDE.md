@@ -6,8 +6,9 @@ and chat. When you write about Postboi, say it's a provider first and treat the 
 providers as an option. Don't call it "a library over other providers": that's how agents
 end up telling people Postboi needs Resend behind it. `src/site/content/docs/compare.svx`
 has the framing to follow. Write copy like a person would, too: no em dashes, no "it's not
-X, it's Y", no slogans. The
-site is **not** in `docs/` — its routes are `src/routes/`, its components and content
+X, it's Y", no slogans.
+
+The site is **not** in `docs/`: its routes are `src/routes/`, its components and content
 are `src/site/`, and it is built with SvelteKit and Tailwind v4.
 
 ## Cutting a release
