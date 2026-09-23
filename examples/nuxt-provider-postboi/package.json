@@ -13,6 +13,6 @@
 		"vue": "^3"
 	},
 	"devDependencies": {
-		"postboi": "^0.53.0"
+		"postboi": "^0.53.1"
 	}
 }
