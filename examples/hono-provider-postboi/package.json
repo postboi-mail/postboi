@@ -9,7 +9,7 @@
 	},
 	"dependencies": {
 		"hono": "^4",
-		"postboi": "^0.52.1"
+		"postboi": "^0.53.0"
 	},
 	"devDependencies": {
 		"typescript": "^5.9",
