@@ -38,13 +38,13 @@ import { mail } from "postboi"
 await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
-| Field                                    | Takes                                                                                                            |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `body`                                   | HTML string, `FormData`, plain object of fields, or a **promise** of any (`body: request.formData()` — no await) |
-| `attachments`                            | one `File` or an array of them, straight from a file input                                                       |
-| `to` `from` `cc` `bcc` `reply_to`        | `"a@b.c"`, `"Name <a@b.c>"`, `{ address, name }`, or arrays                                                      |
-| rest of `SendOptions`                    | `headers`, `tags`, `idempotency_key`, `scheduled_at`, `tracking`, `unsubscribe_url`, `captcha` — `/raw/api`      |
-| `shell` `letterhead` `style` `preheader` | Postboi provider only: branded column, header/footer, and `data-button` blocks. See [Templates](#templates)      |
+| Field                                               | Takes                                                                                                            |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `body`                                              | HTML string, `FormData`, plain object of fields, or a **promise** of any (`body: request.formData()` — no await) |
+| `attachments`                                       | one `File` or an array of them, straight from a file input                                                       |
+| `to` `from` `cc` `bcc` `reply_to`                   | `"a@b.c"`, `"Name <a@b.c>"`, `{ address, name }`, or arrays                                                      |
+| rest of `SendOptions`                               | `headers`, `tags`, `idempotency_key`, `scheduled_at`, `tracking`, `unsubscribe_url`, `captcha` — `/raw/api`      |
+| `shell` `letterhead` `style` `preheader` `footnote` | Postboi provider only: branded column, header/footer, and `data-button` blocks. See [Templates](#templates)      |
 
 A plain-text alternative is derived from the HTML automatically (`auto_text`, on by default).
 
@@ -285,7 +285,7 @@ await mail({
 - **A button's `div` holds exactly one `<a>`.**
 - **The body must be a fragment.** A whole `<!doctype>` document is a 400.
 - **Styles you write inline still win** over the shell's.
-- `letterhead: true` adds the team's header and footer. `style: "plain"` gives the same blocks without the brand's drawing. `preheader` sets the inbox preview line.
+- `letterhead: true` adds the team's header and footer. `style: "plain"` gives the same blocks without the brand's drawing. `preheader` sets the inbox preview line. `footnote` is one send's line of small print under the frame ("Didn't request this? …"), plain text.
 - **Long URLs wrap inside the column**, so a "paste this link" fallback is fine as it is.
 
 If a complete document is already rendered (Maizzle, React Email, MJML), use `letterhead` on its own, not the shell. `/raw/provider` (Letterhead & the shell)

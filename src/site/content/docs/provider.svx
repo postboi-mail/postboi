@@ -331,13 +331,38 @@ It is written into your HTML as a hidden div, first — ahead of a letterhead's 
 because what an inbox previews is the first text it finds, and a masthead would otherwise
 be the preview. It needs no shell, and a long one is clipped rather than refused.
 
-All four options are the Postboi provider's own — what they ask for lives on your
+### The footnote
+
+`footnote` is one send's line of small print under the message — the reassurance under
+a sign-in email, which says something different on every kind of mail the team sends:
+
+```ts
+await mail({
+	to: "someone@example.com",
+	subject: "Sign in to Acme",
+	body: `<h1>Sign in to Acme</h1><div data-button="ink"><a href="${url}">Sign in</a></div>`,
+	shell: true,
+	letterhead: true,
+	footnote: "Didn't request this? You can safely ignore this email.",
+})
+```
+
+With the shell it sits on the ground under the frame, centred, in the muted ink. The
+letterhead is what stays the same: its header and footer can each be set **outside the
+frame** on the dashboard's Letterhead page, so a logo can sit in the sheet while the
+address and the unsubscribe line sit under it. A footnote goes nearest the message —
+after a footer that is in the frame, before one that is outside it. Without the shell
+there is no frame to be under, and it is simply the last thing in the body.
+
+It is plain text: escaped, with line breaks kept, and at most 500 characters.
+
+All five options are the Postboi provider's own — what they ask for lives on your
 account — so naming one under any other provider is a type error.
 
 ### Saying it once
 
 How mail looks is usually a project-level decision, not a per-call one. Three of the
-four can be defaulted, and a send that names one still wins:
+five can be defaulted, and a send that names one still wins:
 
 ```ts
 // postboi.config.ts
@@ -355,8 +380,8 @@ just looks wrong a fortnight later. `bunx postboi doctor` says so when it spots 
 shape, and importing the config from the file that sends (`import "../postboi.config"`)
 is the other way out — importing it registers it.
 
-`preheader` is deliberately not defaultable: it describes one message, and the same
-line on every email is worse than none.
+`preheader` and `footnote` are deliberately not defaultable: each describes one message,
+and a line that is the same on every email belongs in the letterhead.
 
 There is a third place to say it, and it reaches every runtime because none of this is
 involved: the **Sends from your code** switch on the dashboard's Letterhead page. That

@@ -202,6 +202,9 @@ export type StyleOption = PostboiOption<EmailStyle>
 /** The line an inbox shows after the subject — see {@link SendOptions.preheader}. */
 export type PreheaderOption = PostboiOption<string>
 
+/** A line of small print under the message — see {@link SendOptions.footnote}. */
+export type FootnoteOption = PostboiOption<string>
+
 /**
  * The variables one WhatsApp template takes, per the generated types — the placeholder
  * names in its approved body, so they're required rather than guessed at. Any
@@ -394,6 +397,17 @@ export interface SendOptions {
 	 * by every other provider.
 	 */
 	preheader?: PreheaderOption
+	/**
+	 * A line of small print under the message, for this send only — "Didn't request
+	 * this? You can safely ignore this email." The letterhead is the team's and the same
+	 * on every send; this is the part that changes per send.
+	 *
+	 * With {@link SendOptions.shell} it sits on the ground under the frame, after a
+	 * letterhead footer that is inside the frame and before one the team set outside it.
+	 * Without the shell it is the last thing in the body. Plain text: it is escaped, and a
+	 * line break is kept. At most 500 characters. Ignored by every other provider.
+	 */
+	footnote?: FootnoteOption
 }
 
 /**
@@ -504,6 +518,8 @@ export interface PreparedMessage {
 	style?: EmailStyle
 	/** The line an inbox shows after the subject — see {@link SendOptions.preheader}. */
 	preheader?: string
+	/** Small print under the message — see {@link SendOptions.footnote}. */
+	footnote?: string
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
 	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi
@@ -1288,6 +1304,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			shell: options.shell ?? this.defaults.shell,
 			style: options.style ?? this.defaults.style,
 			preheader: options.preheader,
+			footnote: options.footnote,
 			fields,
 		}
 	}
