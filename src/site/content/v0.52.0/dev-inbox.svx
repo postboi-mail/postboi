@@ -1,0 +1,262 @@
+---
+title: Dev inbox
+name: Dev inbox
+description: A local inbox that catches everything your app sends in development — email, texts, WhatsApp, chat and push — so you can read the real thing instead of a console dump.
+category: Guides
+---
+
+Messages you send while building have to go somewhere. Sending them for real means a
+stray customer address is one typo away (and on SMS, a real bill); printing them to the
+terminal means you never see the thing you're actually building.
+
+So Postboi ships a local inbox. Start your dev server and everything lands at
+`/__postboi` instead of going out — mail with rendered HTML, headers and attachments, and
+[texts](/sms), [WhatsApp messages](/whatsapp), [chat posts](/slack) and
+[pushes](/push) alongside them.
+
+**Your code doesn't change.** No `preview()`, no `if (dev)`, no separate provider. The
+same calls that send in production are captured in development.
+
+## Vite projects — nothing to run
+
+If you have the [`postboi/vite`](/cloudflare-workers#the-config-file) plugin in your
+`vite.config.ts` (`postboi init` adds it), the inbox is already there:
+
+```bash
+bun run dev
+```
+
+```
+  ➜  Local:    http://localhost:5173/
+  ➜  Postboi:  dev inbox at http://localhost:5173/__postboi
+```
+
+It rides on the dev server you already started — no extra port, no second terminal. That
+covers SvelteKit, Astro, Nuxt, Remix and plain Vite.
+
+Because it's mounted by Vite's `configureServer` hook, which only ever runs in dev, the
+inbox cannot end up in a production build.
+
+## Everything else — `postboi dev`
+
+Express, Hono, Next.js and bare `wrangler dev` have no Vite to hang it off, so run the
+inbox yourself:
+
+```bash
+bunx postboi dev
+```
+
+```
+  Postboi dev inbox: http://localhost:1080/__postboi
+  Mail from this project is captured here instead of being sent.
+```
+
+It advertises its port in `node_modules/.postboi/`, so an app started in the same project
+directory finds it with nothing configured. Running somewhere else — another directory, a
+container, a different runtime — set `POSTBOI_INBOX` to the port:
+
+```bash
+POSTBOI_INBOX=1080 bun run dev
+```
+
+## Just looking at it
+
+`--demo` fills the inbox with sample captures from every channel — mail (a styled HTML
+message, a FormData table with an attachment, a text-only body), a text thread, a WhatsApp
+template, one conversation per chat platform, and a couple of notifications, plus a
+scheduled send and a cancelled one — so there's something to look at without wiring an app
+to it:
+
+```bash
+bunx postboi dev --demo
+```
+
+It re-seeds on every start, which also makes it the way to work on the inbox itself: run it
+under a file watcher and an edit restarts the server with the sample captures still there.
+
+```bash
+bun --watch src/cli/index.ts dev --demo
+```
+
+## What gets captured
+
+**Everything**, including a provider with real, working credentials. That's the point: a
+laptop should not be able to mail a real person because a test fixture had a real address
+in it. With the inbox running, `mail()` never reaches a provider.
+
+The other channels land here too, each by its own rule:
+
+- **[SMS](/sms) and [WhatsApp](/whatsapp)** are intercepted in development whether or not
+  an inbox is running — a stray text costs money and can't be recalled. With an inbox up,
+  the capture lands there; without one, it's printed to the console.
+- **Chat ([Slack](/slack), [Discord](/discord), [Teams](/teams), [Telegram](/telegram))
+  and [push](/push)** send for real in development once configured (posting to your own
+  Slack is usually the point). Unconfigured, their dev fallback captures to the inbox
+  instead of erroring.
+
+Two guards keep that from ever biting a deploy:
+
+- It only happens when `NODE_ENV` is exactly `development`. An unrecognised environment is
+  treated as production, so nothing is ever silently swallowed on a server.
+- If the inbox isn't reachable — you killed the dev server, the port moved — the message is
+  **printed to the console**, never sent. A send you thought was captured can't quietly
+  become real mail.
+
+> **On an HTTPS dev server**, the inbox is served over HTTPS too — it's mounted on that same
+> server — and Postboi works this out for itself. Its certificate doesn't need to be one
+> anything trusts. If you're pointing at an inbox by hand, `POSTBOI_INBOX` takes a whole URL
+> as well as a bare port:
+>
+> ```bash
+> POSTBOI_INBOX=https://localhost:5173 bun run dev
+> ```
+
+## Turning it off
+
+To send for real from your machine, pick whichever fits:
+
+```ts
+// postboi.config.ts
+import { config } from 'postboi'
+
+export default config({
+	dev: { inbox: false },
+})
+```
+
+```bash
+POSTBOI_INBOX=off bun run dev
+```
+
+```ts
+// vite.config.ts — don't serve it at all
+postboi({ inbox: false })
+```
+
+## Reading the mail
+
+The inbox lists messages newest-first and shows each one four ways:
+
+| Tab             | What it shows                                                       |
+| --------------- | ------------------------------------------------------------------- |
+| **Message**     | The HTML, rendered in a sandboxed frame — scripts blocked, as a real client would |
+| **Plain Text**  | The `text` part, including the one [auto-derived](/config) from your HTML |
+| **Source**      | The raw HTML, for when a provider mangles something                 |
+| **Report**      | The [email-testing](/email-testing) analysis over what you sent — client compatibility, clipping, dead links |
+| **Attachments** | Every file, downloadable, with its type and size                    |
+
+Above them: `from`, `to`, `cc`, `bcc` and `reply_to` exactly as the provider would have
+received them — after defaults are applied and addresses parsed. If `reply_to` isn't what
+you expected, this is where you find out.
+
+The Report tab can also photograph the capture in **real clients** — Outlook on Windows,
+Gmail, Apple Mail — when a hosted [Postboi](https://postboi.app) account is connected: set
+`POSTBOI_TOKEN` (your API token) and a **Photograph in real clients** button appears. One
+click runs the capture through the hosted [testing pipeline](/email-testing) and the
+screenshots develop right there in the tab. Every client on a run is one rendered preview
+from the account's monthly allowance, so the button never fires on its own.
+
+Messages live in memory for the life of the dev server. Restarting it empties the inbox.
+**Prev** and **Next** at the bottom of the reader step through the mailbox without going
+back to the list.
+
+### Folders
+
+The list is an outbox, not an inbox — these are messages on their way out, caught before
+they went. The tabs carry their counts:
+
+| Folder        | What's in it                                                          |
+| ------------- | --------------------------------------------------------------------- |
+| **Outbox**    | Everything still going out — Sent and Scheduled together                |
+| **Sent**      | Went immediately, or its scheduled time has passed                      |
+| **Scheduled** | Sent with [`scheduled_at`](/scheduling), still ahead of its time         |
+| **Deleted**   | Called off with [`cancel()`](/scheduling#cancelling-a-scheduled-send)   |
+
+```ts
+const { id } = await mail({
+	to: 'ada@example.com',
+	subject: 'Reminder',
+	body: '<p>See you tomorrow.</p>',
+	scheduled_at: { days: 1 }
+})
+
+await cancel(id) // moves it to Deleted
+```
+
+Nothing is really queued — the inbox captured these instead of sending them — so a
+scheduled message crossing its time only moves folders while the page is open.
+
+> [`mail.messages.reschedule`](/scheduling#rescheduling) is a provider API call rather than
+> a send, so it doesn't pass through the inbox. A captured message keeps the time it was
+> captured with.
+
+### Every channel opens as its own app
+
+Mail opens in the reader. Everything else opens as the application it belongs to,
+each in its own window on the desktop:
+
+- **WhatsApp** gets a WhatsApp window — brand green, date chips, template cards, and
+  two grey ticks that will never turn blue.
+- **Slack, Discord, Teams and Telegram** share one chat window that dresses as
+  whichever platform the message was bound for. A chat whose platform isn't known
+  falls back to a Messenger window of a suspiciously familiar vintage — the Nudge
+  still works.
+- **Push** pulls down a notification shade, every notification on one panel,
+  delivered to 0 devices.
+- **SMS** is the exception to all of it: a text lands on a handset, so a handset is
+  what opens — a Pokia, an indestructible blue brick with no window frame at all,
+  dragged around by its body like Winamp. Click a text on the screen to read it, scroll
+  it with the wheel or the two curved keys, and power the thing off from the button on
+  its crown. The keypad types, and the letters printed on the keys still spell
+  something.
+
+The desktop has one other icon on it, and it isn't a mail client. Its weapon sprites come
+from the [Freedoom](https://github.com/freedoom/freedoom) project, under the 3-clause BSD
+licence — the notice ships with the package as `FREEDOOM-LICENSE.txt`.
+
+Conversations thread by channel and destination — send three texts to the same number
+and the phone reads them as one inbox. Channel details ride along in each skin: SMS
+shows its segment count and encoding (what your provider would have billed), WhatsApp
+shows the template, language and variables, push shows the click-through URL and data
+payload. Every window is a child of the app: minimise Postboi Local and they all duck
+down with it to reveal the desktop, restore it and the same set comes back.
+
+### Options
+
+The inbox is dressed as a mail client of a certain vintage, sound and all. Both the sound
+and the sign-on screen can start off, for everyone on the project:
+
+```ts
+// vite.config.ts
+postboi({ inbox: { sounds: false, intro: false } })
+```
+
+```bash
+bunx postboi dev --no-sound --no-intro
+```
+
+These set what the page *starts* with; the toolbar toggle still works, and a viewer's own
+choice is remembered and wins. `inbox: false` disables the whole thing.
+
+> The desktop behind the app plays a short clip, which streams rather than shipping in the
+> package — the only thing here that reaches the network. If it can't, nothing breaks and
+> nothing is logged. **No mail ever leaves your machine**; the capture path is unrelated.
+
+## Tests still use the mock
+
+The inbox is for reading mail with your eyes. In tests, keep using
+[`postboi/mock`](/providers#mock-provider), which captures to `sent` with no server
+involved:
+
+```ts
+import Mock from 'postboi/mock'
+
+const mail = new Mock({ default: { from: 'no-reply@example.com' } })
+await mail.send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
+
+expect(mail.sent).toHaveLength(1)
+```
+
+> The inbox stands in front of **sending** only. `mail.lists`, `mail.contacts` and the other
+> [Postboi provider](/provider) namespaces still talk to the real API in development —
+> managing an audience isn't something you'd want faked.

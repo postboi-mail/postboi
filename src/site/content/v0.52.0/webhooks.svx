@@ -1,0 +1,344 @@
+---
+title: Webhooks
+name: Webhooks
+description: Receive delivery events (delivered, opened, clicked, bounced) normalized across every provider, with signatures verified.
+category: Guides
+---
+
+Sending is half the story. Providers also *report back* (delivery confirmations, opens,
+clicks, bounces, spam complaints) via webhooks. `postboi/webhooks` receives those the
+same way postboi sends: **one normalized shape, any provider**. Point your provider's
+webhook at an endpoint, hand postboi the request, and get typed events out, signature
+verification included.
+
+```typescript
+import { receive } from 'postboi/webhooks'
+import { mail } from 'postboi'
+
+export async function POST(request: Request) {
+	const events = await receive(request)
+
+	for (const event of events) {
+		if (event.type === 'opened') {
+			console.log(`${event.email} opened in ${event.client?.name} on ${event.client?.device}`)
+		}
+		if (event.type === 'bounced' && event.bounce?.category === 'hard') {
+			await mail.suppressions.add(event.email)
+		}
+	}
+
+	return Response.json({ received: events.length })
+}
+```
+
+Like `mail()`, `receive()` is zero-config: the provider comes from `POSTBOI_PROVIDER` /
+`postboi.config.ts` / a `POSTBOI_TOKEN`, and the signing secret from the provider's
+`<PROVIDER>_WEBHOOK_SECRET` env var. Both can be passed explicitly:
+
+```typescript
+const events = await receive(request, { provider: 'resend', secret: RESEND_WEBHOOK_SECRET })
+```
+
+## One line per framework
+
+You rarely need to call `receive()` yourself: `webhook()` wraps it in the response
+contract providers expect — 200 on success, 401 on a bad signature, 400 on a bad
+payload, 500 when your handler throws so the provider retries — and takes the request
+in whichever shape your framework hands it over. A web `Request` (Next.js, Workers,
+plain fetch handlers) and a context object carrying `.request` (SvelteKit, Astro,
+Remix) both work, so the same line is the whole endpoint in all of them:
+
+```typescript
+// Next.js app/webhooks/route.ts · an Astro APIRoute · a Remix action ·
+// a SvelteKit +server.ts · a Worker fetch branch — identical in each:
+import { webhook } from 'postboi/webhooks'
+
+export const POST = webhook(async (event) => {
+	if (event.type === 'opened') {
+		console.log(`${event.email} opened in ${event.client?.name}`)
+	}
+})
+```
+
+Hono keeps the raw request one level deeper — unwrap it in place:
+
+```typescript
+app.post('/webhooks', (c) => webhook(handler)(c.req.raw))
+```
+
+### Express and plain node:http
+
+Express is where webhook endpoints classically break: signatures verify over the
+request's **exact raw bytes**, and a body parser mounted in front of the route rewrites
+them — verification then fails forever, with nothing to say why. `webhook.node()` reads
+the raw stream itself, so there's no parser to misconfigure:
+
+```javascript
+app.post('/webhooks', webhook.node(async (event) => {
+	console.log(`${event.type} — ${event.email}`)
+}))
+```
+
+A global `express.urlencoded()` is fine (webhook bodies are JSON, so it never touches
+them) — just don't mount a JSON parser ahead of this route.
+
+On SvelteKit, `postboi/kit` re-exports `webhook()` with the `RequestEvent` type
+already narrowed, so imports stay consistent with `mail` and `action` from the same
+module.
+
+## The event shape
+
+Every provider's payload normalizes to a `WebhookEvent`:
+
+```typescript
+interface WebhookEvent {
+	type: 'sent' | 'delivered' | 'delayed' | 'bounced' | 'complained'
+	    | 'opened' | 'clicked' | 'unsubscribed' | 'failed' | 'received'
+	provider: string      // "resend", "postmark", …
+	message_id?: string   // matches the id send() returned, where the provider allows
+	email?: string        // the recipient this event is about
+	channel?: Channel     // "sms" | "whatsapp"; absent means email
+	phone?: string        // sms/whatsapp: the number, in E.164 — never in `email`
+	timestamp?: Date
+	subject?: string
+	tags?: Array<string>
+	url?: string          // clicked events: the link
+	bounce?: { category: 'hard' | 'soft' | 'suppressed' | 'unknown'; detail?: string }
+	client?: EmailClient  // opened/clicked, see below
+	ip?: string
+	body?: { html?: string; text?: string }  // received events: the message
+	form?: { id: string; name: string }      // Postboi: the form a submission was filed under
+	fields?: Array<[string, string]>         // Postboi: the submission's fields, in order
+	raw: unknown          // the untouched provider payload
+}
+```
+
+On the Postboi provider, every event about a form submission — `sent` through `clicked` —
+names the form and carries the fields it was submitted with, so a handler that files
+submissions somewhere else has the data rather than an email to scrape it from.
+
+## Mail coming back
+
+`received` is the one event that isn't about a send: someone wrote to your
+[sending address](/provider#replies) or your
+[reply subdomain](/provider#receiving-on-your-own-domain). It reads the other way
+round from the rest —
+`email` is the person who wrote to you, and `message_id` is the send they were replying
+to, when we can tell. Lettermint's inbound routes and Sequenzy's tracked replies arrive
+the same way:
+
+```typescript
+export const POST = webhook(async (event) => {
+	if (event.type === 'received') {
+		await open_ticket({
+			from: event.email ?? event.phone, // a number when they wrote over WhatsApp
+			subject: event.subject,
+			body: event.body?.text ?? event.body?.html,
+			about: event.message_id, // the send being answered, if any
+		})
+	}
+})
+```
+
+On WhatsApp via [Meta's Cloud API](/whatsapp#delivery-receipts-and-replies) it is a
+message to your number: `phone` is the person, `body.text` is what they said, and
+`message_id` is the send they replied to when they used WhatsApp's reply. Providers
+without inbound never emit it.
+
+## Text messages
+
+The same events cover [SMS](/sms#delivery-receipts): `channel` says `"sms"` (absent
+still means email), and the number is in `phone` — never in `email`, so a handler that
+reads `event.email` is never handed a phone number. A text that reached the handset is
+`delivered`; one the carrier gave up on is `failed`, with the carrier's code in
+`bounce.detail`; one it is still retrying is `delayed`. Which way they arrive depends on
+the provider. **The SMS Works** pushes account-wide delivery reports, so it is a
+`receive()` provider like any of the email ones — `provider: 'smsworks'`, verified with
+`SMSWORKS_WEBHOOK_SECRET` as `?token=…` (see the [table below](#verification)).
+**Twilio** sets its callbacks per message, so it is [polled](#providers-that-dont-push-poll).
+Both read an inbound reply for one thing: a reply that is an
+[opt-out keyword](/sms#opt-outs) is an `unsubscribed` event for the number that sent it.
+
+## Who opened it, and on what
+
+On opens and clicks, most providers report the recipient's user-agent. postboi parses it
+**locally** (a pure function: no lookup service, nothing leaves your server) into:
+
+```typescript
+interface EmailClient {
+	name?: string   // "Apple Mail", "Gmail", "Outlook", "Chrome", …
+	os?: string     // "iOS", "macOS", "Windows", …
+	device: 'desktop' | 'mobile' | 'tablet' | 'unknown'
+	user_agent: string
+}
+```
+
+So `event.client` answers "opened in Apple Mail on an iPhone" out of the box. Two honest
+caveats: proxied opens (Gmail, Yahoo fetch the pixel on the recipient's behalf) identify
+the mailbox provider but hide the device, and Apple Mail Privacy Protection means open
+events generally are an approximation, whatever the provider.
+
+## Verification
+
+Verification is **fail-closed**: if no secret is configured, `receive()` throws rather
+than silently accepting unauthenticated requests. Every comparison is timing-safe, and
+schemes with timestamps get replay protection.
+
+Providers fall into three camps:
+
+| Provider | Scheme | Secret to set |
+| -------- | ------ | ------------- |
+| the Postboi provider | Signed (standard-webhooks HMAC) | `POSTBOI_WEBHOOK_SECRET`, the `whsec_…` from the dashboard |
+| Resend | Signed (Svix HMAC) | `RESEND_WEBHOOK_SECRET`, the `whsec_…` from the dashboard |
+| SendGrid | Signed (ECDSA P-256) | `SENDGRID_WEBHOOK_SECRET`, the Signed Event Webhook *public key* |
+| Mailgun | Signed (HMAC timestamp+token) | `MAILGUN_WEBHOOK_SECRET`, the webhook signing key |
+| MailerSend | Signed (HMAC of body) | `MAILERSEND_WEBHOOK_SECRET` |
+| Mailtrap | Signed (HMAC of body) | `MAILTRAP_WEBHOOK_SECRET` |
+| Mandrill | Signed (HMAC of URL + params) | `MANDRILL_WEBHOOK_SECRET`; behind a proxy also set `MANDRILL_WEBHOOK_URL` to the exact configured URL |
+| MailPace | Signed (Ed25519) | `MAILPACE_WEBHOOK_SECRET`, the public verification key |
+| Lettermint | Signed (HMAC timestamp+body, 5-minute replay window) | `LETTERMINT_WEBHOOK_SECRET`, the webhook's signing secret |
+| Unosend | Signed (HMAC of body) | `UNOSEND_WEBHOOK_SECRET`, the `whsec_…` signing secret |
+| Sequenzy | Signed (HMAC timestamp+body, 5-minute replay window) | `SEQUENZY_WEBHOOK_SECRET`, the endpoint's `whsec_…` signing secret; several comma-separated during a rotation |
+| Meta (WhatsApp Cloud API) | Signed (`X-Hub-Signature-256`, HMAC of body) | `META_WEBHOOK_SECRET`, the app secret from the app's Basic Settings — plus `META_WEBHOOK_VERIFY_TOKEN` for the [handshake](#metas-endpoint-handshake) |
+| Loops | Signed (standard-webhooks HMAC) | `LOOPS_WEBHOOK_SECRET`, the `whsec_…` signing secret from Settings → Webhooks |
+| AhaSend | Signed (standard-webhooks HMAC, keyed with the literal secret) | `AHASEND_WEBHOOK_SECRET`, the webhook's secret exactly as shown when it was created |
+| Customer.io | Signed (HMAC timestamp+body, 5-minute replay window) | `CUSTOMERIO_WEBHOOK_SECRET`, the reporting webhook's signing key |
+| SocketLabs | Secret key in the body | `SOCKETLABS_WEBHOOK_SECRET`, the endpoint's secret key — set it before pressing Validate, since the `Validation` handshake is verified like any other request and then echoed back by `webhook()` for you |
+| Postmark, Brevo, SparkPost, Mailjet, ZeptoMail, Elastic Email, Plunk, SMTP2GO, Postal, Infobip, SendPulse | Shared secret | `<PROVIDER>_WEBHOOK_SECRET`, a token you make up; put the same value in the webhook URL as `?token=…` (or the provider's auth-header option) |
+| The SMS Works (SMS) | Shared secret | `SMSWORKS_WEBHOOK_SECRET`, a token you make up, as `?token=…` on the delivery-report URL (Delivery Reports → Webhook Configuration) — or the basic-auth password on a reply-number webhook |
+| Amazon SES, Scaleway | Shared secret over SNS | `SES_WEBHOOK_SECRET` / `SCALEWAY_WEBHOOK_SECRET` as `?token=…` on the subscription URL; SNS subscription handshakes confirm automatically |
+| Azure Communication Services | Shared secret over Event Grid | `AZURE_WEBHOOK_SECRET` as `?token=…` on the subscription's endpoint URL (Event Grid keeps the query string secret); the subscription validation handshake is completed automatically. Engagement reports name the message but not the recipient, so opens and clicks carry `message_id` and no `email` |
+
+To skip verification deliberately (a local experiment, a payload replay), pass
+`{ verify: false }`: it's always an explicit opt-out, never a fallback.
+
+### Meta's endpoint handshake
+
+Meta checks an endpoint is yours before it subscribes it: saving the callback URL in
+the app dashboard sends a `GET` with `hub.mode=subscribe`, the **verify token** you
+typed into the same form, and a `hub.challenge` it expects back as the response body.
+`webhook()` answers that on a `GET` — route both methods to the same handler — and
+compares the token with `META_WEBHOOK_VERIFY_TOKEN` (or `{ verify_token }`), timing-safe
+and fail-closed like everything else here: no configured token is a 401, never a
+stranger's subscription confirmed. `{ verify: false }` doesn't reach it, for the same
+reason — a handshake has no payload to trust, only a URL anyone could have found.
+
+```typescript
+// SvelteKit src/routes/webhooks/whatsapp/+server.ts · Next.js route.ts
+const handle = webhook(async (event) => { … }, { provider: 'meta' })
+export { handle as GET, handle as POST }
+
+// Express: app.all('/webhooks/whatsapp', webhook.node(handler, { provider: 'meta' }))
+// Hono:    app.on(['GET', 'POST'], '/webhooks/whatsapp', (c) => handle(c.req.raw))
+```
+
+Name the provider: the zero-config default is your *email* provider, and the endpoint
+Meta calls is never the one your email provider calls. (A project with no email
+provider at all does fall through to `POSTBOI_WHATSAPP_PROVIDER=meta`, so a
+WhatsApp-only app needs nothing here.)
+
+Calling `receive()` yourself? `handshake(request, options)` from the same module is
+the piece `webhook()` uses: it returns the challenge to echo (send it as `200`, plain
+text), or `undefined` for a request that isn't a handshake, and throws
+`WebhookVerificationError` on a bad token. The verify token is separate from the app
+secret on purpose — it travels in a query string, and query strings end up in access
+logs.
+
+## Providers that don't push: `poll()`
+
+SMTP, Microsoft 365 and Cloudflare Email Service don't emit delivery-event webhooks —
+`receive()` throws `webhooks_not_supported` and points here. Gmail has no delivery
+events at all, and Alibaba Direct Mail, HubSpot, Iterable, JetEmail, Klaviyo, Lettr,
+MailChannels, Maileroo, Netcore, OneSignal, Primitive and Yandex Cloud Postbox have none
+postboi receives yet, so `receive()` throws the same for them. Twilio is here for a
+different reason: its status callbacks are set per message, at send time, so polling is
+what makes SMS and WhatsApp delivery receipts work with nothing configured and no public
+endpoint. (Meta's Cloud API pushes a real webhook, so WhatsApp via Meta is `receive()`
+above.) Each still has somewhere the events can be fetched from, and `poll()` fetches
+what's new since the last call, returning the same normalized events plus an opaque
+cursor to persist:
+
+```typescript
+import { poll } from 'postboi/webhooks'
+
+const { events, cursor } = await poll({ provider: 'microsoft365', cursor: saved })
+for (const event of events) handle(event)
+await save(cursor) // hand it back next time — polls are incremental
+```
+
+Run it on whatever schedule suits you (a cron, a queue worker); `more: true` in the
+result means the provider had more ready than one call returned — poll again soon.
+Credentials resolve like sending: explicit `options`, else the provider's env vars.
+
+| Provider | Where events come from | Setup beyond the send credentials |
+| -------- | ---------------------- | --------------------------------- |
+| Microsoft 365 | The Graph [message-trace API](https://learn.microsoft.com/graph/api/resources/exchangemessagetrace) | Grant the app registration the **ExchangeMessageTrace.Read.All** application permission (admin consent) and provision a service principal for Microsoft app id `8bd644d1-64a1-4d4b-ae52-2e0cbf64e373`. `send()` mints the internet Message-ID it returns, and trace events carry the same id, so events correlate to sends. Tenant rate limit: 100 trace queries per 5 minutes. |
+| Cloudflare | A [Queue](https://developers.cloudflare.com/queues/) fed by an Email Sending event subscription, pulled over HTTP | The first poll auto-creates a `postboi-email-events` queue with an HTTP-pull consumer (the API token needs Queues edit access). Add the event subscription once — Queues → the queue → Subscriptions → Email Sending — and the poll self-heals when the first event lands; or provision everything yourself and set `CLOUDFLARE_QUEUE_ID`. Give that queue no other consumer. |
+| Twilio (SMS + WhatsApp) | The [Message resource](https://www.twilio.com/docs/messaging/api/message-resource), listed over the last 24 hours | Nothing — `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are the send credentials. One row covers both channels: `event.channel` is `"sms"` or `"whatsapp"` and the number is in `event.phone`, never `event.email`. WhatsApp's read receipt arrives as `opened`; an undeliverable message is `failed` with the carrier's code in `bounce.detail` (a text message has no bounce *classification* — there's no mailbox to be unavailable). The window is trailing rather than incremental, because Twilio filters by `DateSent` while what changes is the status: the cursor remembers the last status per message and emits only on a change. Inbound replies are read for one thing: a reply that is an [opt-out keyword](/sms#opt-outs) (`STOP` and friends) is an `unsubscribed` event for the number that sent it. |
+| SMTP | The return-path's bounce mailbox, read over POP3, parsing RFC 3464 delivery status notifications | Set `POP3_HOST`, `POP3_USER`, `POP3_PASS` (and `POP3_PORT`/`POP3_SECURE` if not 995/implicit TLS) for the mailbox your bounce address delivers to. Messages are left on the server by default — pass `{ options: { delete: '1' } }` to remove processed mail. `parse_dsn` is exported on its own too, if bounces already reach you some other way (an inbound route, for instance). |
+
+Two honest caveats. Cloudflare pulls are acked in-call, and SMTP deletion is
+irreversible: persist the returned events before doing anything that can fail. And SMTP
+only ever reports what the DSN says — servers that bounce in prose instead of RFC 3464
+parse to nothing (the raw mail stays in the mailbox as the escape hatch).
+
+## Testing without a provider
+
+You don't need a tunnel or a real provider to test your handler. `mock_event` builds a
+normalized event; `mock_request` builds a full, **correctly signed** HTTP request:
+
+```typescript
+import { receive, mock_request, mock_event } from 'postboi/webhooks'
+
+// Unit-test handler logic directly:
+await my_handler(mock_event('opened', { email: 'user@example.com' }))
+
+// Or drive the whole path, signature verification included:
+const { request, secret } = await mock_request({ provider: 'resend', type: 'clicked' })
+const events = await receive(request, { provider: 'resend', secret })
+// events[0].url === "https://example.com/pricing"
+
+// WhatsApp via Meta, a person writing back to your number:
+const wa = await mock_request({ provider: 'meta', type: 'received' })
+// (await receive(wa.request, { provider: 'meta', secret: wa.secret }))[0].body.text
+
+// Text-message providers put the number in `phone`:
+const sms = await mock_request({ provider: 'smsworks', type: 'failed' })
+// (await receive(sms.request, { provider: 'smsworks', secret: sms.secret }))[0].phone === "+447700900123"
+```
+
+Polling providers get the same treatment: `mock_poll` builds a realistic `poll()` result
+— each fixture runs through the adapter's real normalization, so it can't drift:
+
+```typescript
+import { mock_poll } from 'postboi/webhooks'
+
+const { events } = await mock_poll({ provider: 'smtp', type: 'bounced' })
+// events[0].bounce.category === "hard"
+
+// Multi-channel providers take the channel too:
+const wa = await mock_poll({ provider: 'twilio', type: 'opened', channel: 'whatsapp' })
+// wa.events[0].phone === "+15557770006"
+```
+
+## Custom providers
+
+`receive()` accepts a custom adapter for anything postboi doesn't cover: implement
+`verify` and `normalize` and pass it as `provider`:
+
+```typescript
+import { receive, type WebhookAdapter } from 'postboi/webhooks'
+
+const my_adapter: WebhookAdapter = {
+	provider: 'internal',
+	verify({ headers, secret }) {
+		if (headers.get('x-api-key') !== secret) throw new Error('nope')
+	},
+	normalize(body) {
+		const payload = JSON.parse(body)
+		return [{ type: 'delivered', provider: 'internal', email: payload.rcpt, raw: payload }]
+	},
+}
+
+const events = await receive(request, { provider: my_adapter, secret: INTERNAL_KEY })
+```
