@@ -81,8 +81,9 @@ credentials. If you do want SMTP, Postboi supports that too (`postboi/smtp`).
 - **Every channel looks the same.** `mail({ to, subject, body })` writes the plain-text
   version for you, and `sms()`, `push()` and the rest take the same shape and fail the same
   way.
-- **Errors have codes.** Whichever provider fails, you get a `PostboiError` with a `code`
-  like `rate_limited` or `from_not_allowed`.
+- **Errors have one shape.** Whichever provider fails, you get a `PostboiError`, with a
+  `code` when the provider gave one. On the Postboi provider that's one of ours, like
+  `rate_limited` or `from_not_allowed`. Other providers pass their own codes through.
 - **Mistakes show up as type errors.** `postboi sync` types `from` to the addresses your
   account can send from, and form names to the forms you have.
 - **The docs are easy for a model to read.** The package ships a skill

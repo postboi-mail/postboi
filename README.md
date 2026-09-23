@@ -12,53 +12,14 @@
 
 ---
 
-**Postboi is an email provider, and `postboi` is its TypeScript SDK.** We run the sending
-infrastructure, the same way Resend, Postmark or SendGrid do. Run one command, get a token,
-and `mail()` sends. You don't need an account with anyone else, a DNS record or a card.
-Custom domains, lists and broadcasts, contacts, suppressions, a message log, webhooks, hosted
-forms, receiving and email testing all come with it, and the same API sends **SMS, WhatsApp,
-push and chat** too.
+**Postboi is an email provider, and `postboi` is its TypeScript SDK.** Run one command, get a
+token, and `mail()` sends. You don't need an account anywhere else, a DNS record or a card.
+The same API also sends SMS, WhatsApp, push and chat.
 
-If you already have a provider you like, you can keep it. The same `mail()` call works with
-Resend, SES, Postmark and 40-odd others, so switching (to Postboi or away from it) is a line
-of config. You don't need any of them to use Postboi, though.
+Already have a provider? `mail()` works with Resend, SES, Postmark and 40-odd others too, so
+switching is a line of config. You don't need any of them to use Postboi.
 
-📖 **Docs: [docs.postboi.app](https://docs.postboi.app)**. Weighing Postboi up against Resend,
-SendGrid or nodemailer? Read **[Postboi compared](https://docs.postboi.app/compare)**.
-
-🤖 **Using an AI coding agent?** It can set everything up without you. `bunx postboi init --agent`
-creates a working account with no prompts and no sign-in, the agent wires it in, and you claim
-it with one click when you're ready. The package also ships a skill that teaches agents the
-whole library: `bunx postboi skill` installs it at `.claude/skills/postboi/SKILL.md` and
-`.agents/skills/postboi/SKILL.md`, with longer recipes beside it in `references/`, and adds a
-three-line pointer to an existing `AGENTS.md` (`init` offers to do the same). You can also read
-it in place at `node_modules/postboi/skills/postboi/SKILL.md`. The docs pages render
-client-side, so agents should fetch the plain Markdown at
-[`docs.postboi.app/raw/<slug>`](https://docs.postboi.app/raw/push) instead, or everything at
-once from [`/llms-full.txt`](https://docs.postboi.app/llms-full.txt).
-
-### Features
-
-- ☁️ **Postboi is the provider** - `postboi init`, sign in, send. [The Postboi provider](https://docs.postboi.app/provider) gives you sending, domains, lists & broadcasts, suppressions and a message log with one token. No DNS, no card, no second account
-- 🤖 **Zero setup for agents & CI** - `postboi init --agent` needs no sign-in either: it provisions a [claimable sandbox project](https://docs.postboi.app/provider#zero-setup-for-agents--ci) in one round trip. The agent wires everything up and you claim it with one click
-- 👨‍💻 **Zero configuration** - works out of the box with minimal setup
-- 🔌 **Or bring your own provider** - optionally send through Resend, SES, Mailgun, Postmark, … instead, and swap without changing your code
-- 📝 **Smart FormData parsing** - automatically converts FormData to HTML tables
-- 🎯 **Grouped fields** - organize form fields with `fieldset→field` syntax
-- 📎 **Attachments** - attach files directly from form inputs or file objects
-- 📮 **Hosted forms** - no backend? point any HTML form at a [hosted endpoint](https://docs.postboi.app/forms) and submissions land in your inbox, spam-checked
-- 🎨 **Bring your own templates** - `body` takes any HTML, and the optional `postboi/maizzle` helper renders [Maizzle](https://docs.postboi.app/templates) templates straight into it
-- 📬 **Webhooks** - receive delivery events ([delivered / opened / clicked / bounced](https://docs.postboi.app/webhooks)) normalized across providers, signatures verified, including _which client and device_ opened the mail
-- 📈 **Per-send tracking & one-click unsubscribe** - `tracking: { opens, clicks }` and `unsubscribe_url` ([RFC 8058 headers](https://docs.postboi.app/tracking)) on any provider that supports them
-- ⏰ **Schedule & cancel** - `scheduled_at` for future sends, `cancel(id)` to [call them off](https://docs.postboi.app/scheduling)
-- 📥 **Local dev inbox** - mail you send in development lands in a [mailbox at `/__postboi`](https://docs.postboi.app/dev-inbox) instead of a real inbox, with the rendered HTML, headers and attachments. No code changes, no extra tool, and you can't accidentally email a customer from your laptop
-- 🔍 **Email testing** - [`analyze()` from `postboi/inspect`](https://docs.postboi.app/email-testing) lints an email before anyone receives it: client compatibility from [Can I email](https://www.caniemail.com) data, Gmail clipping, missing alt text, dead links, unsubscribe headers. It's synchronous with no network calls or dependencies, so it drops into any test suite
-- 🍯 **Invisible spam protection** - a zero-config [honeypot](https://docs.postboi.app/spam), plus an invisible captcha. We manage it for you on the Postboi provider, or you can bring your own Turnstile key
-- 🗂️ **Named forms** - `mail({ form: "Contact" })` files the submission under a form in the dashboard, fields and all, ready to [export as a table](https://docs.postboi.app/formdata#naming-the-form); `postboi sync` types the names
-- 🧩 **`<Captcha />` component** - one prop-free tag inside your own form, for [Svelte, React, Vue and Astro](https://docs.postboi.app/spam#the-captcha-component). `postboi sync` bakes in the key
-- 🛡️ **Type-safe** - full TypeScript support with normalized error handling
-- 💬 **Every channel, one shape** - [`sms()`](https://docs.postboi.app/sms), [`whatsapp()`](https://docs.postboi.app/whatsapp), [`push()`](https://docs.postboi.app/push), [`slack()`, `discord()`, `teams()`, `telegram()` and `bluesky()`](https://docs.postboi.app/slack) work exactly like `mail()`, with Twilio, The SMS Works, Meta, Web Push, FCM and others behind them
-- 📡 **Multi-channel `send()`** - [one call](https://docs.postboi.app/send) fans out to everything in `to`, or walks `channels: "cheapest"` (push → chat → email → whatsapp → sms) and stops at the first one that works. It runs in your own process, so nobody meters it
+📖 [Docs](https://docs.postboi.app) · [Postboi compared](https://docs.postboi.app/compare) · [Dashboard](https://postboi.app/dashboard)
 
 ## Quick start
 
@@ -66,80 +27,69 @@ once from [`/llms-full.txt`](https://docs.postboi.app/llms-full.txt).
 bunx postboi init
 ```
 
-Pick **Postboi** at the first prompt and you're sending in under a minute. The CLI opens
-your browser, authorises the device, and writes a single env var. No provider account, no API keys to copy, no DNS and no card:
+Pick **Postboi**, sign in in the browser, and you're done. The CLI writes one secret:
 
 ```bash
-# .env  (gitignored, and the only secret)
+# .env
 POSTBOI_TOKEN=…
 ```
 
 ```typescript
 import { mail } from "postboi"
 
-await mail({ to: "contact@example.com", subject: "Hi", body: "<p>Hello</p>" })
+await mail({ to: "ada@example.com", subject: "Hi", body: "<p>Hello</p>" })
 ```
 
-That's the whole setup. Mail goes out from your `you@send.postboi.email` address (set
-`reply_to` to get replies) until you verify a domain of your own in the
-[dashboard](https://postboi.app/dashboard).
+Mail goes out from `you@send.postboi.email` until you verify your own domain. Everything
+that isn't a secret (defaults, hooks, the captcha key) goes in a committed
+[`postboi.config.ts`](https://docs.postboi.app/config), and `from` is typed to the addresses
+your account can send from.
 
-Nobody at the keyboard? **`bunx postboi init --agent`** does the same thing with no prompts
-and no sign-in. It creates a project you can claim later, named after your `package.json`
-(`@acme/mail-site` sends from `mail-site@send.postboi.email`). Until it's claimed, sends are
-sandboxed into your message log, and one click on the claim URL it prints switches them to
-real delivery. It's there for AI coding agents and CI. See
-[Zero setup](https://docs.postboi.app/provider#zero-setup-for-agents--ci).
+No one at the keyboard? `bunx postboi init --agent` sets up a project with no prompts and no
+sign-in. Sends stay sandboxed until someone claims it with one click.
+[More on that](https://docs.postboi.app/provider#zero-setup-for-agents--ci).
 
-`init` also:
+## What you get
 
-- writes defaults, hooks and the publishable captcha key to a committed
-  [`postboi.config.ts`](https://docs.postboi.app/config), so everything but the token lives in version control
-- **types `from`** to the addresses your account can actually send from, so a wrong one is
-  a type error instead of a runtime `from_not_allowed`
-- wires **managed captcha** (`<Captcha />` works with no keys) and your **webhook secrets**
+- **Sending, domains, lists and broadcasts, contacts, suppressions and a message log**, all
+  on the one token. [The Postboi provider](https://docs.postboi.app/provider)
+- **FormData to email.** Hand `mail()` a `FormData` and it becomes a tidy HTML table, with
+  attachments and [grouped fields](https://docs.postboi.app/formdata)
+- **Hosted forms** for sites with no backend, and
+  [spam protection](https://docs.postboi.app/spam) (honeypot plus an invisible captcha)
+- **A dev inbox** at [`/__postboi`](https://docs.postboi.app/dev-inbox), so mail sent in
+  development never reaches a real person
+- **Webhooks** for delivered, opened, clicked and bounced, in one format
+  [whichever provider sent it](https://docs.postboi.app/webhooks)
+- **Scheduling, tracking and one-click unsubscribe.**
+  [Scheduling](https://docs.postboi.app/scheduling) ·
+  [Tracking](https://docs.postboi.app/tracking)
+- **Email testing.** [`analyze()`](https://docs.postboi.app/email-testing) checks client
+  support, Gmail clipping, alt text and links, offline, in any test suite
+- **Any HTML** for the body, or [Maizzle](https://docs.postboi.app/templates) templates
+- **One error type**, `PostboiError`, whichever provider failed
 
-Beyond `mail()`, the token unlocks [message status](https://docs.postboi.app/provider#delivery-status),
-[recipient lists, broadcasts and double opt-in](https://docs.postboi.app/provider#lists--broadcasts),
-your [contacts (the audience)](https://docs.postboi.app/provider#contacts-the-audience),
-[suppressions](https://docs.postboi.app/provider#suppressions), and
-[batching with idempotency keys](https://docs.postboi.app/provider#batching--idempotency), all from the
-same import:
+## Bring your own provider
 
-```typescript
-import { mail } from "postboi"
-
-await mail.recipients.add("Newsletter", "Ada Lovelace <ada@example.com>")
-await mail.contacts.add("ada@example.com", { data: { plan: "pro" } }) // one contact, shared across lists
-```
-
-Full details: [The Postboi provider](https://docs.postboi.app/provider).
-
-### Bring your own provider
-
-Would you rather use Resend, SES, Mailgun or Postmark? Pick **Bring your own provider** and
-the CLI asks for that provider's credentials. Secrets go in your env file and everything
-else in the committed config, which usually still means a single env var:
+Pick **Bring your own provider** in `postboi init` instead. Your code stays the same:
 
 ```typescript
-// postboi.config.ts  (committed)
+// postboi.config.ts
 import { config } from "postboi"
 
-export default config({
-	provider: "resend",
-	default: { from: "no-reply@example.com" },
-})
+export default config({ provider: "resend", default: { from: "no-reply@example.com" } })
 ```
 
 ```bash
-# .env  (gitignored, secrets only)
+# .env
 RESEND_API_KEY=re_xxxxxxxx
 ```
 
-Every example below is identical either way: `mail()` picks up whichever provider is
-configured, with no provider import or constructor.
+See [all providers](https://docs.postboi.app/providers).
 
-On SvelteKit, a form action is a one-liner:
+## SvelteKit
+
+A contact form action is one line:
 
 ```typescript
 // +page.server.ts
@@ -148,46 +98,16 @@ import { mail } from "postboi/kit"
 export const actions = { default: mail }
 ```
 
-Or skip the server file entirely with [remote functions](https://svelte.dev/docs/kit/remote-functions)
-(experimental: set `kit.experimental.remoteFunctions: true`; `postboi init` adds the
-required `optimizeDeps: { exclude: ["postboi/remote"] }` to `vite.config` for you):
-
-```svelte
-<script>
-	import { mail } from "postboi/remote"
-</script>
-
-<form {...mail}>
-	<input {...mail.fields.contact.name.as("text")} required />
-	<input {...mail.fields.contact.email.as("email")} required />
-	<button disabled={!!mail.pending}>Send</button>
-</form>
-
-{#if mail.result?.success}<p>Thanks!</p>{/if}
-```
-
-Nested fields (`contact.name`) group in the email exactly like the classic `contact→name`
-syntax, spam protection and attachments included. For a custom provider or forced fields,
-build your own with `remote(...)` from `postboi/kit`.
-
-| Topic                                    | Docs                                                                   |
-| ---------------------------------------- | ---------------------------------------------------------------------- |
-| Quick start: the CLI (`postboi init`)    | [docs.postboi.app/quick-start](https://docs.postboi.app/quick-start)   |
-| The Postboi provider                     | [docs.postboi.app/provider](https://docs.postboi.app/provider)         |
-| Manual setup (no CLI)                    | [docs.postboi.app/manual-setup](https://docs.postboi.app/manual-setup) |
-| SvelteKit form actions                   | [docs.postboi.app/sveltekit](https://docs.postboi.app/sveltekit)       |
-| FormData → HTML tables                   | [docs.postboi.app/formdata](https://docs.postboi.app/formdata)         |
-| All providers & their options            | [docs.postboi.app/providers](https://docs.postboi.app/providers)       |
-| Hooks, global config, retries, bulk send | [docs.postboi.app/config](https://docs.postboi.app/config)             |
-| API reference                            | [docs.postboi.app/api](https://docs.postboi.app/api)                   |
-
-> Cloudflare Workers work the same way. Bindings are read as env vars, and the `postboi/vite` plugin bundles `postboi.config.ts` in place of the filesystem auto-load. See [Cloudflare Workers](https://docs.postboi.app/cloudflare-workers).
+Or use [remote functions](https://docs.postboi.app/sveltekit) with `postboi/remote` and skip
+the server file. Postboi also has guides for [Next.js](https://docs.postboi.app/nextjs),
+[Astro](https://docs.postboi.app/astro), [Nuxt](https://docs.postboi.app/nuxt),
+[Remix](https://docs.postboi.app/remix), [Hono](https://docs.postboi.app/hono),
+[Express](https://docs.postboi.app/express) and
+[Cloudflare Workers](https://docs.postboi.app/cloudflare-workers).
 
 ## Beyond email
 
-Every channel is the same three moves: `bunx postboi init --sms` (or `--whatsapp`,
-`--push`, `--chat`), credentials land in env, then call the function. Same hooks, same
-normalized errors, same zero config:
+Run `bunx postboi init --sms` (or `--whatsapp`, `--push`, `--chat`) and call the function:
 
 ```typescript
 import { sms, whatsapp, push, slack, send } from "postboi"
@@ -197,7 +117,7 @@ await whatsapp({ to: "+447788223344", template: "order_shipped", variables: { na
 await push({ to: subscription, title: "Order shipped", message: "On its way" })
 await slack({ message: "Deploy finished" })
 
-// …or one call that stops at the first (cheapest) channel that works:
+// or try the cheapest channel first and stop when one works
 await send({
 	to: { push: subscription, sms: "+447788223344" },
 	channels: "cheapest",
@@ -205,52 +125,31 @@ await send({
 })
 ```
 
-In development, texts and WhatsApp messages are **logged, never sent**. It's the same
-protection the dev inbox gives email, only stricter, because a stray text costs money
-and you can't take it back.
+In development, texts and WhatsApp messages are logged, not sent.
+[SMS](https://docs.postboi.app/sms) · [WhatsApp](https://docs.postboi.app/whatsapp) ·
+[Push](https://docs.postboi.app/push) · [Chat](https://docs.postboi.app/slack) ·
+[`send()`](https://docs.postboi.app/send)
 
-| Channel                          | Docs                                                           |
-| -------------------------------- | -------------------------------------------------------------- |
-| Multi-channel `send()`           | [docs.postboi.app/send](https://docs.postboi.app/send)         |
-| SMS (and RCS)                    | [docs.postboi.app/sms](https://docs.postboi.app/sms)           |
-| WhatsApp                         | [docs.postboi.app/whatsapp](https://docs.postboi.app/whatsapp) |
-| Push (Web Push, FCM, APNs, Expo) | [docs.postboi.app/push](https://docs.postboi.app/push)         |
-| Chat (Slack, Discord, …)         | [docs.postboi.app/slack](https://docs.postboi.app/slack)       |
+## For AI agents
+
+- `bunx postboi skill` installs a skill that teaches the whole library, at
+  `.claude/skills/postboi/` and `.agents/skills/postboi/`. It also ships in the package at
+  `node_modules/postboi/skills/postboi/SKILL.md`.
+- The docs pages render client-side, so fetch plain Markdown from
+  `https://docs.postboi.app/raw/<slug>`, or everything at once from
+  [`/llms-full.txt`](https://docs.postboi.app/llms-full.txt).
 
 ## Development
 
 ```bash
-# install dependencies
 bun install
-
-# start dev server
-bun run dev
-
-# type checking
-bun run check
-
-# linting
+bun run dev     # the docs site
+bun run check   # types
 bun run lint
-
-# run tests
 bun run test
-
-# build library
-bun run build
+bun run build   # the package
 ```
 
-The docs site is the SvelteKit app at the repo root, and `bun run dev` serves it locally.
-
-## Contributing
-
-PRs welcome! Especially for new email providers. Make sure you:
-
-- Follow the existing code style (snake_case, no semicolons)
-- Add tests for new features
-- Run `bun run check` and `bun run lint` before pushing
-
-## Releasing
-
-Maintainers: `npm run release -- <patch|minor|major>` publishes the library and
-creates the GitHub release. See [RELEASING.md](RELEASING.md) for the full
-process, including snapshotting the versioned docs.
+PRs are welcome, new providers especially. Match the code style (snake_case, no
+semicolons), add tests, and run `check` and `lint` before pushing. Releases are covered in
+[RELEASING.md](RELEASING.md).
