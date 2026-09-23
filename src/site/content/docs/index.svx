@@ -1,23 +1,23 @@
 ---
 title: Introduction
 name: Introduction
-description: Postboi is an email provider and the TypeScript SDK that talks to it. Managed sending with one token, plus SMS, WhatsApp, push and chat behind the same API — and your own provider behind it when you want one.
+description: Postboi is an email provider and TypeScript SDK. Send email with one token, plus SMS, WhatsApp, push and chat from the same API, and use your own provider if you want to.
 category: Getting started
 ---
 
-**Postboi is an email provider** — managed sending infrastructure, in the same category as
-Resend, Postmark or SendGrid — **and the TypeScript SDK that talks to it.** Run
-`postboi init`, get a `POSTBOI_TOKEN`, and `mail()` sends: no other provider account, no
-DNS, no card. [The Postboi provider](/provider) brings custom domains, lists and
+**Postboi is an email provider, and `postboi` is its TypeScript SDK.** We run the sending
+infrastructure, like Resend, Postmark or SendGrid do. Run `postboi init`, get a
+`POSTBOI_TOKEN`, and `mail()` sends. You don't need an account anywhere else, a DNS record
+or a card. [The Postboi provider](/provider) comes with custom domains, lists and
 broadcasts, contacts, suppressions, a message log, webhooks, hosted forms and receiving.
 
-Bringing your own provider is an option on top, not the premise. The same call can go
-through Resend, SES, Postmark or [40-odd others](/providers), so the provider is a line of
-config rather than something your code knows about — but you never _need_ another one.
-Deciding between Postboi and another email service? See [Postboi compared](/compare).
+If you'd rather use a provider you already have, you can. The same call works with Resend,
+SES, Postmark and [40-odd others](/providers), and switching is a line of config. You don't
+need any of them to use Postboi, though. Comparing Postboi with another email service? See
+[Postboi compared](/compare).
 
-Import a channel, call it, done — and on the email side, handing `mail()` a `FormData`
-renders it as a tidy HTML table.
+Import a channel and call it. On the email side, hand `mail()` a `FormData` and it turns
+it into a tidy HTML table.
 
 ```typescript
 import { mail, sms } from 'postboi'
@@ -28,9 +28,9 @@ await sms({ to: '+44 7788 223344', message: 'Your code is 4291' })
 
 ## Features
 
-- ☁️ **Postboi is the provider**: managed email sending with one token, no second vendor.
+- ☁️ **Postboi is the provider**: send email with one token and no other account.
 - 👨‍💻 **Zero configuration**: works out of the box with minimal setup.
-- 🔌 **Or bring your own**: swap providers on any channel without changing your code.
+- 🔌 **Or use your own provider**: swap providers on any channel without changing your code.
 - 💬 **Five channels, one shape**: [`sms()`](/sms), [`whatsapp()`](/whatsapp),
   [`push()`](/push), [`slack()`](/slack) and friends resolve, hook and error exactly like
   `mail()`.

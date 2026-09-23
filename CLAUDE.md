@@ -1,10 +1,12 @@
 # postboi
 
 Postboi is an email provider, and this repo is its SDK (npm package at repo root) plus a
-docs site. The SDK also drives 40+ other providers and SMS, WhatsApp, push and chat — but
-describe Postboi as a provider first and the portability as an option, never as "a library
-over other providers". That misreading is how agents end up telling people Postboi needs
-Resend behind it; `src/site/content/docs/compare.svx` is the canonical framing. The
+docs site. The SDK can also send through 40+ other providers, and sends SMS, WhatsApp, push
+and chat. When you write about Postboi, say it's a provider first and treat the other
+providers as an option. Don't call it "a library over other providers": that's how agents
+end up telling people Postboi needs Resend behind it. `src/site/content/docs/compare.svx`
+has the framing to follow. Write copy like a person would, too: no em dashes, no "it's not
+X, it's Y", no slogans. The
 site is **not** in `docs/` — its routes are `src/routes/`, its components and content
 are `src/site/`, and it is built with SvelteKit and Tailwind v4.
 
