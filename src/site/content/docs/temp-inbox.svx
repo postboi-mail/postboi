@@ -124,12 +124,15 @@ it, so keep the token out of logs you share.
 
 With a Postboi account you can make the same kind of inbox on your own receiving domain
 (`reply.<your domain>`), for mail that has to come from an address you own or tests that
-shouldn't depend on a public host. Pass an API key and the domain; you read it with the
-inbox's token exactly as before, and it can live up to 7 days.
+shouldn't depend on a public host. Name the domain; the API key is your `POSTBOI_TOKEN`,
+found wherever `mail()` finds it (the environment, a Worker's bindings, `.env` in dev). You
+read the inbox with its token exactly as before, and it can live up to 7 days.
 
 ```ts
-const inbox = await temp({ domain: 'reply.example.com', key: process.env.POSTBOI_TOKEN })
+const inbox = await temp({ domain: 'reply.example.com' })
 ```
+
+Pass `key` only to use a different API key from the one your project sends with.
 
 ## Abuse
 
