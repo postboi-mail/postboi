@@ -15,4 +15,4 @@ npx tempboi watch --forward http://localhost:5173/api/inbound
 `import { temp } from "postboi/inbox"`.
 
 Inboxes last an hour (up to a day), hold 100 messages and are deleted when they expire.
-Docs: https://docs.postboi.app/docs/temp-inbox
+Docs: https://docs.postboi.app/temp-inbox
