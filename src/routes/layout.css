@@ -313,23 +313,24 @@ html {
 
    Twinkleplop (src/site/utils/highlight.js) marks every token with a class and
    leaves the colours to CSS, so one rendering carries both modes and the theme
-   is these variables. The palette is ours: Ayu Light on paper, Aura Soft Dark on
-   ink, with attribute names in the brand accent (the orange on paper, where the
-   yellow is too pale to read). postboi-app's app.css carries the same palette
-   for its news snippets, so a block reads the same on either site. */
+   is these variables. On ink it is Aura Soft Dark with attribute names in the
+   brand yellow. On paper it is our own: strings in a deep cut of Boi's hat blue
+   (#3b91e6 itself is 3.3:1 on white), functions in the ink, and every colour at
+   4.5:1 or better on white. postboi-app's app.css carries the same palette for
+   its news snippets, so a block reads the same on either site. */
 :root {
-	--code-fg: #5c6166;
-	--code-comment: #8a9199;
-	--code-string: #86b300;
-	--code-constant: #a37acc;
-	--code-keyword: #fa8d3e;
-	--code-operator: #ed9366;
-	--code-function: #f2ae49;
-	--code-type: #399ee6;
-	--code-tag: #55b4d4;
-	--code-attr: #f47600;
-	--code-escape: #4cbf99;
-	--code-invalid: #e65050;
+	--code-fg: #3d4660;
+	--code-comment: #716e64;
+	--code-string: #1f6fc4;
+	--code-constant: #b4470b;
+	--code-keyword: #7443c9;
+	--code-operator: #3d4660;
+	--code-function: #0b1f4d;
+	--code-type: #b4470b;
+	--code-tag: #7443c9;
+	--code-attr: #946300;
+	--code-escape: #b0307a;
+	--code-invalid: #c62828;
 }
 
 .dark {
