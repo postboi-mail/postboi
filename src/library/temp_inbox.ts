@@ -333,9 +333,14 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 	})
 }
 
-/** A request that gave out rather than was refused: worth another go in a watch loop. */
+/**
+ * A request that gave out rather than was refused: worth another go in a watch loop.
+ * That includes our own ceiling (`with_deadline`) firing on a long-poll a proxy swallowed,
+ * which rejects with a `TimeoutError`, not a `TypeError`.
+ */
 function transient(error: unknown): boolean {
 	if (error instanceof InboxError) return !error.status || error.status >= 500
+	if (error instanceof Error && error.name === "TimeoutError") return true
 	return error instanceof TypeError
 }
 

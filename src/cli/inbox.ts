@@ -14,6 +14,7 @@ import {
 } from "../library/temp_inbox.js"
 import { hmac_sha256, base64_decode, base64_encode } from "../library/webhooks/crypto.js"
 import { open_browser } from "./postboi.js"
+import { help_text } from "./help.js"
 import { bold, cyan, dim, green, yellow, red } from "./prompts.js"
 
 /**
@@ -559,6 +560,11 @@ export async function inbox_command(
 			err,
 			fetch: options.fetch,
 			signal: options.signal,
+		}
+		// `npx tempboi --help` must not mint an inbox, which a bare `inbox` otherwise does.
+		if (parsed.flags.help || parsed.sub === "help" || args.includes("-h")) {
+			out(help_text(["Temp inboxes"]))
+			return EXIT.ok
 		}
 		const run = parsed.sub === undefined ? create : COMMANDS[parsed.sub]
 		if (!run) {

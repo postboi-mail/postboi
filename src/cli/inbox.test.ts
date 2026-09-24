@@ -211,6 +211,14 @@ describe("inbox_command", () => {
 		expect(out.at(-1)).toBe("777111")
 	})
 
+	it("prints help for --help rather than making an inbox", async () => {
+		const { server, out, run, path } = run_env()
+		expect(await run("--help")).toBe(EXIT.ok)
+		expect(out.join("\n")).toContain("inbox wait")
+		expect(server.requests.length).toBe(0)
+		expect(() => readFileSync(path, "utf8")).toThrow()
+	})
+
 	it("prints an eval-able --env line", async () => {
 		const { out, run } = run_env()
 		await run("new", "--env", "--name", "ci")

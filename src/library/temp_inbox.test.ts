@@ -212,6 +212,28 @@ describe("inbox.watch()", () => {
 		}
 		expect(seen).toEqual(["Code 1", "Code 2"])
 	})
+
+	it("retries a long-poll its own ceiling cut off, rather than ending", async () => {
+		const { server } = setup()
+		let cut = false
+		const fetcher = ((input: RequestInfo | URL, init?: RequestInit) => {
+			if (!cut && String(input).includes("wait=25")) {
+				cut = true
+				return Promise.reject(new DOMException("The operation timed out.", "TimeoutError"))
+			}
+			return server.fetch(input, init)
+		}) as typeof fetch
+		const inbox = await temp({ base: server.base, fetch: fetcher })
+		const controller = new AbortController()
+		setTimeout(() => server.deliver(inbox.address, { subject: "After" }), 10)
+		const seen: Array<string | null> = []
+		for await (const mail of inbox.watch({ signal: controller.signal })) {
+			seen.push(mail.subject)
+			controller.abort()
+		}
+		expect(cut).toBe(true)
+		expect(seen).toEqual(["After"])
+	})
 })
 
 describe("lifetime", () => {

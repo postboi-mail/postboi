@@ -213,9 +213,11 @@ export const HELP: Array<HelpSection> = [
 const COLUMN = 31
 
 /** `--help`: the sections with the commands in cyan, the details dimmed. */
-export function help_text(): string {
+/** The whole reference, or only the sections named in `only`. */
+export function help_text(only?: Array<string>): string {
 	const out: Array<string> = []
 	for (const section of HELP) {
+		if (only && !only.includes(section.title)) continue
 		out.push(`${bold(section.title)}${section.note ? ` ${dim(`(${section.note})`)}` : ""}`)
 		for (const entry of section.entries) {
 			const name = section.title === "Options" ? entry.command : `bunx postboi ${entry.command}`
