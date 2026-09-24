@@ -46,6 +46,21 @@ Postboi provider — full reference: <https://api.postboi.app>
 
 A bare noun lists; `list` says the same. Add --json to any of them for the API's response as JSON (errors carry the API's code).
 
+## Temp inboxes
+
+tempboi.email, no account or POSTBOI_TOKEN needed
+
+| Command                    | What it does                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bunx postboi inbox`       | Make a throwaway inbox and print its address — `new [--name <n>] [--ttl 2h] [--json] [--env]` · `--env prints export POSTBOI_INBOX=… POSTBOI_INBOX_TOKEN=… for eval`                                                                                                                                                      |
+| `bunx postboi inbox watch` | Print mail as it arrives, one line each — `[address] --all --json (NDJSON) --tag <t> --from <s> --subject <s>` · `--forward <url>: POST each as an email.received webhook, signed with POSTBOI_WEBHOOK_SECRET when set` · `--exec <cmd>: run per mail with SUBJECT FROM TO CODE LINK ID set and the mail's JSON on stdin` |
+| `bunx postboi inbox wait`  | Wait for one mail, then exit — `[address] --from <s> --subject <s> --tag <t> (/regex/ works) --timeout <sec> --new` · `--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout`                                                                                                                 |
+| `bunx postboi inbox read`  | One mail in full — `[id or latest] --html --raw --headers --json`                                                                                                                                                                                                                                                         |
+| `bunx postboi inbox open`  | The inbox's web page, in your browser                                                                                                                                                                                                                                                                                     |
+| `bunx postboi inbox ls`    | Inboxes made on this machine — `rm [address] · extend <ttl> [address]`                                                                                                                                                                                                                                                    |
+
+The inbox made or used last is the default; POSTBOI_INBOX and POSTBOI_INBOX_TOKEN override it, POSTBOI_INBOX_URL moves the host.
+
 ## Notes for agents
 
 - **`doctor` first and last.** It says whether the project is wired — token, provider,
@@ -62,6 +77,10 @@ A bare noun lists; `list` says the same. Add --json to any of them for the API's
   `--channel whatsapp`.
 - **`webhooks add` then `sync`**, which writes the secret to `POSTBOI_WEBHOOK_SECRET`;
   `webhooks rotate <id>` mints a new one and the old stops verifying at once.
+- **A sign-up or sign-in email to receive?** `inbox` makes a throwaway address at
+  tempboi.email with no token and no account; `inbox wait --code` prints the one-time
+  code (exit 2 on timeout, 3 when the mail has none), `--link` the verify link. Recipe
+  in `https://docs.postboi.app/raw/temp-inbox`.
 - **Deletes are immediate and unprompted** (`lists delete` takes the recipients with it).
 - **Dashboard-only by design:** API-key management, member roles and billing — send the
   user there rather than trying.

@@ -50,6 +50,21 @@ Postboi provider — full reference: <https://api.postboi.app>
 
 A bare noun lists; `list` says the same. Add --json to any of them for the API's response as JSON (errors carry the API's code).
 
+## Temp inboxes
+
+tempboi.email, no account or POSTBOI_TOKEN needed
+
+| Command                    | What it does                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bunx postboi inbox`       | Make a throwaway inbox and print its address — `new [--name <n>] [--ttl 2h] [--json] [--env]` · `--env prints export POSTBOI_INBOX=… POSTBOI_INBOX_TOKEN=… for eval`                                                                                                                                                      |
+| `bunx postboi inbox watch` | Print mail as it arrives, one line each — `[address] --all --json (NDJSON) --tag <t> --from <s> --subject <s>` · `--forward <url>: POST each as an email.received webhook, signed with POSTBOI_WEBHOOK_SECRET when set` · `--exec <cmd>: run per mail with SUBJECT FROM TO CODE LINK ID set and the mail's JSON on stdin` |
+| `bunx postboi inbox wait`  | Wait for one mail, then exit — `[address] --from <s> --subject <s> --tag <t> (/regex/ works) --timeout <sec> --new` · `--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout`                                                                                                                 |
+| `bunx postboi inbox read`  | One mail in full — `[id or latest] --html --raw --headers --json`                                                                                                                                                                                                                                                         |
+| `bunx postboi inbox open`  | The inbox's web page, in your browser                                                                                                                                                                                                                                                                                     |
+| `bunx postboi inbox ls`    | Inboxes made on this machine — `rm [address] · extend <ttl> [address]`                                                                                                                                                                                                                                                    |
+
+The inbox made or used last is the default; POSTBOI_INBOX and POSTBOI_INBOX_TOKEN override it, POSTBOI_INBOX_URL moves the host.
+
 ## For agents
 
 `bunx postboi init --agent` provisions a claimable sandbox account with no prompts and no

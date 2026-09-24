@@ -70,6 +70,10 @@ ${help_markdown()}
   \`--channel whatsapp\`.
 - **\`webhooks add\` then \`sync\`**, which writes the secret to \`POSTBOI_WEBHOOK_SECRET\`;
   \`webhooks rotate <id>\` mints a new one and the old stops verifying at once.
+- **A sign-up or sign-in email to receive?** \`inbox\` makes a throwaway address at
+  tempboi.email with no token and no account; \`inbox wait --code\` prints the one-time
+  code (exit 2 on timeout, 3 when the mail has none), \`--link\` the verify link. Recipe
+  in \`https://docs.postboi.app/raw/temp-inbox\`.
 - **Deletes are immediate and unprompted** (\`lists delete\` takes the recipients with it).
 - **Dashboard-only by design:** API-key management, member roles and billing — send the
   user there rather than trying.
