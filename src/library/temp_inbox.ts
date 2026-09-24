@@ -1,3 +1,4 @@
+import { ensure_env_loaded, read_env } from "./env.js"
 import { PostboiError } from "./errors.js"
 
 /**
@@ -278,14 +279,8 @@ export interface AttachOptions {
 	fetch?: typeof fetch
 }
 
-function env_var(name: string): string | undefined {
-	const value = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-		?.env?.[name]
-	return value || undefined
-}
-
 function base_url(base: string | undefined): string {
-	return (base ?? env_var("POSTBOI_INBOX_URL") ?? TEMP_INBOX_URL).replace(/\/+$/, "")
+	return (base ?? read_env("POSTBOI_INBOX_URL") ?? TEMP_INBOX_URL).replace(/\/+$/, "")
 }
 
 function matches(value: string | null, match: Match | undefined): boolean {
@@ -619,9 +614,12 @@ async function failure(response: Response): Promise<InboxError> {
 }
 
 async function create(options: TempOptions = {}): Promise<Inbox> {
+	// The environment mail() reads: process.env, Worker bindings, and .env / .dev.vars in dev,
+	// so a POSTBOI_TOKEN that sends mail also makes inboxes on your own domain.
+	await ensure_env_loaded()
 	const base = base_url(options.base)
 	const fetcher = options.fetch ?? globalThis.fetch
-	const key = options.domain ? (options.key ?? env_var("POSTBOI_TOKEN")) : options.key
+	const key = options.domain ? (options.key ?? read_env("POSTBOI_TOKEN")) : options.key
 	const body: Record<string, unknown> = {}
 	if (options.name) body.name = options.name
 	if (options.ttl !== undefined) body.ttl = Math.round(duration_ms(options.ttl) / 1000)
@@ -647,10 +645,11 @@ async function create(options: TempOptions = {}): Promise<Inbox> {
  * Checks the token by asking for the inbox, so a wrong one fails here and not later.
  */
 async function attach(options: AttachOptions = {}): Promise<Inbox> {
+	await ensure_env_loaded()
 	// POSTBOI_INBOX is also the dev inbox's port or `off`, so it only counts as an address.
-	const from_env = env_var("POSTBOI_INBOX")
+	const from_env = read_env("POSTBOI_INBOX")
 	const address = options.address || (from_env?.includes("@") ? from_env : undefined)
-	const token = options.token || env_var("POSTBOI_INBOX_TOKEN")
+	const token = options.token || read_env("POSTBOI_INBOX_TOKEN")
 	if (!token)
 		throw new InboxError({
 			message: "No inbox token: pass token or set POSTBOI_INBOX_TOKEN",
