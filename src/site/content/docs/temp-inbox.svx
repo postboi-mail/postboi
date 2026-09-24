@@ -1,0 +1,134 @@
+---
+title: Temp inboxes
+name: Temp inboxes
+description: Throwaway email addresses at tempboi.email for tests and agents. Make one with curl, the CLI or one function, wait for the sign-up code, and let it expire. No account needed.
+category: Guides
+---
+
+Some tests need a real email to arrive: the code a sign-up sends, a magic link, a
+password reset. Agents hit the same wall when they sign up for something on your behalf.
+[tempboi.email](https://tempboi.email) gives you an address that exists for as long as
+you need it, with no sign-up and no token of Postboi's. Everything it receives is
+readable over plain HTTP, and it goes away on its own.
+
+## With curl
+
+Make an inbox:
+
+```bash
+curl -X POST tempboi.email
+```
+
+```
+quiet-otter-k3f9@tempboi.email
+token: tb_…
+expires: 2026-09-24T12:00:00.000Z
+```
+
+Send something to that address, then wait for it. The request holds until a match
+arrives (up to 60 seconds by default, 90 at most) and answers with the message as JSON,
+including the one-time `code` and the verify `link` already pulled out of it:
+
+```bash
+curl -H "Authorization: Bearer tb_…" \
+  "https://tempboi.email/v1/inboxes/quiet-otter-k3f9@tempboi.email/wait?subject=verify"
+```
+
+A 408 means nothing matched in time. Add `Accept: application/json` to the first request
+to get the inbox as JSON instead of text, and `curl tempboi.email` prints a usage card.
+The whole API is described at [tempboi.email/llms.txt](https://tempboi.email/llms.txt).
+
+## From the CLI
+
+`postboi inbox` does the same from the terminal, remembers the token for you, and needs
+no `POSTBOI_TOKEN`:
+
+```bash
+bunx postboi inbox                    # make one and print the address
+bunx postboi inbox watch              # print each mail as it arrives
+CODE=$(bunx postboi inbox wait --code --subject verify)
+```
+
+`wait` exits 0 when a mail arrives, 2 on timeout, and 3 when `--code` or `--link` asked
+for something the mail doesn't have, so a script can branch on it. `--new` ignores mail
+that was already there, and a filter written as `/…/` is a regular expression.
+
+In CI, make the inbox in one step and hand it to the next through the environment:
+
+```bash
+eval "$(bunx postboi inbox new --ttl 30m --env)"   # sets POSTBOI_INBOX and POSTBOI_INBOX_TOKEN
+```
+
+`watch --forward http://localhost:5173/webhooks/postboi` posts every mail to your own app
+in the shape of Postboi's `email.received` [webhook](/webhooks), signed with
+`POSTBOI_WEBHOOK_SECRET` when it's set. That tests an inbound handler locally with no
+tunnel. `watch --exec` runs a command per mail instead, with `SUBJECT`, `FROM`, `CODE`,
+`LINK` and friends in its environment. Every command is in the [CLI reference](/cli).
+
+## In a test
+
+`postboi/inbox` is the same thing as one function. It only uses `fetch`, so it runs in
+Node, Bun, Deno and Workers. Here it is in a Playwright test:
+
+```ts
+import { test, expect } from '@playwright/test'
+import { temp } from 'postboi/inbox'
+
+test('sign-up sends a working code', async ({ page }) => {
+	await using inbox = await temp({ ttl: '15m' })
+
+	await page.goto('/signup')
+	await page.fill('[name=email]', inbox.address)
+	await page.click('text=Sign up')
+
+	const mail = await inbox.wait({ subject: 'Verify', timeout: '60s' })
+	await page.fill('[name=code]', mail.code!)
+	await page.click('text=Continue')
+
+	await expect(page.getByText('Welcome')).toBeVisible()
+})
+```
+
+`await using` deletes the inbox when the test ends. Without it, call `inbox.delete()`
+yourself, or leave it to expire.
+
+- **`inbox.wait()`** returns the newest mail that matches, including one that arrived
+  before you started waiting, since "sign up, then wait" is the usual order. Pass
+  `after: inbox.cursor` to insist on new mail. `from` and `subject` take a substring or a
+  RegExp; `tag` is exact. A timeout rejects with `InboxTimeoutError`.
+- **Each mail** has `code` and `codes`, `link` and `links`, `from`, `name`, `subject`,
+  `text`, `html`, `headers`, `auth` (SPF, DKIM, DMARC), `attachments` and `received` as a
+  `Date`. `await mail.raw()` is the `.eml` as bytes. The HTML is as received, so render
+  it sandboxed.
+- **Plus-tags** land in the same inbox: `inbox.tag('run-42')` gives
+  `quiet-otter-k3f9+run-42@tempboi.email`, and `wait({ tag: 'run-42' })` picks that one
+  out. Parallel tests can share one inbox this way.
+- **`for await (const mail of inbox.watch())`** yields every new mail until you break
+  out or abort its `signal`. `inbox.list()`, `inbox.extend('2h')` and `inbox.delete()`
+  do what they say.
+- **`temp.attach()`** picks up an inbox made elsewhere, from `POSTBOI_INBOX` and
+  `POSTBOI_INBOX_TOKEN` by default, which is how a test reads the inbox a CI step made.
+
+## Limits
+
+An inbox lives an hour unless you say otherwise, and 24 hours at most. It holds 100
+messages, and a message can be up to 10 MB; mail past either limit is refused when it
+arrives. Reading an inbox always needs its token, which is only handed out when the inbox
+is made. Anyone can send to an address they know, and anyone holding the token can read
+it, so keep the token out of logs you share.
+
+## On your own domain
+
+With a Postboi account you can make the same kind of inbox on your own receiving domain
+(`reply.<your domain>`), for mail that has to come from an address you own or tests that
+shouldn't depend on a public host. Pass an API key and the domain; you read it with the
+inbox's token exactly as before, and it can live up to 7 days.
+
+```ts
+const inbox = await temp({ domain: 'reply.example.com', key: process.env.POSTBOI_TOKEN })
+```
+
+## Abuse
+
+tempboi.email is for testing and automation. Report abuse to
+[abuse@postboi.app](mailto:abuse@postboi.app).

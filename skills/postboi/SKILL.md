@@ -245,6 +245,18 @@ Lint what the mock captured with `analyze` from `postboi/inspect` — synchronou
 
 For real-client verdicts, name a test instead of addressing a person: `await mail({ test: "welcome", subject, body })` runs the email through Postboi's hosted testing (needs `POSTBOI_TOKEN`) and answers the report + screenshot run — `t.report?.status`, `t.url` (the run's dashboard page). Same name = new attempt on the same dashboard entry (the edit-and-re-run loop); `clients` picks screenshot clients and only typechecks on a test send, while `to`/`cc`/`bcc` beside `test` are type errors. For transport checks (SPF/DKIM/DMARC + SpamAssassin over real bytes), `hosted_test` from `postboi/inspect`: `const t = await hosted_test({ label }); await mail({ to: t.address, ... }); const done = await t.wait()`. Runs count against the account's daily cap and screenshots against the rendering allowance — gate it behind a flag in CI. `/raw/email-testing`
 
+### Receiving a verification email
+
+When you (or a test) need a real inbox, say to sign up for something and read the code it sends, use a throwaway address at tempboi.email. No account, no `POSTBOI_TOKEN`, nothing to clean up:
+
+```bash
+eval "$(bunx postboi inbox new --env)"   # sets POSTBOI_INBOX (the address) and POSTBOI_INBOX_TOKEN
+# ...sign up with $POSTBOI_INBOX...
+CODE=$(bunx postboi inbox wait --code --subject verify --timeout 90)   # exit 2 on timeout, 3 if the mail has no code
+```
+
+`--link` prints the verify link instead, `--json` the whole message, `/regex/` works as a filter. Without the CLI it is plain HTTP: `curl -X POST tempboi.email` prints the address and a `tb_…` token, then `curl -H "Authorization: Bearer tb_…" "https://tempboi.email/v1/inboxes/<address>/wait?subject=verify"` holds until the mail arrives and answers JSON with `code` and `link` already extracted (408 on timeout). In test code: `await using inbox = await temp()` from `postboi/inbox`, then `(await inbox.wait({ subject: /verify/i })).code`. Inboxes live 1h by default (24h max) and hold 100 messages. `/raw/temp-inbox`
+
 ## Edge runtimes
 
 Cloudflare Workers, and anything else without a filesystem. `/raw/cloudflare-workers`
