@@ -492,9 +492,9 @@ This only applies to the Postboi provider (we can't know another provider's iden
 mix Postboi with a bring-your-own provider in one project, remove `postboi sync` from your
 prepare script: the narrowing applies to `from` everywhere.
 
-`form` is typed the same way: `sync` reads your account's forms, so `mail({ form: "Home
-Ownership Query" })` autocompletes and a renamed or misspelled form is a type error. A raw
-`form_…` id is always accepted. See [Naming the form](/formdata#naming-the-form).
+`form` is looser: `sync` reads your account's forms so `mail({ form: "Home Ownership
+Query" })` autocompletes, but any other name is accepted too, since a form is created on
+its first send. See [Naming the form](/formdata#naming-the-form).
 
 ## Limits
 

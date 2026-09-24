@@ -8,8 +8,8 @@ import type { PostboiDomain, PostboiForm } from "./postboi.js"
  *
  * - `register.d.ts`: a `Register` augmentation narrowing every `from` field to the
  *   account's sending address plus its domains, every WhatsApp `template` to the
- *   names approved on Meta or Twilio, and every `form` to the account's forms by
- *   name and id. Pending domains are included
+ *   names approved on Meta or Twilio, and suggesting the account's forms (by name and
+ *   id) for every `form`. Pending domains are included
  *   deliberately: you write the code while DNS propagates, and the API enforces delivery
  *   either way — the type answers "is this plausibly my address", not "will it deliver".
  * - `register.js`: the account's publishable captcha key, which is what lets the
@@ -57,9 +57,9 @@ function variables_member(variables: Record<string, Array<string>>): string {
 }
 
 /**
- * Union members for the account's forms: each current name, then each id. The ids are
- * already covered by the `form_${string}` pattern the type carries — listing them is for
- * autocomplete, so an id can be picked rather than pasted.
+ * Union members for the account's forms: each current name, then each id. `form` takes
+ * any string, so none of these narrow it; they're there for autocomplete, so a name or
+ * id can be picked rather than typed.
  */
 function form_members(forms: Array<PostboiForm>): Array<string> {
 	return [...forms.map((f) => JSON.stringify(f.name)), ...forms.map((f) => JSON.stringify(f.id))]
@@ -98,9 +98,8 @@ function register_block(
 		blocks.push(variables_member(variables))
 	}
 	// Forms differ from addresses in that an empty list is an answer: an account with no
-	// forms gets no `form` member, and `form` widens back to any string so the first send
-	// can create one. Only a run that couldn't ask (undefined) keeps the last generated
-	// names, so a blip doesn't loosen a type that was narrow yesterday.
+	// forms gets no `form` member. Only a run that couldn't ask (undefined) keeps the last
+	// generated names, so a blip doesn't drop yesterday's suggestions.
 	const form = forms ? form_members(forms) : keep_forms
 	if (form.length > 0) blocks.push(member("form", form))
 	if (blocks.length === 0) return ""
