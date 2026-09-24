@@ -1,0 +1,138 @@
+---
+title: FormData
+name: FormData
+description: How Postboi turns submitted FormData into tidy, sectioned HTML email tables.
+category: Guides
+---
+
+Pass a `FormData` object as the `body` and Postboi converts it into a tidy HTML table. This
+is what powers the [SvelteKit form actions](/sveltekit), but you can pass `FormData`
+to any `mail()` call.
+
+`body` also accepts a **plain object** of fields (like Express/multer's `req.body`), which
+is normalised and parsed the same way:
+
+```typescript
+await mail({ body: req.body })
+```
+
+And a **promise** resolving to any of these, so you can hand a framework's
+`request.formData()` straight through without awaiting it yourself:
+
+```typescript
+await mail({ body: request.formData() })
+```
+
+## Special fields
+
+These keys are extracted from the body and applied to the send options instead of appearing
+in the table:
+
+- `_to`, `_from`, `_subject`, `_reply_to`
+- `_cc`, `_bcc`: comma-separated or repeated
+
+Values can be base64-encoded; they'll be decoded automatically.
+
+Set `_reply_to` to the submitter's email so replies go back to them instead of your
+`from` address. See the [SvelteKit form](/sveltekit#the-form) for the hidden-field
+pattern. Typically that's all a contact form needs: a reply-to is enough for replies to
+reach the right person, with no per-message `from` or verified domain required.
+
+Addresses may include a display name: `"ACME Inc <hello@example.com>"` arrives as **ACME
+Inc**. That works anywhere an address does: `_from`, `_reply_to`, `default.from`, and the
+CLI's `Default from` prompt.
+
+Two more fields are stripped before rendering: the `_honey` honeypot and Turnstile's
+token (`cf-turnstile-response`, or `_captcha` on SvelteKit remote forms). They drive the built-in [spam protection](/spam) and never appear in your
+emails.
+
+## Grouped fields
+
+Use the `fieldset→field` syntax to group related fields into sections:
+
+```html
+<input name="contact→name" />
+<input name="contact→email" />
+<input name="order→product" />
+<input name="order→quantity" />
+```
+
+This produces sectioned tables in the email body: one section per fieldset (`contact`,
+`order`), with a row per field.
+
+## Naming the form
+
+On the Postboi provider, a send can say which form it came from:
+
+```typescript
+await mail({ to: "housing@example.org", body: request.formData(), form: "Home Ownership Query" })
+```
+
+Every submission that names a form is filed under it in the dashboard, and the fields it
+carried become the columns of that form's table — and of the CSV or spreadsheet exports
+built from it. That works because the provider sends the submission's fields as data
+beside the rendered table (FormData's own `[name, value]` entries, minus files and the
+`_` specials), so the dashboard has the submission, not just the email.
+
+A name is matched case-insensitively and created on first use, so nothing needs setting
+up before the first send. `bunx postboi sync` then feeds your account's forms (and their
+`form_…` ids) to `form` so they autocomplete. It still takes any other string, so you can
+name a form in code before it exists on the account. Rename a form in the dashboard and
+the API keeps answering to the old name, so what's already shipped keeps landing in the
+right place. The one exception: create a *new* form under a name an older one used to have, and that name now
+means the new form.
+
+Naming a form marks the send as a form submission, so [managed captcha](/spam) gates it
+like any FormData send. Forms are the Postboi provider's: on a project whose
+`postboi.config` names another provider, `sync` records that too, and `form` becomes a type
+error there rather than an option that silently does nothing.
+
+## Escaping
+
+Field names and values are HTML-escaped before they reach the table, so a submission
+can't inject markup into the email. This matters because the form is usually public:
+without escaping, anyone could put a `<a href>` or a tracking pixel into the
+notification you read, arriving from your own sending domain.
+
+Escape nothing yourself on the way in — you'd get visible `&amp;lt;` entities. The
+derived plain-text body decodes back to exactly what the sender typed.
+
+## Multi-line values
+
+Line breaks in a value become `<br>`, so a textarea arrives laid out the way it was
+typed rather than collapsed into one run-on line. Browsers submit textareas with CRLF;
+`\r\n`, lone `\r` and lone `\n` are all handled, and blank lines survive as
+consecutive breaks. A `<br>` someone *submits* is still escaped — only the breaks
+Postboi adds are real markup.
+
+## Hand-rolled bodies
+
+Escaping applies to the **table renderer** only. An HTML string passed as `body` is
+yours and is sent verbatim, so sanitise that yourself if any part of it came from a
+user. The same two helpers are exported for that:
+
+```typescript
+import { escape_html, escape_lines, mail } from "postboi"
+
+await mail({
+	subject: "New enquiry",
+	body: `<p>From ${escape_html(name)}</p><p>${escape_lines(message)}</p>`,
+})
+```
+
+`escape_html` for single-line values and attributes, `escape_lines` when the value may
+contain newlines.
+
+## Attachments
+
+Attachments work from file inputs (`details→files`) or via `attachments: File | File[]` on
+[`mail()`](/api#sendoptions).
+
+```html
+<input type="file" name="details→attachments" multiple />
+```
+
+## Customising the labels
+
+The [`formatter`](/api#sendoptions) option on `mail()` controls how fieldset and field
+labels are rendered. Pass `null` or `false` to a part to leave those labels untouched.

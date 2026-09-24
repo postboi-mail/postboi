@@ -1,0 +1,164 @@
+---
+title: Quick start
+name: Quick start
+description: postboi init signs you in, writes your token, and installs Postboi — or collects your own provider's credentials.
+category: Getting started
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "$site"
+</script>
+
+One command, fully set up.
+
+<InstallationTabs exec args="init" />
+
+The first prompt is the only real decision: send with **Postboi**, or **bring your own
+provider** (Resend, SES, Mailgun, Postmark, …). Everything after that is the same, and so
+is every line of code you write.
+
+## Sending with Postboi
+
+Pick **Postboi** and the CLI opens your browser, authorises the device, and writes one env
+var. No provider account, no API key to copy from a dashboard, no DNS, no card:
+
+```bash
+# .env  (gitignored — the only secret)
+POSTBOI_TOKEN=…
+```
+
+```typescript
+import { mail } from 'postboi'
+
+await mail({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>' })
+```
+
+You don't need the token to start building: until one is set, `mail()`
+[prints each message to the console](/providers#no-credential-yet) in development instead
+of failing, and only throws once you deploy.
+
+That's the setup. Mail sends from your account's `you@send.postboi.email` address — a real
+deliverable address, but not an inbox, so set `reply_to` if you want replies — until you
+[verify a domain](/provider#sending-from-your-own-domain) of your own. `init` offers that
+too, at the end: it detects your project's domain (astro `site`, `package.json`
+`homepage`, a `CNAME` file, wrangler routes, `SITE_URL`-style env vars), prefills the
+prompt, registers the domain on a yes, and opens the one-click DNS link for your
+registrar. Skippable with one Enter — nothing waits on it.
+
+Because Postboi knows your account, `init` can wire up things a bring-your-own provider
+can't:
+
+- **Typed `from`** — narrowed to your sending address and verified domains, so a wrong one
+  is a type error instead of a runtime `from_not_allowed`. The types are generated
+  [inside `node_modules`](/provider#type-safe-from): nothing to commit, and always optional.
+- **Managed captcha** — the publishable key is baked in, so [`<Captcha />`](/spam#the-captcha-component)
+  works with no Cloudflare account and no keys.
+- **Webhook secrets** — every endpoint secret written as `POSTBOI_WEBHOOK_SECRET`, so
+  [`receive()`](/webhooks) verifies signatures without a copy-paste.
+
+Re-running `init` is safe: a working `POSTBOI_TOKEN` is reused rather than replaced, so you
+can walk the prompts again any time to revisit defaults. `bunx postboi sync` refreshes the
+generated pieces (types, captcha key, webhook secrets) after adding a domain.
+
+The same token also covers the rest of the platform from the same import — no second SDK:
+
+```typescript
+import { mail } from 'postboi'
+
+await mail.recipients.add('Newsletter', 'Ada Lovelace <ada@example.com>')
+```
+
+[Message status and the log](/provider#delivery-status),
+[lists, broadcasts and double opt-in](/provider#lists--broadcasts),
+[notifications](/provider#notifications), [suppressions](/provider#suppressions),
+[scheduling](/scheduling) and [batch sends with idempotency keys](/provider#batching--idempotency)
+are all documented in [The Postboi provider](/provider), along with plan limits.
+
+## Zero setup — no sign-in at all
+
+There's a version of the Postboi path with **no browser, no sign-in and no prompts**,
+built for AI coding agents, CI, and anyone who wants working mail before deciding
+anything:
+
+```bash
+bunx postboi init --agent
+```
+
+One round trip provisions a **claimable project**: the token lands in `.env`, the config
+is written, and your sending address is derived from your `package.json` name
+(`@acme/mail-site` sends from `mail-site@send.postboi.email`). Sends work immediately but
+are **sandboxed** — they run the full pipeline and land in your message log without
+delivering — until you open the printed **claim URL** and sign in once. Claiming lifts
+the sandbox on the spot; nothing else changes. The details (expiry, limits, how agents
+should surface the claim link) are in
+[Zero setup for agents & CI](/provider#zero-setup-for-agents--ci).
+
+## Bringing your own provider
+
+Pick **Bring your own provider** and the CLI asks which one, then collects its credentials
+(an API key, plus a domain for Mailgun or a region for SES) — printing the exact dashboard
+page each one comes from. If you're signed in and your team has
+[synced the credential](/provider#team-credentials) before, the prompt answers itself: the
+key is pulled from your account and you type nothing. What you do type is synced up for
+the next teammate, so any credential is typed once, on one machine, ever.
+
+Either way it **writes only secrets** to your env file and **everything else** — the
+provider, defaults, and non-secret options — to a committed
+[`postboi.config.ts`](/config). The best case is a single env var:
+
+```ts
+// postboi.config.ts  (committed)
+import { config } from 'postboi'
+
+export default config({
+	provider: 'resend',
+	default: { from: 'no-reply@example.com' }
+})
+```
+
+```bash
+# .env  (gitignored, secrets only)
+RESEND_API_KEY=re_xxxxxxxx
+```
+
+`mail()` picks that up on every call, exactly as it does with a `POSTBOI_TOKEN` — the
+sending code never names a provider, so swapping later is a one-line config change.
+
+## What it does either way
+
+- Optionally collects `from` / `to` and other defaults applied to every send, and writes
+  them (with hooks, later) to the committed [`postboi.config.ts`](/config).
+- Installs `postboi` if it isn't installed yet.
+- Offers to push your env vars to your host (Vercel, Cloudflare, Netlify, Railway) — no
+  globally installed host CLI required, and it offers to link the project first when it
+  isn't yet — and to gitignore the env file if it isn't already.
+- Offers to install the **postboi agent skill** into `.claude/skills/`: a condensed
+  cheat-sheet that teaches AI coding agents the library's conventions. It ships inside
+  the package, and what's installed is a symlink to it — so upgrading postboi upgrades
+  the skill, with no diff in your repo — it dangles on a fresh clone until dependencies
+  are installed, so the skill is absent rather than stale. (Where symlinks aren't
+  available the file is copied instead, and `postboi sync` keeps that copy current.)
+
+Already have postboi installed and never ran `init`? Install the skill on its own:
+
+```bash
+bunx postboi skill
+```
+
+## Beyond email
+
+The same `init` sets up the other channels — `--sms`, `--whatsapp`, `--push`, `--chat` —
+and each channel's call works exactly the way `mail()` does. Start with
+[Multi-channel send()](/send), or jump straight to [SMS](/sms), [WhatsApp](/whatsapp),
+[Push](/push), [Slack](/slack), [Discord](/discord), [Teams](/teams) or
+[Telegram](/telegram).
+
+Signed in to the Postboi provider, `init` also **syncs the credentials it collects to
+your account**, so a teammate's `postboi sync` fills in their env file with no ceremony —
+see [Team credentials](/provider#team-credentials).
+
+## Prefer to do it yourself?
+
+Skip the CLI and write the config file plus the credential env vars by hand, or
+construct a provider instance directly. See [Manual setup](/manual-setup) and
+[Providers](/providers).
