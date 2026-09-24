@@ -10,7 +10,7 @@
 		"ci": "bunx tsc --noEmit"
 	},
 	"dependencies": {
-		"postboi": "^0.54.0"
+		"postboi": "^0.54.1"
 	},
 	"devDependencies": {
 		"wrangler": "^4.0.0",
