@@ -86,6 +86,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "formdata", name: "FormData" },
 					{ slug: "dev-inbox", name: "Dev inbox" },
 					{ slug: "email-testing", name: "Email testing" },
+					{ slug: "temp-inbox", name: "Temp inboxes" },
 					{ slug: "forms", name: "Hosted forms" },
 					{ slug: "spam", name: "Spam protection" },
 					{ slug: "templates", name: "Email templates" },

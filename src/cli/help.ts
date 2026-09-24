@@ -156,6 +156,52 @@ export const HELP: Array<HelpSection> = [
 		],
 	},
 	{
+		title: "Temp inboxes",
+		note: "tempboi.email, no account or POSTBOI_TOKEN needed",
+		entries: [
+			{
+				command: "inbox",
+				summary: "Make a throwaway inbox and print its address",
+				details: [
+					"new [--name <n>] [--ttl 2h] [--json] [--env]",
+					"--env prints export POSTBOI_INBOX=… POSTBOI_INBOX_TOKEN=… for eval",
+				],
+			},
+			{
+				command: "inbox watch",
+				summary: "Print mail as it arrives, one line each",
+				details: [
+					"[address] --all --json (NDJSON) --tag <t> --from <s> --subject <s>",
+					"--forward <url>: POST each as an email.received webhook, signed with POSTBOI_WEBHOOK_SECRET when set",
+					"--exec <cmd>: run per mail with SUBJECT FROM TO CODE LINK ID set and the mail's JSON on stdin",
+				],
+			},
+			{
+				command: "inbox wait",
+				summary: "Wait for one mail, then exit",
+				details: [
+					"[address] --from <s> --subject <s> --tag <t> (/regex/ works) --timeout <sec> --new",
+					"--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout",
+				],
+			},
+			{
+				command: "inbox read",
+				summary: "One mail in full",
+				details: ["[id or latest] --html --raw --headers --json"],
+			},
+			{ command: "inbox open", summary: "The inbox's web page, in your browser" },
+			{
+				command: "inbox ls",
+				summary: "Inboxes made on this machine",
+				details: ["rm [address] · extend <ttl> [address]"],
+			},
+		],
+		footer: [
+			"The inbox made or used last is the default; POSTBOI_INBOX_TOKEN overrides",
+			"it (the token alone finds its inbox), POSTBOI_INBOX_URL moves the host.",
+		],
+	},
+	{
 		title: "Options",
 		entries: [
 			{ command: "-h, --help", summary: "Show this help" },
@@ -167,9 +213,11 @@ export const HELP: Array<HelpSection> = [
 const COLUMN = 31
 
 /** `--help`: the sections with the commands in cyan, the details dimmed. */
-export function help_text(): string {
+/** The whole reference, or only the sections named in `only`. */
+export function help_text(only?: Array<string>): string {
 	const out: Array<string> = []
 	for (const section of HELP) {
+		if (only && !only.includes(section.title)) continue
 		out.push(`${bold(section.title)}${section.note ? ` ${dim(`(${section.note})`)}` : ""}`)
 		for (const entry of section.entries) {
 			const name = section.title === "Options" ? entry.command : `bunx postboi ${entry.command}`
@@ -190,7 +238,8 @@ export function help_markdown(): string {
 	const out: Array<string> = []
 	for (const section of HELP) {
 		if (section.title === "Options") continue
-		out.push(`## ${section.title === "Usage" ? "Setup and tools" : "The account"}`)
+		const heading: Record<string, string> = { Usage: "Setup and tools", Account: "The account" }
+		out.push(`## ${heading[section.title] ?? section.title}`)
 		out.push("")
 		if (section.note) out.push(`${section.note.replace(/: (https?:\S+)/, ": <$1>")}`, "")
 		// Padded to the widest cell, as the formatter would write it, so a generated file

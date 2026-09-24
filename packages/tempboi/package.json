@@ -1,0 +1,31 @@
+{
+	"name": "tempboi",
+	"version": "0.0.0",
+	"description": "Throwaway email inboxes from your terminal, for developers and agents. No sign-up.",
+	"type": "module",
+	"bin": {
+		"tempboi": "bin.js"
+	},
+	"files": [
+		"bin.js",
+		"README.md"
+	],
+	"dependencies": {
+		"postboi": "*"
+	},
+	"keywords": [
+		"email",
+		"temp mail",
+		"disposable email",
+		"testing",
+		"cli",
+		"agents"
+	],
+	"homepage": "https://tempboi.email",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/postboi-mail/postboi.git",
+		"directory": "packages/tempboi"
+	},
+	"license": "MIT"
+}
