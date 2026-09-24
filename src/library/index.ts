@@ -149,15 +149,15 @@ export type WhatsappTemplate = Register extends { template: infer T extends stri
 	: string
 
 /**
- * The forms on your Postboi account, per the generated types — or any string when none
- * have been generated. `bunx postboi sync` reads their names and ids from the account, so
- * a form that was renamed or never existed is a type error rather than a stray form
- * minted at runtime. A raw `form_…` id stays valid whatever's been generated, the same
- * way a Twilio SID does for templates.
+ * The forms on your Postboi account, per the generated types, plus any other string.
+ * `bunx postboi sync` reads their names and ids from the account so they autocomplete,
+ * but a name it hasn't seen is still accepted: the API creates a form on first use, so
+ * code that names one before it exists on the account is how a form usually starts.
+ * (`string & {}` rather than `string` keeps the generated names in the editor's
+ * suggestions instead of collapsing the union to `string`.)
  *
  * Only the *current* names are generated. The API still answers to a form's previous
- * names, so code shipped against the old one keeps landing in the right place; the type
- * error on the next sync is the nudge to update it.
+ * names, so code shipped against the old one keeps landing in the right place.
  *
  * Forms are the Postboi provider's. When the generated types say the project sends
  * through another provider (`sync` writes the config's `provider` into {@link Register}),
@@ -172,7 +172,7 @@ export type FormName = Register extends { provider: infer P }
 	: GeneratedFormName
 
 type GeneratedFormName = Register extends { form: infer F extends string }
-	? F | `form_${string}`
+	? F | (string & {})
 	: string
 
 /**

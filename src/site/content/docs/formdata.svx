@@ -75,11 +75,11 @@ beside the rendered table (FormData's own `[name, value]` entries, minus files a
 `_` specials), so the dashboard has the submission, not just the email.
 
 A name is matched case-insensitively and created on first use, so nothing needs setting
-up before the first send. `bunx postboi sync` then types `form` to your account's forms
-(and their `form_…` ids), the same way it types `from`, so a form you rename in the
-dashboard becomes a type error here on the next sync — while the API keeps answering to
-the old name, so what's already shipped keeps landing in the right place. The one
-exception: create a *new* form under a name an older one used to have, and that name now
+up before the first send. `bunx postboi sync` then feeds your account's forms (and their
+`form_…` ids) to `form` so they autocomplete. It still takes any other string, so you can
+name a form in code before it exists on the account. Rename a form in the dashboard and
+the API keeps answering to the old name, so what's already shipped keeps landing in the
+right place. The one exception: create a *new* form under a name an older one used to have, and that name now
 means the new form.
 
 Naming a form marks the send as a form submission, so [managed captcha](/spam) gates it

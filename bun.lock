@@ -54,6 +54,8 @@
       "peerDependencies": {
         "@maizzle/framework": "^6.0.0",
         "@sveltejs/kit": "^2.0.0",
+        "expo-constants": ">=15",
+        "expo-notifications": ">=0.20",
         "react": ">=18",
         "svelte": "^5.7.0",
         "vue": ">=3.3",
@@ -61,6 +63,8 @@
       "optionalPeers": [
         "@maizzle/framework",
         "@sveltejs/kit",
+        "expo-constants",
+        "expo-notifications",
         "react",
         "vue",
       ],
