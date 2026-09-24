@@ -88,6 +88,25 @@ jobs:
             npm publish
           fi
 
+      # tempboi is `postboi inbox` under a short name, released in step with postboi:
+      # the same version, depending on exactly this postboi. Its own trusted
+      # publisher on npmjs.com names this same workflow file.
+      - name: Publish tempboi to npm
+        working-directory: packages/tempboi
+        run: |
+          if [ "$(npm view "tempboi@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+            echo "• tempboi@$VERSION is already on npm — nothing to publish"
+            exit 0
+          fi
+          node -e '
+            const fs = require("node:fs")
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"))
+            pkg.version = process.env.VERSION
+            pkg.dependencies.postboi = process.env.VERSION
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, "\t") + "\n")
+          '
+          npm publish
+
       # On dispatch runs the tag may not exist yet — gh creates it at this
       # commit (tags created with the workflow's own token don't re-trigger
       # this workflow, which is why release.yml dispatches instead of tagging).
