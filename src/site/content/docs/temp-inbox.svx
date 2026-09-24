@@ -106,8 +106,11 @@ yourself, or leave it to expire.
 - **`for await (const mail of inbox.watch())`** yields every new mail until you break
   out or abort its `signal`. `inbox.list()`, `inbox.extend('2h')` and `inbox.delete()`
   do what they say.
-- **`temp.attach()`** picks up an inbox made elsewhere, from `POSTBOI_INBOX` and
-  `POSTBOI_INBOX_TOKEN` by default, which is how a test reads the inbox a CI step made.
+- **`temp.attach()`** picks up an inbox made elsewhere, from `POSTBOI_INBOX_TOKEN` by
+  default, which is how a test reads the inbox a CI step made. The token alone is enough:
+  it finds its own inbox, and `POSTBOI_INBOX` only has to be set if you want the address
+  checked too. The same goes for the CLI, so the command tempboi.email's page gives you,
+  `POSTBOI_INBOX_TOKEN=tb_… npx tempboi watch`, watches the inbox you were looking at.
 
 ## Limits
 

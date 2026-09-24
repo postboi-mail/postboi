@@ -100,6 +100,16 @@ describe("pick_inbox", () => {
 		expect(pick_inbox(saved, {})).toMatchObject({ address: "recent@t.e" })
 	})
 
+	it("takes the env token alone, and ignores a POSTBOI_INBOX that isn't an address", () => {
+		expect(pick_inbox(saved, { POSTBOI_INBOX_TOKEN: "tb_env" })).toMatchObject({
+			address: "",
+			token: "tb_env",
+		})
+		expect(
+			pick_inbox(saved, { POSTBOI_INBOX: "1080", POSTBOI_INBOX_TOKEN: "tb_env" })
+		).toMatchObject({ address: "", token: "tb_env" })
+	})
+
 	it("says why when there's nothing to read", () => {
 		expect(pick_inbox([], {})).toMatchObject({ code: "no_inbox" })
 		expect(pick_inbox(saved, {}, "stranger@t.e")).toMatchObject({ code: "unknown_inbox" })

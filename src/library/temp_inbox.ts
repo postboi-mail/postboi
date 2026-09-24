@@ -269,7 +269,7 @@ export interface TempOptions {
 }
 
 export interface AttachOptions {
-	/** Default `POSTBOI_INBOX`. */
+	/** Default `POSTBOI_INBOX`. Optional: the token alone finds its inbox. */
 	address?: string
 	/** Default `POSTBOI_INBOX_TOKEN`. */
 	token?: string
@@ -647,18 +647,25 @@ async function create(options: TempOptions = {}): Promise<Inbox> {
  * Checks the token by asking for the inbox, so a wrong one fails here and not later.
  */
 async function attach(options: AttachOptions = {}): Promise<Inbox> {
-	const address = options.address ?? env_var("POSTBOI_INBOX")
-	const token = options.token ?? env_var("POSTBOI_INBOX_TOKEN")
-	if (!address)
-		throw new InboxError({
-			message: "No inbox to attach to: pass address or set POSTBOI_INBOX",
-			code: "missing_address",
-		})
+	// POSTBOI_INBOX is also the dev inbox's port or `off`, so it only counts as an address.
+	const from_env = env_var("POSTBOI_INBOX")
+	const address = options.address || (from_env?.includes("@") ? from_env : undefined)
+	const token = options.token || env_var("POSTBOI_INBOX_TOKEN")
 	if (!token)
 		throw new InboxError({
 			message: "No inbox token: pass token or set POSTBOI_INBOX_TOKEN",
 			code: "missing_token",
 		})
+	const base = base_url(options.base)
+	const fetcher = options.fetch ?? globalThis.fetch
+	// The token alone names its inbox, so an address is only a check that they agree.
+	if (!address) {
+		const response = await fetcher(`${base}/v1/inboxes`, {
+			headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+		})
+		if (!response.ok) throw await failure(response)
+		return new Inbox((await response.json()) as WireInbox, token, base, fetcher)
+	}
 	const placeholder: WireInbox = {
 		address,
 		domain: address.slice(address.lastIndexOf("@") + 1),
@@ -668,13 +675,7 @@ async function attach(options: AttachOptions = {}): Promise<Inbox> {
 		cursor: 0,
 		urls: { web: "", messages: "", wait: "" },
 	}
-	const inbox = new Inbox(
-		placeholder,
-		token,
-		base_url(options.base),
-		options.fetch ?? globalThis.fetch
-	)
-	return inbox.info()
+	return new Inbox(placeholder, token, base, fetcher).info()
 }
 
 /**

@@ -281,8 +281,25 @@ describe("temp.attach()", () => {
 		})
 	})
 
+	it("finds the inbox from its token alone", async () => {
+		const { server, make } = setup()
+		const made = await make()
+		delete process.env.POSTBOI_INBOX
+		process.env.POSTBOI_INBOX_TOKEN = made.token
+		process.env.POSTBOI_INBOX_URL = server.base
+		const inbox = await temp.attach({ fetch: server.fetch })
+		expect(inbox.address).toBe(made.address)
+		expect(server.requests.at(-1)).toMatchObject({ method: "GET", path: "/v1/inboxes" })
+
+		process.env.POSTBOI_INBOX_TOKEN = "tb_nobody"
+		await expect(temp.attach({ fetch: server.fetch })).rejects.toMatchObject({
+			code: "not_found",
+		})
+	})
+
 	it("says what's missing", async () => {
 		delete process.env.POSTBOI_INBOX
-		await expect(temp.attach()).rejects.toMatchObject({ code: "missing_address" })
+		delete process.env.POSTBOI_INBOX_TOKEN
+		await expect(temp.attach()).rejects.toMatchObject({ code: "missing_token" })
 	})
 })

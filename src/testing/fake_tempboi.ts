@@ -148,6 +148,15 @@ export function fake_tempboi(options: { base?: string; scale?: number } = {}) {
 			return json(201, view(inbox, true))
 		}
 
+		// The token alone names its inbox.
+		if (path === "/v1/inboxes" && method === "GET") {
+			const token = auth?.replace(/^Bearer /, "") ?? query.token
+			if (!token) return json(401, { message: "Missing token", code: "missing_token" })
+			const found = [...inboxes.values()].find((inbox) => inbox.token === token)
+			if (!found) return json(404, { message: "No live inbox has that token", code: "not_found" })
+			return json(200, view(found))
+		}
+
 		const match = /^\/v1\/inboxes\/([^/]+)(\/.*)?$/.exec(path)
 		if (!match) return json(404, { message: "Not found", code: "not_found" })
 		const inbox = inboxes.get(match[1])

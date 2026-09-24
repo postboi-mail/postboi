@@ -197,8 +197,8 @@ export const HELP: Array<HelpSection> = [
 			},
 		],
 		footer: [
-			"The inbox made or used last is the default; POSTBOI_INBOX and",
-			"POSTBOI_INBOX_TOKEN override it, POSTBOI_INBOX_URL moves the host.",
+			"The inbox made or used last is the default; POSTBOI_INBOX_TOKEN overrides",
+			"it (the token alone finds its inbox), POSTBOI_INBOX_URL moves the host.",
 		],
 	},
 	{

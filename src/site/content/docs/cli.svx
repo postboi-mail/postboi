@@ -63,7 +63,7 @@ tempboi.email, no account or POSTBOI_TOKEN needed
 | `bunx postboi inbox open`  | The inbox's web page, in your browser                                                                                                                                                                                                                                                                                     |
 | `bunx postboi inbox ls`    | Inboxes made on this machine — `rm [address] · extend <ttl> [address]`                                                                                                                                                                                                                                                    |
 
-The inbox made or used last is the default; POSTBOI_INBOX and POSTBOI_INBOX_TOKEN override it, POSTBOI_INBOX_URL moves the host.
+The inbox made or used last is the default; POSTBOI_INBOX_TOKEN overrides it (the token alone finds its inbox), POSTBOI_INBOX_URL moves the host.
 
 ## For agents
 

@@ -164,17 +164,19 @@ export function pick_inbox(
 	address?: string
 ): SavedInbox | { error: string; code: string } {
 	const base = (env.POSTBOI_INBOX_URL || TEMP_INBOX_URL).replace(/\/+$/, "")
-	const from_env =
-		env.POSTBOI_INBOX && env.POSTBOI_INBOX_TOKEN
-			? { address: env.POSTBOI_INBOX, token: env.POSTBOI_INBOX_TOKEN, base, expires: "" }
-			: undefined
+	// The token alone names its inbox; `attach` looks the address up when it isn't given.
+	// POSTBOI_INBOX is also the dev inbox's port or `off`, so it only counts as an address.
+	const env_address = env.POSTBOI_INBOX?.includes("@") ? env.POSTBOI_INBOX : ""
+	const from_env = env.POSTBOI_INBOX_TOKEN
+		? { address: env_address, token: env.POSTBOI_INBOX_TOKEN, base, expires: "" }
+		: undefined
 	if (address) {
 		const wanted = untagged(address).toLowerCase()
-		if (from_env && untagged(from_env.address).toLowerCase() === wanted) return from_env
+		if (from_env?.address && untagged(from_env.address).toLowerCase() === wanted) return from_env
 		const found = saved.find((e) => e.address.toLowerCase() === wanted)
 		if (found) return found
 		return {
-			error: `No token for ${address} on this machine. Set POSTBOI_INBOX and POSTBOI_INBOX_TOKEN to read one made elsewhere.`,
+			error: `No token for ${address} on this machine. Set POSTBOI_INBOX_TOKEN to read one made elsewhere.`,
 			code: "unknown_inbox",
 		}
 	}
@@ -290,7 +292,8 @@ async function open_inbox(ctx: Context, address?: string): Promise<Inbox> {
 		if (error instanceof InboxError && error.status === 404) forget(ctx.path, picked.address)
 		throw error
 	})
-	if (picked.expires) save(ctx, inbox)
+	// Remembered either way, so an inbox claimed with its token is the default afterwards.
+	save(ctx, inbox)
 	return inbox
 }
 
