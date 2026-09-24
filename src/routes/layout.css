@@ -308,3 +308,121 @@ html {
 	background-size: 4px 4px;
 	opacity: 0.14;
 }
+
+/* ---------- highlighted code ----------
+
+   Twinkleplop (src/site/utils/highlight.js) marks every token with a class and
+   leaves the colours to CSS, so one rendering carries both modes and the theme
+   is these variables. The palette is ours: Ayu Light on paper, Aura Soft Dark on
+   ink, with attribute names in the brand accent (the orange on paper, where the
+   yellow is too pale to read). postboi-app's app.css carries the same palette
+   for its news snippets, so a block reads the same on either site. */
+:root {
+	--code-fg: #5c6166;
+	--code-comment: #8a9199;
+	--code-string: #86b300;
+	--code-constant: #a37acc;
+	--code-keyword: #fa8d3e;
+	--code-operator: #ed9366;
+	--code-function: #f2ae49;
+	--code-type: #399ee6;
+	--code-tag: #55b4d4;
+	--code-attr: #f47600;
+	--code-escape: #4cbf99;
+	--code-invalid: #e65050;
+}
+
+.dark {
+	--code-fg: #edecee;
+	--code-comment: #6d6d6d;
+	--code-string: #61ffca;
+	--code-constant: #ffca85;
+	--code-keyword: #a277ff;
+	--code-operator: #edecee;
+	--code-function: #82e2ff;
+	--code-type: #ffca85;
+	--code-tag: #a277ff;
+	--code-attr: #fdc005;
+	--code-escape: #f694ff;
+	--code-invalid: #ff6767;
+}
+
+/* Anything not named below (identifiers, properties, punctuation) is the
+   foreground, which is where Aura and Ayu put them too. */
+.twinkleplop {
+	color: var(--code-fg);
+}
+
+.twinkleplop
+	:is(
+		.comment,
+		.doctype,
+		.hash,
+		.label,
+		.code_fence,
+		.front_matter_marker,
+		.blockquote_marker,
+		.hr
+	) {
+	color: var(--code-comment);
+	font-style: italic;
+}
+
+.twinkleplop :is(.string, .template, .plain_scalar, .inserted, .inserted_marker, .url, .link_text) {
+	color: var(--code-string);
+}
+
+.twinkleplop :is(.number, .boolean, .null, .datetime, .entity, .bit) {
+	color: var(--code-constant);
+}
+
+.twinkleplop
+	:is(
+		.keyword,
+		.expression,
+		.svelte_block,
+		.lifetime,
+		.unit,
+		.directive,
+		.changed,
+		.changed_marker
+	) {
+	color: var(--code-keyword);
+}
+
+.twinkleplop .operator {
+	color: var(--code-operator);
+}
+
+.twinkleplop :is(.function, .decorator) {
+	color: var(--code-function);
+}
+
+.twinkleplop :is(.type, .class_name, .builtin, .namespace, .variant, .heading, .heading_marker) {
+	color: var(--code-type);
+}
+
+.twinkleplop :is(.tag_name, .selector, .tag) {
+	color: var(--code-tag);
+}
+
+.twinkleplop
+	:is(
+		.attr_name,
+		.attribute,
+		.attr_sigil,
+		.svelte_directive,
+		.selector_class,
+		.selector_id,
+		.selector_pseudo
+	) {
+	color: var(--code-attr);
+}
+
+.twinkleplop :is(.regex, .string_escape, .escape, .format) {
+	color: var(--code-escape);
+}
+
+.twinkleplop :is(.deleted, .deleted_marker) {
+	color: var(--code-invalid);
+}

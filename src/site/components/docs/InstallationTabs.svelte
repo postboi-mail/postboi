@@ -3,7 +3,7 @@
 	import { cn } from "$site/utils/cn"
 	import CopyCodeButton from "./markdown/CopyCodeButton.svelte"
 	import Pre from "./markdown/Pre.svelte"
-	import { getHighlighter } from "$site/utils/highlighter"
+	import { highlight } from "$site/utils/highlight"
 	import {
 		packageManagers,
 		packageManagerStore,
@@ -119,26 +119,11 @@
 		}
 	})
 
-	const highlightedCommands = $derived.by(() => {
-		const highlighter = getHighlighter()
-		const highlighted = {} as Record<PackageManager, { light: string; dark: string }>
-
-		for (const pm of packageManagers) {
-			const cmd = commands[pm]
-			highlighted[pm] = {
-				light: highlighter.codeToHtml(cmd, {
-					lang: "bash",
-					theme: "github-light",
-				}),
-				dark: highlighter.codeToHtml(cmd, {
-					lang: "bash",
-					theme: "github-dark",
-				}),
-			}
-		}
-
-		return highlighted
-	})
+	const highlightedCommands = $derived(
+		Object.fromEntries(
+			packageManagers.map((pm) => [pm, highlight(commands[pm], "bash")])
+		) as Record<PackageManager, string>
+	)
 </script>
 
 <div class="inset-shadow my-6 rounded-lg bg-background-inset p-1.5">
@@ -187,14 +172,8 @@
 						data-package-manager={pm}
 						data-active={packageManagerStore.active === pm}
 					>
-						<div class="shiki-theme-light">
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-							{@html highlightedCommands[pm].light}
-						</div>
-						<div class="shiki-theme-dark">
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-							{@html highlightedCommands[pm].dark}
-						</div>
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+						{@html highlightedCommands[pm]}
 					</div>
 				{/each}
 			</Pre>
@@ -276,18 +255,6 @@
 		:global(html[data-docs-package-manager="yarn"])
 			.package-manager-command[data-active="true"]:not([data-package-manager="yarn"]) {
 			display: none;
-		}
-
-		.shiki-theme-dark {
-			display: none;
-		}
-
-		:global(.dark) :global(.shiki-theme-light) {
-			display: none;
-		}
-
-		:global(.dark) :global(.shiki-theme-dark) {
-			display: block;
 		}
 	</style>
 </div>
