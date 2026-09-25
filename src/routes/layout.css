@@ -314,21 +314,20 @@ html {
    Twinkleplop (src/site/utils/highlight.js) marks every token with a class and
    leaves the colours to CSS, so one rendering carries both modes and the theme
    is these variables. On ink it is Aura Soft Dark with attribute names in the
-   brand yellow. On paper it is our own: strings in a deep cut of Boi's hat blue
-   (#3b91e6 itself is 3.3:1 on white), keywords and tags in an orangey yellow,
-   types in the postal red, attributes and functions in the ink, and every
-   colour at 4.5:1 or better on white. postboi-app's app.css carries the same
-   palette for its news snippets, so a block reads the same on either site. */
+   brand yellow. On paper it is our own: code set in a soft navy, strings in
+   Boi's hat blue, keywords and tags in the brand orange, types in the postal
+   red, attributes and functions in the ink. postboi-app's app.css carries the
+   same palette for its news snippets, so a block reads the same on either site. */
 :root {
-	--code-fg: #3d4660;
+	--code-fg: #356696;
 	--code-comment: #716e64;
-	--code-string: #1f6fc4;
+	--code-string: #368ce7;
 	--code-constant: #b8341f;
-	--code-keyword: #ad6200;
-	--code-operator: #3d4660;
+	--code-keyword: #f88429;
+	--code-operator: #356696;
 	--code-function: #0b1f4d;
 	--code-type: #b8341f;
-	--code-tag: #ad6200;
+	--code-tag: #f88429;
 	--code-attr: #0b1f4d;
 	--code-escape: #b0307a;
 	--code-invalid: #c62828;
