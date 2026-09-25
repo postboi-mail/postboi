@@ -120,7 +120,7 @@ describe("expo", () => {
 		const error = await new Expo().send({ to: TOKEN, message: "hi" }).catch((e) => e)
 		expect(PushProvider.is_expired(error)).toBe(true)
 		expect(push.expired(error)).toBe(true)
-		expect(String(error)).toContain("delete your stored copy")
+		expect(String(error)).toContain("Delete your stored copy")
 	})
 
 	it("surfaces a request-level refusal by its code", async () => {

@@ -49,7 +49,7 @@ async function load_node(): Promise<void> {
 		throw new PostboiError({
 			provider: "smtp",
 			message:
-				"The SMTP provider needs a Node.js runtime — node:net/node:tls are unavailable here. Use an HTTP-based provider instead.",
+				"The SMTP provider needs a Node.js runtime, and node:net/node:tls are unavailable here. Use an HTTP-based provider instead.",
 			code: "node_required",
 		})
 	}

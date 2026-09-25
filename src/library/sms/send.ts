@@ -43,12 +43,12 @@ const RESOLUTION: ChannelResolution<SmsProvider<unknown>> = {
 	// set by anyone using Voice or Verify. Name the provider.
 	infers: false,
 	dev_fallback_warning:
-		"postboi: no SMS provider configured — logging texts to the console instead of sending. Run `bunx postboi init --sms` to send for real.",
+		"postboi: no SMS provider configured, so texts are logged to the console instead of sent. Run `bunx postboi init --sms` to send for real.",
 	dev_intercept: {
 		env_key: "POSTBOI_SMS_DEV",
 		configured: (config) => config.dev?.sms,
 		warning:
-			"postboi: development — texts are logged, not sent. Set `dev: { sms: false }` in postboi.config or POSTBOI_SMS_DEV=send to send for real.",
+			"postboi: development mode, so texts are logged, not sent. Set `dev: { sms: false }` in postboi.config or POSTBOI_SMS_DEV=send to send for real.",
 	},
 }
 

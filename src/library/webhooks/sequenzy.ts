@@ -251,9 +251,9 @@ export const mock: AdapterModule["mock"] = async ({ type, secret }) => {
 		data.from_email = "someone@example.com"
 		data.from_name = "Someone"
 		data.subject = "Re: Mock subject"
-		data.body_text = "Thanks — that works for me."
-		data.body_html = "<p>Thanks — that works for me.</p>"
-		data.stripped_text = "Thanks — that works for me."
+		data.body_text = "Thanks, that works for me."
+		data.body_html = "<p>Thanks, that works for me.</p>"
+		data.stripped_text = "Thanks, that works for me."
 		data.received_at = now.toISOString()
 	}
 

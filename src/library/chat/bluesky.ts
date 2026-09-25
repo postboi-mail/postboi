@@ -71,7 +71,7 @@ export default class Bluesky extends ChatProvider<SendResponse> {
 				provider: this.provider,
 				channel: "chat",
 				code: "too_long",
-				message: `A Bluesky post is ${LIMIT} graphemes at most — this one is ${length}.`,
+				message: `A Bluesky post is ${LIMIT} graphemes at most, and this one is ${length}.`,
 			})
 		}
 
@@ -147,7 +147,7 @@ export default class Bluesky extends ChatProvider<SendResponse> {
 				provider: this.provider,
 				channel: "chat",
 				code: "no_session",
-				message: "Bluesky returned no session — check the handle and app password.",
+				message: "Bluesky returned no session. Check the handle and app password.",
 				raw: data,
 			})
 		}

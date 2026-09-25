@@ -272,7 +272,7 @@ export const mock: AdapterModule["mock"] = async ({ type, secret }) => {
 			id: "wamid.mock-inbound",
 			timestamp: now,
 			type: "text",
-			text: { body: type === "unsubscribed" ? "STOP" : "Thanks — that works for me." },
+			text: { body: type === "unsubscribed" ? "STOP" : "Thanks, that works for me." },
 		}
 		// A reply to one of yours — so the event carries the send it answers.
 		if (type === "received") message.context = { from: "15551110001", id: "wamid.mock" }

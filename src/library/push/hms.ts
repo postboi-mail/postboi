@@ -157,7 +157,7 @@ export default class HMS extends PushProvider<SendResponse> {
 		if (body?.code === TOKEN_EXPIRED) forget_token(`hms:${this.#app_id}`)
 		if (body?.code && DEAD_TOKEN.has(body.code)) {
 			return {
-				message: `HMS rejected the device token (${body.code}) — delete your stored copy. See PushProvider.is_expired().`,
+				message: `HMS rejected the device token (${body.code}). Delete your stored copy. See PushProvider.is_expired().`,
 				code: "expired_subscription",
 			}
 		}
@@ -166,7 +166,7 @@ export default class HMS extends PushProvider<SendResponse> {
 		}
 		// No code at all means we never reached Push Kit — let the status speak.
 		return response.ok
-			? { message: "HMS returned no result code — the response was not from Push Kit." }
+			? { message: "HMS returned no result code, so the response was not from Push Kit." }
 			: undefined
 	}
 }

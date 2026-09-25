@@ -212,7 +212,7 @@ export async function resolve_channel_provider<TProvider>(
 			channel: spec.channel,
 			code: "missing_env",
 			message:
-				`${spec.channel} provider "${key}" needs ${missing.env} — set it in the environment` +
+				`${spec.channel} provider "${key}" needs ${missing.env}. Set it in the environment` +
 				(missing.secret
 					? ""
 					: ` or as \`${spec.channel}.options.${missing.arg}\` in postboi.config.ts`) +

@@ -5,7 +5,7 @@ description: The provider surface, SendOptions, the Email type, and common const
 category: Reference
 ---
 
-Looking for the HTTP endpoints instead — managing lists, domains, webhooks, and
+Looking for the HTTP endpoints instead, for managing lists, domains, webhooks, and
 members over curl? That's the [REST API](/rest-api).
 
 ## Provider class

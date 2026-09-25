@@ -325,7 +325,7 @@ async function read_disk(): Promise<PostboiConfig> {
 					// A found config that fails to import is a misconfiguration, not a missing file —
 					// be loud so defaults/hooks/provider don't silently vanish.
 					const hint = file.endsWith("ts")
-						? " (this Node can't import TypeScript config — use Node 23.6+ or rename to postboi.config.js)"
+						? " (this Node can't import TypeScript config: use Node 23.6+ or rename to postboi.config.js)"
 						: ""
 					console.warn(
 						`postboi: found ${path.basename(file)} but couldn't import it${hint}:`,

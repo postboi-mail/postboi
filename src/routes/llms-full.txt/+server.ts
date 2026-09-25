@@ -24,7 +24,7 @@ export const GET: RequestHandler = async () => {
 	const preamble = [
 		`# ${siteConfig.name}`,
 		"",
-		`> ${siteConfig.name} — ${siteConfig.description}`,
+		`> ${siteConfig.name}: ${siteConfig.description}`,
 		"",
 		"Postboi is an email provider, and `postboi` on npm is its SDK. A `POSTBOI_TOKEN` is the whole setup, and no other provider account is needed. Sending through another provider (Resend, SES, Postmark and others) is optional.",
 		"",

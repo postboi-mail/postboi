@@ -221,7 +221,7 @@ async function subscribe_now(options: SubscribeOptions = {}): Promise<PushSubscr
 		if (permission === "denied") {
 			throw new PushSubscribeError(
 				"permission_denied",
-				"Notification permission was denied. The browser will not ask again — the user has to change it in site settings."
+				"Notification permission was denied. The browser will not ask again, so the user has to change it in site settings."
 			)
 		}
 		if (permission !== "granted") {

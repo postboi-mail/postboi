@@ -92,6 +92,6 @@ export default class MockChat extends ChatProvider<SendResponse> {
 
 /** Print a captured chat message. */
 function log_chat(captured: SentChat): void {
-	const heading = captured.title ? `${captured.title} — ` : ""
+	const heading = captured.title ? `${captured.title}: ` : ""
 	console.log(`postboi (mock chat) → ${captured.to}\n\n${heading}${captured.message}`)
 }

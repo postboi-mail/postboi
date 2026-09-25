@@ -137,7 +137,7 @@ export function create_prompts(io: { input?: Readable; output?: Writable } = {})
 		async select<T>(message: string, options: Array<Option<T>>): Promise<T> {
 			output.write(`${message}\n`)
 			options.forEach((option, i) => {
-				const hint = option.hint ? dim(` — ${option.hint}`) : ""
+				const hint = option.hint ? dim(`: ${option.hint}`) : ""
 				output.write(`  ${dim(String(i + 1))}) ${option.label}${hint}\n`)
 			})
 			while (true) {

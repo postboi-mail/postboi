@@ -1179,7 +1179,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		this.#announced_sandbox = true
 		const claim = data.claim_url ? ` Claim your project to deliver for real: ${data.claim_url}` : ""
 		console.log(
-			`postboi: this account is sandboxed — sends land in your Postboi message log, nothing is delivered.${claim}`
+			`postboi: this account is sandboxed. Sends land in your Postboi message log and nothing is delivered.${claim}`
 		)
 	}
 

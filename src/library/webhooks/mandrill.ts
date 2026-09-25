@@ -99,7 +99,7 @@ const adapter: WebhookAdapter = {
 			throw new WebhookVerificationError({
 				provider: "mandrill",
 				message:
-					"mandrill webhook signature did not match. Mandrill signs the exact URL it was configured with — behind a proxy, set MANDRILL_WEBHOOK_URL.",
+					"mandrill webhook signature did not match. Mandrill signs the exact URL it was configured with. Behind a proxy, set MANDRILL_WEBHOOK_URL.",
 				code: "invalid_signature",
 			})
 		}

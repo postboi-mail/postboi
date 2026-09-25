@@ -122,7 +122,7 @@ export async function svix_adapter_verify(
 	if (verdicts.every((verdict) => verdict === "malformed_secret")) {
 		throw new WebhookVerificationError({
 			provider,
-			message: `${provider.toUpperCase()}_WEBHOOK_SECRET is not a whsec_… secret — the value after the prefix must be base64`,
+			message: `${provider.toUpperCase()}_WEBHOOK_SECRET is not a whsec_… secret. The value after the prefix must be base64`,
 			code: "missing_secret",
 		})
 	}

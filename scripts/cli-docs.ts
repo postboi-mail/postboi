@@ -15,7 +15,7 @@ export function cli_page(): string {
 	return `---
 title: CLI
 name: CLI
-description: Every postboi command — setup, the dev inbox, and the whole account from the terminal. Generated from the CLI's own help.
+description: Every postboi command: setup, the dev inbox, and the whole account from the terminal. Generated from the CLI's own help.
 category: Reference
 ---
 
@@ -24,8 +24,8 @@ category: Reference
 The \`postboi\` package carries a CLI: \`bunx postboi <command>\` (or \`npx\`). Setup and the
 dev tools work with any provider; the account commands need the Postboi provider's
 \`POSTBOI_TOKEN\`, which \`init\` writes. Every account command takes \`--json\` for the API's
-response as one document, and a failure carries the API's \`code\` — what a script or an
-agent should branch on.
+response as one document, and a failure carries the API's \`code\`, which is what a script or
+an agent should branch on.
 
 ${help_markdown()}
 ## For agents
@@ -49,20 +49,20 @@ export function cli_reference(): string {
 \`bunx postboi <command>\` (or \`npx\`). Setup and the dev tools work with any provider; the
 account commands need the Postboi provider's \`POSTBOI_TOKEN\`, which \`init\` writes. A bare
 noun lists (\`list\` says the same). **Add \`--json\` to any account command** for the API's
-response as one JSON document on stdout — parse that rather than the table — and a failure
+response as one JSON document on stdout (parse that rather than the table), and a failure
 goes to stderr as \`{ "error": { "message", "code" } }\` with exit 1; branch on the \`code\`
 (\`name_taken\`, \`export_paused\`, \`no_token\`, …), never the wording.
 
 ${help_markdown()}
 ## Notes for agents
 
-- **\`doctor\` first and last.** It says whether the project is wired — token, provider,
-  \`default.from\`, webhooks, skill — names every fix, and exits 1 on a failure.
+- **\`doctor\` first and last.** It says whether the project is wired (token, provider,
+  \`default.from\`, webhooks, skill), names every fix, and exits 1 on a failure.
 - **\`send\` then \`messages <id>\`** proves the pipeline end to end from the terminal; no
-  throwaway script. On a sandboxed account \`send\` prints the claim URL — surface it.
+  throwaway script. On a sandboxed account \`send\` prints the claim URL. Surface it.
 - **\`forms\` before naming a form** on a send, so \`contact\` doesn't land beside
   \`Contact form\`. A form is created on first use and matched case-insensitively.
-- **Exports** are a hosted feature, downloaded now or emailed on a schedule — the recipe
+- **Exports** are a hosted feature, downloaded now or emailed on a schedule. The recipe
   and the defaults to state rather than guess are in \`references/exports.md\`.
 - **Recipients** upsert the contact and the membership; with names or custom data, or in
   bulk, POST \`/v1/lists/<list>/recipients\` (see \`references/migration.md\`).
@@ -75,12 +75,12 @@ ${help_markdown()}
   code (exit 2 on timeout, 3 when the mail has none), \`--link\` the verify link. Recipe
   in \`https://docs.postboi.app/raw/temp-inbox\`.
 - **Deletes are immediate and unprompted** (\`lists delete\` takes the recipients with it).
-- **Dashboard-only by design:** API-key management, member roles and billing — send the
+- **Dashboard-only by design:** API-key management, member roles and billing. Send the
   user there rather than trying.
 - **No terminal, no prompts:** \`init\` without \`--agent\` refuses to run unattended (exit
   2); \`init --agent\` is the one to run.
 
-Anything richer than the CLI exposes: the REST API at https://api.postboi.app —
+Anything richer than the CLI exposes: the REST API at https://api.postboi.app, with
 \`https://postboi.app/openapi/<tag>.json\` for one feature's slice of the OpenAPI document
 (\`exports\`, \`forms\`, \`messages\`, …; the index is \`https://postboi.app/openapi\`), auth
 \`Authorization: Bearer $POSTBOI_TOKEN\`, errors always \`{ "message", "code" }\`.

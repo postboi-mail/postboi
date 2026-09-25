@@ -28,7 +28,7 @@ const gmail_clip: Check = ({ html_bytes }) => {
 	return {
 		id: "gmail_clip",
 		severity: "warning",
-		message: `The HTML body is ${kb(html_bytes)} — Gmail clips messages over ${kb(GMAIL_CLIP_BYTES)}, hiding the rest behind a "View entire message" link`,
+		message: `The HTML body is ${kb(html_bytes)}. Gmail clips messages over ${kb(GMAIL_CLIP_BYTES)}, hiding the rest behind a "View entire message" link`,
 	}
 }
 
@@ -40,7 +40,7 @@ const message_size: Check = ({ input }) => {
 	return {
 		id: "message_size",
 		severity: "warning",
-		message: `The whole message is ${Math.round(input.size_bytes / 1024 / 1024)} MB — Gmail and Outlook refuse mail around 25 MB, and most other servers are close behind`,
+		message: `The whole message is ${Math.round(input.size_bytes / 1024 / 1024)} MB. Gmail and Outlook refuse mail around 25 MB, and most other servers are close behind`,
 	}
 }
 
@@ -52,7 +52,7 @@ const missing_plain_text: Check = ({ input }) => {
 		id: "missing_plain_text",
 		severity: "warning",
 		message:
-			"No plain-text alternative — spam filters distrust HTML-only email, and text-only clients show nothing",
+			"No plain-text alternative. Spam filters distrust HTML-only email, and text-only clients show nothing",
 	}
 }
 
@@ -62,7 +62,7 @@ const missing_list_unsubscribe: Check = ({ input }) => {
 		id: "missing_list_unsubscribe",
 		severity: "info",
 		message:
-			"No List-Unsubscribe header — bulk senders need one to keep Gmail and Yahoo happy; transactional mail can ignore this",
+			"No List-Unsubscribe header. Bulk senders need one to keep Gmail and Yahoo happy; transactional mail can ignore this",
 	}
 }
 
@@ -72,7 +72,7 @@ const missing_one_click_unsubscribe: Check = ({ input }) => {
 		id: "missing_one_click_unsubscribe",
 		severity: "info",
 		message:
-			"List-Unsubscribe without List-Unsubscribe-Post — one-click unsubscribe (RFC 8058) needs both, and Gmail requires it for bulk senders",
+			"List-Unsubscribe without List-Unsubscribe-Post. One-click unsubscribe (RFC 8058) needs both, and Gmail requires it for bulk senders",
 	}
 }
 
@@ -83,7 +83,7 @@ const missing_lang: Check = ({ tokens }) => {
 		id: "missing_lang",
 		severity: "info",
 		message:
-			"The <html> tag has no lang attribute — screen readers fall back to guessing the language",
+			"The <html> tag has no lang attribute, so screen readers fall back to guessing the language",
 	}
 }
 
@@ -96,7 +96,7 @@ const images_missing_alt: Check = ({ images }) => {
 	return {
 		id: "images_missing_alt",
 		severity: "warning",
-		message: `${missing} image${missing === 1 ? " has" : "s have"} no alt text — with images blocked (Outlook's default) the reader sees nothing`,
+		message: `${missing} image${missing === 1 ? " has" : "s have"} no alt text. With images blocked (Outlook's default) the reader sees nothing`,
 		occurrences: missing,
 	}
 }
@@ -113,7 +113,7 @@ const image_no_dimensions: Check = ({ tokens }) => {
 	return {
 		id: "image_no_dimensions",
 		severity: "info",
-		message: `${undimensioned} image${undimensioned === 1 ? " has" : "s have"} no declared dimensions — layouts jump while images load, and Outlook renders them at natural size`,
+		message: `${undimensioned} image${undimensioned === 1 ? " has" : "s have"} no declared dimensions. Layouts jump while images load, and Outlook renders them at natural size`,
 		occurrences: undimensioned,
 	}
 }
@@ -124,7 +124,7 @@ const insecure_links: Check = ({ links }) => {
 	return {
 		id: "insecure_links",
 		severity: "warning",
-		message: `${insecure} link${insecure === 1 ? " uses" : "s use"} plain http: — spam filters read that as a signal, and browsers warn on the landing page`,
+		message: `${insecure} link${insecure === 1 ? " uses" : "s use"} plain http:. Spam filters read that as a signal, and browsers warn on the landing page`,
 		occurrences: insecure,
 	}
 }
@@ -149,7 +149,7 @@ const empty_links: Check = ({ tokens }) => {
 	return {
 		id: "empty_links",
 		severity: "warning",
-		message: `${empty} link${empty === 1 ? " goes" : "s go"} nowhere (missing, "#" or javascript: href) — dead taps for the reader, script schemes are stripped anyway`,
+		message: `${empty} link${empty === 1 ? " goes" : "s go"} nowhere (missing, "#" or javascript: href). They are dead taps for the reader, and script schemes are stripped anyway`,
 		occurrences: empty,
 	}
 }
@@ -160,13 +160,13 @@ const subject_length: Check = ({ input }) => {
 		return {
 			id: "subject_missing",
 			severity: "warning",
-			message: "The subject is empty — a classic spam signal, and the inbox shows “(no subject)”",
+			message: "The subject is empty: a classic spam signal, and the inbox shows “(no subject)”",
 		}
 	if (input.subject.length > 78)
 		return {
 			id: "subject_length",
 			severity: "info",
-			message: `The subject is ${input.subject.length} characters — most inboxes truncate around 50–78, so the end will be cut off`,
+			message: `The subject is ${input.subject.length} characters. Most inboxes truncate around 50–78, so the end will be cut off`,
 		}
 	return
 }

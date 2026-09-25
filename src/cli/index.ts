@@ -229,7 +229,7 @@ function write_env_values(targets: Array<EnvTarget>, values: Record<string, stri
 		console.log(`${green("✓")} wrote ${Object.keys(values).length} var(s) to ${bold(target.file)}`)
 		for (const key of removed) {
 			console.log(
-				`  ${yellow("!")} removed stale ${bold(key)} — it would override your postboi.config defaults`
+				`  ${yellow("!")} removed stale ${bold(key)}: it would override your postboi.config defaults`
 			)
 		}
 		if (target.note) console.log(`  ${yellow("!")} ${target.note}`)
@@ -265,7 +265,7 @@ function prefill_from_team(
 	const prefilled: Record<string, string> = {}
 	for (const field of fields) {
 		if (team[field.env] !== undefined) {
-			console.log(`${green("✓")} ${bold(field.env)} — using your team's synced credential`)
+			console.log(`${green("✓")} ${bold(field.env)}: using your team's synced credential`)
 			prefilled[field.env] = team[field.env]
 		}
 	}
@@ -305,7 +305,7 @@ async function sync_credentials_up(
 		// Say so: the docs promise team sync, and a silent skip reads as a broken promise
 		// when a teammate later finds nothing to pull.
 		console.log(
-			dim("(credentials not synced to a team — no POSTBOI_TOKEN; `bunx postboi init` signs in)")
+			dim("(credentials not synced to a team: no POSTBOI_TOKEN. `bunx postboi init` signs in)")
 		)
 		return
 	}
@@ -316,7 +316,7 @@ async function sync_credentials_up(
 		)
 	} else if (pushed.reason) {
 		// A rejection is worth a line; an unreachable API stays quiet — sync is best-effort.
-		console.log(yellow(`! credential sync skipped — ${pushed.reason}`))
+		console.log(yellow(`! credential sync skipped: ${pushed.reason}`))
 	}
 }
 
@@ -337,7 +337,9 @@ function write_pulled_vars(vars: Record<string, string>, force = false): Array<s
 	const gitignore = existsSync(".gitignore") ? readFileSync(".gitignore", "utf8") : ""
 	for (const target of targets) {
 		if (target.file !== ".envrc" && !is_gitignored(gitignore, target.file)) {
-			console.log(`  ${yellow("!")} ${bold(target.file)} isn't gitignored — it holds secrets now`)
+			console.log(
+				`  ${yellow("!")} ${bold(target.file)} isn't gitignored, and it holds secrets now`
+			)
 		}
 	}
 	return keys
@@ -425,7 +427,7 @@ async function offer_host_push(
 	if (invocation.via_runner) {
 		console.log(
 			dim(
-				`\n(${HOST_CLI[host]} isn't installed — running it via ${[invocation.cmd, ...invocation.prefix].join(" ")})`
+				`\n(${HOST_CLI[host]} isn't installed, so running it via ${[invocation.cmd, ...invocation.prefix].join(" ")})`
 			)
 		)
 	}
@@ -439,14 +441,14 @@ async function offer_host_push(
 		if (!link) {
 			// Cloudflare's "link" is the config file: secrets push to the Worker it names.
 			console.log(
-				`\n${yellow("!")} no wrangler config found — add wrangler.jsonc (with your Worker's \`name\`), then run:`
+				`\n${yellow("!")} no wrangler config found. Add wrangler.jsonc (with your Worker's \`name\`), then run:`
 			)
 			for (const key of Object.keys(values)) console.log(`    ${manual_hint(host, key)}`)
 			return
 		}
 		if (
 			!(await prompts.confirm(
-				`\nThis directory isn't linked to a ${HOST_LABEL[host]} project yet — link it now?`
+				`\nThis directory isn't linked to a ${HOST_LABEL[host]} project yet. Link it now?`
 			))
 		) {
 			console.log(`  ${dim(`link later (${HOST_CLI[host]} ${link.join(" ")}), then run:`)}`)
@@ -455,7 +457,7 @@ async function offer_host_push(
 		}
 		const linked = run_push({ cmd: invocation.cmd, args: [...invocation.prefix, ...link] })
 		if (!linked.ok) {
-			console.log(`${red("✗")} linking failed — ${linked.reason}`)
+			console.log(`${red("✗")} linking failed: ${linked.reason}`)
 			console.log(`  ${dim("link by hand, then run:")}`)
 			for (const key of Object.keys(values)) console.log(`    ${manual_hint(host, key)}`)
 			return
@@ -468,7 +470,7 @@ async function offer_host_push(
 		if (result.ok) {
 			console.log(`${green("✓")} ${key}`)
 		} else {
-			console.log(`${red("✗")} ${key} — ${result.reason}`)
+			console.log(`${red("✗")} ${key}: ${result.reason}`)
 			if (host === "railway") {
 				// Railway's link state lives in its global config, so this is the first
 				// place an unlinked project surfaces.
@@ -499,7 +501,7 @@ async function ask_defaults(
 	if (await prompts.confirm(`\nSet ${bold("default")} ${names}?`)) {
 		for (const field of fields) {
 			while (true) {
-				const hint = field.hint ? dim(` — ${field.hint}`) : ""
+				const hint = field.hint ? dim(`: ${field.hint}`) : ""
 				const value = await prompts.ask(`${field.label} ${dim("(optional)")}${hint}`, {
 					default: field.default,
 				})
@@ -540,7 +542,7 @@ function write_config(
 			}
 			if (next) captcha_key = undefined // handled — keep it out of the merge hint
 		}
-		console.log(`${yellow("!")} ${bold(existing_config)} already exists — add to it:`)
+		console.log(`${yellow("!")} ${bold(existing_config)} already exists. Add to it:`)
 		console.log(dim(`\n  provider: ${JSON.stringify(provider_key)},`))
 		if (Object.keys(defaults).length)
 			console.log(dim(`  ${render_block("default", defaults, "  ").trimEnd()}`))
@@ -583,12 +585,12 @@ function ensure_install(files: Array<string>): void {
 	if (has_dependency(pkg, "postboi")) return
 	const pm = detect_package_manager(files, pkg)
 	const dev = is_bundled_framework(files, pkg)
-	const hint = dev ? ` ${dim("(as a devDependency — bundled at build time)")}` : ""
+	const hint = dev ? ` ${dim("(as a devDependency, bundled at build time)")}` : ""
 	console.log(`\n${dim(`Installing ${bold("postboi")} with ${pm}…`)}${hint}`)
 	const { cmd, args } = install_command(pm, "postboi", dev)
 	const result = run_push({ cmd, args })
 	if (result.ok) console.log(`${green("✓")} installed postboi`)
-	else console.log(`${red("✗")} ${result.reason} — run \`${cmd} ${args.join(" ")}\` yourself`)
+	else console.log(`${red("✗")} ${result.reason}. Run \`${cmd} ${args.join(" ")}\` yourself`)
 }
 
 /**
@@ -616,7 +618,7 @@ function ensure_remote_exclude(files: Array<string>): void {
 	if (plugin !== "unable") {
 		writeFileSync(vite, plugin)
 		console.log(
-			`${green("✓")} added the ${bold("postboi()")} Vite plugin ${dim(`(${vite} — bundles postboi.config into the server build)`)}`
+			`${green("✓")} added the ${bold("postboi()")} Vite plugin ${dim(`(${vite}: bundles postboi.config into the server build)`)}`
 		)
 		return
 	}
@@ -643,7 +645,7 @@ function ensure_remote_exclude(files: Array<string>): void {
 	}
 	writeFileSync(vite, result)
 	console.log(
-		`${green("✓")} excluded ${bold("postboi/remote")} from Vite prebundling ${dim(`(${vite} — needed for SvelteKit remote functions)`)}`
+		`${green("✓")} excluded ${bold("postboi/remote")} from Vite prebundling ${dim(`(${vite}: needed for SvelteKit remote functions)`)}`
 	)
 }
 
@@ -711,7 +713,7 @@ function warn_unbundled_config(): void {
 	)
 	console.log(
 		dim(
-			`  Without it the config isn't bundled, so those settings work locally and vanish once deployed.\n  Add: import { postboi } from "postboi/vite" — then postboi() in plugins.`
+			`  Without it the config isn't bundled, so those settings work locally and vanish once deployed.\n  Add: import { postboi } from "postboi/vite", then postboi() in plugins.`
 		)
 	)
 }
@@ -739,7 +741,7 @@ async function env_command(args: Array<string>): Promise<void> {
 	await ensure_env_loaded()
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
-		console.log(red("postboi env needs a POSTBOI_TOKEN — run `bunx postboi init` first."))
+		console.log(red("postboi env needs a POSTBOI_TOKEN. Run `bunx postboi init` first."))
 		return exit(1)
 	}
 	const base = cloud_base()
@@ -797,7 +799,7 @@ async function env_command(args: Array<string>): Promise<void> {
 		const payload = Object.fromEntries(keys.map((key) => [key, vars[key]]))
 		const pushed = await push_env_vars(base, token, payload)
 		if (!pushed.ok) {
-			console.log(red(`Push failed — ${pushed.reason ?? "could not reach the Postboi API."}`))
+			console.log(red(`Push failed: ${pushed.reason ?? "could not reach the Postboi API."}`))
 			return exit(1)
 		}
 		console.log(`${green("✓")} pushed ${keys.length} credential(s): ${bold(keys.join(", "))}`)
@@ -809,7 +811,7 @@ async function env_command(args: Array<string>): Promise<void> {
 		if (!synced) return void console.log(red("Could not reach the Postboi API."))
 		const written = write_pulled_vars(synced.vars, args.includes("--force"))
 		if (written.length === 0) {
-			console.log(dim("Nothing to pull — every synced credential already has a local value."))
+			console.log(dim("Nothing to pull. Every synced credential already has a local value."))
 			return
 		}
 		console.log(`${green("✓")} pulled ${written.length} credential(s): ${bold(written.join(", "))}`)
@@ -819,7 +821,7 @@ async function env_command(args: Array<string>): Promise<void> {
 	if (action === "remove" && args[1]) {
 		const removed = await push_env_vars(base, token, { [args[1]]: null })
 		if (!removed.ok) {
-			console.log(red(`Remove failed — ${removed.reason ?? "could not reach the Postboi API."}`))
+			console.log(red(`Remove failed: ${removed.reason ?? "could not reach the Postboi API."}`))
 			return exit(1)
 		}
 		console.log(`${green("✓")} removed ${bold(args[1])} from the synced credentials`)
@@ -833,7 +835,7 @@ async function env_command(args: Array<string>): Promise<void> {
 async function sync(): Promise<void> {
 	await ensure_env_loaded()
 	if (!existsSync(TYPES_TARGET)) {
-		console.log(dim("postboi sync: postboi isn't installed here — install it, then re-run."))
+		console.log(dim("postboi sync: postboi isn't installed here. Install it, then re-run."))
 		return
 	}
 	refresh_skill()
@@ -858,7 +860,7 @@ async function sync(): Promise<void> {
 		const vapid = read_env("VAPID_PUBLIC_KEY")
 		if (write_runtime(key, sids, vapid)) {
 			console.log(`${green("✓")} captcha key baked for <Captcha /> ${dim(`(from ${source})`)}`)
-			if (vapid) console.log(`${green("✓")} VAPID public key baked — subscribe() needs no key`)
+			if (vapid) console.log(`${green("✓")} VAPID public key baked, so subscribe() needs no key`)
 		}
 	}
 	/** Say what got typed, once, however sync got here. */
@@ -875,7 +877,7 @@ async function sync(): Promise<void> {
 		const { names, variables } = await templates_promise
 		if (write_types(undefined, [], names, variables, undefined, provider_name))
 			report_templates(names)
-		console.log(dim("postboi sync: no POSTBOI_TOKEN — skipping the generated from types."))
+		console.log(dim("postboi sync: no POSTBOI_TOKEN, skipping the generated from types."))
 		return
 	}
 	// The two GETs are independent, and sync runs as the project's predev hook — start the
@@ -890,9 +892,7 @@ async function sync(): Promise<void> {
 		const { names, variables } = await templates_promise
 		if (write_types(undefined, [], names, variables, undefined, provider_name))
 			report_templates(names)
-		console.log(
-			yellow("postboi sync: could not fetch domains from the Postboi provider — skipped.")
-		)
+		console.log(yellow("postboi sync: could not fetch domains from the Postboi provider, skipped."))
 		return
 	}
 
@@ -936,7 +936,7 @@ async function sync(): Promise<void> {
 		const next = upsert_captcha_key(config_source, account.captcha_key)
 		if (next) {
 			writeFileSync(config_file, next)
-			console.log(`${green("✓")} wrote the captcha key to ${bold(config_file)} — commit it`)
+			console.log(`${green("✓")} wrote the captcha key to ${bold(config_file)}. Commit it`)
 		} else {
 			console.log(
 				`${yellow("!")} add \`captcha: { key: ${JSON.stringify(account.captcha_key)} }\` to ${bold(config_file)} so tokenless builds keep the captcha`
@@ -1000,7 +1000,7 @@ async function offer_domain(
 
 	const hinted = hint ? ` ${dim(`(${hint.domain} detected)`)}` : ""
 	const wants = await prompts.confirm(
-		`\nSend from your own domain?${hinted} ${dim("— optional, DNS records at your registrar")}`,
+		`\nSend from your own domain?${hinted} ${dim("(optional, DNS records at your registrar)")}`,
 		Boolean(hint)
 	)
 	if (!wants) return hint
@@ -1015,7 +1015,7 @@ async function offer_domain(
 	const domain = answer ? hostname_of(answer) : undefined
 	if (answer && !domain) {
 		console.log(
-			`${yellow("!")} ${bold(answer.trim())} doesn't look like a public domain you could verify — skipped.`
+			`${yellow("!")} ${bold(answer.trim())} doesn't look like a public domain you could verify, skipped.`
 		)
 		console.log(dim(`  add one later: bunx postboi domains add <domain>`))
 	}
@@ -1028,7 +1028,7 @@ async function offer_domain(
 		await api_command("domains", ["add", domain])
 		console.log(
 			dim(
-				`\nOnce verified: bunx postboi send-address you@${domain} — until then, mail keeps sending from ${send_address ?? "your shared address"}.`
+				`\nOnce verified: bunx postboi send-address you@${domain}. Until then, mail keeps sending from ${send_address ?? "your shared address"}.`
 			)
 		)
 	} catch (error) {
@@ -1069,7 +1069,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		// every send into a quiet no-op. Unattended, the only safe answer is to stop.
 		if (existing_token) {
 			throw new PostboiAuthError(
-				"POSTBOI_TOKEN is already set but couldn't be verified — check connectivity (or `bunx postboi whoami`), and remove the token from your env first if you really want a fresh project."
+				"POSTBOI_TOKEN is already set but couldn't be verified. Check connectivity (or `bunx postboi whoami`), and remove the token from your env first if you really want a fresh project."
 			)
 		}
 		// Zero setup: no browser, no sign-in, no human. One round trip mints a claimable
@@ -1081,7 +1081,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		send_address = provisioned.send_address
 		claim_url = provisioned.claim_url
 		claim_days = provisioned.expires_in_days
-		console.log(`${green("✓")} provisioned a Postboi project — no sign-in needed`)
+		console.log(`${green("✓")} provisioned a Postboi project, no sign-in needed`)
 		if (send_address) console.log(`  ${dim("sends from")} ${bold(send_address)}`)
 		// Everything a fresh account could report came back with the provision response
 		// (its domain list is empty by construction) — no second request needed.
@@ -1140,11 +1140,11 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 				...(send_address ? [send_address] : []),
 				...domains.map((d) => `…@${d.domain}`),
 			].join(", ")
-			return `${bold(status.domain)} isn't a domain on your account — use ${permitted}, or verify the domain in the dashboard first.`
+			return `${bold(status.domain)} isn't a domain on your account. Use ${permitted}, or verify the domain in the dashboard first.`
 		}
 		if (status.level === "pending")
 			console.log(
-				`${yellow("!")} ${bold(status.domain)} is still pending verification — mail from it may not be delivered yet.`
+				`${yellow("!")} ${bold(status.domain)} is still pending verification, so mail from it may not be delivered yet.`
 			)
 		return undefined
 	}
@@ -1181,7 +1181,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		)
 	}
 	if (write_runtime(cloud_account?.captcha_key, {}, read_env("VAPID_PUBLIC_KEY"))) {
-		console.log(`${green("✓")} baked your captcha key — drop ${bold("<Captcha />")} into any form`)
+		console.log(`${green("✓")} baked your captcha key. Drop ${bold("<Captcha />")} into any form`)
 	}
 	if (types_file || cloud_account?.captcha_key) ensure_prepare()
 
@@ -1204,8 +1204,8 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		: "Emails send from your account's send.postboi.email address"
 	const verify_hint = config_defaults.from
 		? ""
-		: " Verify a domain to send from your own — `bunx postboi domains add <domain>`."
-	console.log(dim(`${from_note} — set reply_to to receive replies.${verify_hint}`) + "\n")
+		: " Verify a domain to send from your own: `bunx postboi domains add <domain>`."
+	console.log(dim(`${from_note}. Set reply_to to receive replies.${verify_hint}`) + "\n")
 
 	// The one thing a zero-setup run still owes a human: the claim link. Everything
 	// works right now (dev inbox locally, sandboxed sends in the message log), and one
@@ -1218,12 +1218,12 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		console.log(`\n  ${cyan(claim_url)}\n`)
 		console.log(
 			dim(
-				`Sandboxed sends run the full pipeline and land in your message log — nothing is delivered until you claim.${expiry}`
+				`Sandboxed sends run the full pipeline and land in your message log. Nothing is delivered until you claim.${expiry}`
 			) + "\n"
 		)
 		if (prompts.agent) {
 			console.log(
-				`${yellow("→")} ${bold("Agents:")} show this claim URL to your user — it's how they take ownership.\n`
+				`${yellow("→")} ${bold("Agents:")} show this claim URL to your user. It's how they take ownership.\n`
 			)
 		}
 	}
@@ -1237,7 +1237,7 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		)
 		const when = claim_url ? "After claiming, run" : "Confirm it with your user, then run"
 		console.log(
-			`  ${dim(`${when}:`)} ${cyan(`bunx postboi domains add ${domain_hint.domain}`)} ${dim("— prints the DNS records and a one-click registrar link.")}\n`
+			`  ${dim(`${when}:`)} ${cyan(`bunx postboi domains add ${domain_hint.domain}`)} ${dim("prints the DNS records and a one-click registrar link.")}\n`
 		)
 	}
 }
@@ -1337,7 +1337,7 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 	await offer_skill(prompts)
 
 	// 8. Done — show how to use it
-	console.log(`\n${green(bold("Done!"))} Now just send — no setup, no instance:\n`)
+	console.log(`\n${green(bold("Done!"))} Now just send. No setup, no instance:\n`)
 	console.log(
 		dim('import { mail } from "postboi"\n\nawait mail({ to: "…", subject: "…", body: "…" })') + "\n"
 	)
@@ -1460,7 +1460,7 @@ const CHANNEL_INIT = {
 			)
 			if (provider.verified) {
 				console.log(
-					dim(`\nPrices move — ${provider.name} was last checked on ${provider.verified}.`) + "\n"
+					dim(`\nPrices move. ${provider.name} was last checked on ${provider.verified}.`) + "\n"
 				)
 			}
 			const seeded: Record<string, string> = country ? { country } : {}
@@ -1482,7 +1482,7 @@ const CHANNEL_INIT = {
 		done: () => [
 			'import { sms } from "postboi"\n\nawait sms({ to: "+447788223344", message: "…" })',
 			// Worth saying out loud: the safe default surprises people who expect a real send.
-			"In development texts are logged, not sent — set POSTBOI_SMS_DEV=send when you want real delivery.",
+			"In development texts are logged, not sent. Set POSTBOI_SMS_DEV=send when you want real delivery.",
 		],
 	},
 	chat: {
@@ -1494,7 +1494,7 @@ const CHANNEL_INIT = {
 		async defaults(prompts: Prompts, provider: ChannelProvider): Promise<Record<string, string>> {
 			if (provider.key !== "telegram") return {}
 			const chat_id = await prompts.ask(
-				`\nDefault chat id ${dim("(optional — the id your bot should post to)")}`,
+				`\nDefault chat id ${dim("(optional, the id your bot should post to)")}`,
 				{ required: false }
 			)
 			return chat_id ? { to: chat_id } : {}
@@ -1528,7 +1528,7 @@ const CHANNEL_INIT = {
 				if (subject) {
 					prefilled.VAPID_SUBJECT = subject
 					console.log(
-						`${green("✓")} ${bold("VAPID_SUBJECT")} — using ${email ? `your git email (${email})` : `your project's domain (${subject})`}`
+						`${green("✓")} ${bold("VAPID_SUBJECT")}: using ${email ? `your git email (${email})` : `your project's domain (${subject})`}`
 					)
 				}
 			}
@@ -1538,7 +1538,7 @@ const CHANNEL_INIT = {
 			prefilled.VAPID_PUBLIC_KEY = pair.public_key
 			prefilled.VAPID_PRIVATE_KEY = pair.private_key
 			console.log(
-				`${green("✓")} generated — the public key also goes to the browser's \`subscribe({ key })\`:\n  ${dim(pair.public_key)}\n`
+				`${green("✓")} generated. The public key also goes to the browser's \`subscribe({ key })\`:\n  ${dim(pair.public_key)}\n`
 			)
 		},
 		// APNs is the only provider here whose credentials can be checked without a real
@@ -1562,7 +1562,7 @@ const CHANNEL_INIT = {
 				? "Subscribe in the browser with `subscribe()` from postboi/push first."
 				: provider.key === "expo"
 					? "Register in the app with `subscribe()` from postboi/push/expo first."
-					: "Register the device token from your app first — `subscribe({ native: true })` from postboi/push/expo does it in an Expo app.",
+					: "Register the device token from your app first. `subscribe({ native: true })` from postboi/push/expo does it in an Expo app.",
 		],
 	},
 	whatsapp: {
@@ -1574,13 +1574,13 @@ const CHANNEL_INIT = {
 			// already collected with the credentials, so `from` would be dead config there.
 			if (provider.key === "twilio") {
 				const from = await prompts.ask(
-					`\nSender number ${dim("(optional — your WhatsApp-enabled number, e.g. +14155238886)")}`,
+					`\nSender number ${dim("(optional, your WhatsApp-enabled number, e.g. +14155238886)")}`,
 					{ required: false }
 				)
 				if (from) defaults.from = from
 			}
 			const country = await prompts.ask(
-				`\nDefault country ${dim('(optional — resolves national numbers; an ISO code like "GB")')}`,
+				`\nDefault country ${dim('(optional, resolves national numbers: an ISO code like "GB")')}`,
 				{ required: false }
 			)
 			if (country) defaults.country = country
@@ -1589,7 +1589,7 @@ const CHANNEL_INIT = {
 		done: () => [
 			'import { whatsapp } from "postboi"\n\nawait whatsapp({ to: "+447788223344", template: "…", variables: { name: "Ada" } })',
 			// The constraint that shapes everything: free-form only works in-window.
-			"Free-form `message` only delivers within 24h of the user's last reply — templates deliver anytime.\nIn development messages are logged, not sent — set POSTBOI_WHATSAPP_DEV=send for real delivery.",
+			"Free-form `message` only delivers within 24h of the user's last reply. Templates deliver anytime.\nIn development messages are logged, not sent. Set POSTBOI_WHATSAPP_DEV=send for real delivery.",
 		],
 	},
 } satisfies Record<"sms" | "chat" | "push" | "whatsapp", InitSpec>
@@ -1637,7 +1637,7 @@ async function offer_service_worker(
 		? `${bold("Wire push into")} ${cyan(found.path)}?`
 		: `${bold("Create")} ${cyan(target.path)} ${bold("to receive notifications?")}`
 	if (!(await prompts.confirm(question))) {
-		console.log(dim("  skipped — `receive()` from postboi/push/sw does it in one line."))
+		console.log(dim("  skipped: `receive()` from postboi/push/sw does it in one line."))
 		return
 	}
 
@@ -1655,7 +1655,7 @@ async function offer_service_worker(
 	} else if (result === "conflict") {
 		// Appending would leave two `push` handlers, and every send would show twice.
 		console.log(
-			`${yellow("!")} ${bold(target.path)} already handles \`push\` itself — two handlers would show two notifications for one send.`
+			`${yellow("!")} ${bold(target.path)} already handles \`push\` itself. Two handlers would show two notifications for one send.`
 		)
 		console.log(dim("  Merge it by hand, or delete yours and run this again."))
 		return
@@ -1664,8 +1664,8 @@ async function offer_service_worker(
 		writeFileSync(target.path, result.source)
 		const how =
 			target.kind === "bundled"
-				? dim(" (imports postboi/push/sw — your bundler builds it)")
-				: dim(" (handlers written out — this file is served as-is and can't import)")
+				? dim(" (imports postboi/push/sw, which your bundler builds)")
+				: dim(" (handlers written out: this file is served as-is and can't import)")
 		console.log(`${green("✓")} ${result.action} ${bold(target.path)}${how}`)
 	}
 
@@ -1708,7 +1708,7 @@ async function channel_init(
 	for (const field of provider.fields) {
 		const value = read_env(field.env)
 		if (prefilled[field.env] === undefined && value) {
-			console.log(`${green("✓")} ${bold(field.env)} — using the value already in your env`)
+			console.log(`${green("✓")} ${bold(field.env)}: using the value already in your env`)
 			prefilled[field.env] = value
 		}
 	}
@@ -1724,7 +1724,7 @@ async function channel_init(
 			{
 				label: "Connect in the browser",
 				value: "connect",
-				hint: "pick a channel there — nothing to find or paste",
+				hint: "pick a channel there, nothing to find or paste",
 			},
 			{ label: "Paste a webhook URL", value: "paste" },
 		])
@@ -1733,12 +1733,10 @@ async function channel_init(
 			if (connected) {
 				prefilled[provider.connect.env] = connected.webhook_url
 				console.log(
-					`${green("✓")} connected${connected.label ? ` — posting to ${bold(connected.label)}` : ""}`
+					`${green("✓")} connected${connected.label ? `, posting to ${bold(connected.label)}` : ""}`
 				)
 			} else {
-				console.log(
-					yellow("! the browser connect didn't complete — paste the webhook URL instead.")
-				)
+				console.log(yellow("! the browser connect didn't complete. Paste the webhook URL instead."))
 			}
 		}
 	}
@@ -1778,7 +1776,7 @@ async function channel_init(
 	// browser side needs no key plumbing from the first subscribe.
 	if (channel === "push" && values.VAPID_PUBLIC_KEY && existsSync(TYPES_TARGET)) {
 		if (write_runtime(undefined, {}, values.VAPID_PUBLIC_KEY)) {
-			console.log(`${green("✓")} VAPID public key baked — subscribe() needs no key`)
+			console.log(`${green("✓")} VAPID public key baked, so subscribe() needs no key`)
 			ensure_prepare()
 		}
 	}
@@ -1831,7 +1829,7 @@ function write_channel_config(
 	console.log()
 	const existing = CONFIG_FILES.find((f) => existsSync(f))
 	if (existing) {
-		console.log(`${yellow("!")} ${bold(existing)} already exists — add to it:`)
+		console.log(`${yellow("!")} ${bold(existing)} already exists. Add to it:`)
 		console.log(dim(`\n  ${channel}: {`))
 		console.log(dim(`    provider: ${JSON.stringify(provider_key)},`))
 		if (Object.keys(defaults).length)
@@ -1852,7 +1850,7 @@ async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = fals
 	if (!agent && !stdin.isTTY) {
 		console.error(red("postboi init asks questions, and there is no terminal here to answer them."))
 		console.error(
-			`  ${dim("Unattended:")} ${cyan("bunx postboi init --agent")} ${dim("— zero prompts, provisions a claimable project")}`
+			`  ${dim("Unattended:")} ${cyan("bunx postboi init --agent")} ${dim("(zero prompts, provisions a claimable project)")}`
 		)
 		return exit(2)
 	}
@@ -1875,12 +1873,12 @@ async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = fals
 			bold("What do you want to set up?"),
 			[
 				{
-					label: "Email — Postboi",
+					label: "Email with Postboi",
 					value: "cloud",
-					hint: "zero config — sign in and start sending",
+					hint: "zero config, sign in and start sending",
 				},
 				{
-					label: "Email — bring your own provider",
+					label: "Email with your own provider",
 					value: "byo",
 					hint: "Resend, SES, Mailgun, Postmark, …",
 				},

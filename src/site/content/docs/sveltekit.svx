@@ -93,7 +93,7 @@ A full, runnable version of this form lives in
 ## Remote functions
 
 SvelteKit's [remote functions](https://svelte.dev/docs/kit/remote-functions) (experimental)
-let a library ship the whole backend. `postboi/remote` exports a ready-made remote form —
+let a library ship the whole backend. `postboi/remote` exports a ready-made remote form:
 no `+page.server.ts`, no action, no endpoint. The component *is* the app:
 
 ```svelte
@@ -119,7 +119,7 @@ no `+page.server.ts`, no action, no endpoint. The component *is* the app:
 </form>
 
 {#if mail.result?.success}
-	<p>Thanks — we'll be in touch!</p>
+	<p>Thanks, we'll be in touch!</p>
 {:else if mail.result}
 	<p>{mail.result.error}</p>
 {/if}
@@ -144,15 +144,15 @@ optimizeDeps: { exclude: ['postboi/remote'] }
 Worth knowing:
 
 - **Field names nest instead of using arrows.** Remote-form names must be valid JS paths,
-  so `fields.contact.name` replaces `contact→name` — the email's
+  so `fields.contact.name` replaces `contact→name`, and the email's
   [grouped table](/formdata#grouped-fields) comes out identical. Special fields
   (`_subject`, `_reply_to`, …) work unchanged.
 - **No schema required.** A contact form is arbitrary fields by design, so the handler
-  accepts whatever the form sends — spam checks and parsing happen in the send pipeline,
+  accepts whatever the form sends: spam checks and parsing happen in the send pipeline,
   same as the classic action. Want client-side validation? Compose kit's own preflight:
   `<form {...mail.preflight(schema)}>` with any Standard Schema (Zod, Valibot).
-- **Enhancement is built in.** The spread progressively enhances the form — no
-  `use:enhance` import — and resets it after a successful submit. `mail.pending` counts
+- **Enhancement is built in.** The spread progressively enhances the form (no
+  `use:enhance` import) and resets it after a successful submit. `mail.pending` counts
   in-flight submissions, `mail.result` is the (ephemeral) return value. Custom submit
   behaviour uses the form's own method: `<form {...mail.enhance(async (form) => { await
   form.submit(); … })}>`. Without JavaScript the form still posts and renders the result,
@@ -164,8 +164,8 @@ Worth knowing:
 ### Writing your own remote form
 
 `remote()` uses SvelteKit's `unchecked` mode, so it accepts whatever the form submits and
-the spam fields arrive intact. Writing your own `form(schema, ...)` instead — for typed
-fields and `issues()` — changes that: **SvelteKit validates against your schema first and
+the spam fields arrive intact. Writing your own `form(schema, ...)` instead, for typed
+fields and `issues()`, changes that: **SvelteKit validates against your schema first and
 drops anything undeclared, silently.** Leave the spam fields out and the honeypot is inert
 and the captcha token never arrives, with no error to tell you.
 
@@ -195,13 +195,13 @@ export const send = form(schema, async (data) => {
 paths, so the managed loader renames the token field. postboi strips both before rendering.
 
 > Sending through a **bring-your-own provider** while `<Captcha />` is on the page fails
-> with `captcha_misconfigured` — a token arrived with no secret to verify it against.
+> with `captcha_misconfigured`: a token arrived with no secret to verify it against.
 > Managed captcha needs the Postboi provider; on any other one, configure Turnstile
 > yourself or opt out with `captcha: { turnstile: false }`. The **mock** provider is the
 > exception: it's credential-free by design, so it drops the token and sends anyway.
 
 For a custom provider or forced fields, build your own in a `.remote.ts` file with
-`remote()` from `postboi/kit` — the remote counterpart of `action()`:
+`remote()` from `postboi/kit`, the remote counterpart of `action()`:
 
 ```ts
 // src/lib/mail.remote.ts

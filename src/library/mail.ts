@@ -110,7 +110,7 @@ async function resolve_dev_inbox(config: PostboiConfig): Promise<ProviderBase<un
 	if (!inbox) return null
 	if (!announced_inbox) {
 		announced_inbox = true
-		console.log(`postboi: capturing mail in the dev inbox — read it at ${inbox.url}`)
+		console.log(`postboi: capturing mail in the dev inbox. Read it at ${inbox.url}`)
 	}
 	const Mock = await import("./mock.js").then((m) => m.default)
 	return new Mock({ sink: inbox.deliver, on_cancel: inbox.cancel, default: env_defaults() })
@@ -145,7 +145,7 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 		if (!warned_shadowed_from) {
 			warned_shadowed_from = true
 			console.warn(
-				`postboi: POSTBOI_FROM (${env_from}) overrides default.from in postboi.config (${config_from}) — remove one of them.`
+				`postboi: POSTBOI_FROM (${env_from}) overrides default.from in postboi.config (${config_from}). Remove one of them.`
 			)
 		}
 	}
@@ -165,7 +165,7 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 			if (!warned_dev_fallback) {
 				warned_dev_fallback = true
 				console.warn(
-					`postboi: no ${key === "postboi" ? "POSTBOI_TOKEN" : "provider"} configured — logging mail to the console instead of sending. Run \`bunx postboi init\` to send for real.`
+					`postboi: no ${key === "postboi" ? "POSTBOI_TOKEN" : "provider"} configured, so mail is logged to the console instead of sending. Run \`bunx postboi init\` to send for real.`
 				)
 			}
 			const Mock = await import("./mock.js").then((m) => m.default)
@@ -207,7 +207,7 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 			throw new PostboiError({
 				provider: key,
 				code: "missing_env",
-				message: `Provider "${key}" needs ${field.env} — set it in the environment${field.secret ? "" : ` or as \`options.${field.arg}\` in postboi.config.ts`}.${shadowed} Run \`bunx postboi init\`.`,
+				message: `Provider "${key}" needs ${field.env}. Set it in the environment${field.secret ? "" : ` or as \`options.${field.arg}\` in postboi.config.ts`}.${shadowed} Run \`bunx postboi init\`.`,
 			})
 		}
 		options[field.arg] = value
@@ -238,7 +238,7 @@ async function send_test(options: TestSendOptions): Promise<HostedTest> {
 		throw new PostboiError({
 			provider: "postboi",
 			code: "invalid_test_body",
-			message: "mail({ test }) proves a rendered email — pass `body` as an HTML string.",
+			message: "mail({ test }) proves a rendered email, so pass `body` as an HTML string.",
 		})
 	}
 	const { hosted_test } = await import("./inspect/hosted.js")
@@ -305,7 +305,7 @@ async function postboi_provider(): Promise<Postboi> {
 			provider: "postboi",
 			code: "lists_not_supported",
 			message:
-				"List, recipient, suppression and notification management needs the Postboi provider — set POSTBOI_TOKEN (run `bunx postboi init`).",
+				"List, recipient, suppression and notification management needs the Postboi provider. Set POSTBOI_TOKEN (run `bunx postboi init`).",
 		})
 	}
 	return provider as Postboi

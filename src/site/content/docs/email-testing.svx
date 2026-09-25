@@ -1,7 +1,7 @@
 ---
 title: Email testing
 name: Email testing
-description: Lint an email before anyone receives it — client compatibility from real support data, Gmail clipping, accessibility, deliverability signals — with one synchronous function and zero dependencies.
+description: Lint an email before anyone receives it (client compatibility from real support data, Gmail clipping, accessibility, deliverability signals) with one synchronous function and zero dependencies.
 category: Guides
 ---
 
@@ -10,7 +10,7 @@ clipped by Gmail, or read as blank to a screen reader. Finding that out from a c
 is the expensive way.
 
 `postboi/inspect` is the cheap way: static analysis for email HTML. One synchronous
-call, no network, no dependencies — the same analysis runs in a test, a CI job, a
+call, no network, no dependencies. The same analysis runs in a test, a CI job, a
 Worker or the CLI.
 
 ```ts
@@ -50,28 +50,28 @@ expect(report.findings.filter((f) => f.severity === 'warning')).toEqual([])
 ```
 
 Pass what you have. Every input is optional, and a check that needs a missing input
-stays silent instead of guessing — a bare HTML string is never nagged about headers it
+stays silent instead of guessing: a bare HTML string is never nagged about headers it
 couldn't possibly carry.
 
 ## What it checks
 
 **Client compatibility.** The document is matched against a support matrix derived from
-the [Can I email](https://www.caniemail.com) project's data (CC BY-SA 4.0) — fifty-odd
+the [Can I email](https://www.caniemail.com) project's data (CC BY-SA 4.0): fifty-odd
 CSS and HTML features that actually vary, across Gmail (web, iOS, Android), Outlook
 (Windows and Outlook.com), Apple Mail, iOS Mail and Yahoo. Using flexbox, `max-width`,
 background images, `@media`, `:hover`, `<video>`, WebP…&nbsp;each becomes one finding
 naming exactly which clients lose it, with a link to the caniemail page as evidence.
 
 **Size.** Gmail clips messages whose HTML passes ~102KB, hiding everything below the
-fold — including, typically, the unsubscribe link. `report.size.gmail_clip` says whether
+fold, including, typically, the unsubscribe link. `report.size.gmail_clip` says whether
 you're over.
 
 **Accessibility.** Images without `alt` (an empty `alt=""` opts a decorative image
 out), a missing `lang` on the root element.
 
 **Deliverability signals.** A missing plain-text alternative, `http:` links, an empty
-subject. When you pass `headers`, a missing `List-Unsubscribe` and — for one-click
-unsubscribe, which Gmail requires of bulk senders — a missing `List-Unsubscribe-Post`
+subject. When you pass `headers`, a missing `List-Unsubscribe` and (for one-click
+unsubscribe, which Gmail requires of bulk senders) a missing `List-Unsubscribe-Post`
 (RFC 8058). If you set [`unsubscribe_url`](/tracking), Postboi already sends both.
 
 **Housekeeping.** Links that go nowhere (no `href`, `"#"`, `javascript:`), images
@@ -84,8 +84,8 @@ every link and image it saw, which is what the next section is for.
 
 ## Checking links for real
 
-`analyze()` never touches the network. When you *want* the network — a test suite, a
-release check — `check_links` fetches every `http(s)` link and reports which ones
+`analyze()` never touches the network. When you *want* the network (a test suite, a
+release check), `check_links` fetches every `http(s)` link and reports which ones
 answer:
 
 ```ts
@@ -101,7 +101,7 @@ for (const link of results) {
 
 It deduplicates, runs a few requests at a time (`concurrency`), gives each ten seconds
 (`timeout_ms`), and takes an injectable `fetch` for stubbing. Run it where outbound
-requests are cheap — not on every render.
+requests are cheap, not on every render.
 
 ## At the command line
 
@@ -111,7 +111,7 @@ The same analysis, as a CI step:
 bunx postboi inspect build/welcome.html
 ```
 
-Findings print one per line; the exit code is the contract — 0 when the email passes,
+Findings print one per line; the exit code is the contract: 0 when the email passes,
 1 on warnings or errors, so the command drops straight into a pipeline. `--links`
 also fetches every link, `--subject "…"` includes the subject in the analysis,
 `--json` emits the full report, and `-` reads stdin. (One check is deliberately
@@ -120,35 +120,35 @@ proves nothing at the command line.)
 
 ## In the dev inbox
 
-Every message the [dev inbox](/dev-inbox) captures gets a **Report** tab — the same
+Every message the [dev inbox](/dev-inbox) captures gets a **Report** tab with the same
 findings, computed on the spot over what your code actually sent. Send from your app,
 click the capture, read the verdict; no configuration, nothing leaves your machine.
 
 ## How detection works
 
 No HTML parser and no DOM: email HTML is table soup, and repairing it into a tree means
-guessing along with the clients. Instead the document is tokenized in one pass — tags,
-attributes, `<style>` bodies — and features are detected from that flat view. Detection
+guessing along with the clients. Instead the document is tokenized in one pass (tags,
+attributes, `<style>` bodies) and features are detected from that flat view. Detection
 is deliberately coarse: it answers "does this email use flexbox?", not "is this
 declaration reachable?". A false positive costs a glance at a finding that links to its
 evidence; a false negative costs a broken email.
 
 Outlook conditional comments (`<!--[if mso]>…<![endif]-->`) are invisible to the
-analysis, as they are to every client but Outlook — the downlevel-revealed form
+analysis, as they are to every client but Outlook. The downlevel-revealed form
 (`<!--[if !mso]><!-->…`) is read like any other markup.
 
 ## Testing against real clients
 
 Static analysis tells you what will degrade; it can't show you the pixels. That's what
 [Postboi](https://postboi.email)'s hosted testing is for: create a test in the
-dashboard, send your email to the address it gives you — from any sender, any
-provider — and read the full report: this same analysis over the exact bytes that
+dashboard, send your email to the address it gives you (from any sender, any
+provider) and read the full report: this same analysis over the exact bytes that
 arrived, plus SPF, DKIM and DMARC verdicts from a real receiving mail server, your
 actual DNS records, a real SpamAssassin score, and real-client screenshots (Outlook
 on Windows, Gmail, Apple Mail and friends) where rendering is enabled.
 
 No sender handy? Paste the HTML straight into the run (or `POST` it to
-`/v1/testing/{id}/source`) and the report and screenshots run on it directly — the
+`/v1/testing/{id}/source`) and the report and screenshots run on it directly. The
 transport-dependent panels stay empty, because nothing travelled.
 
 ### From code
@@ -166,7 +166,7 @@ test.url // the run's dashboard page — screenshots develop there
 ```
 
 The name is the entry. Edit the HTML, call again with the same name, and it's a new
-attempt on the same dashboard entry — the edit-and-re-run loop, from code:
+attempt on the same dashboard entry: the edit-and-re-run loop, from code:
 
 ```ts
 await mail({ test: 'welcome', body: v1 }) // starts the entry
@@ -174,14 +174,14 @@ await mail({ test: 'welcome', body: v2 }) // attempt №2 on it, clients carried
 ```
 
 The types keep the two kinds of send apart: `to` next to `test` is a compile error
-(a test has readers, not recipients), and `clients` — screenshot client ids from
-`GET /v1/testing/clients` — only exists on a test send. Omit `clients` and a
+(a test has readers, not recipients), and `clients` (screenshot client ids from
+`GET /v1/testing/clients`) only exists on a test send. Omit `clients` and a
 continued entry keeps its previous pick; a fresh one gets the curated set. It needs
 `POSTBOI_TOKEN` set (create a token under **Account → API tokens**), whatever
 provider your real mail uses.
 
-**Testing the transport too.** `mail({ test })` proves the email itself — rendering,
-compatibility, screenshots — without anything travelling. When you want SPF, DKIM,
+**Testing the transport too.** `mail({ test })` proves the email itself (rendering,
+compatibility, screenshots) without anything travelling. When you want SPF, DKIM,
 DMARC and a SpamAssassin score judged over real bytes, `hosted_test` from
 `postboi/inspect` mints the run's address for your actual sending path:
 
@@ -197,12 +197,12 @@ done.authentication?.spf // "pass"
 done.spam?.score // 0.1
 ```
 
-(`hosted_test` is also the lower-level client under `mail({ test })` — paste with
+(`hosted_test` is also the lower-level client under `mail({ test })`: paste with
 `html`, tune `wait()`'s polling, point `api` somewhere else.)
 
 Every run counts against the account's daily cap and every screenshot client draws
 from the monthly rendering allowance, so a suite that runs on every commit wants
-this behind a flag — keep the free, local `analyze()` in the hot path and save the
+this behind a flag. Keep the free, local `analyze()` in the hot path and save the
 hosted run for release checks:
 
 ```ts

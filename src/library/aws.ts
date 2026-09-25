@@ -44,7 +44,7 @@ export async function load_crypto(provider: string): Promise<typeof import("node
 	} catch {
 		throw new PostboiError({
 			provider,
-			message: `The ${provider} provider needs a Node.js runtime — node:crypto is unavailable here.`,
+			message: `The ${provider} provider needs a Node.js runtime, and node:crypto is unavailable here.`,
 			code: "node_required",
 		})
 	}

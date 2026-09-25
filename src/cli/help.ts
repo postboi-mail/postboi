@@ -29,7 +29,7 @@ export const HELP: Array<HelpSection> = [
 				command: "init",
 				summary: "Set up the Postboi provider or a provider of your own",
 				details: [
-					"--agent: zero prompts, zero sign-in — provisions a claimable sandbox account (made for AI coding agents and CI)",
+					"--agent: zero prompts, zero sign-in. Provisions a claimable sandbox account (made for AI coding agents and CI)",
 					"--sms · --whatsapp · --push · --chat: set up that channel instead",
 				],
 			},
@@ -62,14 +62,14 @@ export const HELP: Array<HelpSection> = [
 			},
 			{
 				command: "inspect",
-				summary: "Lint an email's HTML — client compatibility, clipping, dead links",
+				summary: "Lint an email's HTML: client compatibility, clipping, dead links",
 				details: ["<file.html> · --links --subject <s> --json (exit 1 on warnings)"],
 			},
 		],
 	},
 	{
 		title: "Account",
-		note: "Postboi provider — full reference: https://api.postboi.app",
+		note: "Postboi provider. Full reference: https://api.postboi.app",
 		entries: [
 			{ command: "whoami", summary: "The account behind your token" },
 			{
@@ -253,7 +253,7 @@ export function help_markdown(): string {
 			const details = (entry.details ?? []).map((line) => `\`${line}\``).join(" · ")
 			rows.push([
 				`\`bunx postboi ${entry.command}\``,
-				cell(`${entry.summary}${details ? ` — ${details}` : ""}`),
+				cell(`${entry.summary}${details ? `: ${details}` : ""}`),
 			])
 		}
 		const widths = [0, 1].map((i) => Math.max(...rows.map((row) => row[i].length)))

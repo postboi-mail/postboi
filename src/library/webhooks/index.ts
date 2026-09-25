@@ -319,8 +319,8 @@ export async function adapter_for(key: string): Promise<WebhookAdapter> {
 			code: "webhooks_not_supported",
 			message:
 				key in POLL_MODULES
-					? `Provider "${key}" doesn't push webhooks — it reports delivery by polling. Use poll() from postboi/webhooks instead.`
-					: `Provider "${key}" has no webhook support — it does not emit delivery events postboi can receive.`,
+					? `Provider "${key}" doesn't push webhooks. It reports delivery by polling. Use poll() from postboi/webhooks instead.`
+					: `Provider "${key}" has no webhook support. It does not emit delivery events postboi can receive.`,
 		})
 	}
 	return (await load()).default
@@ -360,7 +360,7 @@ export async function receive(
 		if (!secret) {
 			throw new WebhookVerificationError({
 				provider: adapter.provider,
-				message: `No webhook secret configured for ${adapter.provider}. Set ${adapter.provider.toUpperCase()}_WEBHOOK_SECRET or pass { secret } — or { verify: false } to explicitly skip verification.`,
+				message: `No webhook secret configured for ${adapter.provider}. Set ${adapter.provider.toUpperCase()}_WEBHOOK_SECRET or pass { secret }, or pass { verify: false } to explicitly skip verification.`,
 				code: "missing_secret",
 			})
 		}

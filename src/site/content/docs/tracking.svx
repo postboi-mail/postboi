@@ -43,12 +43,12 @@ anything you leave out. The resulting open/click events arrive via
 | MailChannels | `tracking_settings.open_tracking` / `click_tracking` |
 | AhaSend | `tracking.open` / `tracking.click` |
 | Infobip | `trackOpens` / `trackClicks` |
-| Maileroo | `tracking` — one switch, on when either flag is |
-| Customer.io | `tracked` — one switch, on when either flag is |
-| Azure | `userEngagementTrackingDisabled` — only the off position; both flags false turns the resource's tracking off for that send |
+| Maileroo | `tracking`: one switch, on when either flag is |
+| Customer.io | `tracked`: one switch, on when either flag is |
+| Azure | `userEngagementTrackingDisabled`: only the off position; both flags false turns the resource's tracking off for that send |
 | Netcore | `settings.open_track` / `settings.click_track` |
-| Alibaba Direct Mail | `ClickTrace` — clicks only; opens are dashboard-level |
-| OneSignal | `disable_email_click_tracking` — only the off position; opens are app-level |
+| Alibaba Direct Mail | `ClickTrace`: clicks only; opens are dashboard-level |
+| OneSignal | `disable_email_click_tracking`: only the off position; opens are app-level |
 
 Providers whose tracking is configured at the **domain level** (Resend) or account level
 ignore the per-send flags. Configure tracking in their dashboard instead. Every other

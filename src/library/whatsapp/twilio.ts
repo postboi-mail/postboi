@@ -103,7 +103,7 @@ export default class TwilioWhatsapp extends WhatsappProvider<SendResponse> {
 		if (error?.code === OUTSIDE_WINDOW) {
 			return {
 				message:
-					"Outside the 24-hour customer service window — free-form text can't be delivered. Send a pre-approved template instead. Check with whatsapp.closed(error).",
+					"Outside the 24-hour customer service window, so free-form text can't be delivered. Send a pre-approved template instead. Check with whatsapp.closed(error).",
 				code: "outside_window",
 			}
 		}

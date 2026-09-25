@@ -126,7 +126,7 @@ function read_flag(name: string): boolean | undefined {
 	if (value === undefined || value === "") return undefined
 	if (["1", "true", "on", "yes"].includes(value)) return true
 	if (["0", "false", "off", "no"].includes(value)) return false
-	warn_once(name, `postboi: ${name} is "${value}", which is neither true nor false — ignoring it.`)
+	warn_once(name, `postboi: ${name} is "${value}", which is neither true nor false. Ignoring it.`)
 	return undefined
 }
 
@@ -159,7 +159,7 @@ export function env_defaults(): Defaults {
 	else if (style) {
 		warn_once(
 			"POSTBOI_STYLE",
-			`postboi: POSTBOI_STYLE is "${style}" — it takes "styled" or "plain". Ignoring it.`
+			`postboi: POSTBOI_STYLE is "${style}", but it takes "styled" or "plain". Ignoring it.`
 		)
 	}
 	return out

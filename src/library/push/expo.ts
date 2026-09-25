@@ -109,7 +109,7 @@ export default class Expo extends PushProvider<SendResponse> {
 				provider: this.provider,
 				channel: "push",
 				code: "invalid_target",
-				message: `Expo push tokens look like ExponentPushToken[…]; got ${JSON.stringify(message.to.slice(0, 24))}…. A raw FCM or APNs device token belongs to postboi/fcm or postboi/apns — or drop { native: true } from the app's subscribe() to get an Expo token.`,
+				message: `Expo push tokens look like ExponentPushToken[…]; got ${JSON.stringify(message.to.slice(0, 24))}…. A raw FCM or APNs device token belongs to postboi/fcm or postboi/apns, or drop { native: true } from the app's subscribe() to get an Expo token.`,
 			})
 		}
 
@@ -175,7 +175,7 @@ export default class Expo extends PushProvider<SendResponse> {
 		const ticket = this.#ticket(data)
 		if (ticket?.status === "error") return this.#outcome_error(ticket)
 		if (response.ok && !ticket) {
-			return { message: "Expo returned no ticket — the response was not from the push service." }
+			return { message: "Expo returned no ticket, so the response was not from the push service." }
 		}
 		return undefined
 	}
@@ -185,7 +185,7 @@ export default class Expo extends PushProvider<SendResponse> {
 		const reason = outcome.details?.error
 		if (reason === DEAD_TOKEN) {
 			return {
-				message: `Expo says the device is no longer registered (${DEAD_TOKEN}) — delete your stored copy. See PushProvider.is_expired().`,
+				message: `Expo says the device is no longer registered (${DEAD_TOKEN}). Delete your stored copy. See PushProvider.is_expired().`,
 				code: "expired_subscription",
 			}
 		}

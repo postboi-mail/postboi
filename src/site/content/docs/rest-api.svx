@@ -1,7 +1,7 @@
 ---
 title: REST API
 name: REST API
-description: Everything the dashboard can do, over HTTP — send, lists, contacts, domains, webhooks, members, suppressions.
+description: Everything the dashboard can do, over HTTP: send, lists, contacts, domains, webhooks, members, suppressions.
 category: Reference
 ---
 
@@ -14,11 +14,11 @@ curl https://api.postboi.app/v1/lists \
 ```
 
 The full interactive reference lives at
-**[api.postboi.app](https://api.postboi.app)** — every endpoint with schemas and
+**[api.postboi.app](https://api.postboi.app)**: every endpoint with schemas and
 copy-paste examples in curl, JavaScript, Python, and more.
 
 Alongside the per-list `/v1/lists/{id}/recipients` endpoints, `/v1/contacts` is your
-whole **audience** — one contact per address, with global `name`/`data` and its list
+whole **audience**: one contact per address, with global `name`/`data` and its list
 memberships:
 
 ```bash
@@ -32,7 +32,7 @@ curl https://api.postboi.app/v1/contacts/ada@example.com/lists \
 	-H "Authorization: Bearer $POSTBOI_TOKEN"
 ```
 
-`/v1/inbound` is the other direction — mail that arrived at your
+`/v1/inbound` is the other direction: mail that arrived at your
 [sending address](/provider#replies) or your
 [reply subdomain](/provider#receiving-on-your-own-domain), newest first, with `/v1/inbound/{id}` for one
 message and its body:
@@ -60,4 +60,4 @@ bunx postboi members invite colleague@example.com
 ```
 
 Run `bunx postboi --help` for the full command list. And for sending itself, the
-[library](/api) is the nicer surface — `mail()` speaks this API for you.
+[library](/api) is the nicer surface. `mail()` speaks this API for you.

@@ -99,7 +99,7 @@ export async function hosted_test(options: HostedTestOptions = {}): Promise<Host
 	const token = options.token ?? read_env("POSTBOI_TOKEN")
 	if (!token) {
 		throw new Error(
-			"postboi/inspect: hosted_test needs an API token — pass `token` or set POSTBOI_TOKEN"
+			"postboi/inspect: hosted_test needs an API token. Pass `token` or set POSTBOI_TOKEN"
 		)
 	}
 	const api = (options.api ?? read_env("POSTBOI_API_URL") ?? "https://postboi.app").replace(

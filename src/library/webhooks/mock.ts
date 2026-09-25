@@ -49,7 +49,7 @@ export function mock_event(
 	if (type === "received") {
 		// Inbound: `email` is whoever wrote to you, and the body is the point of it.
 		base.email = "someone@example.com"
-		base.body = { text: "Thanks — that works for me." }
+		base.body = { text: "Thanks, that works for me." }
 	}
 	if (overrides.channel === "sms" || overrides.channel === "whatsapp") {
 		// A text-message event is about a number: never an address, and no subject line.

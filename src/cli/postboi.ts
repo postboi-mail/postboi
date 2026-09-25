@@ -119,7 +119,7 @@ async function post_json(
 		throw new PostboiAuthError(
 			typeof data?.message === "string" && data.message
 				? data.message
-				: `the Postboi provider responded with ${response.status} — try again shortly.`
+				: `the Postboi provider responded with ${response.status}. Try again shortly.`
 		)
 	}
 	return data ?? {}
@@ -135,7 +135,7 @@ export async function start_device_auth(
 	)
 	if (!start) {
 		throw new PostboiAuthError(
-			"Unexpected response from the Postboi provider — update postboi and retry."
+			"Unexpected response from the Postboi provider. Update postboi and retry."
 		)
 	}
 	return start
@@ -177,7 +177,7 @@ export async function provision_account(
 		// send an unattended agent into a retry loop that can never succeed.
 		if (error instanceof PostboiAuthError && error.message.includes("404")) {
 			throw new PostboiAuthError(
-				"This Postboi API doesn't support zero-setup provisioning — run `postboi init` without --agent to sign in."
+				"This Postboi API doesn't support zero-setup provisioning. Run `postboi init` without --agent to sign in."
 			)
 		}
 		throw error
@@ -185,7 +185,7 @@ export async function provision_account(
 	if (typeof data.token !== "string") {
 		// An older API without the provision endpoint answers with HTML or a 404 shape.
 		throw new PostboiAuthError(
-			"This Postboi API doesn't support zero-setup provisioning — run `postboi init` without --agent to sign in."
+			"This Postboi API doesn't support zero-setup provisioning. Run `postboi init` without --agent to sign in."
 		)
 	}
 	return {
@@ -217,10 +217,10 @@ export async function poll_device_auth(
 		deps
 	)
 	if (result === "dead") {
-		throw new PostboiAuthError("This sign-in code is no longer valid — run `postboi init` again.")
+		throw new PostboiAuthError("This sign-in code is no longer valid. Run `postboi init` again.")
 	}
 	if (result === "timeout") {
-		throw new PostboiAuthError("Timed out waiting for the browser — run `postboi init` again.")
+		throw new PostboiAuthError("Timed out waiting for the browser. Run `postboi init` again.")
 	}
 	return result
 }

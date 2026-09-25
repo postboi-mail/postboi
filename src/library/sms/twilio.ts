@@ -74,7 +74,7 @@ export default class Twilio extends SmsProvider<SendResponse> {
 				channel: "sms",
 				code: "single_recipient_only",
 				message:
-					"Twilio sends to one recipient per message — pass an array of sends instead of an array of recipients.",
+					"Twilio sends to one recipient per message. Pass an array of sends instead of an array of recipients.",
 			})
 		}
 
@@ -90,7 +90,7 @@ export default class Twilio extends SmsProvider<SendResponse> {
 					channel: "sms",
 					code: "scheduling_needs_service",
 					message:
-						"Twilio can only schedule through a Messaging Service — construct the provider with { messaging_service_sid }.",
+						"Twilio can only schedule through a Messaging Service. Construct the provider with { messaging_service_sid }.",
 				})
 			}
 			body.set("ScheduleType", "fixed")

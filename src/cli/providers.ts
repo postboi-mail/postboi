@@ -52,13 +52,13 @@ export const SMS_DEFAULT_FIELDS: Array<{
 		arg: "from",
 		env: "POSTBOI_SMS_FROM",
 		label: "Sender",
-		hint: 'a purchased number, or an alphanumeric sender ID — e.g. "POSTBOI" (11 chars max)',
+		hint: 'a purchased number, or an alphanumeric sender ID, e.g. "POSTBOI" (11 chars max)',
 	},
 	{
 		arg: "country",
 		env: "POSTBOI_SMS_COUNTRY",
 		label: "Default country",
-		hint: 'resolves national numbers like "07788 223344" — an ISO code ("GB") or dialling code ("+44")',
+		hint: 'resolves national numbers like "07788 223344": an ISO code ("GB") or dialling code ("+44")',
 	},
 ]
 

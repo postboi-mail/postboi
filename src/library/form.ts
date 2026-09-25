@@ -71,7 +71,7 @@ export function activate_captcha(
 	const key = pk ?? captcha_key
 	if (!key) {
 		console.warn(
-			"postboi: <Captcha> has no publishable key — run `bunx postboi sync` (the Postboi provider) or pass pk. The honeypot still works; the managed captcha is off."
+			"postboi: <Captcha> has no publishable key. Run `bunx postboi sync` (the Postboi provider) or pass pk. The honeypot still works; the managed captcha is off."
 		)
 		return
 	}

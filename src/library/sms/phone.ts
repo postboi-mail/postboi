@@ -221,7 +221,7 @@ function validate(digits: string, original: string | number): string {
 			provider: "postboi",
 			channel: "sms",
 			code: "invalid_number",
-			message: `"${original}" is not a valid phone number — E.164 allows 8 to 15 digits, got ${digits.length}.`,
+			message: `"${original}" is not a valid phone number. E.164 allows 8 to 15 digits, got ${digits.length}.`,
 		})
 	}
 	return `+${digits}`

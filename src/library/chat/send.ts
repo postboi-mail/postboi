@@ -52,7 +52,7 @@ const RESOLUTION: ChannelResolution<ChatProvider<unknown>> = {
 	// so what remains inferable is credentials nobody sets by accident.
 	infers: true,
 	dev_fallback_warning:
-		"postboi: no chat provider configured — logging messages to the console instead of posting. Run `bunx postboi init --chat` to post for real.",
+		"postboi: no chat provider configured, so messages are logged to the console instead of posted. Run `bunx postboi init --chat` to post for real.",
 }
 
 /**
@@ -132,7 +132,9 @@ async function resolve_platform(key: ChatProviderKey): Promise<ChatProvider<unkn
 		if (is_development()) {
 			if (!warned_platform.has(key)) {
 				warned_platform.add(key)
-				console.warn(`postboi: no ${missing.env} set — logging ${key} messages instead of posting.`)
+				console.warn(
+					`postboi: no ${missing.env} set, so ${key} messages are logged instead of posted.`
+				)
 			}
 			const Mock = await LOADERS.mock()
 			// The platform rides on the mock so the dev inbox can dress the conversation as
@@ -149,7 +151,7 @@ async function resolve_platform(key: ChatProviderKey): Promise<ChatProvider<unkn
 			channel: "chat",
 			code: "missing_env",
 			message:
-				`${key}() needs ${missing.env} — set it in the environment` +
+				`${key}() needs ${missing.env}. Set it in the environment` +
 				(missing.secret ? "" : ` or as \`chat.options.${missing.arg}\` in postboi.config.ts`) +
 				". Run `bunx postboi init --chat`.",
 		})

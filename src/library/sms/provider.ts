@@ -119,7 +119,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 				provider: this.provider,
 				channel: "sms",
 				code: "empty_message",
-				message: "Cannot send an empty SMS — `message` is required.",
+				message: "Cannot send an empty SMS: `message` is required.",
 			})
 		}
 

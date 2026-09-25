@@ -682,7 +682,7 @@ export type Hooks = {
 function missing_config_hint(): string {
 	if (config_loaded()) return ""
 	return (
-		". No postboi.config was loaded — if it sets this default, it isn't reaching the " +
+		". No postboi.config was loaded. If it sets this default, it isn't reaching the " +
 		"runtime: add postboi() from postboi/vite (Vite/SvelteKit), import the config from " +
 		"your server entry, or call configure() at startup."
 	)
