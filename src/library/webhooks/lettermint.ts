@@ -238,7 +238,7 @@ export const mock: AdapterModule["mock"] = async ({ type, secret }) => {
 		delete data.recipient
 		data.from = { email: "someone@example.com", name: "Someone" }
 		data.date = now.toISOString()
-		data.body = { text: "Thanks — that works for me." }
+		data.body = { text: "Thanks, that works for me." }
 	}
 
 	const body = JSON.stringify({

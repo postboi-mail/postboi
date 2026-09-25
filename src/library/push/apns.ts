@@ -209,7 +209,7 @@ export default class APNs extends PushProvider<SendResponse> {
 		// request — normalizing the code here is what makes push.expired() catch both.
 		if (reason === "Unregistered" || reason === "BadDeviceToken") {
 			return {
-				message: `APNs rejected the device token (${reason}) — delete your stored copy. See PushProvider.is_expired().`,
+				message: `APNs rejected the device token (${reason}). Delete your stored copy. See PushProvider.is_expired().`,
 				code: "expired_subscription",
 			}
 		}

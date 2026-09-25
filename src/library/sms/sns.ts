@@ -78,7 +78,7 @@ export default class SNS extends SmsProvider<SendResponse> {
 				channel: "sms",
 				code: "single_recipient_only",
 				message:
-					"SNS publishes to one number per request — pass an array of sends instead of an array of recipients.",
+					"SNS publishes to one number per request. Pass an array of sends instead of an array of recipients.",
 			})
 		}
 

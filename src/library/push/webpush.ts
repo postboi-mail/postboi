@@ -82,7 +82,7 @@ export function vapid_subject(subject: string, provider: string): string {
 		code: "invalid_subject",
 		message: `VAPID subject must be a mailto: or https: URI (RFC 8292), got ${
 			value ? `"${value}"` : "an empty string"
-		}. An email address on its own is fine — it becomes mailto:${value || "you@example.com"}.`,
+		}. An email address on its own is fine: it becomes mailto:${value || "you@example.com"}.`,
 	})
 }
 
@@ -199,7 +199,7 @@ export default class WebPush extends PushProvider<SendResponse> {
 		if (response.status === 404 || response.status === 410) {
 			return {
 				message:
-					"Push subscription has expired or been unsubscribed — delete your stored copy. See PushProvider.is_expired().",
+					"Push subscription has expired or been unsubscribed. Delete your stored copy. See PushProvider.is_expired().",
 				code: "expired_subscription",
 			}
 		}

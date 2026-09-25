@@ -48,7 +48,7 @@ export async function api<T>(
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
 		throw new ApiCommandError(
-			"No POSTBOI_TOKEN found — run `postboi init` to sign in first.",
+			"No POSTBOI_TOKEN found. Run `postboi init` to sign in first.",
 			"no_token"
 		)
 	}
@@ -92,7 +92,7 @@ async function api_file(
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
 		throw new ApiCommandError(
-			"No POSTBOI_TOKEN found — run `postboi init` to sign in first.",
+			"No POSTBOI_TOKEN found. Run `postboi init` to sign in first.",
 			"no_token"
 		)
 	}
@@ -166,10 +166,10 @@ async function whoami(): Promise<void> {
 	say(`  plan          ${account.plan}`)
 	say(`  send address  ${account.send_address}`)
 	say(`  sends         ${account.sends_today} today, ${account.sends_this_month} this month`)
-	if (account.suspended) say(`  ${red("suspended — contact support@postboi.app")}`)
+	if (account.suspended) say(`  ${red("suspended, contact support@postboi.app")}`)
 	if (account.unclaimed && account.claim_url) {
 		say(
-			`  ${yellow("unclaimed")}     sandboxed until claimed — claim it at ${cyan(account.claim_url)}`
+			`  ${yellow("unclaimed")}     sandboxed until claimed. Claim it at ${cyan(account.claim_url)}`
 		)
 	} else if (account.sandbox) {
 		say(`  ${yellow("sandbox")}       sends are logged, nothing is delivered`)
@@ -266,7 +266,7 @@ async function lists(args: Array<string>): Promise<void> {
 			created_at: string
 		}>
 	}>("/v1/lists")
-	if (rows.length === 0) return say(dim("No lists yet — postboi lists add <name>"))
+	if (rows.length === 0) return say(dim("No lists yet. Add one: postboi lists add <name>"))
 	table(
 		["NAME", "RECIPIENTS", "OPT-IN", "CREATED", "ID"],
 		rows.map((l) => [
@@ -414,7 +414,7 @@ async function contacts(args: Array<string>): Promise<void> {
 
 	// No action → page the whole audience.
 	const { contacts: rows } = await api<{ contacts: Array<ContactWire> }>("/v1/contacts")
-	if (rows.length === 0) return say(dim("No contacts yet — postboi contacts add <email>"))
+	if (rows.length === 0) return say(dim("No contacts yet. Add one: postboi contacts add <email>"))
 	table(
 		["EMAIL", "NAME", "CREATED"],
 		rows.map((c) => [c.email, c.name ?? "", day(c.created_at)])
@@ -530,7 +530,7 @@ async function domains(args: Array<string>): Promise<void> {
 	const identity = await api<{ send_address: string; domains: Array<PostboiDomain> }>("/v1/domains")
 	say(`${dim("Send address:")} ${identity.send_address}\n`)
 	if (identity.domains.length === 0) {
-		return say(dim("No custom domains yet — postboi domains add <domain>"))
+		return say(dim("No custom domains yet. Add one: postboi domains add <domain>"))
 	}
 	table(
 		["DOMAIN", "STATUS"],
@@ -572,7 +572,7 @@ async function webhooks(args: Array<string>): Promise<void> {
 		say(`${green("✓")} rotated the secret for ${bold(rotated.id)}`)
 		say(`  ${dim("secret:")} ${rotated.secret}`)
 		return say(
-			`  ${dim("`postboi sync` writes it to POSTBOI_WEBHOOK_SECRET — the old one stops verifying now.")}`
+			`  ${dim("`postboi sync` writes it to POSTBOI_WEBHOOK_SECRET. The old one stops verifying now.")}`
 		)
 	}
 	if (action === "deliveries") {
@@ -617,7 +617,7 @@ async function webhooks(args: Array<string>): Promise<void> {
 			disabled: boolean
 		}>
 	}>("/v1/webhooks")
-	if (rows.length === 0) return say(dim("No webhooks yet — postboi webhooks add <url>"))
+	if (rows.length === 0) return say(dim("No webhooks yet. Add one: postboi webhooks add <url>"))
 	table(
 		["URL", "EVENTS", "STATE", "ID"],
 		rows.map((w) => [
@@ -751,10 +751,10 @@ async function send(args: Array<string>): Promise<void> {
 	const verb = flags.at ? `scheduled for ${flags.at}` : "sent"
 	say(`${green("✓")} ${verb} ${bold(result.id)} ${dim(`to ${to.map((r) => r.email).join(", ")}`)}`)
 	if (result.claim_url) {
-		say(`  ${yellow("sandbox")} — logged, not delivered until the project is claimed:`)
+		say(`  ${yellow("sandbox")}: logged, not delivered until the project is claimed:`)
 		say(`  ${cyan(result.claim_url)}`)
 	} else if (result.sandbox) {
-		say(`  ${yellow("sandbox")} — logged, nothing is delivered`)
+		say(`  ${yellow("sandbox")}: logged, nothing is delivered`)
 	}
 	say(`  ${dim(`postboi messages ${result.id} shows its delivery status.`)}`)
 }
@@ -798,7 +798,7 @@ function status_colour(status: string): string {
 async function show_message(id: string): Promise<void> {
 	const m = await api<MessageWire>(`/v1/messages/${encodeURIComponent(id)}`)
 	say(`${bold(m.subject)} ${dim(`(${m.id})`)}`)
-	say(`  status     ${status_colour(m.status)}${m.error ? dim(` — ${m.error}`) : ""}`)
+	say(`  status     ${status_colour(m.status)}${m.error ? dim(` (${m.error})`) : ""}`)
 	say(`  from       ${m.from}`)
 	say(`  to         ${m.to.join(", ")}`)
 	say(`  created    ${m.created_at.slice(0, 16).replace("T", " ")}`)
@@ -1064,7 +1064,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 			},
 		})
 		say(
-			`${green("✓")} scheduled ${bold(created.name)} ${dim(`(${created.id})`)} — ${describe_schedule(created.schedule)}`
+			`${green("✓")} scheduled ${bold(created.name)} ${dim(`(${created.id})`)}: ${describe_schedule(created.schedule)}`
 		)
 		say(`  ${dim("to:")} ${created.recipients.map((r) => r.email).join(", ")}`)
 		const set = Object.entries(created.filter).filter(([, value]) => value !== undefined)
@@ -1098,7 +1098,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 		const rows = on.has("xlsx")
 			? undefined
 			: Math.max(0, new TextDecoder().decode(file.bytes).split("\r\n").length - 2)
-		const count = rows === undefined ? "" : dim(` — ${rows} row${rows === 1 ? "" : "s"}`)
+		const count = rows === undefined ? "" : dim(` (${rows} row${rows === 1 ? "" : "s"})`)
 		if (flags.out === "-") {
 			stdout.write(file.bytes)
 			return
@@ -1115,7 +1115,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 		const path = `/v1/exports/${encodeURIComponent(id)}`
 		if (action === "run") {
 			await api(`${path}/run`, { method: "POST" })
-			return say(`${green("✓")} queued ${bold(id)} ${dim("— the file goes within a minute")}`)
+			return say(`${green("✓")} queued ${bold(id)} ${dim("(the file goes within a minute)")}`)
 		}
 		if (action === "delete") {
 			await api(path, { method: "DELETE" })
@@ -1127,7 +1127,7 @@ async function exports_command(args: Array<string>): Promise<void> {
 		})
 		return say(
 			`${green("✓")} ${action === "pause" ? "paused" : "resumed"} ${bold(row.name)}${
-				row.next_run_at ? dim(` — next ${row.next_run_at.slice(0, 16).replace("T", " ")}`) : ""
+				row.next_run_at ? dim(`, next run ${row.next_run_at.slice(0, 16).replace("T", " ")}`) : ""
 			}`
 		)
 	}
@@ -1140,7 +1140,9 @@ async function exports_command(args: Array<string>): Promise<void> {
 
 	const { exports: rows } = await api<{ exports: Array<ExportWire> }>("/v1/exports")
 	if (rows.length === 0) {
-		return say(dim("No scheduled exports — postboi exports add <name> --to <email> --weekly"))
+		return say(
+			dim("No scheduled exports. Add one: postboi exports add <name> --to <email> --weekly")
+		)
 	}
 	table(
 		["NAME", "SCHEDULE", "TO", "NEXT", "STATE", "ID"],
@@ -1161,14 +1163,14 @@ async function exports_command(args: Array<string>): Promise<void> {
 async function forms(args: Array<string>): Promise<void> {
 	if (args[0]) {
 		throw new ApiCommandError(
-			'Forms are named from your code (`mail({ form: "Contact" })`) and managed in the dashboard — `postboi forms` lists them.'
+			'Forms are named from your code (`mail({ form: "Contact" })`) and managed in the dashboard. `postboi forms` lists them.'
 		)
 	}
 	const { forms: rows } = await api<{
 		forms: Array<{ id: string; name: string; kind: string; paused: boolean; created_at: string }>
 	}>("/v1/forms")
 	if (rows.length === 0) {
-		return say(dim('No forms yet — name one on a send: mail({ …, form: "Contact" })'))
+		return say(dim('No forms yet. Name one on a send: mail({ …, form: "Contact" })'))
 	}
 	table(
 		["NAME", "KIND", "STATE", "CREATED", "ID"],
@@ -1231,7 +1233,7 @@ async function notifications(args: Array<string>): Promise<void> {
 			},
 		})
 		return say(
-			`${green("✓")} notification ${dim(`(${created.id})`)} — ${describe_notification_schedule(created.schedule)}, to ${flags.to}`
+			`${green("✓")} notification ${dim(`(${created.id})`)}: ${describe_notification_schedule(created.schedule)}, to ${flags.to}`
 		)
 	}
 	if (action === "delete") {
@@ -1247,7 +1249,9 @@ async function notifications(args: Array<string>): Promise<void> {
 	const { notifications: rows } = await api<{ notifications: Array<NotificationWire> }>(path)
 	if (rows.length === 0) {
 		return say(
-			dim(`No notifications on ${list} — postboi notifications ${list} add --to <email> --weekly`)
+			dim(
+				`No notifications on ${list}. Add one: postboi notifications ${list} add --to <email> --weekly`
+			)
 		)
 	}
 	table(
@@ -1327,7 +1331,7 @@ async function testing(args: Array<string>): Promise<void> {
 			data.map((c) => [c.id, c.name, c.group ?? "", c.default ? green("yes") : ""])
 		)
 		if (max_per_test)
-			say(dim(`\nUp to ${max_per_test} per test — postboi testing add --clients a,b`))
+			say(dim(`\nUp to ${max_per_test} per test: postboi testing add --clients a,b`))
 		return
 	}
 	if (action === "delete") {
@@ -1379,7 +1383,7 @@ async function testing(args: Array<string>): Promise<void> {
 	}
 
 	const { data: rows } = await api<{ data: Array<TestRun> }>("/v1/testing")
-	if (rows.length === 0) return say(dim("No tests yet — postboi testing add"))
+	if (rows.length === 0) return say(dim("No tests yet. Add one: postboi testing add"))
 	table(
 		["LABEL", "STATUS", "SUBJECT", "WHEN", "ID"],
 		rows.map((t) => [

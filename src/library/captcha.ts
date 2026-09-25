@@ -173,7 +173,7 @@ export async function check_captcha(
 			ok: false,
 			code: "captcha_misconfigured",
 			message:
-				"Turnstile verification is expected but no secret key is configured — set TURNSTILE_SECRET_KEY, pass captcha: { turnstile: { secret_key } }, or send via the Postboi provider for managed captcha.",
+				"Turnstile verification is expected but no secret key is configured. Set TURNSTILE_SECRET_KEY, pass captcha: { turnstile: { secret_key } }, or send via the Postboi provider for managed captcha.",
 		}
 	}
 	if (!token) {

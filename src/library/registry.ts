@@ -158,7 +158,7 @@ export const PROVIDERS = [
 			{
 				env: "CLOUDFLARE_QUEUE_ID",
 				arg: "queue_id",
-				label: "Event queue ID (optional — auto-provisioned)",
+				label: "Event queue ID (optional, auto-provisioned)",
 				default: "",
 				ambient: true,
 			},
@@ -1055,7 +1055,7 @@ export const CHAT_PROVIDERS = [
 		import: "postboi/slack",
 		class: "Slack",
 		url: "https://api.slack.com/messaging/webhooks",
-		note: "Incoming webhook — the channel is baked into the URL",
+		note: "Incoming webhook. The channel is baked into the URL",
 		connect: { env: "SLACK_WEBHOOK_URL" },
 		fields: [
 			{
@@ -1073,7 +1073,7 @@ export const CHAT_PROVIDERS = [
 		import: "postboi/discord",
 		class: "Discord",
 		url: "https://discord.com/developers/docs/resources/webhook",
-		note: "Channel webhook — same shape as Slack",
+		note: "Channel webhook, same shape as Slack",
 		connect: { env: "DISCORD_WEBHOOK_URL" },
 		fields: [
 			{
@@ -1110,7 +1110,7 @@ export const CHAT_PROVIDERS = [
 		import: "postboi/telegram",
 		class: "Telegram",
 		url: "https://core.telegram.org/bots#botfather",
-		note: "Bot API — the recipient must have started a chat with your bot first",
+		note: "Bot API. The recipient must have started a chat with your bot first",
 		// Only the constructor option lives here. The default chat id is a channel default
 		// (chat.default.to / POSTBOI_CHAT_TO), not a constructor option — routing it through
 		// `fields` made the CLI commit it somewhere no provider reads.
@@ -1130,7 +1130,7 @@ export const CHAT_PROVIDERS = [
 		import: "postboi/bluesky",
 		class: "Bluesky",
 		url: "https://bsky.app/settings/app-passwords",
-		note: "AT Protocol — posts publicly to your own feed, not to a room",
+		note: "AT Protocol. Posts publicly to your own feed, not to a room",
 		fields: [
 			{ env: "BLUESKY_HANDLE", arg: "identifier", label: "Handle (e.g. you.bsky.social)" },
 			{ env: "BLUESKY_APP_PASSWORD", arg: "app_password", label: "App password", secret: true },
@@ -1188,7 +1188,7 @@ export const PUSH_PROVIDERS = [
 		import: "postboi/fcm",
 		class: "FCM",
 		url: "https://console.firebase.google.com",
-		note: "Android apps — the only route to them, and it reaches iOS too",
+		note: "Android apps: the only route to them, and it reaches iOS too",
 		fields: [
 			{ env: "FCM_PROJECT_ID", arg: "project_id", label: "Firebase project id" },
 			{ env: "FCM_CLIENT_EMAIL", arg: "client_email", label: "Service account email" },
@@ -1206,7 +1206,7 @@ export const PUSH_PROVIDERS = [
 		import: "postboi/apns",
 		class: "APNs",
 		url: "https://developer.apple.com/account/resources/authkeys/list",
-		note: "iOS, iPadOS, macOS and Safari — direct, with no Firebase in the middle",
+		note: "iOS, iPadOS, macOS and Safari, direct, with no Firebase in the middle",
 		fields: [
 			{ env: "APNS_KEY_ID", arg: "key_id", label: "Key ID of the .p8 auth key" },
 			{ env: "APNS_TEAM_ID", arg: "team_id", label: "Apple Developer team ID" },
@@ -1234,7 +1234,7 @@ export const PUSH_PROVIDERS = [
 		import: "postboi/hms",
 		class: "HMS",
 		url: "https://developer.huawei.com/consumer/en/console",
-		note: "Huawei phones sold since 2020 — they have no Play Services, so FCM can't reach them",
+		note: "Huawei phones sold since 2020. They have no Play Services, so FCM can't reach them",
 		fields: [
 			{ env: "HMS_APP_ID", arg: "app_id", label: "App ID from AppGallery Connect" },
 			{ env: "HMS_APP_SECRET", arg: "app_secret", label: "App secret", secret: true },
@@ -1246,7 +1246,7 @@ export const PUSH_PROVIDERS = [
 		import: "postboi/expo",
 		class: "Expo",
 		url: "https://expo.dev/accounts/[account]/settings/access-tokens",
-		note: "Expo and React Native apps, both platforms — Expo holds the FCM and APNs credentials, so the server needs none",
+		note: "Expo and React Native apps, both platforms. Expo holds the FCM and APNs credentials, so the server needs none",
 		fields: [
 			{
 				env: "EXPO_ACCESS_TOKEN",
@@ -1312,7 +1312,7 @@ export const WHATSAPP_PROVIDERS = [
 		import: "postboi/whatsapp-meta",
 		class: "Meta",
 		url: "https://developers.facebook.com/apps",
-		note: "Direct — no platform fee on top of Meta's, but needs Business verification",
+		note: "Direct: no platform fee on top of Meta's, but needs Business verification",
 		fields: [
 			{
 				env: "WHATSAPP_ACCESS_TOKEN",
@@ -1338,7 +1338,7 @@ export const WHATSAPP_PROVIDERS = [
 				env: "META_WEBHOOK_SECRET",
 				arg: "webhook_secret",
 				label:
-					"App secret (optional; signs delivery webhooks — Basic Settings in the app dashboard)",
+					"App secret (optional; signs delivery webhooks, from Basic Settings in the app dashboard)",
 				secret: true,
 				default: "",
 			},

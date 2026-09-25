@@ -1074,7 +1074,7 @@ var FOLDERS = ["outbox", "sent", "scheduled", "deleted"]
 var LABELS = { outbox: "Outbox", sent: "Sent", scheduled: "Scheduled", deleted: "Deleted" }
 var EMPTY = {
 	outbox:
-		"Your outbox is empty.<br>Send anything from your app \\u2014 mail, texts, chats, pushes \\u2014 and it lands here.",
+		"Your outbox is empty.<br>Send anything from your app (mail, texts, chats, pushes) and it lands here.",
 	sent: "Nothing has gone out yet.",
 	scheduled: "Nothing is waiting on a clock.<br>Send with <b>scheduled_at</b> and it will queue up here.",
 	deleted: "Nothing cancelled.<br>Call <b>cancel(id)</b> on a scheduled send and it will land here.",
@@ -1398,7 +1398,7 @@ function report_html(report) {
 	var head = report.findings.length
 		? '<div class="r-status' + (report.status === "error" ? " error" : "") + '">' +
 			report.findings.length + " finding" + (report.findings.length === 1 ? "" : "s") + "</div>"
-		: '<div class="r-status pass">Looks good \\u2014 nothing to flag.</div>'
+		: '<div class="r-status pass">Looks good. Nothing to flag.</div>'
 	var rows = report.findings.map(function (f) {
 		var clients = (f.clients || []).map(function (c) {
 			return c.name + (c.support === "partial" ? " (partial)" : "")
@@ -1407,7 +1407,7 @@ function report_html(report) {
 			esc(f.message) + (clients ? '<br><span class="r-clients">' + esc(clients) + "</span>" : "") + "</li>"
 	}).join("")
 	return '<div class="report selectable">' + head + "<ul>" + rows + "</ul>" +
-		'<div class="r-size">HTML: ' + kb + " KB" + (report.size.gmail_clip ? " \\u2014 Gmail will clip this" : "") +
+		'<div class="r-size">HTML: ' + kb + " KB" + (report.size.gmail_clip ? ", Gmail will clip this" : "") +
 		" \\u00b7 " + report.links.length + " link" + (report.links.length === 1 ? "" : "s") +
 		" \\u00b7 " + report.images.length + " image" + (report.images.length === 1 ? "" : "s") + "</div></div>"
 }
@@ -1495,11 +1495,11 @@ function shots_html(id, data) {
 	var head = '<div class="r-shead">Real clients</div>'
 	if (!data.run_id && !data.enabled) {
 		return head + '<div class="r-snote">Set POSTBOI_TOKEN (your hosted API token) to photograph this ' +
-			"email in real clients \\u2014 Outlook, Gmail, Apple Mail \\u2014 right from here.</div>"
+			"email in real clients (Outlook, Gmail, Apple Mail) right from here.</div>"
 	}
 	if (!data.run_id) {
 		return head + '<div class="r-snote"><button id="rshotgo">\\uD83D\\uDCF7 Photograph in real clients</button>' +
-			" \\u2014 uses your monthly preview allowance, one preview per client.</div>"
+			" Uses your monthly preview allowance, one preview per client.</div>"
 	}
 	var cells = (data.previews || []).map(function (p) {
 		if (p.status === "ready") {
@@ -1532,7 +1532,7 @@ function shots_html(id, data) {
 		})
 	if (nothing) {
 		grid += '<div class="r-snote"><button id="rshotgo">\\uD83D\\uDCF7 Try again</button>' +
-			" \\u2014 after topping up, this re-photographs the email." + "</div>"
+			" After topping up, this re-photographs the email." + "</div>"
 	}
 	return head + grid
 }
@@ -1672,7 +1672,7 @@ function render_messenger() {
 
 	var parts = [
 		'<div class="sysline">' + esc(to) +
-			" joins the conversation. Captured by the dev inbox \\u2014 nothing was actually sent.</div>",
+			" joins the conversation. Captured by the dev inbox. Nothing was actually sent.</div>",
 	]
 	thread.forEach(function (m) {
 		parts.push(
@@ -1688,7 +1688,7 @@ function render_messenger() {
 		if (m.cancelled_at) {
 			parts.push('<div class="sysline">This send was cancelled. It was never going out.</div>')
 		} else if (state_of(m) === "scheduled") {
-			parts.push('<div class="sysline">Scheduled \\u2014 sends ' + esc(when_full(m.scheduled_at)) + "</div>")
+			parts.push('<div class="sysline">Scheduled: sends ' + esc(when_full(m.scheduled_at)) + "</div>")
 		}
 	})
 	var history = $("msnhistory")
@@ -1705,7 +1705,7 @@ $("msn-send").onclick = function () {
 	var box = $("msn-text")
 	if (!box.value.trim()) return
 	box.value = ""
-	msn_sys("This glass is one-way \\u2014 your app does the talking. Nothing was sent.")
+	msn_sys("This glass is one-way: your app does the talking. Nothing was sent.")
 }
 $("msn-nudge").onclick = function () {
 	var el = $("messenger")
@@ -1797,7 +1797,7 @@ function render_wa() {
 		if (m.cancelled_at) {
 			parts.push('<div class="wasys">This send was cancelled. It was never going out.</div>')
 		} else if (state_of(m) === "scheduled") {
-			parts.push('<div class="wasys">Scheduled \\u2014 sends ' + esc(when_full(m.scheduled_at)) + "</div>")
+			parts.push('<div class="wasys">Scheduled: sends ' + esc(when_full(m.scheduled_at)) + "</div>")
 		}
 	})
 	var chat = $("wachat")
@@ -1814,7 +1814,7 @@ function wa_sys(text) {
 $("wa-text").addEventListener("keydown", function (event) {
 	if (event.key !== "Enter" || !this.value.trim()) return
 	this.value = ""
-	wa_sys("One-way glass \\u2014 your app does the talking here. Nothing was sent.")
+	wa_sys("One-way glass: your app does the talking here. Nothing was sent.")
 })
 $("wafoot").addEventListener("click", function (event) {
 	var button = event.target.closest("[data-wa]")
@@ -1888,7 +1888,7 @@ function render_plat() {
 	$("plat-sub").textContent = look.sub + " \\u00B7 " + who(plat_convo.to)
 	$("plat-input").placeholder = look.ph
 
-	var parts = ['<div class="m-sys">Captured by the dev inbox \\u2014 nothing was posted.</div>']
+	var parts = ['<div class="m-sys">Captured by the dev inbox. Nothing was posted.</div>']
 	thread.forEach(function (m) {
 		var text = ""
 		if (m.subject) text += "<b>" + esc(m.subject) + "</b>" + (m.text ? "\\n" : "")
@@ -1902,7 +1902,7 @@ function render_plat() {
 		if (m.cancelled_at) {
 			parts.push('<div class="m-sys">This send was cancelled. It was never going out.</div>')
 		} else if (state_of(m) === "scheduled") {
-			parts.push('<div class="m-sys">Scheduled \\u2014 sends ' + esc(when_full(m.scheduled_at)) + "</div>")
+			parts.push('<div class="m-sys">Scheduled: sends ' + esc(when_full(m.scheduled_at)) + "</div>")
 		}
 	})
 	var hist = $("plathist")
@@ -1917,7 +1917,7 @@ $("plat-input").addEventListener("keydown", function (event) {
 	var hist = $("plathist")
 	hist.insertAdjacentHTML(
 		"beforeend",
-		'<div class="m-sys">One-way glass \\u2014 your app does the posting. Nothing was sent.</div>'
+		'<div class="m-sys">One-way glass: your app does the posting. Nothing was sent.</div>'
 	)
 	hist.scrollTop = hist.scrollHeight
 })
@@ -1967,17 +1967,17 @@ function render_push() {
 			if (pair[0] === "Opens") rows += '<div class="link">\\u{1F517} ' + esc(pair[1]) + "</div>"
 			else rows += '<div class="data">' + esc(pair[0]) + ": " + esc(pair[1]) + "</div>"
 		})
-		if (m.cancelled_at) rows += '<span class="sched off">cancelled \\u2014 was never going out</span>'
+		if (m.cancelled_at) rows += '<span class="sched off">cancelled, was never going out</span>'
 		else if (state_of(m) === "scheduled") {
 			rows += '<span class="sched">sends ' + esc(when_full(m.scheduled_at)) + "</span>"
 		}
 		parts.push('<div class="note">' + rows + "</div>")
 	})
-	parts.push('<div class="pushfoot">Delivered to 0 devices \\u2014 captured by the dev inbox.</div>')
+	parts.push('<div class="pushfoot">Delivered to 0 devices. Captured by the dev inbox.</div>')
 	$("pushbody").innerHTML = parts.join("")
 	$("push-clear").onclick = function () {
 		$("pushbody").lastChild.textContent =
-			"They were never delivered \\u2014 there is nothing to clear."
+			"They were never delivered, so there is nothing to clear."
 	}
 	render_list()
 }
@@ -2080,7 +2080,7 @@ function render_pokia() {
 	nk_current = m
 	var body = "From: " + ((m.from && m.from.address) || "Your app") + "\\n" + (m.text || "")
 	;(m.meta || []).forEach(function (pair) { body += "\\n" + pair[0] + ": " + pair[1] })
-	if (m.cancelled_at) body += "\\nCancelled \\u2014 never going out"
+	if (m.cancelled_at) body += "\\nCancelled, never going out"
 	else if (state_of(m) === "scheduled") body += "\\nSends " + when_full(m.scheduled_at)
 	face.innerHTML = head + '<div class="nk-title">' + stamp(m.received_at) + "</div>" +
 		'<div class="nk-read" id="nk-read">' + esc(body) + "</div>" +
@@ -3371,7 +3371,7 @@ function poom_cheat(key) {
 	POOM_TYPED = ""
 	poom.god = !poom.god
 	poom.health = poom.god ? 100 : poom.health
-	poom_say(poom.god ? "GOD MODE ON \u2014 NOBODY DELIVERS LIKE YOU" : "GOD MODE OFF")
+	poom_say(poom.god ? "GOD MODE ON. NOBODY DELIVERS LIKE YOU" : "GOD MODE OFF")
 	return true
 }
 

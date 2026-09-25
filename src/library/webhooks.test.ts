@@ -314,7 +314,7 @@ describe("receive — postboi", () => {
 			email: "someone@example.com",
 			message_id: "mock-message-id",
 		})
-		expect(event.body?.text).toBe("Thanks — that works for me.")
+		expect(event.body?.text).toBe("Thanks, that works for me.")
 	})
 
 	it("accepts a space/comma-separated secret list — any candidate verifies", async () => {
@@ -1355,7 +1355,7 @@ describe("receive — meta (WhatsApp Cloud API)", () => {
 			phone: "+15557770006",
 			// The reply's context names your message; that is the id worth carrying.
 			message_id: "wamid.mock",
-			body: { text: "Thanks — that works for me." },
+			body: { text: "Thanks, that works for me." },
 		})
 	})
 

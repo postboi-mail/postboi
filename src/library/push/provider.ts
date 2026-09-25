@@ -60,7 +60,7 @@ export abstract class PushProvider<TResponse = unknown> extends Transport<TRespo
 				channel: "push",
 				code: "no_target",
 				message:
-					"No push target — pass the subscription or device token the client registered with.",
+					"No push target. Pass the subscription or device token the client registered with.",
 			})
 		}
 		if (!options.message?.trim()) {
@@ -68,7 +68,7 @@ export abstract class PushProvider<TResponse = unknown> extends Transport<TRespo
 				provider: this.provider,
 				channel: "push",
 				code: "empty_message",
-				message: "Cannot send an empty notification — `message` is required.",
+				message: "Cannot send an empty notification: `message` is required.",
 			})
 		}
 

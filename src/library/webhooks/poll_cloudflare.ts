@@ -107,7 +107,7 @@ async function provision(options: Record<string, string>): Promise<string> {
 			code: "poll_provisioning_failed",
 			message:
 				`Couldn't set up the "${QUEUE_NAME}" queue for Email Sending events: ${detail}. ` +
-				`The API token needs Queues edit access — or create a queue with an HTTP-pull consumer and an Email Sending event subscription yourself, and set CLOUDFLARE_QUEUE_ID.`,
+				`The API token needs Queues edit access. Otherwise, create a queue with an HTTP-pull consumer and an Email Sending event subscription yourself, and set CLOUDFLARE_QUEUE_ID.`,
 			raw: error,
 		})
 	}
@@ -203,7 +203,7 @@ const adapter: PollAdapter = {
 				code: "poll_provisioning_failed",
 				message:
 					`Queue "${QUEUE_NAME}" (${queue_id}) is ready, but no Email Sending events have arrived. ` +
-					`Add the event subscription once — dashboard: Queues → ${QUEUE_NAME} → Subscriptions → Email Sending, or \`wrangler queues subscription create ${QUEUE_NAME} --source email.sending\` — then this clears when the first event lands, or set CLOUDFLARE_QUEUE_ID=${queue_id} to start pulling quietly now.`,
+					`Add the event subscription once (dashboard: Queues → ${QUEUE_NAME} → Subscriptions → Email Sending, or \`wrangler queues subscription create ${QUEUE_NAME} --source email.sending\`). Then this clears when the first event lands, or set CLOUDFLARE_QUEUE_ID=${queue_id} to start pulling quietly now.`,
 			})
 		}
 

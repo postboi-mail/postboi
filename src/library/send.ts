@@ -224,7 +224,7 @@ export async function send(options: FanOutOptions): Promise<SendResult> {
 			provider: "postboi",
 			code: "no_recipient",
 			message:
-				"No channel to send on — `to` needs at least one of email, sms, chat, push or whatsapp.",
+				"No channel to send on: `to` needs at least one of email, sms, chat, push or whatsapp.",
 		})
 	}
 

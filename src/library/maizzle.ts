@@ -11,7 +11,7 @@ async function load_framework(): Promise<Framework> {
 		framework = await import("@maizzle/framework")
 	} catch (cause) {
 		throw new Error(
-			"postboi/maizzle needs @maizzle/framework — install it alongside postboi (e.g. `npm install @maizzle/framework`)",
+			"postboi/maizzle needs @maizzle/framework. Install it alongside postboi (e.g. `npm install @maizzle/framework`)",
 			{ cause }
 		)
 	}

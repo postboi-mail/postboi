@@ -46,12 +46,12 @@ const RESOLUTION: ChannelResolution<WhatsappProvider<unknown>> = {
 	// Same as SMS: billable, reaches a real handset, and shares Twilio's ambient pair.
 	infers: false,
 	dev_fallback_warning:
-		"postboi: no WhatsApp provider configured — logging messages to the console instead of sending. Run `bunx postboi init --whatsapp` to send for real.",
+		"postboi: no WhatsApp provider configured, so messages are logged to the console instead of sent. Run `bunx postboi init --whatsapp` to send for real.",
 	dev_intercept: {
 		env_key: "POSTBOI_WHATSAPP_DEV",
 		configured: (config) => config.dev?.whatsapp,
 		warning:
-			"postboi: development — WhatsApp messages are logged, not sent. Set `dev: { whatsapp: false }` in postboi.config or POSTBOI_WHATSAPP_DEV=send to send for real.",
+			"postboi: development mode, so WhatsApp messages are logged, not sent. Set `dev: { whatsapp: false }` in postboi.config or POSTBOI_WHATSAPP_DEV=send to send for real.",
 	},
 }
 

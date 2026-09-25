@@ -88,7 +88,7 @@ function demo_messages(): Array<CapturedMessage> {
 			to: [{ address: "ada@example.com" }],
 			from: { address: "billing@acme.example" },
 			subject: "Receipt for order #1042",
-			text: "Thanks for your order.\n\nOrder #1042 — £29.00\nVAT included.",
+			text: "Thanks for your order.\n\nOrder #1042: £29.00\nVAT included.",
 			attachments: [],
 		},
 		{
@@ -111,7 +111,7 @@ function demo_messages(): Array<CapturedMessage> {
 			channel: "sms",
 			to: [{ address: "+447700900123" }],
 			from: { address: "ACME" },
-			text: "Order #1042 is out for delivery — arriving today between 14:00 and 16:00.",
+			text: "Order #1042 is out for delivery, arriving today between 14:00 and 16:00.",
 			meta: [["Segments", "1 × GSM-7 (79 units)"]],
 		},
 		{
@@ -171,14 +171,14 @@ function demo_messages(): Array<CapturedMessage> {
 			provider: "teams",
 			to: [{ address: "https://acme.webhook.office.com/webhookb2/000/xxx" }],
 			subject: "Nightly backup",
-			text: "Snapshot completed — 4.2 GB in 38s.",
+			text: "Snapshot completed: 4.2 GB in 38s.",
 			meta: [],
 		},
 		{
 			channel: "chat",
 			provider: "telegram",
 			to: [{ address: "@acme_dev_channel" }],
-			text: "Error budget at 82% — three 500s on /checkout in the last hour.",
+			text: "Error budget at 82%. Three 500s on /checkout in the last hour.",
 			meta: [],
 		},
 		{

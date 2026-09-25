@@ -22,7 +22,8 @@ async function load_node(): Promise<void> {
 	} catch {
 		throw new PostboiError({
 			provider: "smtp",
-			message: "The POP3 poller needs a Node.js runtime — node:net/node:tls are unavailable here.",
+			message:
+				"The POP3 poller needs a Node.js runtime, and node:net/node:tls are unavailable here.",
 			code: "node_required",
 		})
 	}

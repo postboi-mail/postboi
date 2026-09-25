@@ -129,7 +129,7 @@ const adapter: PollAdapter = {
 					status: 403,
 					code: data?.error?.code ?? "forbidden",
 					message:
-						"Graph refused the message-trace query. Grant the app the ExchangeMessageTrace.Read.All application permission (admin consent) and provision the service principal for app id 8bd644d1-64a1-4d4b-ae52-2e0cbf64e373 — provisioning can take a few hours.",
+						"Graph refused the message-trace query. Grant the app the ExchangeMessageTrace.Read.All application permission (admin consent) and provision the service principal for app id 8bd644d1-64a1-4d4b-ae52-2e0cbf64e373. Provisioning can take a few hours.",
 					raw: data,
 				})
 			}

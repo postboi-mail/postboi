@@ -66,7 +66,7 @@ export abstract class ChatProvider<TResponse = unknown> extends Transport<TRespo
 				provider: this.provider,
 				channel: "chat",
 				code: "no_destination",
-				message: `No destination for ${this.provider} — pass \`to\`, or configure one on the provider.`,
+				message: `No destination for ${this.provider}. Pass \`to\`, or configure one on the provider.`,
 			})
 		}
 		if (!options.message?.trim()) {
@@ -74,7 +74,7 @@ export abstract class ChatProvider<TResponse = unknown> extends Transport<TRespo
 				provider: this.provider,
 				channel: "chat",
 				code: "empty_message",
-				message: "Cannot post an empty message — `message` is required.",
+				message: "Cannot post an empty message: `message` is required.",
 			})
 		}
 

@@ -109,7 +109,7 @@ export function inbox_sink(channel: Channel): (captured: unknown) => Promise<boo
 		if (taken && !announced.has(chan)) {
 			announced.add(chan)
 			console.log(
-				`postboi: capturing ${CHANNEL_NOUN[chan]} in the dev inbox — read them at ${inbox.url}`
+				`postboi: capturing ${CHANNEL_NOUN[chan]} in the dev inbox. Read them at ${inbox.url}`
 			)
 		}
 		return taken

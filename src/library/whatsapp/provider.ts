@@ -99,7 +99,7 @@ export abstract class WhatsappProvider<TResponse = unknown> extends Transport<
 				channel: "whatsapp",
 				code: "no_sender",
 				message:
-					"No sender provided (from or default.from) — your WhatsApp-enabled number in E.164.",
+					"No sender provided (from or default.from). Use your WhatsApp-enabled number in E.164.",
 			})
 		}
 		const has_message = Boolean(options.message?.trim())
@@ -110,7 +110,7 @@ export abstract class WhatsappProvider<TResponse = unknown> extends Transport<
 				channel: "whatsapp",
 				code: "no_content",
 				message:
-					"Nothing to send — pass `message` (free-form, inside the 24h window) or `template` (pre-approved, anytime).",
+					"Nothing to send. Pass `message` (free-form, inside the 24h window) or `template` (pre-approved, anytime).",
 			})
 		}
 		if (has_message && has_template) {
@@ -121,7 +121,7 @@ export abstract class WhatsappProvider<TResponse = unknown> extends Transport<
 				channel: "whatsapp",
 				code: "ambiguous_content",
 				message:
-					"Pass `message` or `template`, not both — a template's content is fixed at approval; use `variables` to fill its placeholders.",
+					"Pass `message` or `template`, not both. A template's content is fixed at approval; use `variables` to fill its placeholders.",
 			})
 		}
 

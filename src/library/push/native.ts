@@ -187,7 +187,7 @@ async function mint(options: SubscribeOptions): Promise<PushRegistration> {
 		if (!expo_project) {
 			throw new PushSubscribeError(
 				"missing_project",
-				"No EAS project id — an Expo push token is minted for a project. Run `eas init` (it writes extra.eas.projectId to app.json), or pass { project_id }."
+				"No EAS project id. An Expo push token is minted for a project. Run `eas init` (it writes extra.eas.projectId to app.json), or pass { project_id }."
 			)
 		}
 	}
@@ -257,7 +257,7 @@ async function subscribe_now(options: SubscribeOptions = {}): Promise<PushRegist
 		throw new PushSubscribeError(
 			"unsupported",
 			Constants.platform?.web
-				? "This is the web build — use subscribe() from postboi/push there."
+				? "This is the web build. Use subscribe() from postboi/push there."
 				: "Push isn't available here. Expo Go on Android has no remote push since SDK 53; use a development build."
 		)
 	}
@@ -274,7 +274,7 @@ async function subscribe_now(options: SubscribeOptions = {}): Promise<PushRegist
 		if (status === "denied") {
 			throw new PushSubscribeError(
 				"permission_denied",
-				"Notification permission was denied. The OS will not ask again — the user has to change it in Settings."
+				"Notification permission was denied. The OS will not ask again, so the user has to change it in Settings."
 			)
 		}
 		if (status !== "granted") {
@@ -347,7 +347,7 @@ export type PushReason = NonNullable<PushState["reason"]>
 function absolute(name: string, target: Filing<PushRegistration> | undefined): void {
 	if (typeof target === "string" && !/^https?:\/\//i.test(target)) {
 		throw new Error(
-			`\`${name}\` must be an absolute URL on a phone — there is no origin to resolve ${JSON.stringify(target)} against.`
+			`\`${name}\` must be an absolute URL on a phone. There is no origin to resolve ${JSON.stringify(target)} against.`
 		)
 	}
 }

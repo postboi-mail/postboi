@@ -39,7 +39,7 @@ const RESOLUTION: ChannelResolution<PushProvider<unknown>> = {
 	// nothing — this is the case inference exists for.
 	infers: true,
 	dev_fallback_warning:
-		"postboi: no push provider configured — logging notifications to the console instead of sending. Run `bunx postboi init --push` to send for real.",
+		"postboi: no push provider configured, so notifications are logged to the console instead of sent. Run `bunx postboi init --push` to send for real.",
 }
 
 /**

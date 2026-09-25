@@ -95,20 +95,20 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 			? {
 					name: "config",
 					level: "warn",
-					detail: "no postboi.config.* — mail() runs on defaults",
+					detail: "no postboi.config.*, so mail() runs on defaults",
 					fix: "bunx postboi init",
 				}
 			: facts.config_unreachable
 				? {
 						name: "config",
 						level: "warn",
-						detail: `${facts.config_file} — ${facts.config_unreachable} bundles its own server code and can't read it, so its defaults and hooks never reach a send made there`,
+						detail: `${facts.config_file}: ${facts.config_unreachable} bundles its own server code and can't read it, so its defaults and hooks never reach a send made there`,
 						fix: `import the config from the file that sends (e.g. \`import "../${facts.config_file.replace(/\.\w+$/, "")}"\`, relative to that file), or set POSTBOI_* in the ${facts.config_unreachable} dashboard`,
 					}
 				: {
 						name: "config",
 						level: "ok",
-						detail: `${facts.config_file} — provider ${facts.provider ?? "postboi"}${facts.default_from ? `, from ${facts.default_from}` : ""}`,
+						detail: `${facts.config_file}: provider ${facts.provider ?? "postboi"}${facts.default_from ? `, from ${facts.default_from}` : ""}`,
 					}
 	)
 
@@ -116,7 +116,7 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 		checks.push({
 			name: "account",
 			level: "skip",
-			detail: `sending through ${facts.provider} — no Postboi account to check`,
+			detail: `sending through ${facts.provider}, no Postboi account to check`,
 		})
 		checks.push({ name: "skill", ...skill_check(facts.skill) })
 		return checks
@@ -149,14 +149,14 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 			checks.push({
 				name: "account",
 				level: "warn",
-				detail: `${a.name ?? a.id} is unclaimed — sends are sandboxed until a human claims it`,
+				detail: `${a.name ?? a.id} is unclaimed. Sends are sandboxed until a human claims it`,
 				fix: `claim it at ${a.claim_url}`,
 			})
 		} else if (a.sandbox) {
 			checks.push({
 				name: "account",
 				level: "warn",
-				detail: `${a.name ?? a.id} is in sandbox — sends are logged, nothing is delivered`,
+				detail: `${a.name ?? a.id} is in sandbox. Sends are logged, nothing is delivered`,
 			})
 		} else {
 			checks.push({
@@ -175,7 +175,7 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 				checks.push({
 					name: "from",
 					level: "warn",
-					detail: `${facts.default_from} is on ${status.domain}, which isn't verified yet — sends fall back to ${a.send_address}`,
+					detail: `${facts.default_from} is on ${status.domain}, which isn't verified yet. Sends fall back to ${a.send_address}`,
 					fix: `bunx postboi domains check ${status.domain}`,
 				})
 			} else {
@@ -192,7 +192,7 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 				name: "from",
 				level: pending.length ? "warn" : "ok",
 				detail: pending.length
-					? `${pending.map((d) => d.domain).join(", ")} still pending — sends use ${a.send_address}`
+					? `${pending.map((d) => d.domain).join(", ")} still pending. Sends use ${a.send_address}`
 					: facts.domains.length
 						? `${facts.domains.length} verified domain(s); default.from unset, sends use ${a.send_address}`
 						: `no custom domain; sends use ${a.send_address}`,
@@ -205,7 +205,7 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 				checks.push({
 					name: "webhooks",
 					level: "warn",
-					detail: `${facts.webhooks} endpoint(s) on the account but no POSTBOI_WEBHOOK_SECRET here — receive() can't verify them`,
+					detail: `${facts.webhooks} endpoint(s) on the account but no POSTBOI_WEBHOOK_SECRET here, so receive() can't verify them`,
 					fix: "bunx postboi sync",
 				})
 			} else {
@@ -240,7 +240,7 @@ function skill_check(state: DoctorFacts["skill"]): Omit<Check, "name"> {
 		default:
 			return {
 				level: "warn",
-				detail: "agent skill not installed — AI coding agents will guess at the API",
+				detail: "agent skill not installed, so AI coding agents will guess at the API",
 				fix: "bunx postboi skill",
 			}
 	}
@@ -343,7 +343,7 @@ export async function doctor_command(args: Array<string>, dir = cwd()): Promise<
 				? red("Something needs fixing before this project can send.")
 				: checks.some((check) => check.level === "warn")
 					? yellow("Sends work; the notes above are worth a look.")
-					: green("All good — this project is wired.")
+					: green("All good. This project is wired.")
 		)
 	}
 	return failed ? 1 : 0

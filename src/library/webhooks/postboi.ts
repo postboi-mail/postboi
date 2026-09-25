@@ -165,7 +165,7 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 		data.from = "someone@example.com"
 		data.to = "brisk-otter-cove@send.postboi.email"
 		data.in_reply_to = "mock-message-id"
-		data.text = "Thanks — that works for me."
+		data.text = "Thanks, that works for me."
 	}
 
 	const body = JSON.stringify({ type: postboi_type, created_at: now, data })

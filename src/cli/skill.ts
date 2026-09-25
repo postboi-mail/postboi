@@ -153,7 +153,7 @@ export function refresh_skill(target = SKILL_TARGET, skill = bundled_skill()): b
 	if (is_link(target)) return added_references // already live — the link tracks the installed version
 	if (link_skill(target)) {
 		console.log(
-			`${green("✓")} linked ${bold(target)} to the installed postboi ${dim("— future releases update it with no diff")}`
+			`${green("✓")} linked ${bold(target)} to the installed postboi ${dim("(future releases update it with no diff)")}`
 		)
 		return true
 	}
@@ -224,7 +224,7 @@ export async function offer_skill(prompts: Prompts, target = SKILL_TARGET): Prom
 		place_companions(target, skill)
 		return
 	}
-	const question = `\nInstall the ${bold("postboi")} agent skill? ${dim("— teaches AI coding agents the library")}`
+	const question = `\nInstall the ${bold("postboi")} agent skill? ${dim("(teaches AI coding agents the library)")}`
 	if (!(await prompts.confirm(question))) return
 	install_skill(target, skill)
 	place_companions(target, skill)
@@ -236,15 +236,15 @@ function install_skill(target: string, skill: string): void {
 	place_references(target)
 	if (link_skill(target)) {
 		console.log(
-			`${green("✓")} linked ${bold(target)} to the installed postboi ${dim("— commit it; upgrades update the skill for free")}`
+			`${green("✓")} linked ${bold(target)} to the installed postboi ${dim("(commit it, and upgrades update the skill for free)")}`
 		)
 		// The link points into node_modules, so a fresh clone has it dangling until deps are
 		// installed — and a dangling skill is silently absent rather than visibly broken.
-		console.log(dim("  (it resolves once dependencies are installed — say so in your README)"))
+		console.log(dim("  (it resolves once dependencies are installed, so say so in your README)"))
 		return
 	}
 	writeFileSync(target, skill)
-	console.log(`${green("✓")} wrote ${bold(target)} — commit it so agents pick it up`)
+	console.log(`${green("✓")} wrote ${bold(target)}. Commit it so agents pick it up`)
 }
 
 /**
@@ -260,7 +260,7 @@ function install_skill(target: string, skill: string): void {
 export function skill_command(target = SKILL_TARGET): boolean {
 	const skill = bundled_skill()
 	if (!skill) {
-		console.log(red("Couldn't find the bundled skill — is postboi installed in this project?"))
+		console.log(red("Couldn't find the bundled skill. Is postboi installed in this project?"))
 		return false
 	}
 	// An existing copy is upgraded to a link where it can be; already-linked is a no-op that

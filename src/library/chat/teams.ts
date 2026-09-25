@@ -50,7 +50,7 @@ export default class Teams extends ChatProvider<SendResponse> {
 				channel: "chat",
 				code: "legacy_webhook",
 				message:
-					"This is an Office 365 connector URL — Microsoft disabled those in May 2026, and posts to them vanish silently. Create a Power Automate Workflows webhook instead (template: “Post to a channel when a webhook request is received”) and use its logic.azure.com URL.",
+					"This is an Office 365 connector URL. Microsoft disabled those in May 2026, and posts to them vanish silently. Create a Power Automate Workflows webhook instead (template: “Post to a channel when a webhook request is received”) and use its logic.azure.com URL.",
 			})
 		}
 		return message

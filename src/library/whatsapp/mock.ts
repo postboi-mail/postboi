@@ -83,7 +83,7 @@ export default class MockWhatsapp extends WhatsappProvider<SendResponse> {
 				channel: "whatsapp",
 				code: "outside_window",
 				message:
-					"Outside the 24-hour customer service window (simulated) — send a template instead.",
+					"Outside the 24-hour customer service window (simulated). Send a template instead.",
 			})
 		}
 		return this.#recorder.capture({

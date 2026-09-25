@@ -105,7 +105,7 @@ export const POLL_FIELDS: Record<string, ReadonlyArray<ProviderField>> = {
 		{
 			env: "CLOUDFLARE_QUEUE_ID",
 			arg: "queue_id",
-			label: "Event queue ID (optional — auto-provisioned)",
+			label: "Event queue ID (optional, auto-provisioned)",
 			default: "",
 			ambient: true,
 		},
@@ -168,7 +168,7 @@ export async function poll_adapter_for(key: string): Promise<PollAdapter> {
 		throw new PostboiError({
 			provider: key,
 			code: "polling_not_supported",
-			message: `Provider "${key}" has no poll adapter — if it pushes webhooks, use receive() instead.`,
+			message: `Provider "${key}" has no poll adapter. If it pushes webhooks, use receive() instead.`,
 		})
 	}
 	return (await load()).default
@@ -229,7 +229,7 @@ export function parse_cursor<T>(provider: string, cursor: string | undefined): T
 		throw new PostboiError({
 			provider,
 			code: "invalid_cursor",
-			message: `The stored ${provider} poll cursor doesn't parse — drop it and poll again from scratch.`,
+			message: `The stored ${provider} poll cursor doesn't parse. Drop it and poll again from scratch.`,
 			raw: cursor,
 		})
 	}

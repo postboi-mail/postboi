@@ -71,7 +71,7 @@ export async function offer_auth_key(
 	if (keys.length === 0) return
 
 	const picked = await prompts.select<(typeof keys)[number] | undefined>(
-		bold("Found an APNs key — use it?"),
+		bold("Found an APNs key. Use it?"),
 		[
 			...keys.map((key) => ({
 				label: key.path.replace(homedir(), "~"),
@@ -121,13 +121,13 @@ export async function verify_apns(args: Record<string, string>): Promise<string 
 		// Our own normalization of BadDeviceToken. The token is bad — that's the point.
 		if (code === "expired_subscription") return undefined
 		if (code === "invalid_key") {
-			return "APNS_PRIVATE_KEY isn't a readable .p8 — is it the whole file, BEGIN/END lines included?"
+			return "APNS_PRIVATE_KEY isn't a readable .p8. Is it the whole file, BEGIN/END lines included?"
 		}
 		if (code === "DeviceTokenNotForTopic" || code === "TopicDisallowed") {
 			return `APNs rejected the topic. Is ${bold(args.topic)} really the app's bundle ID?`
 		}
 		if (code === "InvalidProviderToken" || code === "ExpiredProviderToken" || status === 403) {
-			return "APNs rejected the credentials — check the key ID and team ID belong to this .p8."
+			return "APNs rejected the credentials. Check the key ID and team ID belong to this .p8."
 		}
 		// Anything else (offline, a proxy, an Apple outage) proves nothing either way.
 		return dim(`couldn't reach APNs to check: ${message}`)

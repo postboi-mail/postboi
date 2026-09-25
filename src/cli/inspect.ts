@@ -44,7 +44,7 @@ function print_report(report: Report, link_checks: Array<LinkCheck> | undefined)
 	if (report.findings.length) console.log("")
 
 	const kb = Math.round(report.size.html_bytes / 102.4) / 10
-	const clip = report.size.gmail_clip ? " — Gmail will clip this" : ""
+	const clip = report.size.gmail_clip ? " (Gmail will clip this)" : ""
 	console.log(
 		dim(
 			`HTML: ${kb} KB${clip} · ${report.links.length} link${report.links.length === 1 ? "" : "s"} · ${report.images.length} image${report.images.length === 1 ? "" : "s"}`
@@ -54,7 +54,7 @@ function print_report(report: Report, link_checks: Array<LinkCheck> | undefined)
 	if (link_checks) {
 		const broken = link_checks.filter((link) => !link.ok)
 		for (const link of broken) {
-			console.log(` ${red("✗")} ${link.url} ${dim(`— ${link.error ?? `answered ${link.status}`}`)}`)
+			console.log(` ${red("✗")} ${link.url} ${dim(`(${link.error ?? `answered ${link.status}`})`)}`)
 		}
 		console.log(
 			dim(
