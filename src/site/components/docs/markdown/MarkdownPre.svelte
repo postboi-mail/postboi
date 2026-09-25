@@ -1,19 +1,17 @@
 <script lang="ts">
 	import type { Snippet } from "svelte"
 	import Pre from "./Pre.svelte"
-	import ShikiCodeBlock from "../ShikiCodeBlock.svelte"
+	import CodeBlock from "../CodeBlock.svelte"
 
 	type Props = {
-		htmlLight: string
-		htmlDark?: string
+		html: string
 		code?: Snippet
 		lang?: string
 		raw?: string
 	}
 
 	const props = $props()
-	const htmlLight = $derived((props as Props).htmlLight)
-	const htmlDark = $derived((props as Props).htmlDark)
+	const html = $derived((props as Props).html)
 	const code = $derived((props as Props).code)
 	const lang = $derived((props as Props).lang)
 	const raw = $derived((props as Props).raw ?? "")
@@ -24,5 +22,5 @@
 		{@render code()}
 	</Pre>
 {:else}
-	<ShikiCodeBlock code={raw} {htmlLight} {htmlDark} {lang} />
+	<CodeBlock code={raw} {html} {lang} />
 {/if}

@@ -68,8 +68,9 @@
 </div>
 
 <style>
-	:global(.shiki) {
-		background-color: transparent !important;
+	/* The slip is the surface; the block carries only the type. */
+	:global(.twinkleplop) {
+		background-color: transparent;
 		font-size: 14px;
 		font-weight: 400;
 	}

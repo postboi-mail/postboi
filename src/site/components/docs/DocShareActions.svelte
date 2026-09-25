@@ -138,7 +138,7 @@
 </script>
 
 {#if hasActions}
-	<div class="mt-auto">
+	<div class="mt-auto shrink-0 pt-6">
 		<div class="mb-3 flex items-center gap-2">
 			<span class="docket text-foreground-muted">Take this page</span>
 			<span class="h-px flex-1 bg-border"></span>

@@ -308,3 +308,137 @@ html {
 	background-size: 4px 4px;
 	opacity: 0.14;
 }
+
+/* ---------- highlighted code ----------
+
+   Twinkleplop (src/site/utils/highlight.js) marks every token with a class and
+   leaves the colours to CSS, so one rendering carries both modes and the theme
+   is these variables. On ink it is Aura Soft Dark with attribute names in the
+   brand yellow. On paper it is our own: code set in a soft navy, strings in
+   Boi's hat blue, keywords and tags in the brand orange, types in the postal
+   red, attributes and functions in the ink. postboi-app's app.css carries the
+   same palette for its news snippets, so a block reads the same on either site. */
+:root {
+	--code-fg: #356696;
+	--code-comment: #716e64;
+	--code-string: #368ce7;
+	--code-constant: #b8341f;
+	--code-keyword: #f88429;
+	--code-operator: #356696;
+	--code-function: #0b1f4d;
+	--code-type: #b8341f;
+	--code-tag: #f88429;
+	--code-attr: #0b1f4d;
+	--code-escape: #b0307a;
+	--code-invalid: #c62828;
+}
+
+.dark {
+	--code-fg: #edecee;
+	--code-comment: #6d6d6d;
+	--code-string: #61ffca;
+	--code-constant: #ffca85;
+	--code-keyword: #a277ff;
+	--code-operator: #edecee;
+	--code-function: #82e2ff;
+	--code-type: #ffca85;
+	--code-tag: #a277ff;
+	--code-attr: #fdc005;
+	--code-escape: #f694ff;
+	--code-invalid: #ff6767;
+}
+
+/* Anything not named below (identifiers, properties, punctuation) is the
+   foreground, which is where Aura and Ayu put them too. */
+.twinkleplop {
+	color: var(--code-fg);
+}
+
+.twinkleplop
+	:is(
+		.comment,
+		.doctype,
+		.hash,
+		.label,
+		.code_fence,
+		.front_matter_marker,
+		.blockquote_marker,
+		.hr
+	) {
+	color: var(--code-comment);
+	font-style: italic;
+}
+
+.twinkleplop :is(.string, .template, .plain_scalar, .inserted, .inserted_marker, .url, .link_text) {
+	color: var(--code-string);
+}
+
+.twinkleplop :is(.number, .boolean, .null, .datetime, .entity, .bit) {
+	color: var(--code-constant);
+}
+
+.twinkleplop
+	:is(
+		.keyword,
+		.expression,
+		.svelte_block,
+		.lifetime,
+		.unit,
+		.directive,
+		.changed,
+		.changed_marker
+	) {
+	color: var(--code-keyword);
+}
+
+.twinkleplop .operator {
+	color: var(--code-operator);
+}
+
+.twinkleplop :is(.function, .decorator) {
+	color: var(--code-function);
+}
+
+.twinkleplop :is(.type, .class_name, .builtin, .namespace, .variant, .heading, .heading_marker) {
+	color: var(--code-type);
+}
+
+.twinkleplop :is(.tag_name, .selector, .tag) {
+	color: var(--code-tag);
+}
+
+.twinkleplop
+	:is(
+		.attr_name,
+		.attribute,
+		.attr_sigil,
+		.svelte_directive,
+		.selector_class,
+		.selector_id,
+		.selector_pseudo
+	) {
+	color: var(--code-attr);
+}
+
+.twinkleplop :is(.regex, .string_escape, .escape, .format) {
+	color: var(--code-escape);
+}
+
+.twinkleplop :is(.deleted, .deleted_marker) {
+	color: var(--code-invalid);
+}
+
+/* A shell command's words, as highlight.js names them: the command in the
+   function colour, its arguments as strings and its flags as constants, which is
+   how a shell reads them. Last, so they beat the builtin class `echo` also carries. */
+.twinkleplop .command {
+	color: var(--code-function);
+}
+
+.twinkleplop .argument {
+	color: var(--code-string);
+}
+
+.twinkleplop .flag {
+	color: var(--code-constant);
+}

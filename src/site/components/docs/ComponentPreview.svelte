@@ -6,9 +6,9 @@
 	import type { Snippet } from "svelte"
 	import { SvelteMap } from "svelte/reactivity"
 	import { cn } from "$site/utils/cn"
-	import { getHighlighter } from "$site/utils/highlighter"
+	import { highlight } from "$site/utils/highlight"
 	import ScrollArea from "../ui/ScrollArea.svelte"
-	import ShikiCodeBlock from "./ShikiCodeBlock.svelte"
+	import CodeBlock from "./CodeBlock.svelte"
 	import CopyCodeButton from "./markdown/CopyCodeButton.svelte"
 
 	type SourceTab = {
@@ -80,26 +80,11 @@
 	const activeSource = $derived(tabs.at(selectedTab) ?? null)
 	const activeTabId = $derived(`${tabsInstanceId}-tab-${selectedTab.toString()}`)
 
-	const highlightedSources = $derived.by(() => {
-		const highlighter = getHighlighter()
-		const highlightedSources: Record<string, { light: string; dark: string }> = {}
-
-		for (const tab of tabs) {
-			const lang = tab.language ?? "typescript"
-			highlightedSources[tab.name] = {
-				light: highlighter.codeToHtml(tab.code, {
-					lang,
-					theme: "github-light",
-				}),
-				dark: highlighter.codeToHtml(tab.code, {
-					lang,
-					theme: "github-dark",
-				}),
-			}
-		}
-
-		return highlightedSources
-	})
+	const highlightedSources = $derived(
+		Object.fromEntries(
+			tabs.map((tab) => [tab.name, highlight(tab.code, tab.language ?? "typescript")])
+		)
+	)
 
 	function setActiveTab(index: number) {
 		activeTab = index
@@ -307,12 +292,7 @@
 						class="p-4 text-sm *:mt-0 *:rounded-none *:border-0 *:bg-transparent *:p-0 *:inset-shadow-none"
 					>
 						{#if activeSource}
-							<ShikiCodeBlock
-								code=""
-								htmlLight={highlightedSources[activeSource.name].light}
-								htmlDark={highlightedSources[activeSource.name].dark}
-								unstyled={true}
-							/>
+							<CodeBlock code="" html={highlightedSources[activeSource.name]} unstyled={true} />
 						{:else if codeSlot}
 							{@render codeSlot()}
 						{/if}
