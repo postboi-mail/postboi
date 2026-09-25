@@ -14,7 +14,7 @@ import { language as typescript } from "@twinkleplop/typescript"
 // Twinkleplop writes a class on each token and no colours, so one rendering carries
 // both modes; the theme is the `--code-*` palette in src/routes/layout.css.
 
-/** @typedef {(input: string) => string} Highlight */
+/** @typedef {(input: string, render?: import("@twinkleplop/core").RenderOptions) => string} Highlight */
 
 /** @type {Record<string, () => Highlight>} */
 const FACTORIES = { bash, css, html, javascript, json, svelte, tsx, typescript }
@@ -33,6 +33,38 @@ const ALIASES = {
 	vue: "html",
 	astro: "tsx",
 	xml: "html",
+}
+
+// Twinkleplop's bash grammar calls every bare word an identifier, so `bunx postboi
+// init` comes out as plain text. This names what each word is doing, the way a shell
+// reads it: the first word of a command (after any `FOO=bar` and the keywords that
+// lead one), a flag, or an argument. The classes ride beside `identifier` and the
+// theme colours them.
+const SEPARATOR = /^[|&;\\()[\]<>$]+$/
+const LEADS = /^\s*(?:(?:[A-Za-z_]\w*=\S*|sudo|then|do|else|if|while|until|time|!)\s+)*$/
+
+/** @param {string} input */
+function shell_words(input) {
+	/** @param {string} type @param {number} start @param {number} end */
+	return (type, start, end) => {
+		if (!["identifier", "builtin", "operator", "punctuation"].includes(type)) return
+		if (SEPARATOR.test(input.slice(start, end))) return
+
+		let word = start
+		while (word > 0 && !/[\s|;&(`]/.test(input[word - 1])) word--
+		if (input[word] === "-") return { class: "flag" }
+
+		let command = word
+		while (command > 0) {
+			const c = input[command - 1]
+			if ("|;&(`".includes(c) || (c === "\n" && input[command - 2] !== "\\")) break
+			command--
+		}
+		const lead = input.slice(command, word).replace(/\\\n/g, " ")
+		if (!LEADS.test(lead)) return { class: "argument" }
+		if (/^[A-Za-z_]\w*=/.test(input.slice(word))) return
+		return { class: "command" }
+	}
 }
 
 /** @type {Map<string, Highlight>} */
@@ -64,6 +96,6 @@ function escape(text) {
  */
 export function highlight(code, lang) {
 	const run = lang ? highlighter(lang) : null
-	if (run) return run(code)
+	if (run) return run(code, run === made.get("bash") ? { token: shell_words(code) } : undefined)
 	return `<pre class="twinkleplop"><code>${escape(code)}</code></pre>`
 }

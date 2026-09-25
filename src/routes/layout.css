@@ -428,3 +428,18 @@ html {
 .twinkleplop :is(.deleted, .deleted_marker) {
 	color: var(--code-invalid);
 }
+
+/* A shell command's words, as highlight.js names them: the command in the
+   function colour, its arguments as strings and its flags as constants, which is
+   how a shell reads them. Last, so they beat the builtin class `echo` also carries. */
+.twinkleplop .command {
+	color: var(--code-function);
+}
+
+.twinkleplop .argument {
+	color: var(--code-string);
+}
+
+.twinkleplop .flag {
+	color: var(--code-constant);
+}
