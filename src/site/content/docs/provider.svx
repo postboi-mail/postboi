@@ -498,14 +498,15 @@ its first send. See [Naming the form](/formdata#naming-the-form).
 
 ## Limits
 
-| Plan    | Included   | Daily cap | Overage     | Custom domains |
-| ------- | ---------- | --------- | ----------- | -------------- |
-| Free    | 3,000/mo   | 100/day   | none (hard) | 1              |
-| Starter | 20,000/mo  | none      | £0.40/1k    | unlimited      |
-| Pro     | 100,000/mo | none      | £0.35/1k    | unlimited      |
-| Scale   | 500,000/mo | none      | £0.30/1k    | unlimited      |
+| Plan    | Price  | Included   | Daily cap | Overage     | Custom domains |
+| ------- | ------ | ---------- | --------- | ----------- | -------------- |
+| Free    | £0     | 3,000/mo   | 100/day   | none (hard) | 1              |
+| Starter | £9/mo  | 40,000/mo  | none      | £0.40/1k    | unlimited      |
+| Pro     | £25/mo | 100,000/mo | none      | £0.35/1k    | unlimited      |
+| Scale   | £99/mo | 500,000/mo | none      | £0.30/1k    | unlimited      |
 
-The free tier stops at its caps; paid tiers keep sending and meter the overage. Every
+The free tier stops at its caps; paid tiers keep sending and meter the overage. Current
+prices are on [postboi.app/pricing](https://postboi.app/pricing). Every
 plan has a burst rate limit. When a limit is hit, `mail()` throws a `PostboiError` with a
 machine-readable `code`:
 

@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/postboi-mail/postboi/refs/heads/main/static/logo.svg" alt="Postboi" width="250" />
 
-**Every channel, zero config**
+**Email for your app, set up with one command**
 
 [![CI](https://shieldcn.dev/github/ci/postboi-mail/postboi.svg?size=xs&theme=blue&font=geist&variant=outline)](https://github.com/postboi-mail/postboi/actions/workflows/ci.yml)
 [![npm](https://shieldcn.dev/npm/postboi.svg?size=xs&theme=blue&font=geist&variant=outline)](https://www.npmjs.com/package/postboi)
@@ -12,14 +12,19 @@
 
 ---
 
-**Postboi is an email provider, and `postboi` is its TypeScript SDK.** Run one command, get a
-token, and `mail()` sends. You don't need an account anywhere else, a DNS record or a card.
-The same API also sends SMS, WhatsApp, push and chat.
+**Postboi is an email provider, and `postboi` is its TypeScript SDK.** Run
+`npx postboi init` and `mail()` sends: no DNS, no card, no other provider to sign up for.
+Receiving, lists, webhooks and forms are already in the box.
+
+3,000 emails a month are free, for good. After that it's £9 for 40,000 or £25 for 100,000,
+which is less than Resend charges for the same volume
+([Postboi or Resend?](https://postboi.app/compare/resend)).
 
 Already have a provider? `mail()` works with Resend, SES, Postmark and 40-odd others too, so
-switching is a line of config. You don't need any of them to use Postboi.
+switching is a line of config. You don't need any of them to use Postboi. And when you want
+more than email, the same API sends SMS, WhatsApp, push and chat.
 
-📖 [Docs](https://docs.postboi.app) · [Postboi compared](https://docs.postboi.app/compare) · [Dashboard](https://postboi.app/dashboard)
+📖 [Docs](https://docs.postboi.app) · [Pricing](https://postboi.app/pricing) · [Postboi compared](https://docs.postboi.app/compare) · [Dashboard](https://postboi.app/dashboard)
 
 ## Quick start
 

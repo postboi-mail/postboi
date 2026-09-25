@@ -44,14 +44,20 @@ So "Postboi or Resend?" compares two email providers.
 | Hosted form endpoints (no backend)               | ✅                                             | ❌                             |
 | Local dev inbox, no code changes                 | ✅ `/__postboi`                                | ❌                             |
 | An agent can set it up without you signing in    | ✅ `postboi init --agent`                      | Needs an account and API key first |
+| Free tier                                        | 3,000 a month, 100 a day                       | 3,000 a month, 100 a day       |
+| First paid plan                                  | £9 for 40,000 a month                          | $20 for 50,000 a month         |
+| 50,000 emails a month                            | £13 (about $17)                                | $20                            |
+| 100,000 emails a month                           | £25 (about $33)                                | $35                            |
+| Lists and broadcasts                             | Included in every plan                         | A separate plan, priced by contact |
 | Ecosystem and track record                       | Newer                                          | ✅ bigger, been around longer  |
 
-This is Resend as we understand it in September 2026. Check [resend.com](https://resend.com)
-for what it does today.
+This is Resend as we understand it in September 2026, with dollars at 1.32 to the pound. Check
+[resend.com/pricing](https://resend.com/pricing) for what it charges today, and
+[Postboi or Resend?](https://postboi.app/compare/resend) for the cost at every volume.
 
-**Pick Postboi** if you want as little code as possible between your app and a sent email,
-if an AI agent is setting things up, if you'll want SMS or push later, or if you'd like to
-be able to change provider without touching your code.
+**Pick Postboi** if you want to pay less for the same volume, as little code as possible
+between your app and a sent email, if an AI agent is setting things up, if you'll want SMS or
+push later, or if you'd like to be able to change provider without touching your code.
 
 **Pick Resend** if you want its ecosystem, its React Email tooling (React Email works with
 Postboi too, since `body` takes any HTML) or its longer history in production.
