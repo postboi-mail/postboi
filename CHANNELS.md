@@ -189,7 +189,7 @@ one API instead of six, cost-ordered fallback, and a dev inbox.
 | Layer                                              | Price                     | Why                                                                                                           |
 | -------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | **The library — all channels, BYO, unlimited**     | **Free, forever**         | Zero marginal cost: it runs in the customer's process. The wedge, unbeatable by anyone carrying hosting costs |
-| **Hosted email** (Postboi provider)                | Existing £9/£29/£99 tiers | SES COGS $0.0001 → **60–75% margin**. Where the money is and always was                                       |
+| **Hosted email** (Postboi provider)                | Existing £9/£25/£99 tiers | SES COGS $0.0001 → **60–75% margin**. Where the money is and always was                                       |
 | **Audience layer** (contacts, profiles, broadcast) | Bundled into email tiers  | Costs ~nothing on Workers — see below                                                                         |
 | **Hosted SMS/RCS**                                 | **Don't build it**        | [Appendix A](#appendix-a--sms-economics)                                                                      |
 | **Hosted orchestration**, if ever                  | Per **event**, Novu-style | Never per contact, never per channel                                                                          |
@@ -210,7 +210,7 @@ written/month**.
 
 Storage doesn't start billing until roughly **15 million** contacts. A 100k-recipient
 broadcast is ~100k reads + ~300k writes + 100k requests ≈ **$0.33** of infrastructure,
-against ~£29 of revenue at the current tier — and the read allowance covers ~250,000 such
+against ~£25 of revenue at the current tier — and the read allowance covers ~250,000 such
 broadcasts a month.
 
 **Two things do cost, and neither is "having contacts":**
@@ -237,7 +237,7 @@ OTPs), UK:
 | Courier                    | **$99/mo+**    | Same shape                                |
 | OneSignal                  | **~$1,219/mo** | Push MAU alone                            |
 | **postboi (BYO)**          | **£0**         | Transport paid direct to your providers   |
-| **postboi (hosted email)** | **£29/mo**     | Email transport included, SMS BYO at cost |
+| **postboi (hosted email)** | **£25/mo**     | Email transport included, SMS BYO at cost |
 
 ### The strategic honesty
 
