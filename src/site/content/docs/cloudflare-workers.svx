@@ -6,7 +6,7 @@ category: Frameworks
 ---
 
 Workers pass configuration as bindings rather than ambient env vars, but Postboi reads them
-off `cloudflare:workers` for you — a `POSTBOI_TOKEN` binding is picked up exactly like a
+off `cloudflare:workers` for you. A `POSTBOI_TOKEN` binding is picked up exactly like a
 `POSTBOI_TOKEN` env var anywhere else, so there's nothing to wire up. Read the request's
 `FormData` and hand it to `mail()`. Postboi extracts the
 [special fields](/formdata#special-fields) and renders the rest into a tidy HTML table.
@@ -35,13 +35,13 @@ the sender. Field names use the [`fieldset→field`](/formdata#grouped-fields) s
 
 Set the token as a secret (`wrangler secret put POSTBOI_TOKEN`, or `.dev.vars` for local
 dev), and turn on `nodejs_compat` in `wrangler.jsonc`. Swap providers with a
-`POSTBOI_PROVIDER` binding plus that provider's credential — or construct one explicitly,
+`POSTBOI_PROVIDER` binding plus that provider's credential, or construct one explicitly,
 which still works: `new Postboi({ token: env.POSTBOI_TOKEN })`. See [Providers](/providers).
 
 ## The config file
 
 Bindings arrive on their own, but a Worker has no filesystem, so `postboi.config.ts` can't
-be read at runtime. If you build with Vite — SvelteKit, Nuxt, Astro, Remix, or plain Vite —
+be read at runtime. If you build with Vite (SvelteKit, Nuxt, Astro, Remix, or plain Vite),
 add the plugin and it travels in the bundle instead:
 
 ```typescript
@@ -55,7 +55,7 @@ That's the whole setup: `mail()` picks up your `default.from`, hooks and captcha
 with nothing imported anywhere. The plugin also adds the `optimizeDeps` exclude that
 [remote forms](/sveltekit#remote-functions) need, so it replaces that line too.
 
-Building with wrangler alone (no Vite), import the config file once from your entry point —
+Building with wrangler alone (no Vite), import the config file once from your entry point.
 `config()` registers it as a side effect and esbuild inlines it:
 
 ```typescript
@@ -68,7 +68,7 @@ Or skip the file and call [`configure()`](/config) at startup.
 
 ## The other channels
 
-Nothing above is email-specific — [`push()`](/push), [`sms()`](/sms),
+Nothing above is email-specific: [`push()`](/push), [`sms()`](/sms),
 [`whatsapp()`](/whatsapp) and the chat functions read their bindings the same way. Web Push
 is the one worth spelling out, because it's the channel a Worker most often *is*: a
 background job that notifies someone.
@@ -80,7 +80,7 @@ wrangler secret put VAPID_PRIVATE_KEY
 wrangler secret put VAPID_SUBJECT
 ```
 
-That's the whole setup — three secrets and no `POSTBOI_PUSH_PROVIDER`. A full VAPID trio
+That's the whole setup: three secrets and no `POSTBOI_PUSH_PROVIDER`. A full VAPID trio
 can only mean Web Push, so postboi infers the provider from it. Set the var anyway if you
 also carry FCM or APNs credentials in the same Worker, where the credentials no longer
 answer the question on their own.
@@ -101,7 +101,7 @@ export default {
 }
 ```
 
-No `nodejs_compat` needed for Web Push — VAPID signing and payload encryption are Web
+No `nodejs_compat` needed for Web Push. VAPID signing and payload encryption are Web
 Crypto. (Email needs it, and so does APNs, which speaks HTTP/2.)
 
 ### Bundle size
@@ -117,6 +117,6 @@ const notify = new WebPush({ public_key: env.VAPID_PUBLIC_KEY, /* … */ })
 ```
 
 Immaterial against a 3 MB Worker limit, and the zero-config form is the one to reach for.
-Worth knowing if you're counting bytes — the same trade exists on every channel.
+Worth knowing if you're counting bytes: the same trade exists on every channel.
 
 **Runnable example:** [`examples/cloudflare-workers-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/cloudflare-workers-provider-postboi).

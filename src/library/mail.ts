@@ -165,7 +165,7 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 			if (!warned_dev_fallback) {
 				warned_dev_fallback = true
 				console.warn(
-					`postboi: no ${key === "postboi" ? "POSTBOI_TOKEN" : "provider"} configured — logging mail to the console instead of sending. Run \`bunx postboi init\` to send for real.`
+					`postboi: no ${key === "postboi" ? "POSTBOI_TOKEN" : "provider"} configured, so mail is logged to the console instead of sending. Run \`bunx postboi init\` to send for real.`
 				)
 			}
 			const Mock = await import("./mock.js").then((m) => m.default)

@@ -12,8 +12,8 @@ calling code.
 This page is the **email** roster. The other channels' providers live with their channel:
 [SMS](/sms#providers) (The SMS Works, PureSMS, Twilio, Amazon SNS),
 [WhatsApp](/whatsapp#providers) (Twilio, Meta Cloud API), [Push](/push) (Web Push, FCM),
-and the chat platforms — [Slack](/slack), [Discord](/discord), [Teams](/teams),
-[Telegram](/telegram) — each on its own page.
+and the chat platforms ([Slack](/slack), [Discord](/discord), [Teams](/teams),
+[Telegram](/telegram)), each on its own page.
 
 The **environment variables** are what [`postboi init`](/quick-start) writes and the
 zero-config [`mail()`](/api) reads; the **constructor options** are the same values passed
@@ -109,17 +109,17 @@ await mail.send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>'
 expect(mail.sent).toHaveLength(1)
 ```
 
-Pass `log: true` to print each message as it is captured — subject, addresses, attachment
+Pass `log: true` to print each message as it is captured: subject, addresses, attachment
 names, and the body in full, so a magic link or confirmation code is readable in the
 terminal. It is off by default so test suites stay quiet.
 
 `mail()` turns it on whenever it resolves the mock itself, which happens two ways:
 
-- **No credential in development** — see [below](#no-credential-yet).
+- **No credential in development**. See [below](#no-credential-yet).
 - **`provider: 'mock'`** in [`postboi.config.ts`](/config) or `POSTBOI_PROVIDER`. Choosing
   the mock is choosing not to send, so printing is the only way to observe it.
 
-Constructing `new Mock()` yourself stays silent — that is the test path, where the point is
+Constructing `new Mock()` yourself stays silent. That is the test path, where the point is
 asserting on `sent` rather than printing to the run.
 
 ## No credential yet
@@ -129,7 +129,7 @@ failing, `mail()` logs the message to the console and carries on, so sign-in lin
 receipts are readable and app code needs no `if (token)` branch around every send:
 
 ```
-postboi: no POSTBOI_TOKEN configured — logging mail to the console instead of sending. Run `bunx postboi init` to send for real.
+postboi: no POSTBOI_TOKEN configured, so mail is logged to the console instead of sending. Run `bunx postboi init` to send for real.
 postboi (mock): Your sign-in link
   to:   partner@example.com
   from: Acme <no-reply@example.com>
@@ -139,7 +139,7 @@ Click to sign in: https://example.com/verify?token=abc123
 
 This only happens when the environment identifies itself as development
 (`NODE_ENV=development`). Anywhere else a missing credential throws
-[`no_token` or `no_provider`](/errors) — including when the environment is unset or
+[`no_token` or `no_provider`](/errors), including when the environment is unset or
 unrecognised. The asymmetry is deliberate: a real deploy that lost its secret must fail
 loudly, because mail that silently becomes a console line locks people out with no error
 anywhere. `NODE_ENV=test` throws too, so suites keep asserting the real failure.
@@ -164,34 +164,34 @@ A few of the roster shape the message around their own model rather than the wir
 
 - **Loops**, **Iterable**, **Klaviyo** and **HubSpot** only send emails designed in their
   own editors, so each takes the template to use (`transactional_id` / `campaign_id` /
-  `metric` / `email_id`) and hands the send over as data variables — `subject`, `html`,
-  `text`, `from` and the recipient's `name` — for that template to place. One recipient
+  `metric` / `email_id`) and hands the send over as data variables (`subject`, `html`,
+  `text`, `from` and the recipient's `name`) for that template to place. One recipient
   per send; a [batch](/bulk) with `data` reaches several. Klaviyo is the furthest from a
   send: there is no transactional endpoint at all, so the message is filed as an **event**
-  and a flow triggered by that metric is what actually mails — nothing goes out until one
+  and a flow triggered by that metric is what actually mails. Nothing goes out until one
   exists, and Klaviyo answers `202` either way.
-- **HubSpot** reports a refusal — `INVALID_TO_ADDRESS`, `PREVIOUSLY_BOUNCED`, a missing
-  template property — as `sendResult` on an HTTP **200**. Anything but `SENT` or `QUEUED`
+- **HubSpot** reports a refusal (`INVALID_TO_ADDRESS`, `PREVIOUSLY_BOUNCED`, a missing
+  template property) as `sendResult` on an HTTP **200**. Anything but `SENT` or `QUEUED`
   is thrown with that value as the error code rather than returned as a success.
 - **Primitive** addresses one person per request with no cc or bcc, so several recipients
   is an error rather than a guess.
-- **AhaSend** has no cc/bcc — every address gets its own copy — so `cc` and `bcc` join
+- **AhaSend** has no cc/bcc (every address gets its own copy), so `cc` and `bcc` join
   the recipient list. **Customer.io** has no cc either; `cc` addresses join its
   comma-separated `to`, and every send is filed against the person the first recipient
   identifies.
 - **OneSignal** sends through its `/notifications` endpoint on the email channel, and
-  answers `200` with no `id` when it reached nobody — that case is thrown too.
+  answers `200` with no `id` when it reached nobody, and that case is thrown too.
   `include_unsubscribed` defaults to **true**, because a password reset is owed to the
   person whatever they think of the newsletter; turn it off for anything they could
   reasonably have opted out of. It has no cc (those addresses join the recipient list) and
   `bcc` maps to `email_bcc`, which caps at five.
 - **Alibaba Direct Mail** signs its own requests (HMAC-SHA1 over sorted form parameters)
-  rather than carrying a token, sends from the `AccountName` the `from` address names —
-  which must be verified in the console, in that region — and has neither cc, bcc nor
+  rather than carrying a token, sends from the `AccountName` the `from` address names
+  (which must be verified in the console, in that region), and has neither cc, bcc nor
   attachments: `cc` and `bcc` addresses join the recipient list, each getting their own
   copy, up to 100 per send.
 - **Yandex Cloud Postbox** implements Amazon's SES v2 API, so it is `postboi/ses` pointed
-  at `postbox.cloud.yandex.net` and signed for `ru-central1` — same payload, same
+  at `postbox.cloud.yandex.net` and signed for `ru-central1`: same payload, same
   attachments, same headers and tags. Its credential is a service account's static access
   key, and that account needs the `postbox.sender` role.
 - **Netcore** carries one content block, so the HTML body is the message: a `text`
@@ -200,8 +200,8 @@ A few of the roster shape the message around their own model rather than the wir
   Azure) and its tracking is a resource-level switch; the one per-send control is turning
   it off with `tracking: { opens: false, clicks: false }`.
 - **Gmail** sends as a Google Workspace mailbox through a service account with
-  domain-wide delegation — the `from` address is the mailbox impersonated unless `user`
-  says otherwise — or with an `access_token` you minted yourself.
+  domain-wide delegation (the `from` address is the mailbox impersonated unless `user`
+  says otherwise), or with an `access_token` you minted yourself.
 - **SendPulse** and **Gmail** exchange their credentials for a short-lived token first;
   the exchange is cached across instances, so `mail()` doesn't pay it per send.
 

@@ -124,5 +124,5 @@ import { mail } from 'postboi/kit'
 export const actions = { default: mail }
 ```
 
-> On Cloudflare Workers this works the same way — bindings are read as env vars — but the
+> On Cloudflare Workers this works the same way (bindings are read as env vars), but the
 > config file needs importing by hand. See [Cloudflare Workers](/cloudflare-workers).

@@ -93,8 +93,8 @@
 	const docTitle = $derived(metadata?.title ?? currentDoc?.name ?? siteConfig.name)
 	const pageTitle = $derived(
 		isHome
-			? `${siteConfig.name} — ${siteConfig.description.split(".")[0]}`
-			: `${docTitle} - ${siteConfig.name}`
+			? `${siteConfig.name} | ${siteConfig.description.split(".")[0]}`
+			: `${docTitle} | ${siteConfig.name}`
 	)
 	const docDescription = $derived(metadata?.description ?? siteConfig.description)
 

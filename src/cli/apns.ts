@@ -124,7 +124,7 @@ export async function verify_apns(args: Record<string, string>): Promise<string 
 			return "APNS_PRIVATE_KEY isn't a readable .p8 — is it the whole file, BEGIN/END lines included?"
 		}
 		if (code === "DeviceTokenNotForTopic" || code === "TopicDisallowed") {
-			return `APNs rejected the topic — is ${bold(args.topic)} really the app's bundle ID?`
+			return `APNs rejected the topic. Is ${bold(args.topic)} really the app's bundle ID?`
 		}
 		if (code === "InvalidProviderToken" || code === "ExpiredProviderToken" || status === 403) {
 			return "APNs rejected the credentials — check the key ID and team ID belong to this .p8."

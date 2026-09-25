@@ -202,7 +202,7 @@ await mail.send({ body, captcha: { turnstile: { secret_key: env.TURNSTILE_SECRET
 Testing? Cloudflare provides [dummy keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/):
 the `1x…` secret always passes, the `2x…` secret always fails.
 
-The [mock provider](/providers) never verifies Turnstile — it has no credentials by design,
+The [mock provider](/providers) never verifies Turnstile. It has no credentials by design,
 so a token from `<Captcha />` is dropped rather than raising `captcha_misconfigured`, and
 local sends keep working. The honeypot still runs, and an explicit `secret_key` or
 `turnstile: true` is still honoured, so you can exercise the real path when you want to.
@@ -211,7 +211,7 @@ local sends keep working. The honeypot still runs, and an explicit `secret_key` 
 
 Cloudflare accepts the submitting visitor's IP (`remoteip`) and uses it to reject a token
 replayed from somewhere else. Postboi sends it for you: the `postboi/kit` form action and
-remote form read it from the request, and it's forwarded for managed captcha too — without
+remote form read it from the request, and it's forwarded for managed captcha too. Without
 it the verifier only ever sees your *server's* address, since that's where the send comes
 from.
 

@@ -1,7 +1,7 @@
 ---
 title: Slack
 name: Slack
-description: Post to Slack from your app with slack() — one webhook URL, zero config, the same shape as mail() and sms().
+description: Post to Slack from your app with slack(): one webhook URL, zero config, the same shape as mail() and sms().
 category: Channels
 ---
 
@@ -29,7 +29,7 @@ paste it:
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/…
 ```
 
-**Treat the URL as a secret** — anyone holding it can post to your channel. It's exactly
+**Treat the URL as a secret.** Anyone holding it can post to your channel. It's exactly
 the kind of credential team sync exists for.
 
 ## Titles
@@ -51,7 +51,7 @@ await slack([
 ])
 ```
 
-Each gets its own result — one failure never loses the rest.
+Each gets its own result, so one failure never loses the rest.
 
 ## Development posts for real
 
@@ -63,10 +63,10 @@ while building is usually the point, costs nothing, and can be deleted. With no
 ## Worth knowing
 
 - Slack replies to a failed post with a **plain-text reason** (`no_service`,
-  `invalid_payload`) rather than JSON — that's what lands in `error.code`.
+  `invalid_payload`) rather than JSON, and that's what lands in `error.code`.
 - In a multi-channel [`send()`](/send), the chat leg posts to whichever platform
   `chat.provider` names in your [config](/config). Your own code just calls `slack()`.
 
 **Runnable example:** [`examples/scripts/chat.ts`](https://github.com/postboi-mail/postboi/tree/main/examples/scripts/chat.ts) posts to each
-platform in turn. The framework apps reach it through their `POST /notify` route — see
+platform in turn. The framework apps reach it through their `POST /notify` route. See
 the [SvelteKit app](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi).

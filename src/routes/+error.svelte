@@ -6,7 +6,7 @@
 	const is_not_found = $derived(page.status === 404)
 	const message = $derived(
 		is_not_found
-			? "We couldn't find that page — it's probably been returned to sender."
+			? "We couldn't find that page. It's probably been returned to sender."
 			: (page.error?.message ?? "Something went wrong.")
 	)
 	// The mark a sorting office actually strikes on an undeliverable item. It only

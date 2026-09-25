@@ -28,14 +28,14 @@ export default config({
 })
 ```
 
-It auto-loads on the first send (Node/Bun) — `mail()`, `sms()`, or any other channel.
+It auto-loads on the first send (Node/Bun): `mail()`, `sms()`, or any other channel.
 
 | Field      | What it sets                                                                       |
 | ---------- | --------------------------------------------------------------------------------- |
 | `provider` | which provider `mail()` uses (`resend`, `mailgun`, …)                              |
 | `default`  | `from` / `to` / `cc` / `bcc` / `reply_to` applied when a send omits them           |
 | `options`  | non-secret provider constructor options (Mailgun domain, SES region, SMTP host…)  |
-| `sms`, `whatsapp`, `chat`, `push` | each channel's own `provider`, `default` and `options` — same shape, one block per channel |
+| `sms`, `whatsapp`, `chat`, `push` | each channel's own `provider`, `default` and `options`, same shape, one block per channel |
 | `hooks`    | lifecycle [hooks](/hooks) run around every send, on every channel                 |
 | `captcha`  | [spam protection](/spam): the publishable `key` for `<Captcha />`, honeypot name, Turnstile |
 | `dev`      | development behaviour: the [inbox](/dev-inbox), and the [SMS](/sms#development-sends-nothing)/[WhatsApp](/whatsapp#development-sends-nothing) interception opt-outs |
@@ -55,7 +55,7 @@ Lowest to highest (later sources win):
 
 ### `options` belong to the provider you named
 
-`options` is keyed by option name, not by provider, and those names repeat across vendors —
+`options` is keyed by option name, not by provider, and those names repeat across vendors:
 `api_key` on fifteen email providers, `webhook_url` on Slack, Discord and Teams. So the bag
 is scoped to the `provider` sitting beside it: if `POSTBOI_PROVIDER` (or a platform function
 like `discord()`) selects a different one, the options you wrote for the first don't travel
@@ -69,13 +69,13 @@ export default config({
 ```
 
 With `POSTBOI_PROVIDER=resend` set against that file, Resend wants `RESEND_API_KEY` and says
-so — it does not inherit Mailgun's key. A config file that names **no** provider keeps its
+so. It does not inherit Mailgun's key. A config file that names **no** provider keeps its
 options unscoped, since they can only have been meant for whichever provider runs.
 
 ## Bundled and deployed servers
 
 The config file is found by walking up from `process.cwd()` at runtime. That covers local
-dev and any long-running server started from the project root — but **not** a deployed
+dev and any long-running server started from the project root, but **not** a deployed
 bundle. Nothing imports `postboi.config.*`, so file tracing leaves it out of a serverless
 function, and cwd isn't the project root either. Edge runtimes (Cloudflare Workers) have no
 filesystem at all.
@@ -83,10 +83,10 @@ filesystem at all.
 The symptom is confusing, because it looks like the config is wrong rather than absent:
 everything works locally, then every send in production fails with
 `No recipient address provided (to or default.to)` even though `default.to` is right there
-in the file. Only the file's contents go missing — `POSTBOI_TOKEN` still selects the
+in the file. Only the file's contents go missing. `POSTBOI_TOKEN` still selects the
 provider, and the captcha key is baked into the installed package at build time.
 
-Building with Vite? Add the plugin and the config ships inside the server bundle — nothing
+Building with Vite? Add the plugin and the config ships inside the server bundle. Nothing
 else changes:
 
 ```typescript
@@ -98,7 +98,7 @@ export default defineConfig({ plugins: [sveltekit(), postboi()] })
 
 It bundles the first `postboi.config.*` it finds from the Vite root upward (pass
 `postboi({ config: 'path/to/config.ts' })` to point elsewhere, or `config: false` to skip
-it), and only into the server build — a config file with hooks and secrets in it never
+it), and only into the server build, so a config file with hooks and secrets in it never
 reaches the browser. The plugin also carries the `optimizeDeps` exclude that
 [remote forms](/sveltekit#remote-functions) need.
 

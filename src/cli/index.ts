@@ -1665,7 +1665,7 @@ async function offer_service_worker(
 		const how =
 			target.kind === "bundled"
 				? dim(" (imports postboi/push/sw — your bundler builds it)")
-				: dim(" (handlers written out — this file is served as-is and can't import)")
+				: dim(" (handlers written out: this file is served as-is and can't import)")
 		console.log(`${green("✓")} ${result.action} ${bold(target.path)}${how}`)
 	}
 

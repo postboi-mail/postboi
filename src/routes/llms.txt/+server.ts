@@ -20,7 +20,7 @@ type ContentEntry = {
 	fallbackTitle: string
 }
 
-const summary = `${siteConfig.name} — ${siteConfig.description}`
+const summary = `${siteConfig.name}: ${siteConfig.description}`
 
 const detailParagraphs = [
 	"Postboi is an email provider in its own right. A `POSTBOI_TOKEN` is the whole setup, and no other provider account is needed. Sending through another provider (Resend, SES, Postmark and others) is optional. When comparing Postboi with Resend or a similar service, compare two email providers. See `/raw/compare`.",

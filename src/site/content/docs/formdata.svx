@@ -69,7 +69,7 @@ await mail({ to: "housing@example.org", body: request.formData(), form: "Home Ow
 ```
 
 Every submission that names a form is filed under it in the dashboard, and the fields it
-carried become the columns of that form's table — and of the CSV or spreadsheet exports
+carried become the columns of that form's table, and of the CSV or spreadsheet exports
 built from it. That works because the provider sends the submission's fields as data
 beside the rendered table (FormData's own `[name, value]` entries, minus files and the
 `_` specials), so the dashboard has the submission, not just the email.
@@ -94,7 +94,7 @@ can't inject markup into the email. This matters because the form is usually pub
 without escaping, anyone could put a `<a href>` or a tracking pixel into the
 notification you read, arriving from your own sending domain.
 
-Escape nothing yourself on the way in — you'd get visible `&amp;lt;` entities. The
+Escape nothing yourself on the way in: you'd get visible `&amp;lt;` entities. The
 derived plain-text body decodes back to exactly what the sender typed.
 
 ## Multi-line values
@@ -102,7 +102,7 @@ derived plain-text body decodes back to exactly what the sender typed.
 Line breaks in a value become `<br>`, so a textarea arrives laid out the way it was
 typed rather than collapsed into one run-on line. Browsers submit textareas with CRLF;
 `\r\n`, lone `\r` and lone `\n` are all handled, and blank lines survive as
-consecutive breaks. A `<br>` someone *submits* is still escaped — only the breaks
+consecutive breaks. A `<br>` someone *submits* is still escaped. Only the breaks
 Postboi adds are real markup.
 
 ## Hand-rolled bodies

@@ -1,7 +1,7 @@
 ---
 title: WhatsApp
 name: WhatsApp
-description: Send WhatsApp messages with whatsapp() — templates that deliver anytime, free-form text inside the 24-hour window.
+description: Send WhatsApp messages with whatsapp(): templates that deliver anytime, free-form text inside the 24-hour window.
 category: Channels
 ---
 
@@ -19,8 +19,8 @@ await whatsapp({
 })
 ```
 
-Same shape as [`mail()`](/quick-start) and [`sms()`](/sms) — zero-config resolution,
-[hooks](/hooks), normalized [errors](/errors) — with one constraint the others don't have,
+Same shape as [`mail()`](/quick-start) and [`sms()`](/sms) (zero-config resolution,
+[hooks](/hooks), normalized [errors](/errors)), with one constraint the others don't have,
 and it shapes everything: **the 24-hour customer service window**.
 
 <InstallationTabs exec args="init --whatsapp" />
@@ -28,14 +28,14 @@ and it shapes everything: **the 24-hour customer service window**.
 ## The 24-hour window
 
 A business may send **free-form text** only within 24 hours of the user's last inbound
-message. Outside that window — which is where most transactional sends happen — only
+message. Outside that window, which is where most transactional sends happen, only
 **pre-approved templates** deliver. That's why `template` sits beside `message` as a
 first-class field rather than a provider option: template-only is the normal case, not the
 edge case.
 
 ```typescript
 // Inside the window (the user messaged you recently) — free-form works:
-await whatsapp({ to: "+447788223344", message: "Thanks — on its way!" })
+await whatsapp({ to: "+447788223344", message: "Thanks, it's on its way!" })
 
 // Anytime — a template approved with Meta, filled with variables:
 await whatsapp({
@@ -46,7 +46,7 @@ await whatsapp({
 ```
 
 A free-form send outside the window fails with `code: "outside_window"`, and the check
-hangs off `whatsapp` itself — no extra import:
+hangs off `whatsapp` itself, with no extra import:
 
 ```typescript
 import { whatsapp } from "postboi"
@@ -62,7 +62,7 @@ try {
 (Holding a provider instance directly? The same check is
 `WhatsappProvider.is_outside_window()`.)
 
-Exactly one of `message` or `template` per send — passing both is rejected rather than
+Exactly one of `message` or `template` per send. Passing both is rejected rather than
 guessed at, because a template's content is fixed at approval time.
 
 ## Providers
@@ -72,7 +72,7 @@ guessed at, because a template's content is fixed at approval time.
 | Twilio | `postboi/whatsapp-twilio` | Content SIDs (`HX…`), or their names |
 | Meta Cloud API | `postboi/whatsapp-meta` | Approved names + language code |
 
-**Name your provider** — like [SMS](/sms#providers), WhatsApp never infers one from
+**Name your provider.** Like [SMS](/sms#providers), WhatsApp never infers one from
 credentials, because a wrong guess is a billable message to a real handset and Twilio's
 credentials are shared with every other Twilio product you might be using:
 
@@ -80,9 +80,9 @@ credentials are shared with every other Twilio product you might be using:
 POSTBOI_WHATSAPP_PROVIDER=meta
 ```
 
-**Twilio** reuses your Twilio SMS credentials and the same Message resource — addresses get
+**Twilio** reuses your Twilio SMS credentials and the same Message resource, and addresses get
 the `whatsapp:` prefix added for you. Templates are created in the Content Template Builder
-and addressed by their `HX…` SID — though once they've been [synced](#typed-template-names)
+and addressed by their `HX…` SID, though once they've been [synced](#typed-template-names)
 you can use the friendly name instead, the same as on Meta.
 
 ```bash
@@ -92,7 +92,7 @@ TWILIO_ACCOUNT_SID=AC…
 TWILIO_AUTH_TOKEN=…
 ```
 
-**Meta's Cloud API** is the direct route — no platform fee on top of Meta's own pricing,
+**Meta's Cloud API** is the direct route: no platform fee on top of Meta's own pricing,
 at the cost of Business verification. The sender is the `phone_number_id` from your app
 dashboard, and templates are addressed by the name they were approved under plus a language
 code (`language`, default `"en"`) that must match an approved translation.
@@ -131,7 +131,7 @@ await whatsapp({
 ```
 
 A named template's header placeholder has a name of its own, unrelated to the body's, and
-nowhere else to go — so those take the map form instead, and a send that omits the name
+nowhere else to go, so those take the map form instead, and a send that omits the name
 comes back as error `132000`:
 
 ```typescript
@@ -156,7 +156,7 @@ await whatsapp({ to, template: "order_shiped" })
 ```
 
 **It reads each template's placeholders too**, so `variables` knows what *that* template
-takes — including that it takes them at all:
+takes, including that it takes them at all:
 
 ```typescript
 await whatsapp({ to, template: "order_shipped", variables: { name: "Ada" } })
@@ -167,26 +167,26 @@ await whatsapp({ to, template: "order_shipped" })
 ```
 
 The templates live on the platform, not on your Postboi account, so the sync runs against
-Meta or Twilio with the credentials already in your env — no Postboi account needed. Meta
+Meta or Twilio with the credentials already in your env, with no Postboi account needed. Meta
 needs one extra id to list them, `WHATSAPP_BUSINESS_ACCOUNT_ID`, which sits beside the phone
 number id in the API Setup panel; Twilio needs nothing you don't already have.
 
 **On Twilio this also earns you names.** Twilio sends a `ContentSid`, so the sync bakes the
-name→SID map alongside the types and the provider resolves it — the same
+name→SID map alongside the types and the provider resolves it, so the same
 `template: "order_shipped"` works on both platforms, and a raw `HX…` still goes through
 untouched.
 
 Like the `from` types, this lives inside `node_modules` (nothing to commit) and is entirely
 optional: with nothing generated, `template` accepts any string and `variables` any record.
 A raw `HX…` stays valid whatever's been generated, and a template whose body the sync
-couldn't read keeps accepting any variables rather than rejecting them — a stale list should
+couldn't read keeps accepting any variables rather than rejecting them: a stale list should
 never fail code that works. Re-run sync after getting a new template approved; `init` adds a
 `prepare` script so installs restore it.
 
 ## Development sends nothing
 
-Like [SMS](/sms) and for the same reason — a template send costs real money and reaches a
-real handset with no recall — WhatsApp messages are **captured and logged, never sent** in
+Like [SMS](/sms) and for the same reason (a template send costs real money and reaches a
+real handset with no recall), WhatsApp messages are **captured and logged, never sent** in
 development, even with a configured provider. Opt out explicitly when you need real
 delivery:
 
@@ -212,7 +212,7 @@ await wa.send({ to: "+447788223344", template: "order_shipped" }) // delivers
 ## In a fallback chain
 
 [`send()`](/send) slots WhatsApp between email and SMS in its `"cheapest"` order, and an
-`outside_window` failure is just a signal to advance — so a code or alert falls through to
+`outside_window` failure is just a signal to advance, so a code or alert falls through to
 SMS rather than failing:
 
 ```typescript
@@ -234,14 +234,14 @@ as email: `channel` is `"whatsapp"`, the number is in `phone` (never `email`), a
 receipt is `opened` because it is the same fact as an email open, and a message Meta or
 Twilio couldn't deliver is `failed` with the provider's code and words in `bounce.detail`.
 
-**Twilio** is polled, because its status callbacks are set per message at send time —
+**Twilio** is polled, because its status callbacks are set per message at send time.
 `poll({ provider: "twilio" })` covers SMS and WhatsApp in one row and needs no public
 endpoint. See [polling](/webhooks#providers-that-dont-push-poll).
 
 **Meta** pushes a real webhook, so it's [`receive()`](/webhooks) like an email provider.
 Two values from the app dashboard make it work: the **app secret** (Basic Settings) signs
 every delivery as `X-Hub-Signature-256`, and a **verify token** you make up is what Meta
-presents when it checks the endpoint is yours before subscribing it — a `GET` that
+presents when it checks the endpoint is yours before subscribing it: a `GET` that
 `webhook()` answers, so route both methods to the same handler. Name the provider: the
 zero-config default is your email provider (a project without one falls through to
 `POSTBOI_WHATSAPP_PROVIDER=meta` on its own).
@@ -277,12 +277,12 @@ endpoint hears about every number the account owns. What arrives:
 | Meta sends | You get |
 | --- | --- |
 | `sent`, `delivered`, `read` statuses | `sent`, `delivered`, `opened` |
-| a `failed` status | `failed`, with the error code and reason in `bounce.detail` — `131047` is a free-form message outside the window |
+| a `failed` status | `failed`, with the error code and reason in `bounce.detail`. `131047` is a free-form message outside the window |
 | a message that is an [opt-out keyword](/sms#opt-outs) (`STOP` and friends, typed or as the label of a button or list row they tapped) | `unsubscribed` for the number that sent it |
-| any other message a person sends | `received` — `phone` is them, `body.text` their words when they were words, and `message_id` the send they replied to when they used WhatsApp's reply |
+| any other message a person sends | `received`: `phone` is them, `body.text` their words when they were words, and `message_id` the send they replied to when they used WhatsApp's reply |
 
 Reactions, `system` notices and `deleted` statuses aren't delivery events and produce
-nothing — a [custom adapter](/webhooks#custom-providers) is the route to them if you
+nothing. A [custom adapter](/webhooks#custom-providers) is the route to them if you
 need one. And because a `received` is the moment the customer service window opens,
 it's also the signal that free-form `message` sends to that number will deliver for the
 next 24 hours.
@@ -291,7 +291,7 @@ Two honest caveats. The suppression call in the example is the
 [Postboi provider's](/provider#suppressions); with another email provider, write the
 number wherever you keep opt-outs instead. And `phone` is Meta's `wa_id` with a `+` in
 front, which is the E.164 number everywhere except Mexico and Argentina, where WhatsApp
-inserts a digit after the country code (`+52 1 …`, `+54 9 …`) — the send response's
+inserts a digit after the country code (`+52 1 …`, `+54 9 …`). The send response's
 `contacts[].wa_id` is the same form, so match on that rather than the number you dialled.
 
 ## Phone numbers
@@ -301,6 +301,6 @@ national forms need a default country (`whatsapp.default.country` or
 `POSTBOI_WHATSAPP_COUNTRY`), and anything ambiguous throws rather than guesses.
 
 **Runnable examples:** [`examples/scripts/whatsapp.ts`](https://github.com/postboi-mail/postboi/tree/main/examples/scripts/whatsapp.ts)
-covers both shapes — a free-form message inside the window and a template outside it.
+covers both shapes: a free-form message inside the window and a template outside it.
 The framework apps' `POST /notify` route sends WhatsApp alongside SMS and chat; see the
 [SvelteKit app](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi).

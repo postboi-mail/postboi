@@ -402,7 +402,7 @@
 				</a>
 				<span
 					class="docket border border-line px-1.5 py-1 text-foreground"
-					title={`Postboi is in pre-release — currently v${version}`}
+					title={`Postboi is in pre-release, currently v${version}`}
 				>
 					Pre-release
 				</span>

@@ -50,7 +50,7 @@ the dashboard, no Cloudflare account, no keys. See [Spam protection](/spam).
 
 ## Zero setup for agents & CI
 
-`postboi init --agent` removes the last human step. No browser, no sign-in, no prompts —
+`postboi init --agent` removes the last human step. No browser, no sign-in, no prompts:
 one API round trip mints a **claimable project** and the CLI wires everything exactly as
 the interactive flow would:
 
@@ -63,31 +63,31 @@ bunx postboi init --agent
 - **Your sending address is your project's name.** The `package.json` name seeds the
   slug: `@acme/mail-site` sends from `mail-site@send.postboi.email` (a suffix is added if
   it's taken, and a friendly random slug stands in when the name can't be an address).
-- **Sends work immediately, sandboxed.** Every send runs the full pipeline — message log,
-  webhooks, status — but nothing is delivered and nothing can reach a real inbox. The
+- **Sends work immediately, sandboxed.** Every send runs the full pipeline (message log,
+  webhooks, status), but nothing is delivered and nothing can reach a real inbox. The
   response says so: `{ id, sandbox: true, claim_url }`.
 - **One sign-in makes it real.** The CLI prints a **claim URL**; opening it and signing
-  in (a magic link — that's the account creation too) transfers the project to you and
+  in (a magic link, which is the account creation too) transfers the project to you and
   lifts the sandbox. Everything the agent built keeps working unchanged, and the
   sandboxed sends are waiting in your message log.
 - **Unclaimed projects expire.** A project nobody claims *and* nobody uses for 14 days is
-  deleted. Activity counts — while your token keeps sending sandboxed mail, the project
-  stays alive for you to claim — but 60 days unclaimed is the ceiling, active or not.
+  deleted. Activity counts: while your token keeps sending sandboxed mail, the project
+  stays alive for you to claim. But 60 days unclaimed is the ceiling, active or not.
 
-In development none of this even matters yet — with the [dev inbox](/dev-inbox) running,
+In development none of this even matters yet. With the [dev inbox](/dev-inbox) running,
 mail is captured locally before the provider is consulted, so the sandbox only shows up
 in deployed or production-mode sends.
 
 **If you're an AI coding agent:** run `init --agent` when no `POSTBOI_TOKEN` exists and
 no human is available to sign in, then **surface the claim URL prominently** in your
-summary — it's the one thing only your human can do. `postboi whoami` re-prints it any
+summary. It's the one thing only your human can do. `postboi whoami` re-prints it any
 time. The other channels accept the flag too (`init --push --agent` mints VAPID keys and
 wires the service worker with no prompts); channels that need paid credentials (SMS,
 WhatsApp) will tell you exactly which env var they're missing instead of prompting.
 
 `--agent` also **detects the project's domain** (astro `site`, `package.json`
 `homepage`, a `CNAME` file, wrangler routes, `SITE_URL`-style env vars) and prints it as
-a suggestion rather than registering it — ownership is the human's to assert, and the
+a suggestion rather than registering it. Ownership is the human's to assert, and the
 API refuses domains on unclaimed projects outright, so an anonymous token can never
 squat one. After the claim, `bunx postboi domains add <domain>` prints the records and
 the one-click registrar link.
@@ -111,8 +111,8 @@ You can rename the address (once a day) from the [dashboard](https://postboi.app
 
 ## Replies
 
-Your sending address is also a mailbox. Anything sent to it — including a reply to a
-message that never set `reply_to` — lands in **Messages → Received** in the dashboard,
+Your sending address is also a mailbox. Anything sent to it, including a reply to a
+message that never set `reply_to`, lands in **Messages → Received** in the dashboard,
 with the body, the sender, and a link back to the send it answers.
 
 That happens whether or not you configure anything. Two things you can add on top:
@@ -122,7 +122,7 @@ That happens whether or not you configure anything. Two things you can add on to
   arrive in your normal inbox as well as the dashboard. (Replying from there goes out
   from your own address, not your Postboi one.)
 - **Handle them in code.** Subscribe a [webhook](/webhooks) to `email.received` and
-  each reply arrives as a normalized `received` event — the basis for a support inbox,
+  each reply arrives as a normalized `received` event: the basis for a support inbox,
   a reply-to-confirm flow, or ticket creation.
 
 Plus-tags route to the same mailbox, so `you+order-1234@send.postboi.email` is a
@@ -142,28 +142,28 @@ swallowed, and inbound HTML is sanitised before it's stored.
 
 ## Receiving on your own domain
 
-Your domain receives as well as sends, on a dedicated subdomain — and for a new
+Your domain receives as well as sends, on a dedicated subdomain, and for a new
 domain it's part of standard setup: the two records it needs (a TXT and an MX, both
 on `reply.yourdomain.com`) are in the same list as the sending ones, covered by the
 same one-click registrar apply where yours supports it. Once they're live, mail to
-**any** address on that subdomain — `support@reply.yourdomain.com`,
-`ada+ticket-42@reply.yourdomain.com` — lands in Received, fires `email.received`, and
+**any** address on that subdomain (`support@reply.yourdomain.com`,
+`ada+ticket-42@reply.yourdomain.com`) lands in Received, fires `email.received`, and
 can be answered from the dashboard, where the reply goes out from the address the mail
 was written to. The switch on the domain turns receiving off (and back on for domains
 added before this was the default, or via `POST /v1/domains/{id}/inbound`).
 
 The MX lives on the subdomain on purpose. Pointing your domain's own MX at us would
-take over your real mailboxes, so that is never asked for — `you@yourdomain.com`
+take over your real mailboxes, so that is never asked for. `you@yourdomain.com`
 keeps working exactly as before, wherever it's hosted.
 
 ## Sending from your own domain
 
-`init` offers this at the end of setup — it detects your project's domain (astro `site`,
+`init` offers this at the end of setup. It detects your project's domain (astro `site`,
 `package.json` `homepage`, a `CNAME` file, wrangler routes, `SITE_URL`-style env vars)
 and prefills the prompt, so accepting is one Enter. Or do it any time from the terminal
-(`bunx postboi domains add yourdomain.com` — prints the records and a one-click
+(`bunx postboi domains add yourdomain.com` prints the records and a one-click
 registrar link) or the dashboard: add a domain, publish the three DKIM CNAME records it
-shows you, and hit **Check**. Every plan includes one custom domain — Free included —
+shows you, and hit **Check**. Every plan includes one custom domain, Free included,
 and paid plans are uncapped (`domain_limit_exceeded` past the cap). Once verified, any
 address at that domain is a valid `from`:
 
@@ -182,7 +182,7 @@ The body of a send from code is **your** document, so Postboi writes nothing int
 unless you ask. Two things can be asked for, and a send can ask for both.
 
 **The letterhead** is the header and footer your team writes once in the dashboard under
-*Messages → Templates → Letterhead* — the masthead, the footer with the unsubscribe line:
+*Messages → Templates → Letterhead*: the masthead, the footer with the unsubscribe line:
 
 ```ts
 await mail({
@@ -193,7 +193,7 @@ await mail({
 })
 ```
 
-The two halves are styled and put around your HTML — *inside* `<body>` when the body is
+The two halves are styled and put around your HTML, *inside* `<body>` when the body is
 a whole document, so nothing ends up before the doctype. Nothing else about the message
 changes.
 
@@ -254,8 +254,8 @@ output for the dark palette, and never reads them from yours.
 Long words and bare URLs wrap inside the column rather than widening it, so a fallback
 "paste this link" line is safe to write as it is.
 
-The shell **sets** the body rather than wrapping it — that is how a bare `<p>` comes
-back typeset — but what you wrote still wins. Its typesetting is written behind your own
+The shell **sets** the body rather than wrapping it (that is how a bare `<p>` comes
+back typeset), but what you wrote still wins. Its typesetting is written behind your own
 declarations, so this stays red:
 
 ```ts
@@ -269,7 +269,7 @@ await mail({
 
 One consequence worth knowing: a tag you colour keeps that colour on a device in dark
 mode, where a tag you left alone is re-inked along with the rest. That is the same rule
-the renderer already follows for its own fixed-colour bands — a colour somebody chose is
+the renderer already follows for its own fixed-colour bands: a colour somebody chose is
 not ours to overrule.
 
 The one thing the shell refuses is a body that is already a **whole HTML document**. The
@@ -286,14 +286,14 @@ own is the option you want.
 await mail({ …, shell: true, style: "plain" })
 ```
 
-`"plain"` is the same blocks in the client's own face — flat keys, no ground, no drawn
+`"plain"` is the same blocks in the client's own face: flat keys, no ground, no drawn
 column, no fonts asked for. It says how, not what: on its own it renders nothing, and
 one cut covers the letterhead and the shell together so they can't disagree.
 
 There is no theme to pick. Light or dark is the recipient's device's to decide, so it is
 never a setting on a message; both palettes go out and the device chooses.
 
-A `{unsubscribe_url}` in the footer — the usual reason to write one — fills from
+A `{unsubscribe_url}` in the footer (the usual reason to write one) fills from
 `unsubscribe_url` on the same send, the option that also sets the
 [List-Unsubscribe headers](/tracking):
 
@@ -317,7 +317,7 @@ agency's.
 ### The preheader
 
 `preheader` is the line an inbox shows after the subject and the message itself never
-does — "Your order is on its way", where the subject is the order number:
+does, like "Your order is on its way", where the subject is the order number:
 
 ```ts
 await mail({
@@ -328,13 +328,13 @@ await mail({
 })
 ```
 
-It is written into your HTML as a hidden div, first — ahead of a letterhead's masthead,
+It is written into your HTML as a hidden div, first. It goes ahead of a letterhead's masthead,
 because what an inbox previews is the first text it finds, and a masthead would otherwise
 be the preview. It needs no shell, and a long one is clipped rather than refused.
 
 ### The footnote
 
-`footnote` is one send's line of small print under the message — the reassurance under
+`footnote` is one send's line of small print under the message: the reassurance under
 a sign-in email, which says something different on every kind of mail the team sends:
 
 ```ts
@@ -351,14 +351,14 @@ await mail({
 With the shell it sits on the ground under the frame, centred, in the muted ink. The
 letterhead is what stays the same: its header and footer can each be set **outside the
 frame** on the dashboard's Letterhead page, so a logo can sit in the sheet while the
-address and the unsubscribe line sit under it. A footnote goes nearest the message —
+address and the unsubscribe line sit under it. A footnote goes nearest the message:
 after a footer that is in the frame, before one that is outside it. Without the shell
 there is no frame to be under, and it is simply the last thing in the body.
 
 It is plain text: escaped, with line breaks kept, and at most 500 characters.
 
-All five options are the Postboi provider's own — what they ask for lives on your
-account — so naming one under any other provider is a type error.
+All five options are the Postboi provider's own (what they ask for lives on your
+account), so naming one under any other provider is a type error.
 
 ### Saying it once
 
@@ -374,12 +374,12 @@ export default config({
 
 `POSTBOI_LETTERHEAD`, `POSTBOI_SHELL` and `POSTBOI_STYLE` say the same thing from the
 environment and win over the file. **Reach for those in a runtime that bundles its own
-server code** — a Convex deployment, say: there is no filesystem to read
+server code**, such as a Convex deployment. There is no filesystem to read
 `postboi.config.ts` from and no bundler plugin to inline it, so the file is simply
 absent at runtime, and unlike a missing `from` an unread letterhead throws nothing. It
 just looks wrong a fortnight later. `bunx postboi doctor` says so when it spots that
 shape, and importing the config from the file that sends (`import "../postboi.config"`)
-is the other way out — importing it registers it.
+is the other way out, since importing it registers it.
 
 `preheader` and `footnote` are deliberately not defaultable: each describes one message,
 and a line that is the same on every email belongs in the letterhead.
@@ -387,11 +387,11 @@ and a line that is the same on every email belongs in the letterhead.
 There is a third place to say it, and it reaches every runtime because none of this is
 involved: the **Sends from your code** switch on the dashboard's Letterhead page. That
 is the team saying "our API mail wears the letterhead" once, server-side, for sends that
-don't mention it either way — `letterhead: false` on a send still sends bare.
+don't mention it either way. `letterhead: false` on a send still sends bare.
 
 ## Team credentials
 
-Your channel credentials — a Resend key, a Twilio SID, a Slack webhook — sync through
+Your channel credentials (a Resend key, a Twilio SID, a Slack webhook) sync through
 your Postboi account, so a teammate (or your next machine) gets a working setup from one
 command:
 
@@ -401,7 +401,7 @@ bunx postboi sync   # pulls every synced credential your local env is missing
 
 `postboi init` pushes credentials up as it collects them **and pulls them back down as it
 asks**: a prompt whose value the team already synced answers itself. So for most projects
-this is invisible — one person runs `init --sms` and types `TWILIO_AUTH_TOKEN` once, ever;
+this is invisible: one person runs `init --sms` and types `TWILIO_AUTH_TOKEN` once, ever;
 every teammate's `init` or `sync` (already in the `prepare` script) fills it in from the
 team. Zero ceremony.
 
@@ -411,16 +411,16 @@ The rules, because these are secrets:
   deliberate local override is never clobbered. `postboi env pull --force` is the
   explicit way to take the team's values wholesale.
 - **`POSTBOI_TOKEN` never syncs.** It's per developer, and it's the credential that
-  unlocks the rest — the store must not contain its own key.
+  unlocks the rest, and the store must not contain its own key.
 - **Encrypted at rest**, and only ever decrypted for a bearer of your account token: the
   same trust that could already send with those credentials.
 - **Used server-side for exactly three things.** The library itself sends with whatever
-  is in your process environment, servers included — the synced store never feeds your
+  is in your process environment, servers included. The synced store never feeds your
   send path. On Postboi's side, synced credentials are decrypted only to poll a provider
-  that can't push delivery webhooks (SMTP, Microsoft 365, Cloudflare — on by default once
+  that can't push delivery webhooks (SMTP, Microsoft 365, Cloudflare; on by default once
   synced, pausable per provider on the credentials page); to send on your behalf when
   you've turned on **send via** there; and, for a provider whose delivery events you point
-  at us, to verify those webhooks with its signing secret — plus to register the webhook
+  at us, to verify those webhooks with its signing secret, plus to register the webhook
   with that provider when you press Register, which stores any key it hands back. Never
   otherwise.
 
@@ -435,7 +435,7 @@ bunx postboi env remove OLD_KEY
 ## Relay: send via your own provider
 
 With credentials synced, the credentials page grows a **Send via** setting: pick a
-provider and the account's sends go out through *it* — Postboi keeps the message log,
+provider and the account's sends go out through *it*. Postboi keeps the message log,
 the suppression list, webhooks and the dashboard timeline, while your Resend, Postmark,
 Cloudflare (or any other synced provider) does the delivering. Your code doesn't change:
 you keep sending through the Postboi provider exactly as before.
@@ -447,7 +447,7 @@ const mail = new Postboi({ send_via: "resend" })
 
 What flows back depends on the target:
 
-- **SMTP, Microsoft 365, Cloudflare** — the providers without webhooks — get their
+- **SMTP, Microsoft 365, Cloudflare**, the providers without webhooks, get their
   delivery and bounce events polled (see [webhooks](/webhooks)) and correlated into the
   timeline, so a relayed send shows Delivered/Bounced like a native one.
 - **Webhook-capable providers** (Resend, Postmark, …) report events to whatever webhooks
@@ -455,7 +455,7 @@ What flows back depends on the target:
   response reports per-recipient verdicts immediately, bounces included.
 
 Two honest notes: set `from` to an address the relay provider can send as (the usual
-`from` rule is skipped for relayed sends — your provider enforces its own sender
+`from` rule is skipped for relayed sends; your provider enforces its own sender
 authentication, and anything it can't authenticate fails with its error), and relayed
 sends still count toward your Postboi plan like any other send.
 
@@ -562,21 +562,21 @@ returns the original message id instead of delivering a duplicate. Pair it with
 `retries` for safe automatic retry.
 
 A batch takes **one** key and gives each recipient its own, suffixed with that
-recipient's position — `order-42` becomes `order-42:0`, `order-42:1` and so on. One key
+recipient's position: `order-42` becomes `order-42:0`, `order-42:1` and so on. One key
 names one message, so a batch whose items shared a key would be a batch claiming to be
 a single message; the suffix is what keeps a retry replaying item by item, returning the
 ids the first attempt got and sending only what never went. The position is the one in
 your original `to` array, so a `before.send` hook skipping a different recipient the
 second time round doesn't shift the keys onto other people's messages.
 
-Keys are capped at 256 characters *including* the suffix — a base key too long to carry
+Keys are capped at 256 characters *including* the suffix. A base key too long to carry
 one is refused before anything is sent, rather than silently truncated into a key that
 could collide with another.
 
 ## Lists & broadcasts
 
 The dashboard's recipient lists are available from code, so a newsletter signup can go
-straight onto a list without leaving your app — one import, one call:
+straight onto a list without leaving your app. One import, one call:
 
 ```ts
 import { mail } from "postboi"
@@ -584,14 +584,14 @@ import { mail } from "postboi"
 await mail.recipients.add("Newsletter", "Ada Lovelace <ada@example.com>")
 ```
 
-`mail.recipients.add` upserts on both sides. The first argument is a list **name or id** —
-an unknown name creates the list — and re-adding an address updates its name and
+`mail.recipients.add` upserts on both sides. The first argument is a list **name or id**
+(an unknown name creates the list), and re-adding an address updates its name and
 `data` instead of duplicating it. Recipients take the same shapes as `to`: a bare
 address, `"Name <a@b.c>"`, `{ email, name?, data? }`, or an array mixing all three.
 (List names are unique per account, so `mail.lists.create` rejects a taken name with code
 `name_taken`.)
 
-Every list method accepts a name or an id — only `mail.recipients.add` creates a missing
+Every list method accepts a name or an id. Only `mail.recipients.add` creates a missing
 list; everything else 404s on an unknown name. The response reports `added` (genuinely
 new addresses) and `updated` (existing ones refreshed), so calling it twice with the
 same address adds once:
@@ -612,14 +612,14 @@ await mail.lists.broadcast("Newsletter", {
 `{key}` placeholders are filled per recipient from their `data` (plus `{name}` and
 `{email}` from the recipient row), and every broadcast automatically carries the
 one-click unsubscribe headers Gmail and Yahoo require for bulk mail. For a visible
-opt-out link in the body, drop in `{unsubscribe_url}` — a reserved variable filled with
+opt-out link in the body, drop in `{unsubscribe_url}`, a reserved variable filled with
 that recipient's signed one-click link (the same target as the header). The rest of the
 surface: `mail.lists.all()`, `mail.lists.get(id)` (with recipients), `mail.lists.rename(id, name)`,
 `mail.lists.delete(id)`, and `mail.recipients.remove(list_id, email)`.
 
 ## Contacts (the audience)
 
-A **contact** is one address on your account — its `name` and `data` live once and are
+A **contact** is one address on your account. Its `name` and `data` live once and are
 shared across every list it's on (not copied per list). Lists are how you *segment* that
 audience; a `mail.recipients` call upserts the contact and its membership together, so you
 rarely touch contacts directly. When you do, `mail.contacts` is the whole audience:
@@ -635,12 +635,12 @@ await mail.contacts.remove("ada@example.com") // drops the contact and all its m
 ```
 
 A contact's `phone` is its **delivery profile** beyond email: one mobile number in E.164
-(`+447788223344` — a national number is rejected rather than guessed at), the one an
+(`+447788223344`; a national number is rejected rather than guessed at), the one an
 [`sms()`](/sms) or [`whatsapp()`](/whatsapp) to that person goes to. Email stays the
 handle; the number is a fact about the contact, searchable alongside the name.
 
 Because `data` is the contact's, setting it through `mail.recipients.add(list, { email, data })`
-writes the **contact's** global `data` — the same values fill `{key}` in a broadcast from any
+writes the **contact's** global `data`, and the same values fill `{key}` in a broadcast from any
 list. Deleting a contact removes it from every list but does **not** suppress it; a hard
 bounce or complaint is suppressed separately (see Suppressions).
 
@@ -648,7 +648,7 @@ bounce or complaint is suppressed separately (see Suppressions).
 > contact's, shared across its lists (last write wins) rather than stored per list; the
 > per-list status enum is `subscribed | pending | unsubscribed` (bounced/complained are
 > suppressions, not a status); and `mail.contacts.*` is a new namespace. `mail.recipients.*`
-> keeps the same signatures — it's contact-backed now.
+> keeps the same signatures. It's contact-backed now.
 
 ## Confirmation (double opt-in)
 
@@ -665,10 +665,10 @@ await mail.recipients.add("Newsletter", "ada@example.com")
 // → { added: 1, updated: 0, pending: 1, list: … } — Ada gets the confirmation email
 ```
 
-A membership carries a **status** — `subscribed`, `pending` or `unsubscribed`. Only
+A membership carries a **status**: `subscribed`, `pending` or `unsubscribed`. Only
 subscribed members receive broadcasts and digests; an unsubscribe keeps the membership
 (with history) but out of every send. Hard bounces and complaints aren't a per-list
-status — they suppress the address account-wide, and the send path drops suppressed
+status. They suppress the address account-wide, and the send path drops suppressed
 addresses on its own (see Suppressions). Set a membership's status explicitly too:
 
 ```ts
@@ -681,12 +681,12 @@ Two knobs, patchable via an object: `enabled` (send confirmation emails) and
 strict double opt-in (email + `"pending"`); a courtesy email without gating is
 `{ enabled: true, default_status: "subscribed" }`; off again is `confirmation: false`.
 The object also takes `subject`, `body` (HTML with `{key}` variables plus `{list}` and
-`{confirm_url}` — put it in a link) and `from`. Settings come back on `mail.lists.get()`, and
+`{confirm_url}`, which goes in a link) and `from`. Settings come back on `mail.lists.get()`, and
 new members start `"subscribed"` or `"pending"` per the list's `default_status`.
 
 ## Notifications
 
-Each list can carry **notifications** — digests of new subscribers emailed to whoever
+Each list can carry **notifications**: digests of new subscribers emailed to whoever
 should know, on a schedule or the moment someone joins. The dashboard's Notifications
 tab manages them visually; the same objects are available from code:
 
@@ -704,10 +704,10 @@ await mail.notifications.create("Newsletter", {
 
 `schedule` takes a bare frequency (`"daily"`, `"weekly"`, `"monthly"`, `"subscribe"`)
 or an object with `days` (JS weekday numbers, weekly), `month_day` (monthly),
-`send_time` and an IANA `timezone` — defaults are Mondays, 09:00, UTC. Subject and
+`send_time` and an IANA `timezone`. Defaults are Mondays, 09:00, UTC. Subject and
 body default to a starter template; bodies are HTML with `{key}` variables plus
 `{#if}`/`{#each}` blocks over `new_subscribers`. The rest of the surface:
-`mail.notifications.all(list)`, `mail.notifications.update(list, id, changes)` (partial — absent
+`mail.notifications.all(list)`, `mail.notifications.update(list, id, changes)` (partial: absent
 fields keep their values), and `mail.notifications.delete(list, id)`.
 
 ## Suppressions
@@ -732,7 +732,7 @@ await mail.suppressions.add({ phone: "+447788223344", channel: "whatsapp" })
 await mail.suppressions.all({ channel: "sms" }) // just the numbers, just that channel
 ```
 
-Each row says which it is — narrow on `channel` before reading the address, because an
+Each row says which it is. Narrow on `channel` before reading the address, because an
 email row carries `email` and a text row carries `phone`, never a number in a field
 called `email`:
 
@@ -744,7 +744,7 @@ for (const row of await mail.suppressions.all()) {
 ```
 
 A texted **STOP** reaches the list on its own when Twilio delivery receipts are polled
-for the account — see [opt-outs on the SMS page](/sms#opt-outs) — and the same
+for the account (see [opt-outs on the SMS page](/sms#opt-outs)), and the same
 `{ phone }` shape adds one by hand from wherever else a reply arrives.
 
 ## Notes
@@ -756,6 +756,6 @@ for the account — see [opt-outs on the SMS page](/sms#opt-outs) — and the sa
 - `scheduled_at` accepts an ISO 8601 datetime string. Include an explicit timezone offset
   or `Z` (e.g. `2026-07-10T14:30:00Z` or `2026-07-10T09:30:00-05:00`). A bare local time
   without an offset is interpreted as UTC. It must be in the future and at most 30 days ahead.
-- On Cloudflare Workers a `POSTBOI_TOKEN` binding is read automatically — see
+- On Cloudflare Workers a `POSTBOI_TOKEN` binding is read automatically. See
   [Cloudflare Workers](/cloudflare-workers). Pass `new Postboi({ token })` only to override it.
 - The token can be revoked and reissued any time from the dashboard's API keys panel.

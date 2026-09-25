@@ -1,7 +1,7 @@
 ---
 title: Discord
 name: Discord
-description: Post to Discord from your app with discord() — one webhook URL, zero config, the same shape as mail() and sms().
+description: Post to Discord from your app with discord(): one webhook URL, zero config, the same shape as mail() and sms().
 category: Channels
 ---
 
@@ -29,7 +29,7 @@ channel's own settings), and paste it:
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/…
 ```
 
-**Treat the URL as a secret** — anyone holding it can post to your channel. It's exactly
+**Treat the URL as a secret.** Anyone holding it can post to your channel. It's exactly
 the kind of credential team sync exists for.
 
 ## Titles
@@ -51,7 +51,7 @@ await discord([
 ])
 ```
 
-Each gets its own result — one failure never loses the rest.
+Each gets its own result, so one failure never loses the rest.
 
 ## Development posts for real
 
@@ -62,7 +62,7 @@ are captured by the [dev inbox](/dev-inbox) (or logged) instead of erroring.
 ## Worth knowing
 
 - Discord caps a message at **2000 characters**. Postboi truncates on code points (an
-  emoji never splits into garbage) rather than letting the whole post be rejected — which
+  emoji never splits into garbage) rather than letting the whole post be rejected, which
   matters when you're piping in a stack trace.
 - In a multi-channel [`send()`](/send), the chat leg posts to whichever platform
   `chat.provider` names in your [config](/config). Your own code just calls `discord()`.

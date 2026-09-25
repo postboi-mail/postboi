@@ -879,7 +879,7 @@ describe("top-level mail() — provider-agnostic dispatch", () => {
 		expect(result).toMatchObject({ id: "mock-1" })
 		// The body must survive to the terminal — it is the reason to read a dev mail at all.
 		expect(log.mock.calls.at(-1)![0]).toMatch(/Sign in[\s\S]*link/)
-		expect(warn.mock.calls.at(-1)![0]).toMatch(/logging mail to the console/)
+		expect(warn.mock.calls.at(-1)![0]).toMatch(/mail is logged to the console/)
 		log.mockRestore()
 		warn.mockRestore()
 	})

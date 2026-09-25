@@ -5,44 +5,44 @@
 `bunx postboi <command>` (or `npx`). Setup and the dev tools work with any provider; the
 account commands need the Postboi provider's `POSTBOI_TOKEN`, which `init` writes. A bare
 noun lists (`list` says the same). **Add `--json` to any account command** for the API's
-response as one JSON document on stdout — parse that rather than the table — and a failure
+response as one JSON document on stdout (parse that rather than the table), and a failure
 goes to stderr as `{ "error": { "message", "code" } }` with exit 1; branch on the `code`
 (`name_taken`, `export_paused`, `no_token`, …), never the wording.
 
 ## Setup and tools
 
-| Command                | What it does                                                                                                                                                                                                                                    |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bunx postboi init`    | Set up the Postboi provider or a provider of your own — `--agent: zero prompts, zero sign-in — provisions a claimable sandbox account (made for AI coding agents and CI)` · `--sms · --whatsapp · --push · --chat: set up that channel instead` |
-| `bunx postboi sync`    | Pull synced team credentials and refresh the generated from/template types                                                                                                                                                                      |
-| `bunx postboi env`     | The synced credentials — `push · pull [--force] · remove <KEY>`                                                                                                                                                                                 |
-| `bunx postboi vapid`   | Mint a VAPID key pair for Web Push, printed to stdout                                                                                                                                                                                           |
-| `bunx postboi doctor`  | Is this project wired? Token, provider, from address, webhooks, skill — `--json · exit 1 on a failure`                                                                                                                                          |
-| `bunx postboi skill`   | Install the agent skill, so AI coding agents know the library                                                                                                                                                                                   |
-| `bunx postboi dev`     | Local inbox for mail sent in development — `--port <n> --demo --no-sound --no-intro` · `(Vite projects already serve it at /__postboi)`                                                                                                         |
-| `bunx postboi inspect` | Lint an email's HTML — client compatibility, clipping, dead links — `<file.html> · --links --subject <s> --json (exit 1 on warnings)`                                                                                                           |
+| Command                | What it does                                                                                                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bunx postboi init`    | Set up the Postboi provider or a provider of your own: `--agent: zero prompts, zero sign-in. Provisions a claimable sandbox account (made for AI coding agents and CI)` · `--sms · --whatsapp · --push · --chat: set up that channel instead` |
+| `bunx postboi sync`    | Pull synced team credentials and refresh the generated from/template types                                                                                                                                                                    |
+| `bunx postboi env`     | The synced credentials: `push · pull [--force] · remove <KEY>`                                                                                                                                                                                |
+| `bunx postboi vapid`   | Mint a VAPID key pair for Web Push, printed to stdout                                                                                                                                                                                         |
+| `bunx postboi doctor`  | Is this project wired? Token, provider, from address, webhooks, skill: `--json · exit 1 on a failure`                                                                                                                                         |
+| `bunx postboi skill`   | Install the agent skill, so AI coding agents know the library                                                                                                                                                                                 |
+| `bunx postboi dev`     | Local inbox for mail sent in development: `--port <n> --demo --no-sound --no-intro` · `(Vite projects already serve it at /__postboi)`                                                                                                        |
+| `bunx postboi inspect` | Lint an email's HTML: client compatibility, clipping, dead links: `<file.html> · --links --subject <s> --json (exit 1 on warnings)`                                                                                                           |
 
 ## The account
 
-Postboi provider — full reference: <https://api.postboi.app>
+Postboi provider. Full reference: <https://api.postboi.app>
 
-| Command                      | What it does                                                                                                                            |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `bunx postboi whoami`        | The account behind your token                                                                                                           |
-| `bunx postboi send`          | One email, now — `--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]`                                     |
-| `bunx postboi send-address`  | Default sending address — `[name@yourdomain.com]`                                                                                       |
-| `bunx postboi lists`         | Lists — `add <name> · send <list> --subject <s> --text, --html or --file <body> · delete <ref>`                                         |
-| `bunx postboi recipients`    | A list's recipients — `<list> add <email>… · <list> remove <email>`                                                                     |
-| `bunx postboi contacts`      | The audience — `add <email> [--name --phone --data] · <email> · remove <email>`                                                         |
-| `bunx postboi domains`       | Sending domains — `add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>`                                                |
-| `bunx postboi webhooks`      | Webhooks — `add <url> · rotate <id> · deliveries <id> · delete <id>`                                                                    |
-| `bunx postboi members`       | Members — `invite <email> · remove <ref> · revoke <ref>`                                                                                |
-| `bunx postboi messages`      | Recent messages — `[status] · <id> (status, opens, fields) · cancel <id>`                                                               |
-| `bunx postboi exports`       | Exports — `download [--form <form>] [--xlsx] [--out <file>]` · `add <name> --to <emails> --weekly · run · pause · resume · delete <id>` |
-| `bunx postboi suppressions`  | Suppressed addresses — `add <email or +phone> · remove <email or +phone>`                                                               |
-| `bunx postboi forms`         | The forms submissions are filed under — `(named in your code)`                                                                          |
-| `bunx postboi notifications` | A list's digests — `<list> · <list> add --to <emails> --weekly or --on-signup · <list> delete <id>`                                     |
-| `bunx postboi testing`       | Email tests — `add [--label] [--clients] · <id> (the report) · clients · delete <id>`                                                   |
+| Command                      | What it does                                                                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `bunx postboi whoami`        | The account behind your token                                                                                                          |
+| `bunx postboi send`          | One email, now: `--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]`                                     |
+| `bunx postboi send-address`  | Default sending address: `[name@yourdomain.com]`                                                                                       |
+| `bunx postboi lists`         | Lists: `add <name> · send <list> --subject <s> --text, --html or --file <body> · delete <ref>`                                         |
+| `bunx postboi recipients`    | A list's recipients: `<list> add <email>… · <list> remove <email>`                                                                     |
+| `bunx postboi contacts`      | The audience: `add <email> [--name --phone --data] · <email> · remove <email>`                                                         |
+| `bunx postboi domains`       | Sending domains: `add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>`                                                |
+| `bunx postboi webhooks`      | Webhooks: `add <url> · rotate <id> · deliveries <id> · delete <id>`                                                                    |
+| `bunx postboi members`       | Members: `invite <email> · remove <ref> · revoke <ref>`                                                                                |
+| `bunx postboi messages`      | Recent messages: `[status] · <id> (status, opens, fields) · cancel <id>`                                                               |
+| `bunx postboi exports`       | Exports: `download [--form <form>] [--xlsx] [--out <file>]` · `add <name> --to <emails> --weekly · run · pause · resume · delete <id>` |
+| `bunx postboi suppressions`  | Suppressed addresses: `add <email or +phone> · remove <email or +phone>`                                                               |
+| `bunx postboi forms`         | The forms submissions are filed under: `(named in your code)`                                                                          |
+| `bunx postboi notifications` | A list's digests: `<list> · <list> add --to <emails> --weekly or --on-signup · <list> delete <id>`                                     |
+| `bunx postboi testing`       | Email tests: `add [--label] [--clients] · <id> (the report) · clients · delete <id>`                                                   |
 
 A bare noun lists; `list` says the same. Add --json to any of them for the API's response as JSON (errors carry the API's code).
 
@@ -50,26 +50,26 @@ A bare noun lists; `list` says the same. Add --json to any of them for the API's
 
 tempboi.email, no account or POSTBOI_TOKEN needed
 
-| Command                    | What it does                                                                                                                                                                                                                                                                                                              |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bunx postboi inbox`       | Make a throwaway inbox and print its address — `new [--name <n>] [--ttl 2h] [--json] [--env]` · `--env prints export POSTBOI_INBOX=… POSTBOI_INBOX_TOKEN=… for eval`                                                                                                                                                      |
-| `bunx postboi inbox watch` | Print mail as it arrives, one line each — `[address] --all --json (NDJSON) --tag <t> --from <s> --subject <s>` · `--forward <url>: POST each as an email.received webhook, signed with POSTBOI_WEBHOOK_SECRET when set` · `--exec <cmd>: run per mail with SUBJECT FROM TO CODE LINK ID set and the mail's JSON on stdin` |
-| `bunx postboi inbox wait`  | Wait for one mail, then exit — `[address] --from <s> --subject <s> --tag <t> (/regex/ works) --timeout <sec> --new` · `--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout`                                                                                                                 |
-| `bunx postboi inbox read`  | One mail in full — `[id or latest] --html --raw --headers --json`                                                                                                                                                                                                                                                         |
-| `bunx postboi inbox open`  | The inbox's web page, in your browser                                                                                                                                                                                                                                                                                     |
-| `bunx postboi inbox ls`    | Inboxes made on this machine — `rm [address] · extend <ttl> [address]`                                                                                                                                                                                                                                                    |
+| Command                    | What it does                                                                                                                                                                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bunx postboi inbox`       | Make a throwaway inbox and print its address: `new [--name <n>] [--ttl 2h] [--json] [--env]` · `--env prints export POSTBOI_INBOX=… POSTBOI_INBOX_TOKEN=… for eval`                                                                                                                                                      |
+| `bunx postboi inbox watch` | Print mail as it arrives, one line each: `[address] --all --json (NDJSON) --tag <t> --from <s> --subject <s>` · `--forward <url>: POST each as an email.received webhook, signed with POSTBOI_WEBHOOK_SECRET when set` · `--exec <cmd>: run per mail with SUBJECT FROM TO CODE LINK ID set and the mail's JSON on stdin` |
+| `bunx postboi inbox wait`  | Wait for one mail, then exit: `[address] --from <s> --subject <s> --tag <t> (/regex/ works) --timeout <sec> --new` · `--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout`                                                                                                                 |
+| `bunx postboi inbox read`  | One mail in full: `[id or latest] --html --raw --headers --json`                                                                                                                                                                                                                                                         |
+| `bunx postboi inbox open`  | The inbox's web page, in your browser                                                                                                                                                                                                                                                                                    |
+| `bunx postboi inbox ls`    | Inboxes made on this machine: `rm [address] · extend <ttl> [address]`                                                                                                                                                                                                                                                    |
 
 The inbox made or used last is the default; POSTBOI_INBOX_TOKEN overrides it (the token alone finds its inbox), POSTBOI_INBOX_URL moves the host.
 
 ## Notes for agents
 
-- **`doctor` first and last.** It says whether the project is wired — token, provider,
-  `default.from`, webhooks, skill — names every fix, and exits 1 on a failure.
+- **`doctor` first and last.** It says whether the project is wired (token, provider,
+  `default.from`, webhooks, skill), names every fix, and exits 1 on a failure.
 - **`send` then `messages <id>`** proves the pipeline end to end from the terminal; no
-  throwaway script. On a sandboxed account `send` prints the claim URL — surface it.
+  throwaway script. On a sandboxed account `send` prints the claim URL. Surface it.
 - **`forms` before naming a form** on a send, so `contact` doesn't land beside
   `Contact form`. A form is created on first use and matched case-insensitively.
-- **Exports** are a hosted feature, downloaded now or emailed on a schedule — the recipe
+- **Exports** are a hosted feature, downloaded now or emailed on a schedule. The recipe
   and the defaults to state rather than guess are in `references/exports.md`.
 - **Recipients** upsert the contact and the membership; with names or custom data, or in
   bulk, POST `/v1/lists/<list>/recipients` (see `references/migration.md`).
@@ -82,12 +82,12 @@ The inbox made or used last is the default; POSTBOI_INBOX_TOKEN overrides it (th
   code (exit 2 on timeout, 3 when the mail has none), `--link` the verify link. Recipe
   in `https://docs.postboi.app/raw/temp-inbox`.
 - **Deletes are immediate and unprompted** (`lists delete` takes the recipients with it).
-- **Dashboard-only by design:** API-key management, member roles and billing — send the
+- **Dashboard-only by design:** API-key management, member roles and billing. Send the
   user there rather than trying.
 - **No terminal, no prompts:** `init` without `--agent` refuses to run unattended (exit
   2); `init --agent` is the one to run.
 
-Anything richer than the CLI exposes: the REST API at https://api.postboi.app —
+Anything richer than the CLI exposes: the REST API at https://api.postboi.app, with
 `https://postboi.app/openapi/<tag>.json` for one feature's slice of the OpenAPI document
 (`exports`, `forms`, `messages`, …; the index is `https://postboi.app/openapi`), auth
 `Authorization: Bearer $POSTBOI_TOKEN`, errors always `{ "message", "code" }`.

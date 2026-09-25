@@ -1,7 +1,7 @@
 ---
 title: Telegram
 name: Telegram
-description: Message Telegram from your app with telegram() — a bot token and a chat id, zero config.
+description: Message Telegram from your app with telegram(): a bot token and a chat id, zero config.
 category: Channels
 ---
 
@@ -33,14 +33,14 @@ export default config({
 ## A chat id is a registered identity, not an address
 
 A bot **cannot message someone who hasn't started a chat with it first**, and you
-address people by `chat_id` — a number you capture from an inbound update, not something
+address people by `chat_id`, a number you capture from an inbound update, not something
 you can know in advance. That's the same shape as a push subscription token, so it needs
 somewhere to be stored. [Slack](/slack), [Discord](/discord) and [Teams](/teams) have no
 equivalent problem: there, the URL *is* the destination.
 
 ## Titles
 
-`title` renders bold, with the body safely below it — Postboi sends HTML parse mode with
+`title` renders bold, with the body safely below it. Postboi sends HTML parse mode with
 everything escaped, so a message containing `<`, `&` or an underscore never breaks the
 formatting or gets mangled by Markdown rules:
 
@@ -57,6 +57,6 @@ Unlike [SMS](/sms), Telegram is not intercepted in development. With no
 ## Worth knowing
 
 - Telegram reports failures with `ok: false` and an **HTTP 200**, so don't check status
-  yourself — the normalised error already accounts for it.
+  yourself: the normalised error already accounts for it.
 - In a multi-channel [`send()`](/send), the chat leg posts to whichever platform
   `chat.provider` names in your [config](/config). Your own code just calls `telegram()`.
