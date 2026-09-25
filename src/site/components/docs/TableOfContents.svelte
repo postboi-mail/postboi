@@ -577,6 +577,27 @@
 		}
 	}
 
+	// A long page's contents outgrow the rail, so the layout gives them a box of their own
+	// that scrolls (data-toc-scroll). Keep the run you are reading inside it, with a line's
+	// room either side, rather than letting it slide out under the page actions.
+	$effect(() => {
+		const top = indicatorTop
+		const bottom = indicatorBottom
+		if (indicatorHeight === 0) return
+		const list = getLinksWrapperElement()
+		const box = list?.closest<HTMLElement>("[data-toc-scroll]")
+		if (!list || !box || box.scrollHeight <= box.clientHeight) return
+
+		const offset =
+			list.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop
+		const margin = 32
+		if (offset + top - margin < box.scrollTop) {
+			box.scrollTo({ top: offset + top - margin, behavior: "smooth" })
+		} else if (offset + bottom + margin > box.scrollTop + box.clientHeight) {
+			box.scrollTo({ top: offset + bottom + margin - box.clientHeight, behavior: "smooth" })
+		}
+	})
+
 	function isLinkHighlighted(id: string) {
 		if (!indicatorRange) {
 			return activeId === id

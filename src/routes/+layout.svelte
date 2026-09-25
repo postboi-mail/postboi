@@ -299,7 +299,12 @@
 				aria-label="Table of contents and document actions"
 			>
 				{#if showToc}
-					<div class="min-h-0 flex-1">
+					<!-- The contents scroll in their own box: a long page's list would
+					     otherwise run on underneath the page actions below it. -->
+					<div
+						class="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+						data-toc-scroll
+					>
 						<TableOfContents
 							selector={tocSelector}
 							headings={page.data.tocHeadings ?? []}
