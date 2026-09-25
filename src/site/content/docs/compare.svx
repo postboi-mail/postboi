@@ -1,7 +1,7 @@
 ---
 title: Postboi compared
 name: Postboi compared
-description: How Postboi stacks up against Resend, SendGrid, Postmark and nodemailer. Postboi is an email provider in its own right, and using someone else's is optional.
+description: How Postboi stacks up against Resend, SendGrid, Postmark, Mailtrap and nodemailer. Postboi is an email provider in its own right, and using someone else's is optional.
 category: Getting started
 ---
 
@@ -20,13 +20,30 @@ them. It works the other way round:
 
 1. **Postboi is an email service.** [The Postboi provider](/provider) handles sending, custom
    domains, lists and broadcasts, contacts, double opt-in, suppressions, a message log,
-   delivery webhooks, scheduling, hosted forms, receiving, email testing and a dashboard.
+   delivery webhooks, scheduling, hosted forms, receiving, email testing and a dashboard. It
+   also runs [Tempboi](/temp-inbox), throwaway inboxes at tempboi.email for tests and agents.
 2. **`postboi` is its SDK.** `mail()` and friends, with one error type, in any JS framework.
 3. **You can point the SDK elsewhere.** Send through [another provider](/providers) instead,
    or keep our log and dashboard while [relaying](/provider#relay-send-via-your-own-provider)
    delivery through your own Resend, Postmark or SES account.
 
 So "Postboi or Resend?" compares two email providers.
+
+## Is Postboi built for transactional email?
+
+Yes, it's the main thing it's for. Sign-in links, one-time codes, receipts and password
+resets are what the provider is built around:
+
+- **[Delivery status](/provider#delivery-status)** on every message, with bounces and
+  complaints tracked and the addresses suppressed for you.
+- **[Idempotency keys](/provider#batching--idempotency)**, so retrying a send after a
+  timeout can't send it twice, and [retries](/errors#retries) with backoff built into the SDK.
+- **[Webhooks](/webhooks)** for every delivery event, and message lookup from code.
+- **Sending pauses itself** if bounce or complaint rates climb past a safety threshold,
+  which protects your domain's reputation before a mailbox provider has to.
+- **[Receiving](/provider#replies)**, so a reply to a transactional email isn't lost.
+
+The other channels and the provider switch are extras on top of that.
 
 ## Postboi vs Resend
 
@@ -37,12 +54,15 @@ So "Postboi or Resend?" compares two email providers.
 | Works without any other provider account         | ✅                                             | ✅                             |
 | First send with no DNS and no card               | ✅ from `you@send.postboi.email`               | Needs a verified domain for real recipients |
 | Custom domains, webhooks, scheduling             | ✅                                             | ✅                             |
+| Idempotency keys, suppressions, bounce tracking  | ✅                                             | ✅                             |
+| Receiving email                                  | ✅                                             | ✅                             |
 | Lists, broadcasts, contacts                      | ✅                                             | ✅                             |
 | Switch provider without rewriting your code      | ✅ one line of config                          | ❌ your code calls Resend's API |
 | SMS, WhatsApp, push and chat in the same API     | ✅                                             | ❌ email only                  |
 | Turn `FormData` into an HTML email               | ✅                                             | ❌                             |
 | Hosted form endpoints (no backend)               | ✅                                             | ❌                             |
 | Local dev inbox, no code changes                 | ✅ `/__postboi`                                | ❌                             |
+| Throwaway inboxes for tests and agents           | ✅ [Tempboi](/temp-inbox), no account          | Test addresses that simulate delivery and bounces |
 | An agent can set it up without you signing in    | ✅ `postboi init --agent`                      | Needs an account and API key first |
 | Free tier                                        | 3,000 a month, 100 a day                       | 3,000 a month, 100 a day       |
 | First paid plan                                  | £9 for 40,000 a month                          | $20 for 50,000 a month         |
@@ -73,6 +93,22 @@ that SDK only sends through them. Postboi is also an email provider, and its SDK
 through any of them too. So you can use Postboi instead of them, or keep one and stop your
 app depending on it directly.
 
+## Postboi vs Mailtrap, Mailosaur and temp mail APIs
+
+These are testing services: a sandbox that catches what your app sends in staging, or
+inboxes a test can receive at. Postboi has both halves, beside the sending:
+
+- **[Dev inbox](/dev-inbox)** catches everything your app sends in development, locally,
+  with no account and no code changes.
+- **[Tempboi](/temp-inbox)** gives a test or an agent a real address at tempboi.email that
+  receives mail from anywhere, with the code and link already pulled out. No account.
+- **[Email testing](/email-testing)** checks an email for client support, clipping,
+  accessibility and deliverability before it's sent.
+
+The difference is that the same SDK then sends your production mail, so the email your
+tests read is the one your users get. If you already use Mailtrap for sending, `mail()` can
+send through it too (`postboi/mailtrap`).
+
 ## Postboi vs nodemailer
 
 nodemailer is a library. You still need an SMTP server or a provider behind it, and you
@@ -84,6 +120,9 @@ credentials. If you do want SMTP, Postboi supports that too (`postboi/smtp`).
 
 - **Setup is one command and nobody has to sign in.** `bunx postboi init --agent` creates a
   project the agent can use straight away. You claim it with one click when you're ready.
+- **An agent can receive mail too.** [Tempboi](/temp-inbox) gives it an address with no
+  account, for signing up to things and reading the code. [Email for agents](/agents) has
+  the whole picture.
 - **Every channel looks the same.** `mail({ to, subject, body })` writes the plain-text
   version for you, and `sms()`, `push()` and the rest take the same shape and fail the same
   way.

@@ -1,9 +1,14 @@
 ---
-title: Temp inboxes
-name: Temp inboxes
-description: Throwaway email addresses at tempboi.email for tests and agents. Make one with curl, the CLI or one function, wait for the sign-up code, and let it expire. No account needed.
-category: Guides
+title: "Tempboi: temp inboxes"
+name: Tempboi
+description: Tempboi is Postboi's throwaway inbox service. Email addresses at tempboi.email for tests and agents. Make one with curl, the CLI or one function, wait for the sign-up code, and let it expire. No account needed.
+category: Testing
 ---
+
+**Tempboi is Postboi's temporary inbox service**, at [tempboi.email](https://tempboi.email).
+It sits beside the [dev inbox](/dev-inbox), which catches what your app sends, and
+[email testing](/email-testing), which checks an email before it goes: Tempboi is the one
+that receives real mail from anywhere, for tests and for agents.
 
 Some tests need a real email to arrive: the code a sign-up sends, a magic link, a
 password reset. Agents hit the same wall when they sign up for something on your behalf.

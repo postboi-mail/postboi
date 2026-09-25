@@ -1,0 +1,99 @@
+---
+title: Email for agents
+name: Email for agents
+description: What an AI agent can do with Postboi on its own. Set up sending with nobody signing in, give itself an inbox at tempboi.email, sign up for things and read the code, and read replies to what it sent.
+category: Getting started
+---
+
+An agent that works with email needs four things: a way to send, an address to receive
+at, a way to read what arrives, and a way to test what it builds. Postboi covers all four,
+and none of them needs a person to sign in first.
+
+| The agent wants to…                     | Use                                    | Needs an account? |
+| --------------------------------------- | -------------------------------------- | ----------------- |
+| Send email from the app it's building   | `bunx postboi init --agent`, `mail()`  | No, a claimable sandbox is made for it |
+| Sign up for something and read the code | [Tempboi](/temp-inbox)                 | No                |
+| Test a sign-up flow end to end          | `temp()` from `postboi/inbox`          | No                |
+| See what the app sent while developing  | The [dev inbox](/dev-inbox)            | No                |
+| Read replies to mail the app sent       | [Receiving](/provider#replies), `/v1/inbound` | Yes, the project's token |
+
+## Send, with nobody signing in
+
+```bash
+bunx postboi init --agent
+```
+
+One command writes `POSTBOI_TOKEN` to `.env`, writes the config, installs the package and
+links the agent skill. With no token and no person to sign in, it makes a **claimable
+project**: sends run the whole pipeline (message log, webhooks, status) but are sandboxed,
+so nothing reaches a real inbox until somebody claims it. The CLI prints a claim URL. Put
+that URL in your summary for the person you're working for, because it's the one step only
+they can take. [The details](/provider#zero-setup-for-agents--ci).
+
+```ts
+import { mail } from "postboi"
+
+await mail({ to: "someone@example.com", subject: "Your code", body: "<p>4291</p>" })
+```
+
+Errors come back as one `PostboiError` with a `code` to branch on, whichever provider
+failed. `postboi sync` types `from` to the addresses the account can send from, so a wrong
+sender is a type error before it's a failed send.
+
+## Receive, with Tempboi
+
+[Tempboi](/temp-inbox) is Postboi's throwaway inbox service. An agent can make an address
+at tempboi.email with no account, use it to sign up for something, and wait for the
+verification mail. The code and the link come back already pulled out:
+
+```bash
+eval "$(bunx postboi inbox new --env)"   # sets POSTBOI_INBOX and POSTBOI_INBOX_TOKEN
+# sign up somewhere with $POSTBOI_INBOX
+CODE=$(bunx postboi inbox wait --code --subject verify)
+```
+
+Or over plain HTTP, with nothing installed:
+
+```bash
+curl -X POST tempboi.email
+curl -H "Authorization: Bearer tb_…" \
+  "https://tempboi.email/v1/inboxes/<address>/wait?subject=verify"
+```
+
+The wait holds until a matching mail arrives and answers JSON with `code`, `link`, `text`,
+`html` and the SPF, DKIM and DMARC results. An inbox lives an hour unless asked for longer
+(24 hours at most). The whole API is at [tempboi.email/llms.txt](https://tempboi.email/llms.txt).
+
+## Test the flow it built
+
+The same inbox is one function in a test, so an agent that builds a sign-up flow can prove
+it works:
+
+```ts
+import { temp } from 'postboi/inbox'
+
+await using inbox = await temp({ ttl: '15m' })
+// sign up with inbox.address
+const mail = await inbox.wait({ subject: 'Verify' })
+mail.code
+```
+
+While developing, the [dev inbox](/dev-inbox) catches everything the app sends, so nothing
+reaches a real person, and [email testing](/email-testing) checks an email for client
+support, clipping and deliverability before it goes out.
+
+## Read replies
+
+Mail sent from Postboi can be answered. Replies to the sending address, and mail to any
+address on `reply.<your domain>`, are kept and can be read over the API or handed to your
+code as an `email.received` [webhook](/webhooks):
+
+```bash
+curl https://api.postboi.app/v1/inbound -H "Authorization: Bearer $POSTBOI_TOKEN"
+```
+
+## Reading these docs
+
+Every page is Markdown at `https://docs.postboi.app/raw/<slug>`, the whole site is one file
+at [`/llms-full.txt`](https://docs.postboi.app/llms-full.txt), and the package ships a
+skill (`bunx postboi skill`) with all of this in it.

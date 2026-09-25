@@ -11,7 +11,7 @@ export const siteConfig = {
 	url: "https://docs.postboi.app",
 	/** Default SEO description for the homepage and fallback metadata. */
 	description:
-		"An email provider and TypeScript SDK. Send email with one token and no DNS setup, plus SMS, WhatsApp, push and chat from the same API. You can use your own provider too, if you want to.",
+		"An email provider and TypeScript SDK. Send and receive email with one token and no DNS setup, test it with throwaway Tempboi inboxes, and send SMS, WhatsApp, push and chat from the same API. You can use your own provider too, if you want to.",
 	/** Author shown in metadata and structured data. */
 	author: "Darby Manning",
 	/** Primary SEO keywords for indexing and discovery. */

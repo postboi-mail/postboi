@@ -1,7 +1,7 @@
 ---
 title: Introduction
 name: Introduction
-description: Postboi is an email provider and TypeScript SDK. Send email with one token, plus SMS, WhatsApp, push and chat from the same API, and use your own provider if you want to.
+description: Postboi is an email provider and TypeScript SDK. Send and receive email with one token, test it with throwaway Tempboi inboxes, and send SMS, WhatsApp, push and chat from the same API. You can use your own provider too.
 category: Getting started
 ---
 
@@ -15,6 +15,24 @@ If you'd rather use a provider you already have, you can. The same call works wi
 SES, Postmark and [40-odd others](/providers), and switching is a line of config. You don't
 need any of them to use Postboi, though. Comparing Postboi with another email service? See
 [Postboi compared](/compare).
+
+## What's in Postboi
+
+Transactional email is the core of it: sign-in links, codes, receipts and resets, with
+delivery status, idempotency keys, retries, suppressions and webhooks. Around that:
+
+| Part                              | What it is                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| [Sending](/provider)              | Email from one token, from `send.postboi.email` on day one or your own domain |
+| [Receiving](/provider#replies)    | Replies, and mail to any address on `reply.<your domain>`, as webhooks     |
+| [Tempboi](/temp-inbox)            | Throwaway inboxes at tempboi.email for tests and AI agents, no account     |
+| [Dev inbox](/dev-inbox)           | Catches everything your app sends in development                           |
+| [Email testing](/email-testing)   | Checks an email for client support, clipping and deliverability            |
+| [Hosted forms](/forms)            | A plain HTML form that arrives as email, no backend                        |
+| [Relay](/provider#relay-send-via-your-own-provider) | Our log and webhooks, your own Resend, Postmark or SES doing delivery |
+| [Other channels](/send)           | SMS, WhatsApp, push and chat in the same shape as `mail()`                 |
+
+Building with an AI agent? [Email for agents](/agents) puts the pieces an agent needs on one page.
 
 Import a channel and call it. On the email side, hand `mail()` a `FormData` and it turns
 it into a tidy HTML table.
@@ -68,6 +86,7 @@ or set things up by hand with [Manual setup](/manual-setup).
 | ------------------------------------------ | ------------------------------------------------- |
 | [Quick start](/quick-start)           | `postboi init`: pick a provider, send your first email |
 | [Postboi compared](/compare)          | Postboi against Resend, SendGrid, Postmark and nodemailer |
+| [Email for agents](/agents)           | Sending, Tempboi inboxes and replies, for an AI agent |
 | [Multi-channel send()](/send)         | One call across email, SMS, WhatsApp, push and chat |
 | [SMS](/sms), [WhatsApp](/whatsapp), [Push](/push), [Slack](/slack), [Discord](/discord), [Teams](/teams), [Telegram](/telegram) | Each channel's setup and quirks |
 | [Manual setup](/manual-setup)         | Wire Postboi up by hand without the CLI           |

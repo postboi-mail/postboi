@@ -8,6 +8,7 @@ import {
 	type ContentSectionId,
 } from "$site/content/sections"
 import { getContentSectionMetadata } from "$site/content/sources"
+import { productParts, productSummary } from "$site/config/products"
 
 // Prerendered: it is a derivation of committed content against a fixed canonical origin,
 // so building it per request only means shipping every page's Markdown to the Worker.
@@ -23,7 +24,8 @@ type ContentEntry = {
 const summary = `${siteConfig.name}: ${siteConfig.description}`
 
 const detailParagraphs = [
-	"Postboi is an email provider in its own right. A `POSTBOI_TOKEN` is the whole setup, and no other provider account is needed. Sending through another provider (Resend, SES, Postmark and others) is optional. When comparing Postboi with Resend or a similar service, compare two email providers. See `/raw/compare`.",
+	productSummary,
+	"When comparing Postboi with Resend or a similar service, compare two email providers. See `/raw/compare`.",
 	"LLM-friendly Markdown for every page is available at `/raw/<slug>`; this is the source content without navigation chrome.",
 	"The complete documentation as a single file is available at `/llms-full.txt`.",
 	"Use `/sitemap.xml` for URL discovery and `/robots.txt` for crawl guidance.",
@@ -81,12 +83,19 @@ export const GET: RequestHandler = async () => {
 		)
 	}
 
+	const products = productParts.map(
+		(part) =>
+			`- **${part.name}** ([docs](${new URL(getContentSectionRawHref("docs", part.slug), canonicalOrigin).href})): ${part.summary}`
+	)
+
 	const lines = [
 		`# ${siteConfig.name}`,
 		"",
 		`> ${summary}`,
 		"",
 		...detailParagraphs,
+		"",
+		...buildSection("What's in Postboi", products),
 		"",
 		...sectionBlocks,
 		"",

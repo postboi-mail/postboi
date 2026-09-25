@@ -47,6 +47,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "quick-start", name: "Quick start" },
 					{ slug: "provider", name: "The Postboi provider" },
 					{ slug: "compare", name: "Postboi compared" },
+					{ slug: "agents", name: "Email for agents" },
 					{ slug: "manual-setup", name: "Manual setup" },
 				],
 			},
@@ -80,13 +81,19 @@ export const contentSections: ContentSectionConfig[] = [
 				],
 			},
 			{
+				slug: "testing",
+				name: "Testing",
+				items: [
+					{ slug: "dev-inbox", name: "Dev inbox" },
+					{ slug: "temp-inbox", name: "Tempboi (temp inboxes)" },
+					{ slug: "email-testing", name: "Email testing" },
+				],
+			},
+			{
 				slug: "guides",
 				name: "Guides",
 				items: [
 					{ slug: "formdata", name: "FormData" },
-					{ slug: "dev-inbox", name: "Dev inbox" },
-					{ slug: "email-testing", name: "Email testing" },
-					{ slug: "temp-inbox", name: "Temp inboxes" },
 					{ slug: "forms", name: "Hosted forms" },
 					{ slug: "spam", name: "Spam protection" },
 					{ slug: "templates", name: "Email templates" },

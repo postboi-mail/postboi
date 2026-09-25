@@ -2,7 +2,7 @@
 title: Dev inbox
 name: Dev inbox
 description: A local inbox that catches everything your app sends in development (email, texts, WhatsApp, chat and push), so you can read the real thing instead of a console dump.
-category: Guides
+category: Testing
 ---
 
 Messages you send while building have to go somewhere. Sending them for real means a

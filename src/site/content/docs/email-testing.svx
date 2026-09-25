@@ -2,7 +2,7 @@
 title: Email testing
 name: Email testing
 description: Lint an email before anyone receives it (client compatibility from real support data, Gmail clipping, accessibility, deliverability signals) with one synchronous function and zero dependencies.
-category: Guides
+category: Testing
 ---
 
 An email that renders beautifully in your browser can still collapse in Outlook, get
