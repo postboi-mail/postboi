@@ -19,7 +19,7 @@ export const productParts: ProductPart[] = [
 		name: "Sending",
 		slug: "provider",
 		summary:
-			"Transactional and bulk email from one token, from `you@send.postboi.email` on day one or your own domain, with a message log, delivery webhooks, scheduling, lists and broadcasts.",
+			"Transactional and bulk email from one token, delivered by Amazon SES in the EU with each team as its own SES tenant, from `you@send.postboi.email` on day one or your own domain, with a message log, delivery webhooks, scheduling, lists and broadcasts.",
 	},
 	{
 		name: "Receiving",
@@ -32,6 +32,12 @@ export const productParts: ProductPart[] = [
 		slug: "temp-inbox",
 		summary:
 			"Throwaway inboxes at tempboi.email for tests and AI agents. `curl -X POST tempboi.email` makes one with no account, and waiting on it returns the sign-up code and link already pulled out.",
+	},
+	{
+		name: "Deliverability",
+		slug: "deliverability",
+		summary:
+			"DKIM and a custom return path on your domain, warm-up limits, automatic suppression, nightly Spamhaus checks, and a public record of delivery times and uptime at postboi.app/delivery.",
 	},
 	{
 		name: "Dev inbox",

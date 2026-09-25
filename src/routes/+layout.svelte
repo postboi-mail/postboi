@@ -16,6 +16,7 @@
 		getContentSectionBasePath,
 		getContentSectionConfig,
 		getContentSectionHref,
+		getContentSectionItemBySlug,
 		getContentSectionLinks,
 		getContentSectionManifest,
 		getContentSectionRawHref,
@@ -82,7 +83,18 @@
 	)
 
 	const siteOrigin = new URL(siteConfig.url).origin
-	const canonicalUrl = $derived(metadata ? new URL(metadata.href, siteOrigin).href : null)
+	// An archived version names the current page as canonical, or the current home when the
+	// page has since gone, and asks not to be indexed. Each one used to call itself canonical,
+	// so search results (and the assistants reading them) quoted plans and prices from docs
+	// several versions old.
+	const latestSectionId = contentSections[0].id
+	const canonicalUrl = $derived.by(() => {
+		if (!metadata) return null
+		if (!isArchivedVersion) return new URL(metadata.href, siteOrigin).href
+		const current = getContentSectionItemBySlug(latestSectionId, metadata.slug)
+		const href = getContentSectionHref(latestSectionId, current ? metadata.slug : "")
+		return new URL(href, siteOrigin).href
+	})
 
 	const docOgImage = $derived(
 		sectionUi.pageActions.enabled && metadata
@@ -178,6 +190,7 @@
 	<title>{pageTitle}</title>
 	<meta name="description" content={docDescription} />
 	{#if canonicalUrl}<link rel="canonical" href={canonicalUrl} />{/if}
+	{#if isArchivedVersion}<meta name="robots" content="noindex, follow" />{/if}
 	<meta name="author" content={siteConfig.author} />
 	<meta name="keywords" content={siteConfig.keywords.join(", ")} />
 

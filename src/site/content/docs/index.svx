@@ -25,6 +25,7 @@ delivery status, idempotency keys, retries, suppressions and webhooks. Around th
 | --------------------------------- | -------------------------------------------------------------------------- |
 | [Sending](/provider)              | Email from one token, from `send.postboi.email` on day one or your own domain |
 | [Receiving](/provider#replies)    | Replies, and mail to any address on `reply.<your domain>`, as webhooks     |
+| [Deliverability](/deliverability) | Delivered by Amazon SES in the EU, your domain signed with DKIM, and a [measured record](https://postboi.app/delivery) |
 | [Tempboi](/temp-inbox)            | Throwaway inboxes at tempboi.email for tests and AI agents, no account     |
 | [Dev inbox](/dev-inbox)           | Catches everything your app sends in development                           |
 | [Email testing](/email-testing)   | Checks an email for client support, clipping and deliverability            |
