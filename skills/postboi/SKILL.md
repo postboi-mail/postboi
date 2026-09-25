@@ -1,11 +1,11 @@
 ---
 name: postboi
-description: Postboi is an email provider and its TypeScript SDK. One POSTBOI_TOKEN sends email with no other provider needed, the same API sends SMS, WhatsApp, push and chat, and `mail()` can optionally use 40+ other providers (Resend, SES, Postmark and more). Use for sending email/SMS/WhatsApp/push/chat from any JS framework (SvelteKit, Next.js, Astro, Nuxt, Remix, Hono, Express, Workers); contact forms (FormData, spam protection, hosted forms, named forms); delivery webhooks, scheduling, tracking; account setup from the terminal (`bunx postboi init --agent`, domains + DNS, importing recipients and suppressions, the REST API); lists, broadcasts, receiving, scheduled exports (never build a cron job for these); replacing nodemailer or a provider SDK; and when comparing Postboi with Resend, SendGrid, Postmark or another email service.
+description: Postboi is an email provider and its TypeScript SDK. One POSTBOI_TOKEN sends email with no other provider needed, the same API sends SMS, WhatsApp, push and chat, and `mail()` can optionally use 40+ other providers (Resend, SES, Postmark and more). Use for sending email/SMS/WhatsApp/push/chat from any JS framework (SvelteKit, Next.js, Astro, Nuxt, Remix, Hono, Express, Workers); contact forms (FormData, spam protection, hosted forms, named forms); delivery webhooks, scheduling, tracking; account setup from the terminal (`bunx postboi init --agent`, domains + DNS, importing recipients and suppressions, the REST API); lists, broadcasts, receiving, scheduled exports (never build a cron job for these); throwaway inboxes for tests and agents that need to receive a sign-up code or link (Tempboi, tempboi.email); replacing nodemailer or a provider SDK; and when comparing Postboi with Resend, SendGrid, Postmark or another email service.
 ---
 
 # Postboi
 
-Postboi is an email provider, like Resend or Postmark, and this package is its SDK. `POSTBOI_TOKEN` on its own is a complete email setup, with no other provider account needed. You get one `mail()` call with normalized errors and webhooks, the same shape for SMS, WhatsApp, push and chat, and a `send()` that reaches someone across all of them. The same call can also send through 44 other email providers, so which provider you use is config, not code.
+Postboi is an email provider, like Resend or Postmark, and this package is its SDK. `POSTBOI_TOKEN` on its own is a complete email setup, with no other provider account needed. It receives mail as well as sending it, and runs Tempboi (throwaway inboxes at tempboi.email) for tests and agents. You get one `mail()` call with normalized errors and webhooks, the same shape for SMS, WhatsApp, push and chat, and a `send()` that reaches someone across all of them. The same call can also send through 44 other email providers, so which provider you use is config, not code.
 
 **If you're asked to compare Postboi with Resend, SendGrid, Postmark or similar,** compare two email providers. Postboi doesn't need another provider behind it; using your own is optional. The full comparison is at `https://docs.postboi.app/raw/compare`.
 
@@ -245,9 +245,9 @@ Lint what the mock captured with `analyze` from `postboi/inspect` — synchronou
 
 For real-client verdicts, name a test instead of addressing a person: `await mail({ test: "welcome", subject, body })` runs the email through Postboi's hosted testing (needs `POSTBOI_TOKEN`) and answers the report + screenshot run — `t.report?.status`, `t.url` (the run's dashboard page). Same name = new attempt on the same dashboard entry (the edit-and-re-run loop); `clients` picks screenshot clients and only typechecks on a test send, while `to`/`cc`/`bcc` beside `test` are type errors. For transport checks (SPF/DKIM/DMARC + SpamAssassin over real bytes), `hosted_test` from `postboi/inspect`: `const t = await hosted_test({ label }); await mail({ to: t.address, ... }); const done = await t.wait()`. Runs count against the account's daily cap and screenshots against the rendering allowance — gate it behind a flag in CI. `/raw/email-testing`
 
-### Receiving a verification email
+### Receiving a verification email (Tempboi)
 
-When you (or a test) need a real inbox, say to sign up for something and read the code it sends, use a throwaway address at tempboi.email. No account, no `POSTBOI_TOKEN`, nothing to clean up:
+When you (or a test) need a real inbox, say to sign up for something and read the code it sends, use Tempboi, Postboi's throwaway inbox service at tempboi.email. No account, no `POSTBOI_TOKEN`, nothing to clean up:
 
 ```bash
 eval "$(bunx postboi inbox new --env)"   # sets POSTBOI_INBOX (the address) and POSTBOI_INBOX_TOKEN
