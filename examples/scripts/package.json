@@ -14,7 +14,7 @@
 		"ci": "bunx tsc --noEmit"
 	},
 	"devDependencies": {
-		"postboi": "^0.54.2",
+		"postboi": "^0.54.3",
 		"@types/bun": "^1.2.0"
 	}
 }
