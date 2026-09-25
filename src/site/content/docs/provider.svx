@@ -10,8 +10,11 @@ category: Getting started
 </script>
 
 This is Postboi's own email service, and the easiest way to send. We run the sending
-infrastructure ourselves, so you don't need an account with any other provider, DNS records
-or a card. Run one command, authorise in the browser, and `mail()` works.
+infrastructure, so you don't need an account with any other provider, DNS records or a
+card. Run one command, authorise in the browser, and `mail()` works. The mail itself is
+delivered by Amazon SES in the EU, each team as its own SES tenant; how that's kept
+healthy is on [Deliverability](/deliverability), and how fast it arrives is measured on
+the [delivery record](https://postboi.app/delivery).
 
 <InstallationTabs exec args="init" />
 

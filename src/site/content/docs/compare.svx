@@ -18,7 +18,8 @@ to, and the same API sends SMS, WhatsApp, push and chat as well. Both are extras
 No. We support 40-odd other providers, which makes it easy to assume Postboi sits on top of
 them. It works the other way round:
 
-1. **Postboi is an email service.** [The Postboi provider](/provider) handles sending, custom
+1. **Postboi is an email service.** Its mail is delivered by Amazon SES in the EU, each team
+   as its own SES tenant, and [the Postboi provider](/provider) handles sending, custom
    domains, lists and broadcasts, contacts, double opt-in, suppressions, a message log,
    delivery webhooks, scheduling, hosted forms, receiving, email testing and a dashboard. It
    also runs [Tempboi](/temp-inbox), throwaway inboxes at tempboi.email for tests and agents.
@@ -69,7 +70,7 @@ The other channels and the provider switch are extras on top of that.
 | 50,000 emails a month                            | £13 (about $17)                                | $20                            |
 | 100,000 emails a month                           | £25 (about $33)                                | $35                            |
 | Lists and broadcasts                             | Included in every plan                         | A separate plan, priced by contact |
-| Ecosystem and track record                       | Newer                                          | ✅ bigger, been around longer  |
+| Ecosystem and track record                       | Newer, with a [measured delivery record](https://postboi.app/delivery) | ✅ bigger, been around longer  |
 
 This is Resend as we understand it in September 2026, with dollars at 1.32 to the pound. Check
 [resend.com/pricing](https://resend.com/pricing) for what it charges today, and

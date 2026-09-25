@@ -1,0 +1,94 @@
+---
+title: Deliverability
+name: Deliverability
+description: What delivers Postboi's mail (Amazon SES in the EU), how your domain is authenticated, and what we do to keep sending reputation clean, from warm-up limits to nightly blocklist checks.
+category: Guides
+---
+
+Deliverability is whether mail reaches the inbox, and it rests on three things: the
+infrastructure it leaves from, the authentication on the domain it claims to be from, and
+the reputation of everyone sending beside you. This page is what Postboi does about each.
+How it's going is measured, not claimed: the
+[delivery record](https://postboi.app/delivery) publishes how fast our mail reaches Gmail,
+Outlook, Yahoo and iCloud, and our uptime, from our own sends.
+
+## What delivers it
+
+Postboi's own sending is delivered by **Amazon SES in the EU** (Stockholm, `eu-north-1`).
+We don't run our own mail servers; SES is the delivery layer under Postboi's API, message
+log, webhooks and suppressions, the same way it sits under a good share of the email
+industry.
+
+- **Each team is its own SES tenant.** Sends are tagged with the team, so SES tracks each
+  team's bounces and complaints separately. If one team's rates run high, SES pauses that
+  team and nobody else.
+- **SES's reputation policy is on.** A team whose bounce rate passes 15% or complaint
+  rate passes 1% is paused automatically, and sends answer `sending_paused` until we've
+  looked at it.
+- **IPs are shared, domains are yours.** Mail leaves on SES's shared IP pools. We don't
+  offer dedicated IPs; below a few hundred thousand emails a month a dedicated IP usually
+  hurts more than it helps, because it has no history of its own.
+
+If you'd rather deliver through your own Resend, Postmark or SES account, you can keep
+Postboi's log and webhooks and [relay](/provider#relay-send-via-your-own-provider) the
+delivery. Then that provider's reputation is the one that counts, and the delivery
+record doesn't include your mail.
+
+## Your domain's authentication
+
+[Adding a domain](/provider#sending-from-your-own-domain) gives you the records that make
+mail from it pass the checks Gmail and Yahoo require of bulk senders:
+
+| Record              | What it does                                                           |
+| ------------------- | ---------------------------------------------------------------------- |
+| **DKIM** (3 CNAMEs) | Signs every message with a key on your domain (SES Easy DKIM)          |
+| **MAIL FROM**       | `bounce.<your domain>`: an MX and an SPF TXT, so the return path is yours and SPF aligns |
+| **DMARC**           | A starter `p=none` policy, offered only when your domain has none      |
+
+With DKIM and the custom MAIL FROM in place, both SPF and DKIM align with your From
+address, so DMARC passes whichever one a receiver checks. Where your registrar supports
+Domain Connect, the records go in with one click. Until the MAIL FROM MX exists, SES falls
+back to its own return path, so you can send while DNS propagates.
+
+Before you have a domain, mail goes from your address on `send.postboi.email`, our shared
+sending domain, with its authentication handled by us.
+
+## Keeping the shared reputation clean
+
+Everyone on Postboi benefits from nobody on Postboi spamming. So:
+
+- **New accounts warm up.** For the first 7 days an account can send up to 1,000 emails
+  a day, and until it verifies a domain, 100 a day, on every plan. Mailbox providers trust
+  volume that grows steadily.
+- **Hard bounces and complaints suppress the address.** A permanent bounce, a spam
+  complaint or an unsubscribe adds the address to your
+  [suppression list](/provider#suppressions), and every later send to it is dropped before
+  it reaches SES. Soft bounces (a full mailbox, a greylisting server) don't suppress.
+- **New accounts are watched.** A complaint on a brand-new account, or a high hard-bounce
+  rate from the shared domain, suspends the account until a person has looked. Sends from
+  new accounts on the shared domain are also reviewed for phishing and impersonation, and
+  addresses that imitate banks, tax offices or well-known brands can't be claimed on it.
+- **Blocklists are checked every night.** At 03:00 UTC we ask the Spamhaus Domain
+  Blocklist about the shared sending domain, every verified customer domain, its
+  `bounce.` host, and the domains your recent mail links to. A new listing is a
+  `deliverability` notification to your team the same
+  morning, and another when it clears. We check domains rather than IPs: an SES IP
+  listing is Amazon's to clear and nothing you or we can act on.
+- **List mail carries one-click unsubscribe.** Sends to a [list](/provider#lists--broadcasts)
+  get `List-Unsubscribe` and `List-Unsubscribe-Post` headers (RFC 8058), which Gmail and
+  Yahoo require of bulk senders, and the link suppresses the address in one request.
+
+## What you can do
+
+- **Send from your own domain** with its records in place. Shared-domain mail is fine to
+  start with; your own domain builds a reputation that's only yours.
+- **Send only to people who asked.** [Double opt-in](/provider#confirmation-double-opt-in)
+  on lists keeps bounces and complaints near zero.
+- **Keep transactional and bulk mail apart**, for example `mail.example.com` for receipts
+  and `news.example.com` for newsletters, so a newsletter complaint never slows a password
+  reset.
+- **Check an email before it goes.** [Email testing](/email-testing) flags what gets mail
+  clipped or filtered, and a hosted test gives you SPF, DKIM, DMARC and a spam score over
+  the real message.
+- **Watch the events.** Bounces and complaints arrive as [webhooks](/webhooks) and in the
+  message log, so a bad list shows up on day one rather than in a monthly report.
