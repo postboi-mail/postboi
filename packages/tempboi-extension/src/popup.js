@@ -294,15 +294,7 @@ function inbox_list() {
 		)
 	)
 	if (!messages.length) {
-		section.append(
-			h(
-				"div",
-				{ class: "empty" },
-				h("img", { src: "../assets/boi.svg", alt: "" }),
-				h("strong", {}, "Nothing here yet"),
-				h("span", {}, "Mail lands here the moment it arrives.")
-			)
-		)
+		section.append(empty())
 		return section
 	}
 	const opened = new Set(seen)
@@ -314,6 +306,35 @@ function inbox_list() {
 		)
 	)
 	return section
+}
+
+/**
+ * Boi as tempboi.email draws him: the whole figure standing behind a slip, his head over
+ * its top edge and his fists holding it in front. boi.svg has no arms of its own, because
+ * the fists are what shows of them; drawn without the slip he is armless. He rises once
+ * per opening, not on every redraw.
+ */
+let risen = false
+function empty() {
+	const stage = h(
+		"div",
+		{ class: `stage${risen ? "" : " rise"}` },
+		h(
+			"div",
+			{ class: "perch", "aria-hidden": "true" },
+			h("div", { class: "well" }, h("img", { class: "boi", src: "../assets/boi.svg", alt: "" })),
+			h("span", { class: "grip left" }, h("img", { src: "../assets/fist.svg", alt: "" })),
+			h("span", { class: "grip right" }, h("img", { src: "../assets/fist.svg", alt: "" }))
+		),
+		h(
+			"div",
+			{ class: "slip empty" },
+			h("strong", {}, "Nothing here yet"),
+			h("span", {}, "Mail lands here the moment it arrives.")
+		)
+	)
+	risen = true
+	return stage
 }
 
 function face(message) {

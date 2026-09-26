@@ -129,10 +129,16 @@ export async function sync({ wait = 0, signal } = {}) {
 	const held = await load_state()
 	if (held.inbox?.address !== inbox.address) return []
 	const merged = merge(held, page)
-	const changes = { messages: merged.messages, cursor: merged.cursor }
+	// Only write what moved: every write wakes the popup's and the worker's listeners, and
+	// an empty long poll every 25 seconds would redraw the popup for nothing.
+	const changes = {}
+	if (merged.fresh.length || merged.cursor !== held.cursor) {
+		changes.messages = merged.messages
+		changes.cursor = merged.cursor
+	}
 	if (page.expires && page.expires !== held.inbox.expires)
 		changes.inbox = { ...held.inbox, expires: page.expires }
-	await chrome.storage.local.set(changes)
+	if (Object.keys(changes).length) await chrome.storage.local.set(changes)
 	if (merged.fresh.length) await update_badge()
 	return merged.fresh
 }

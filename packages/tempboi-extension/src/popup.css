@@ -254,18 +254,74 @@ main {
 	color: var(--muted);
 }
 
+/*
+ * The empty inbox: Boi behind a slip, as on tempboi.email. His head is 0.439 of the
+ * figure; the well clips the rest behind the slip; the fists sit over its top edge. The
+ * numbers are the page's, at popup size.
+ */
+.stage {
+	--head: 84px;
+	--full: calc(var(--head) / 0.439);
+	--wide: calc(var(--full) * 0.5107);
+	--hand: calc(var(--wide) * 0.1956);
+	position: relative;
+	isolation: isolate;
+	margin: calc(var(--head) + 18px) 6px 8px;
+}
+.perch {
+	position: absolute;
+	top: calc(-1 * var(--head));
+	left: calc(50% - var(--wide) / 2);
+	width: var(--wide);
+	/* Only what shows: the whole figure's height would reach past a short slip and give
+	   the popup a scrollbar for legs nobody can see. */
+	height: calc(var(--head) + 28px);
+	pointer-events: none;
+}
+.well {
+	position: absolute;
+	top: -12px;
+	left: -8px;
+	right: -8px;
+	height: calc(var(--head) + 40px);
+	overflow: hidden;
+	z-index: 0;
+}
+.boi {
+	position: absolute;
+	top: 12px;
+	left: 8px;
+	width: var(--wide);
+	height: var(--full);
+}
+.grip {
+	position: absolute;
+	top: calc(var(--head) - var(--hand) * 0.773);
+	width: 30%;
+	z-index: 2;
+}
+.grip img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+.grip.left {
+	left: 0.5%;
+}
+.grip.right {
+	left: 84%;
+}
+.grip.right img {
+	scale: -1 1;
+}
 .empty {
+	position: relative;
+	z-index: 1;
 	display: grid;
 	justify-items: center;
 	gap: 4px;
-	padding: 8px 0 16px;
+	padding: 22px 16px 18px;
 	text-align: center;
-}
-.empty img {
-	width: 104px;
-	height: auto;
-	margin-bottom: 4px;
-	animation: bob 2.4s ease-in-out infinite;
 }
 .empty strong {
 	font: 800 15px / 1.2 var(--f-poster);
@@ -276,14 +332,14 @@ main {
 	color: var(--muted);
 	font-size: 13px;
 }
-@keyframes bob {
-	50% {
-		transform: translateY(-4px);
+@media (prefers-reduced-motion: no-preference) {
+	.stage.rise .boi {
+		animation: rise 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 180ms both;
 	}
 }
-@media (prefers-reduced-motion: reduce) {
-	.empty img {
-		animation: none;
+@keyframes rise {
+	from {
+		translate: 0 75%;
 	}
 }
 
