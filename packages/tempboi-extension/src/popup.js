@@ -108,7 +108,7 @@ function render() {
 function first_run() {
 	return h(
 		"section",
-		{ class: "slip card" },
+		{ class: "card" },
 		h("h1", { class: "poster" }, "A throwaway inbox, ", h("span", { class: "hot" }, "right here")),
 		h(
 			"p",
@@ -133,7 +133,7 @@ function first_run() {
 function gone_card(inbox) {
 	return h(
 		"section",
-		{ class: "slip card" },
+		{ class: "card" },
 		h("p", { class: "label" }, "Expired"),
 		h("h1", { class: "poster" }, "That inbox is ", h("span", { class: "hot" }, "gone")),
 		h(
@@ -165,7 +165,7 @@ function address_card(inbox) {
 	copy_key.addEventListener("click", () => copy(inbox.address, copy_key))
 	const card = h(
 		"section",
-		{ class: "slip card" },
+		{ class: "card" },
 		h(
 			"div",
 			{ class: "row split" },
