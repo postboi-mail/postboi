@@ -143,7 +143,7 @@ async function message_for(notification_id) {
 chrome.notifications.onClicked.addListener(async (notification_id) => {
 	const { inbox, id } = await message_for(notification_id)
 	chrome.notifications.clear(notification_id)
-	if (inbox?.urls?.web) chrome.tabs.create({ url: message_page(inbox.urls.web, id) })
+	if (inbox?.urls?.web) chrome.tabs.create({ url: message_page(inbox, id) })
 })
 
 chrome.notifications.onButtonClicked.addListener(async (notification_id, index) => {

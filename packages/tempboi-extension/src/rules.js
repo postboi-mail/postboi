@@ -196,12 +196,16 @@ export function latest_code(messages) {
 }
 
 /**
- * The inbox's page on the web with one message open. The page reads `?m=` once the inbox
- * is up; the token stays after the `#`, where the server never sees it.
+ * One message's own page on the web: `/<inbox>/<id>`, which the page opens and scrolls to.
+ * Built from the inbox's page (`urls.web`) so a preview's `/tempboi` base and the token
+ * after the `#` come along; an inbox on somebody's own domain has its page at the base,
+ * with the address in the fragment, so its name is put back in front of the id.
  */
-export function message_page(web, id) {
-	const url = new URL(web)
-	url.searchParams.set("m", id)
+export function message_page(inbox, id) {
+	const url = new URL(inbox.urls.web)
+	const local = inbox.address.split("@")[0]
+	const path = url.pathname.replace(/\/$/, "")
+	url.pathname = path.endsWith(`/${local}`) ? `${path}/${id}` : `${path}/${local}/${id}`
 	return url.toString()
 }
 

@@ -114,9 +114,23 @@ test("senders", () => {
 	expect(initial({})).toBe("U")
 })
 
-test("a message's page keeps the token after the #", () => {
-	const url = message_page("https://tempboi.email/bright-otter#t=tb_abc", "tmsg_1")
-	expect(url).toBe("https://tempboi.email/bright-otter?m=tmsg_1#t=tb_abc")
+test("a message's page is its own path, with the token still after the #", () => {
+	const inbox = (address, web) => ({ address, urls: { web } })
+	expect(
+		message_page(
+			inbox("bright-otter@tempboi.email", "https://tempboi.email/bright-otter#t=tb_abc"),
+			"tmsg_1"
+		)
+	).toBe("https://tempboi.email/bright-otter/tmsg_1#t=tb_abc")
+	expect(
+		message_page(inbox("box@tempboi.email", "http://localhost:5173/tempboi/box#t=tb_abc"), "tmsg_1")
+	).toBe("http://localhost:5173/tempboi/box/tmsg_1#t=tb_abc")
+	expect(
+		message_page(
+			inbox("box@reply.acme.com", "https://tempboi.email/#t=tb_abc&a=box%40reply.acme.com"),
+			"tmsg_1"
+		)
+	).toBe("https://tempboi.email/box/tmsg_1#t=tb_abc&a=box%40reply.acme.com")
 })
 
 describe("the reader's document", () => {

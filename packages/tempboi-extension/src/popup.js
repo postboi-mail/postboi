@@ -520,7 +520,7 @@ function reader(summary) {
 				"a",
 				{
 					class: "key plain small",
-					href: message_page(inbox.urls.web, summary.id),
+					href: message_page(inbox, summary.id),
 					target: "_blank",
 					rel: "noreferrer",
 				},
