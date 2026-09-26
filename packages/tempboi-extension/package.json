@@ -1,0 +1,12 @@
+{
+	"name": "tempboi-extension",
+	"version": "0.1.0",
+	"private": true,
+	"description": "tempboi in the browser toolbar: a throwaway inbox, codes picked out, fields filled.",
+	"type": "module",
+	"scripts": {
+		"test": "bun test src",
+		"pack": "rm -f tempboi-extension.zip && zip -r -X tempboi-extension.zip manifest.json src assets fonts icons -x 'src/*.test.js'"
+	},
+	"license": "MIT"
+}

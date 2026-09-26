@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en-GB">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Settings | tempboi</title>
+		<link rel="stylesheet" href="house.css" />
+		<link rel="stylesheet" href="options.css" />
+		<script type="module" src="options.js"></script>
+	</head>
+	<body>
+		<main>
+			<header class="masthead">
+				<img src="../assets/mark.svg" alt="" width="36" height="36" />
+				<h1>TEMPBOI <span>Settings</span></h1>
+			</header>
+
+			<section class="slip panel">
+				<h2 class="label">New inboxes</h2>
+				<label class="line">
+					<span>Keep a new inbox for</span>
+					<select class="field" id="ttl"></select>
+				</label>
+				<p class="tip">Anything up to a day. "+1h" in the popup adds more while there is room.</p>
+			</section>
+
+			<section class="slip panel">
+				<h2 class="label">When mail arrives</h2>
+				<label class="check">
+					<input type="checkbox" id="notify" />
+					<span>Show a notification, with the code on it when there is one</span>
+				</label>
+				<p class="tip">
+					The toolbar badge counts unopened mail either way. The extension checks every thirty
+					seconds, and at once while the popup is open.
+				</p>
+			</section>
+
+			<section class="slip panel">
+				<h2 class="label">Open an inbox you made elsewhere</h2>
+				<p class="tip">
+					An inbox from tempboi.email or <code class="mono">npx tempboi</code> can be moved in here
+					with its token: paste the command from the page's "Watch this inbox in a terminal" strip,
+					or the token on its own. This replaces the inbox the extension has now.
+				</p>
+				<form class="line" id="adopt">
+					<input
+						class="field mono"
+						id="token"
+						type="password"
+						placeholder="tb_…"
+						autocomplete="off"
+						spellcheck="false"
+						aria-label="Inbox token"
+					/>
+					<button class="key" type="submit">Open it</button>
+				</form>
+			</section>
+
+			<section class="slip panel">
+				<h2 class="label">Keys</h2>
+				<dl class="keys">
+					<dt><kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd></dt>
+					<dd>Open tempboi</dd>
+					<dt><kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>E</kbd></dt>
+					<dd>Fill the focused field with your address (makes one if you have none)</dd>
+					<dt><kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>C</kbd></dt>
+					<dd>Fill the focused field with the latest code</dd>
+				</dl>
+				<p class="tip">
+					Right-click any field for the same two. Change the keys at
+					<button class="link" id="shortcuts" type="button">chrome://extensions/shortcuts</button>.
+				</p>
+			</section>
+
+			<details class="slip panel">
+				<summary class="label">Server</summary>
+				<p class="tip">
+					For testing a Postboi preview or <code class="mono">bun dev</code>. Leave it on
+					tempboi.email otherwise.
+				</p>
+				<form class="line" id="server-form">
+					<input class="field mono" id="server" type="url" spellcheck="false" aria-label="Server" />
+					<button class="key plain" type="submit">Save</button>
+				</form>
+			</details>
+
+			<p class="status" id="status" role="status" aria-live="polite"></p>
+
+			<p class="foot">
+				tempboi is run by
+				<a href="https://postboi.app" target="_blank" rel="noreferrer">Postboi</a>. Inboxes are
+				public to anyone holding their token and deleted when they expire.
+				<a href="https://tempboi.email/terms" target="_blank" rel="noreferrer">Terms</a> ·
+				<a href="https://tempboi.email/faq" target="_blank" rel="noreferrer">FAQ</a>
+			</p>
+		</main>
+	</body>
+</html>

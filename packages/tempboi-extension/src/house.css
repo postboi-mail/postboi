@@ -1,0 +1,151 @@
+/*
+ * The house style, cut down for a popup: manila and ink, safety yellow, square corners,
+ * drawn rules, keys that press into their own shadow. Archivo names things, Golos is what
+ * you read, Monaspace is what a machine said. Light is paper with ink on it; dark is ink
+ * with paper on it. The values are the app's (app.css), spelled as hex.
+ */
+
+@font-face {
+	font-family: "Archivo Variable";
+	font-weight: 100 900;
+	font-stretch: 62% 125%;
+	font-display: swap;
+	src: url(../fonts/archivo.woff2) format("woff2-variations");
+}
+@font-face {
+	font-family: "Golos Text Variable";
+	font-weight: 400 900;
+	font-display: swap;
+	src: url(../fonts/golos-text.woff2) format("woff2-variations");
+}
+@font-face {
+	font-family: "Monaspace Neon";
+	font-weight: 400;
+	font-display: swap;
+	src: url(../fonts/monaspace-neon.woff2) format("woff2");
+}
+
+:root {
+	color-scheme: light dark;
+	--yellow: #fdc005;
+	--ink-fixed: #141a2e;
+	--paper-fixed: #f5f0e3;
+	--ground: light-dark(#f5f0e3, #141a2e);
+	--sheet: light-dark(#fbf8f0, #1b2240);
+	--ink: light-dark(#141a2e, #f5f0e3);
+	--muted: light-dark(#5b5f6e, #b3b1a8);
+	--rule: light-dark(#141a2e, #f5f0e3);
+	--hairline: light-dark(rgb(20 26 46 / 0.16), rgb(245 240 227 / 0.16));
+	--tint: light-dark(rgb(253 192 5 / 0.22), rgb(253 192 5 / 0.16));
+	--danger: light-dark(#b3261e, #ff8a80);
+	--f-poster: "Archivo Variable", "Golos Text Variable", system-ui, sans-serif;
+	--f-read: "Golos Text Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--f-mono: "Monaspace Neon", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	background: var(--ground);
+	color: var(--ink);
+	font: 14px / 1.45 var(--f-read);
+}
+
+button,
+input,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+a {
+	color: inherit;
+}
+
+:focus-visible {
+	outline: 2px solid var(--yellow);
+	outline-offset: 2px;
+}
+
+/* The slip: a sheet with a drawn edge and a hard offset. */
+.slip {
+	background: var(--sheet);
+	border: 2px solid var(--rule);
+	box-shadow: 4px 4px 0 var(--rule);
+}
+
+.label {
+	font: 700 11px / 1.4 var(--f-poster);
+	font-stretch: 84%;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.mono {
+	font-family: var(--f-mono);
+}
+
+/* A key: yellow, drawn, pressing into its own shadow. */
+.key {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border: 2px solid var(--ink-fixed);
+	background: var(--yellow);
+	color: var(--ink-fixed);
+	box-shadow: 3px 3px 0 var(--rule);
+	font: 700 13px / 1.2 var(--f-poster);
+	font-stretch: 100%;
+	letter-spacing: 0.02em;
+	text-decoration: none;
+	cursor: pointer;
+	white-space: nowrap;
+	transition:
+		transform 60ms ease,
+		box-shadow 60ms ease;
+}
+.key:active:not(:disabled) {
+	transform: translate(3px, 3px);
+	box-shadow: 0 0 0 var(--rule);
+}
+.key:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+.key.plain {
+	background: var(--sheet);
+	color: var(--ink);
+	border-color: var(--rule);
+}
+.key.small {
+	padding: 3px 8px;
+	font-size: 12px;
+	box-shadow: 2px 2px 0 var(--rule);
+}
+.key.small:active:not(:disabled) {
+	transform: translate(2px, 2px);
+}
+.key.danger {
+	color: var(--danger);
+}
+
+.field {
+	width: 100%;
+	padding: 7px 9px;
+	border: 2px solid var(--rule);
+	background: var(--sheet);
+	border-radius: 0;
+}
+
+.icon {
+	width: 16px;
+	height: 16px;
+	flex: none;
+}

@@ -1,0 +1,63 @@
+{
+	"manifest_version": 3,
+	"name": "tempboi: throwaway email",
+	"short_name": "tempboi",
+	"version": "0.1.0",
+	"description": "A throwaway inbox in your toolbar. Codes picked out as they land, filled into the page for you. No sign-up.",
+	"homepage_url": "https://tempboi.email",
+	"minimum_chrome_version": "116",
+	"icons": {
+		"16": "icons/16.png",
+		"32": "icons/32.png",
+		"48": "icons/48.png",
+		"128": "icons/128.png"
+	},
+	"action": {
+		"default_title": "tempboi",
+		"default_popup": "src/popup.html",
+		"default_icon": {
+			"16": "icons/16.png",
+			"32": "icons/32.png"
+		}
+	},
+	"background": {
+		"service_worker": "src/background.js",
+		"type": "module"
+	},
+	"options_ui": {
+		"page": "src/options.html",
+		"open_in_tab": true
+	},
+	"permissions": [
+		"storage",
+		"alarms",
+		"notifications",
+		"contextMenus",
+		"activeTab",
+		"scripting",
+		"offscreen",
+		"clipboardWrite"
+	],
+	"host_permissions": ["https://tempboi.email/*"],
+	"optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+	"commands": {
+		"_execute_action": {
+			"suggested_key": {
+				"default": "Alt+Shift+T"
+			},
+			"description": "Open tempboi"
+		},
+		"fill-address": {
+			"suggested_key": {
+				"default": "Alt+Shift+E"
+			},
+			"description": "Fill the focused field with your tempboi address"
+		},
+		"fill-code": {
+			"suggested_key": {
+				"default": "Alt+Shift+C"
+			},
+			"description": "Fill the focused field with the latest code"
+		}
+	}
+}

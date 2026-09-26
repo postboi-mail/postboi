@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en-GB">
+	<head>
+		<meta charset="utf-8" />
+		<title>tempboi</title>
+		<link rel="stylesheet" href="house.css" />
+		<link rel="stylesheet" href="popup.css" />
+		<script type="module" src="popup.js"></script>
+	</head>
+	<body>
+		<header class="masthead">
+			<a class="brand" id="home" href="https://tempboi.email" target="_blank" rel="noreferrer">
+				<img src="../assets/mark.svg" alt="" width="26" height="26" />
+				<span>TEMPBOI</span>
+			</a>
+			<nav>
+				<button class="bare" id="web" type="button" title="Open this inbox on tempboi.email">
+					<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+						<path
+							d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						/>
+					</svg>
+					<span class="sr">Open on the web</span>
+				</button>
+				<button class="bare" id="settings" type="button" title="Settings">
+					<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+						<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2" />
+						<path
+							d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						/>
+					</svg>
+					<span class="sr">Settings</span>
+				</button>
+			</nav>
+		</header>
+
+		<main id="main"></main>
+
+		<p class="status" id="status" role="status" aria-live="polite"></p>
+	</body>
+</html>
