@@ -120,8 +120,13 @@ export async function sync({ wait = 0, signal } = {}) {
 		page = await list_messages(inbox.server, inbox, { after: cursor, wait, signal })
 	} catch (error) {
 		if (error instanceof TempboiError && error.gone) {
-			await chrome.storage.local.set({ inbox: { ...inbox, gone: true } })
-			await update_badge()
+			// Only if it is still the inbox held: a New or Delete while this was in flight
+			// must not have the old one written back over it.
+			const now = (await load_state()).inbox
+			if (now && now.address === inbox.address && now.token === inbox.token) {
+				await chrome.storage.local.set({ inbox: { ...now, gone: true } })
+				await update_badge()
+			}
 		}
 		throw error
 	}
