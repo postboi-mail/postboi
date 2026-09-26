@@ -25,8 +25,49 @@ export const LIFETIMES = [
 /** How long the popup's long poll holds, in seconds. The server's own ceiling is 25. */
 export const POLL_SECONDS = 25
 
-/** The worker's alarm period, in minutes. Chrome's floor is half a minute. */
-export const ALARM_MINUTES = 0.5
+/**
+ * The worker's alarm, in minutes. With push the alarm is only a backstop for a push the
+ * push service dropped; without it (a server with no key, a browser that refused) it is
+ * how mail is found, at Chrome's floor of half a minute.
+ */
+export const ALARM_MINUTES = { pushed: 5, polled: 0.5 }
+
+/**
+ * tempboi.email's VAPID public key: public by definition, and the same one the app's build
+ * script bakes into the page. An inbox's answer carries its server's key as `push.key`,
+ * which wins; this covers a server that answers without one yet.
+ */
+export const TEMPBOI_PUSH_KEY =
+	"BMOvqNa2X4FY7RtGBfHn0Lpg1II-PafsAq1IdktdxwU3y9sKm2YyP_r9kt-B11odlAj62DeC3v5qYUFTbMrLiA4"
+
+/**
+ * Where and with what key to follow an inbox by push, or undefined when it can't be.
+ * The inbox's own answer says; failing that, tempboi.email is known to push.
+ */
+export function push_target(inbox) {
+	if (!inbox || inbox.gone) return undefined
+	if (inbox.push?.key && inbox.push?.url) return { key: inbox.push.key, url: inbox.push.url }
+	if (inbox.server !== DEFAULT_SERVER) return undefined
+	return {
+		key: TEMPBOI_PUSH_KEY,
+		url: `${DEFAULT_SERVER}/v1/inboxes/${encodeURIComponent(inbox.address)}/push`,
+	}
+}
+
+/** A base64url VAPID key as the bytes `pushManager.subscribe` wants. */
+export function key_bytes(key) {
+	const base64 = key.replace(/-/g, "+").replace(/_/g, "/")
+	const raw = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4))
+	return Uint8Array.from(raw, (char) => char.charCodeAt(0))
+}
+
+/** Whether a subscription was made with this key: a new key needs a new subscription. */
+export function same_key(subscribed_with, key) {
+	if (!subscribed_with) return false
+	const a = new Uint8Array(subscribed_with)
+	const b = key_bytes(key)
+	return a.length === b.length && a.every((byte, n) => byte === b[n])
+}
 
 /** A server URL as settings keep it: an http(s) origin, no trailing slash, or undefined. */
 export function server_origin(value) {

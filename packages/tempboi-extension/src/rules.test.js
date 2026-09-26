@@ -12,6 +12,10 @@ import {
 	message_page,
 	notification_for,
 	pasted_server,
+	push_target,
+	same_key,
+	key_bytes,
+	TEMPBOI_PUSH_KEY,
 	reader_document,
 	server_origin,
 	time_left,
@@ -147,4 +151,34 @@ test("notifications lead with the code", () => {
 		message: "Acme: Your code",
 	})
 	expect(notification_for(message(1, { subject: "" })).title).toBe("New mail from a@b.c")
+})
+
+describe("following by push", () => {
+	const held = { address: "bright-otter@tempboi.email", server: "https://tempboi.email" }
+	test("the inbox's own answer wins", () => {
+		const push = { key: "BAAA", url: "https://x.dev/v1/inboxes/a@b/push" }
+		expect(push_target({ ...held, push })).toEqual(push)
+	})
+	test("tempboi.email is known to push before it says so", () => {
+		expect(push_target(held)).toEqual({
+			key: TEMPBOI_PUSH_KEY,
+			url: "https://tempboi.email/v1/inboxes/bright-otter%40tempboi.email/push",
+		})
+	})
+	test("another server without a key is polled", () => {
+		expect(push_target({ ...held, server: "http://localhost:5173" })).toBeUndefined()
+		expect(push_target({ ...held, push: null, server: "http://localhost:5173" })).toBeUndefined()
+	})
+	test("a gone inbox is followed by nobody", () => {
+		expect(push_target({ ...held, gone: true })).toBeUndefined()
+		expect(push_target(undefined)).toBeUndefined()
+	})
+	test("the key is a P-256 point", () => {
+		const bytes = key_bytes(TEMPBOI_PUSH_KEY)
+		expect(bytes.length).toBe(65)
+		expect(bytes[0]).toBe(4)
+		expect(same_key(bytes.buffer, TEMPBOI_PUSH_KEY)).toBe(true)
+		expect(same_key(new Uint8Array(65).buffer, TEMPBOI_PUSH_KEY)).toBe(false)
+		expect(same_key(null, TEMPBOI_PUSH_KEY)).toBe(false)
+	})
 })

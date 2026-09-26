@@ -12,8 +12,12 @@ It speaks only the public `/v1/inboxes` API, the same one `npx tempboi` and
 - **An address on one press**, copied on the next. The card counts down to expiry, `+1h`
   adds an hour up to the day an anonymous inbox may live, **New** swaps it for a fresh one
   (random or named) and **Delete** takes it and its mail now.
-- **Mail as it lands.** While the popup is open it long-polls (`messages?wait=25`); while it
-  is shut the worker checks every thirty seconds. The badge counts unopened mail.
+- **Mail as it lands.** The worker follows the inbox by Web Push, the same push the page's
+  Notify me uses, so it is woken the moment mail is filed even with the popup shut. The
+  push is silent and carries nothing we read: it is a bell, and the worker fetches the mail
+  itself. An alarm every five minutes backs it up, and becomes every thirty seconds where
+  push can't be had (a server with no VAPID key, a browser that refused). While the popup
+  is open it long-polls as well (`messages?wait=25`). The badge counts unopened mail.
 - **The code and the link up front.** Each row carries the code as a copy chip and an
   **Open link** key for the verify link, both read out by the server at arrival.
 - **A notification per message**, titled with the code when there is one, with **Copy
@@ -76,8 +80,8 @@ Why each permission is asked for:
 | Permission                    | Why                                                                                                      |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `storage`                     | Keeps the current inbox, its token, the messages already read and the settings on this device.           |
-| `alarms`                      | Checks for new mail every thirty seconds while the popup is closed.                                      |
-| `notifications`               | Says when mail arrives, with the code on it.                                                             |
+| `alarms`                      | A backstop check for new mail in case a push is dropped.                                                 |
+| `notifications` (and push)    | Says when mail arrives, with the code on it.                                                             |
 | `contextMenus`                | The right-click items that fill the address or the code into a field.                                    |
 | `activeTab`, `scripting`      | Puts the address or code into the field that was right-clicked or focused, on that tab only, when asked. |
 | `offscreen`, `clipboardWrite` | Copies a code from a notification's button, which the worker can't do by itself.                         |

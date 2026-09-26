@@ -94,6 +94,15 @@ export function extend_inbox(server, inbox, ttl) {
 	})
 }
 
+/**
+ * Have the inbox's arrivals pushed to this browser. `url` is the inbox's `push.url`; the
+ * body is the subscription as `toJSON()` gives it. A browser follows one inbox, so this
+ * moves it off whichever it followed before.
+ */
+export function follow_inbox(url, inbox, subscription) {
+	return call(url, { method: "POST", token: inbox.token, body: subscription })
+}
+
 /** Gone now rather than at expiry. */
 export function delete_inbox(server, inbox) {
 	return call(inbox_url(server, inbox.address), { method: "DELETE", token: inbox.token })

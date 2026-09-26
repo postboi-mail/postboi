@@ -1,11 +1,27 @@
+import { follow_inbox } from "./api.js"
 import { insert_text } from "./fill.js"
-import { ALARM_MINUTES, latest_code, message_page, notification_for } from "./rules.js"
+import {
+	ALARM_MINUTES,
+	key_bytes,
+	latest_code,
+	message_page,
+	notification_for,
+	push_target,
+	same_key,
+} from "./rules.js"
 import { live_inbox, load_settings, load_state, sync, update_badge } from "./state.js"
 
 /**
- * The worker: it checks the inbox on an alarm while the popup is shut, keeps the badge,
- * announces new mail, and answers the right-click menu and the fill shortcut. The popup
- * long-polls on its own while it is open; both fold into the same storage (state.js).
+ * The worker: it is told the moment mail lands, keeps the badge, announces new mail, and
+ * answers the right-click menu and the fill shortcut. The popup long-polls on its own
+ * while it is open; both fold into the same storage (state.js).
+ *
+ * "Told" is Web Push, the same push tempboi's page offers under Notify me: the worker
+ * files a subscription against the inbox it holds, and each arrival wakes it. The push is
+ * silent (`userVisibleOnly: false`, Chrome 121) and carries nothing we read: it is a bell,
+ * and the worker fetches the mail itself, so the notification is ours and follows the
+ * settings. An alarm stays on as a backstop for a push the push service dropped, and is
+ * the whole of it wherever push can't be had.
  */
 
 const POLL = "tempboi-poll"
@@ -13,7 +29,7 @@ const FILL_ADDRESS = "tempboi-fill-address"
 const FILL_CODE = "tempboi-fill-code"
 
 function setup() {
-	chrome.alarms.create(POLL, { periodInMinutes: ALARM_MINUTES })
+	follow()
 	chrome.contextMenus.removeAll(() => {
 		chrome.contextMenus.create({
 			id: FILL_ADDRESS,
@@ -32,14 +48,62 @@ function setup() {
 chrome.runtime.onInstalled.addListener(setup)
 chrome.runtime.onStartup.addListener(setup)
 
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-	if (alarm.name !== POLL) return
+chrome.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name === POLL) return check()
+})
+
+self.addEventListener("push", (event) => event.waitUntil(check()))
+
+// The browser rotated the subscription: file the new one, with the token we hold.
+self.addEventListener("pushsubscriptionchange", (event) => event.waitUntil(follow()))
+
+// A new inbox (made, adopted, replaced) is followed; expiry moving is the same inbox.
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (area !== "local" || !("inbox" in changes)) return
+	const { oldValue: was, newValue: now } = changes.inbox
+	if (was?.address !== now?.address || was?.token !== now?.token || was?.gone !== now?.gone)
+		follow()
+})
+
+async function check() {
 	try {
 		await announce(await sync())
 	} catch {
 		// Offline, expired, rate limited: the next tick asks again, and the popup says why.
 	}
-})
+}
+
+/**
+ * Follow the held inbox by push, and set the alarm to match: a backstop when that worked,
+ * the way mail is found when it didn't. `push` in storage says which, for the settings.
+ */
+async function follow() {
+	const { inbox } = await load_state()
+	const target = push_target(inbox)
+	let instant = false
+	if (target) {
+		try {
+			const manager = self.registration.pushManager
+			let subscription = await manager.getSubscription()
+			if (subscription && !same_key(subscription.options.applicationServerKey, target.key)) {
+				await subscription.unsubscribe()
+				subscription = null
+			}
+			subscription ??= await manager.subscribe({
+				userVisibleOnly: false,
+				applicationServerKey: key_bytes(target.key),
+			})
+			await follow_inbox(target.url, inbox, subscription.toJSON())
+			instant = true
+		} catch (error) {
+			console.warn("tempboi: push unavailable, checking on a timer instead:", error?.message)
+		}
+	}
+	await chrome.alarms.create(POLL, {
+		periodInMinutes: instant ? ALARM_MINUTES.pushed : ALARM_MINUTES.polled,
+	})
+	await chrome.storage.local.set({ push: { address: inbox?.address, instant } })
+}
 
 /** A notification per new message nobody has been told about yet. */
 async function announce(fresh) {

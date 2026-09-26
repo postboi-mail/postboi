@@ -68,6 +68,19 @@ async function reach(origin) {
 	return granted
 }
 
+/** Whether the held inbox is followed by push, which the worker writes as `push`. */
+async function show_arrival() {
+	const { push, inbox } = await chrome.storage.local.get(["push", "inbox"])
+	document.getElementById("arrival").textContent =
+		!inbox || push?.instant
+			? "tempboi is told the moment mail lands."
+			: "Push isn't available here, so tempboi checks every thirty seconds instead, and at once while the popup is open."
+}
+show_arrival()
+chrome.storage.onChanged.addListener((changes) => {
+	if ("push" in changes) show_arrival()
+})
+
 document.getElementById("shortcuts").addEventListener("click", () => {
 	chrome.tabs.create({ url: "chrome://extensions/shortcuts" })
 })
