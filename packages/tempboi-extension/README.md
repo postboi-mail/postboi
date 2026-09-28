@@ -65,6 +65,51 @@ The fonts are the latin subsets of Archivo, Golos Text and Monaspace Neon, from 
 bundled because a store extension shouldn't load them from a CDN. The icons are
 `assets/mark.svg` (the app's favicon) rendered at 16, 32, 48 and 128.
 
+## Publishing
+
+CI publishes it (`.github/workflows/extension.yml`). **Raise `"version"` in
+`manifest.json` and merge to `main`**: the workflow tests, packs, uploads the zip and
+submits it for review, and it goes live when Google approves it. Any other change under
+this folder runs the same steps and stops at "the store already has it", because the
+store refuses a version that isn't higher than the last. Run the workflow by hand from
+the Actions tab to retry, or tick **staged** to hold an approved version until you publish
+it from the dashboard.
+
+`bun run release` is the same step by hand, after `bun run pack`, with `CWS_PUBLISHER_ID`,
+`CWS_EXTENSION_ID` and `CWS_ACCESS_TOKEN` in the environment (a token with the
+`https://www.googleapis.com/auth/chromewebstore` scope, for example from
+`gcloud auth print-access-token --impersonate-service-account=… --scopes=…`).
+
+### Once, before CI can publish
+
+1. **Publish the first version by hand.** The API can only update an item that exists
+   and whose **Store listing** and **Privacy** tabs are filled in. Upload the zip from
+   `bun run pack` in the Developer Dashboard and submit it. The account needs 2-step
+   verification.
+2. **Note two ids**: the publisher id (Developer Dashboard → **Account**) and the
+   extension's id (in its dashboard URL).
+3. **Make a service account** in a Google Cloud project, with the **Chrome Web Store
+   API** enabled. It needs no roles. Add its email in the Developer Dashboard under
+   **Account** (one service account per publisher).
+4. **Let GitHub sign in as it**, keyless (preferred): create a Workload Identity pool and
+   an OIDC provider for `https://token.actions.githubusercontent.com`, restricted to this
+   repository (`assertion.repository == 'postboi-mail/postboi'`), and grant the
+   repository's principal `roles/iam.workloadIdentityUser` on the service account.
+   Or, if that's more than you want to set up, create a JSON key for the service account
+   instead.
+5. **Set these in the repository** (Settings → Secrets and variables → Actions):
+
+   | Name                             | Kind     | Value                                                                                  |
+   | -------------------------------- | -------- | -------------------------------------------------------------------------------------- |
+   | `CWS_PUBLISHER_ID`               | variable | the publisher id                                                                       |
+   | `CWS_EXTENSION_ID`               | variable | the extension id                                                                       |
+   | `CWS_SERVICE_ACCOUNT`            | variable | the service account's email                                                            |
+   | `CWS_WORKLOAD_IDENTITY_PROVIDER` | variable | `projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>` |
+   | `CWS_SERVICE_ACCOUNT_KEY`        | secret   | the JSON key, only if you skipped Workload Identity                                    |
+
+   Until the two ids are set the workflow's job is skipped, so nothing fails in the
+   meantime.
+
 ## For the store listing
 
 **Summary**: A throwaway inbox in your toolbar. Codes picked out as they land, filled into

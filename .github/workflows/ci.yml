@@ -41,6 +41,11 @@ jobs:
       - name: Run tests
         run: bun run test
 
+      # tempboi for Chrome has no build and no dependencies; its tests are its own.
+      - name: Run the Chrome extension's tests
+        working-directory: packages/tempboi-extension
+        run: bun run test
+
       # A developer machine rarely carries someone else's credentials, which is how a
       # release shipped inference that read an unrelated AWS key as "send the SMS via
       # SNS" — and then missed Twilio's pair the same way, because the fix was a
