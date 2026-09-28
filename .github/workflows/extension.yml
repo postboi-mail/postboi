@@ -1,0 +1,81 @@
+name: tempboi for Chrome
+
+# Publishes packages/tempboi-extension to the Chrome Web Store. The manifest's version
+# is the switch: a push to main that raises "version" in manifest.json uploads and
+# submits it for review, and anything else under the package is a test run that stops
+# at "the store already has it". Run it by hand to retry, or to stage an approved
+# version instead of letting it go live on approval.
+#
+# Nothing here runs until the repository has CWS_PUBLISHER_ID and CWS_EXTENSION_ID
+# (Settings → Secrets and variables → Actions → Variables) and one way to sign in:
+# keyless through Workload Identity Federation (CWS_WORKLOAD_IDENTITY_PROVIDER and
+# CWS_SERVICE_ACCOUNT variables), or a service account's JSON key as the secret
+# CWS_SERVICE_ACCOUNT_KEY. The package's README walks through both.
+
+on:
+  push:
+    branches: [main]
+    paths: ["packages/tempboi-extension/**", ".github/workflows/extension.yml"]
+  workflow_dispatch:
+    inputs:
+      staged:
+        description: "Stage it once approved, rather than publishing on approval"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity Federation
+
+concurrency:
+  group: tempboi-extension-store
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to the Chrome Web Store
+    if: vars.CWS_EXTENSION_ID != '' && vars.CWS_PUBLISHER_ID != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/tempboi-extension
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Test
+        run: bun run test
+
+      - name: Pack
+        run: bun run pack
+
+      - name: Keep the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tempboi-extension
+          path: packages/tempboi-extension/tempboi-extension.zip
+
+      # Exactly one of the two is set; the action takes whichever is non-empty.
+      - name: Sign in to Google
+        id: google
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.CWS_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.CWS_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.CWS_SERVICE_ACCOUNT_KEY }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+
+      - name: Upload and submit
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          CWS_STAGED: ${{ inputs.staged && '1' || '' }}
+        run: bun run release

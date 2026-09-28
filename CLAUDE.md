@@ -24,6 +24,10 @@ or `npm run release -- <patch|minor|major|X.Y.Z>` from a clean `main`. Do not ru
 the freeze/publish/push steps by hand — the workflow and the script sequence them
 and check preconditions.
 
+**tempboi for Chrome** (`packages/tempboi-extension`) is not part of the npm release: it
+ships to the Chrome Web Store when its `manifest.json` version rises on `main`
+(`.github/workflows/extension.yml`; setup in its README). No `release:*` label for it.
+
 ## Planned work
 
 **[CHANNELS.md](CHANNELS.md)** is the plan for taking postboi multi-channel — SMS, push

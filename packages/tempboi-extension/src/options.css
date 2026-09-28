@@ -1,0 +1,108 @@
+main {
+	max-width: 640px;
+	margin: 0 auto;
+	padding: 32px 16px 48px;
+	display: grid;
+	gap: 20px;
+	font-size: 15px;
+}
+.masthead {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding-bottom: 12px;
+	border-bottom: 2px solid var(--rule);
+}
+.masthead img {
+	border: 2px solid var(--ink-fixed);
+}
+h1 {
+	margin: 0;
+	font: 900 28px / 1 var(--f-poster);
+	font-stretch: 125%;
+}
+h1 span {
+	font-weight: 500;
+	font-stretch: 100%;
+	color: var(--muted);
+	font-size: 18px;
+	margin-left: 6px;
+}
+.panel {
+	padding: 16px 18px;
+	display: grid;
+	gap: 10px;
+}
+.panel h2,
+.panel summary {
+	margin: 0;
+}
+.panel summary {
+	cursor: pointer;
+}
+.line {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+.line > span {
+	flex: none;
+}
+.line .field {
+	flex: 1;
+}
+.check {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+}
+.check input {
+	width: 18px;
+	height: 18px;
+	margin: 2px 0 0;
+	accent-color: var(--yellow);
+}
+.tip {
+	margin: 0;
+	color: var(--muted);
+	font-size: 13px;
+}
+.keys {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 8px 16px;
+	margin: 0;
+	align-items: center;
+}
+.keys dd {
+	margin: 0;
+}
+kbd {
+	display: inline-block;
+	padding: 1px 6px;
+	border: 1.5px solid var(--rule);
+	box-shadow: 1.5px 1.5px 0 var(--rule);
+	font: 12px / 1.4 var(--f-mono);
+}
+.link {
+	padding: 0;
+	border: 0;
+	background: none;
+	text-decoration: underline;
+	cursor: pointer;
+	font-family: var(--f-mono);
+	font-size: 12px;
+}
+.status {
+	margin: 0;
+	min-height: 1.4em;
+	font-size: 14px;
+}
+.status.error {
+	color: var(--danger);
+}
+.foot {
+	margin: 0;
+	color: var(--muted);
+	font-size: 13px;
+}

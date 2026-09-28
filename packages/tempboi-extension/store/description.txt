@@ -1,0 +1,23 @@
+A throwaway email address in your toolbar, for sign-ups, trials, testing and anything else you don't want in your real inbox. No account, no sign-up.
+
+Press the tempboi icon and you have an address. Copy it, use it, and the mail shows up the moment it arrives, even with the popup closed.
+
+The code is picked out for you
+Sign-up codes and verify links are read out of each email as it lands. Copy the code with one click, or press Open link to confirm straight away. Notifications lead with the code and have a Copy code button, so often you never need to open the email at all.
+
+Fills the form for you
+Right-click any email field and choose "Fill in my tempboi address", then "Fill in the latest code" when it arrives. Or use the keyboard: Alt+Shift+E for the address, Alt+Shift+C for the code.
+
+Safe to read
+Email is shown in a locked-down viewer with scripts turned off. Remote images are held back until you ask for them, so a sender can't use a tracking pixel to tell you opened it. Attachments download on request.
+
+Your address, your rules
+Keep an inbox for an hour, six hours or a day, and add an hour when you need more time. Pick your own name or take a random one. Delete it the moment you're done, or let it expire, and its mail is deleted with it.
+
+Works with the rest of tempboi
+Made an inbox on tempboi.email or with npx tempboi in your terminal? Paste its command into the extension's settings and carry on in the toolbar.
+
+What it does with your data
+tempboi talks to tempboi.email and nowhere else. New-mail alerts arrive through Chrome's own push service and carry no mail, just a nudge to go and fetch it. Your inbox's key stays in your browser and is only ever sent to tempboi.email. There is no tracking and no analytics, and inboxes are deleted when they expire.
+
+tempboi is run by Postboi, the email provider. Terms: https://tempboi.email/terms
