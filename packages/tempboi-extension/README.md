@@ -115,7 +115,8 @@ it from the dashboard.
 The listing's own copy is in `store/`: `description.txt` for the Description field and
 `icon-128.png` for the Store icon (the mark at 96px with 16px of transparent padding,
 as the store's image guidelines ask; `icons/128.png` is the toolbar's and runs to the
-edge). `bun run pack` leaves the folder out of the zip.
+edge), and `screenshots/` the five 1280×800 listing images, taken from the real popup over
+a stand-in inbox of made-up senders. `bun run pack` leaves the folder out of the zip.
 
 **Summary**: A throwaway inbox in your toolbar. Codes picked out as they land, filled into
 the page for you. No sign-up.
