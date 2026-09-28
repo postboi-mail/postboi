@@ -203,12 +203,19 @@ async function fill_code(target) {
 	// Ask once more before answering: the code is usually seconds old.
 	await sync().catch(() => [])
 	const found = latest_code((await load_state()).messages)
-	if (found) await fill(target, found.code)
-	else await say(target, "No code has arrived at your tempboi address yet.")
+	if (!found) return say(target, "No code has arrived at your tempboi address yet.")
+	try {
+		await fill(target, found.code)
+	} catch (error) {
+		await say(target, error?.message ?? "tempboi couldn't fill that field.")
+	}
 }
 
-function fill(target, text) {
-	return chrome.scripting.executeScript({ target, func: insert_text, args: [text] })
+/** Every frame is asked; only the one holding focus writes, and none doing so is said. */
+async function fill(target, text) {
+	const results = await chrome.scripting.executeScript({ target, func: insert_text, args: [text] })
+	if (!results.some((each) => each.result === true))
+		throw new Error("tempboi couldn't find a field to fill. Click into one and try again.")
 }
 
 function say(target, words) {

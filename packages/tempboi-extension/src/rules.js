@@ -196,13 +196,27 @@ export function latest_code(messages) {
 }
 
 /**
+ * The inbox's page on the web, with its token after the `#`. An inbox adopted by token is
+ * answered without one (the claim never says a token back), and a page opened without it
+ * can't open an inbox this browser's page never held.
+ */
+export function web_page(inbox) {
+	const url = new URL(inbox.urls.web)
+	const fragment = new URLSearchParams(url.hash.slice(1))
+	if (inbox.token && !fragment.has("t")) {
+		url.hash = new URLSearchParams([["t", inbox.token], ...fragment]).toString()
+	}
+	return url.toString()
+}
+
+/**
  * One message's own page on the web: `/<inbox>/<id>`, which the page opens and scrolls to.
  * Built from the inbox's page (`urls.web`) so a preview's `/tempboi` base and the token
  * after the `#` come along; an inbox on somebody's own domain has its page at the base,
  * with the address in the fragment, so its name is put back in front of the id.
  */
 export function message_page(inbox, id) {
-	const url = new URL(inbox.urls.web)
+	const url = new URL(web_page(inbox))
 	const local = inbox.address.split("@")[0]
 	const path = url.pathname.replace(/\/$/, "")
 	url.pathname = path.endsWith(`/${local}`) ? `${path}/${id}` : `${path}/${local}/${id}`

@@ -64,6 +64,18 @@ export async function new_inbox({ name } = {}) {
 	return hold(inbox, settings.server)
 }
 
+/**
+ * A new inbox in place of the one held. The new one is made first, so a refusal (a rate
+ * limit, a dropped connection) leaves the old inbox and its mail exactly as they were;
+ * only then is the old one deleted, and an old one that won't go is left to expire.
+ */
+export async function replace_inbox({ name } = {}) {
+	const { inbox: old } = await load_state()
+	const stored = await new_inbox({ name })
+	if (old && !old.gone) await delete_inbox(old.server, old).catch(() => {})
+	return stored
+}
+
 /** Take over an inbox made elsewhere (the page, the CLI) by its token. */
 export async function adopt_inbox(token, server) {
 	const from = server ?? (await load_settings()).server

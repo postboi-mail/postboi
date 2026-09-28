@@ -12,6 +12,7 @@ import {
 	sender,
 	time_left,
 	unread_count,
+	web_page,
 } from "./rules.js"
 import {
 	drop_inbox,
@@ -19,6 +20,7 @@ import {
 	load_state,
 	mark_seen,
 	new_inbox,
+	replace_inbox,
 	sync,
 	update_badge,
 } from "./state.js"
@@ -241,7 +243,7 @@ function flash(node) {
 	setTimeout(() => (node.textContent = was), 900)
 }
 
-/** A new address, random or named. The old inbox is deleted: one inbox at a time. */
+/** A new address, random or named. The old inbox is deleted once it exists: one at a time. */
 function name_form(inbox) {
 	const input = h("input", {
 		class: "field mono",
@@ -260,8 +262,7 @@ function name_form(inbox) {
 				event.preventDefault()
 				const name = clean_name(input.value)
 				act(async () => {
-					await drop_inbox()
-					await new_inbox({ name })
+					await replace_inbox({ name })
 					view.naming = false
 				})
 			},
@@ -629,7 +630,7 @@ function open_settings() {
 
 document.getElementById("settings").addEventListener("click", open_settings)
 web.addEventListener("click", () => {
-	if (held.inbox?.urls?.web) chrome.tabs.create({ url: held.inbox.urls.web })
+	if (held.inbox?.urls?.web) chrome.tabs.create({ url: web_page(held.inbox) })
 })
 
 // The worker writes too (an alarm tick, a right-click that made an inbox).

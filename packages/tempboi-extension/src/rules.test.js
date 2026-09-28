@@ -10,6 +10,7 @@ import {
 	latest_code,
 	merge,
 	message_page,
+	web_page,
 	notification_for,
 	pasted_server,
 	push_target,
@@ -131,6 +132,22 @@ test("a message's page is its own path, with the token still after the #", () =>
 			"tmsg_1"
 		)
 	).toBe("https://tempboi.email/box/tmsg_1#t=tb_abc&a=box%40reply.acme.com")
+})
+
+test("an adopted inbox's page gets its token back, since the claim answers without one", () => {
+	const adopted = (address, web) => ({ address, token: "tb_abc", urls: { web } })
+	expect(web_page(adopted("box@tempboi.email", "https://tempboi.email/box"))).toBe(
+		"https://tempboi.email/box#t=tb_abc"
+	)
+	expect(
+		web_page(adopted("box@reply.acme.com", "https://tempboi.email/#a=box%40reply.acme.com"))
+	).toBe("https://tempboi.email/#t=tb_abc&a=box%40reply.acme.com")
+	expect(message_page(adopted("box@tempboi.email", "https://tempboi.email/box"), "tmsg_1")).toBe(
+		"https://tempboi.email/box/tmsg_1#t=tb_abc"
+	)
+	expect(web_page(adopted("box@tempboi.email", "https://tempboi.email/box#t=tb_abc"))).toBe(
+		"https://tempboi.email/box#t=tb_abc"
+	)
 })
 
 describe("the reader's document", () => {
