@@ -23,6 +23,9 @@ export const actions = {
 ```
 
 Or on any `mail()` call: `mail({ to, body: request.formData(), form: "Home Ownership Query" })`.
+When one route serves several forms, let each form name itself with a hidden
+`<input type="hidden" name="_form" value="Home Ownership Query">` instead (see
+[FormData](/formdata)).
 A name is created on first use and matched case-insensitively; `bunx postboi sync` makes
 your account's forms autocomplete on `form`, and a name it doesn't know yet is still fine. See
 [Naming the form](/formdata#naming-the-form) for the details, including what a rename does.

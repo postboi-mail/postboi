@@ -151,6 +151,7 @@ describe("ProviderBase", () => {
 			form.append("_cc", "cc@test.com")
 			form.append("_bcc", "bcc@test.com")
 			form.append("_subject", "Hello")
+			form.append("_form", "Contact")
 
 			const { options } = await provider.form(form)
 			expect(options.to).toBe("to@test.com")
@@ -159,6 +160,7 @@ describe("ProviderBase", () => {
 			expect(options.cc).toBe("cc@test.com")
 			expect(options.bcc).toBe("bcc@test.com")
 			expect(options.subject).toBe("Hello")
+			expect(options.form).toBe("Contact")
 			// no non-special fields -> no rendered body
 			expect(options.body).toBeUndefined()
 		})

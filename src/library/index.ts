@@ -252,7 +252,8 @@ export interface Tracking {
  * - Any of to/cc/bcc/reply_to can be provided as a single value or an array.
  * - For convenience, comma-separated strings are supported for `to`.
  * - If body is FormData, special keys are handled and grouped into a tidy HTML table.
- *   Special keys (excluded from the rendered body): _to, _from, _reply_to, _cc, _bcc, _subject
+ *   Special keys (excluded from the rendered body): _to, _from, _reply_to, _cc, _bcc, _subject,
+ *   _form (the Postboi form the submission is filed under; see SendOptions.form)
  *   Values for these keys may be base64 encoded; they will be decoded automatically.
  */
 export interface SendOptions {
@@ -1129,6 +1130,11 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 						continue
 					case "_bcc":
 						options.bcc = this.decode_value(value)
+						continue
+					case "_form":
+						// The Postboi form to file the submission under, so one route can serve every
+						// form on a site. A registered FormName narrows below `string`, hence the cast.
+						options.form = this.decode_value(value) as FormName
 						continue
 				}
 
