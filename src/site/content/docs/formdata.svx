@@ -30,8 +30,15 @@ in the table:
 
 - `_to`, `_from`, `_subject`, `_reply_to`
 - `_cc`, `_bcc`: comma-separated or repeated
+- `_form`: the Postboi form the submission is filed under, by name or `form_…` id, the
+  same as the [`form`](/forms) send option. One route can serve every form on a site, each
+  naming its own
 
 Values can be base64-encoded; they'll be decoded automatically.
+
+```html
+<input type="hidden" name="_form" value="Contact">
+```
 
 Set `_reply_to` to the submitter's email so replies go back to them instead of your
 `from` address. See the [SvelteKit form](/sveltekit#the-form) for the hidden-field
