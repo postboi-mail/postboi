@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
+import { fail } from "@sveltejs/kit"
 import { action, mail, remote_form_data, webhook } from "$library/kit.js"
 import { mail as send } from "$library/mail.js"
 import Mock from "$library/mock.js"
@@ -129,6 +130,112 @@ describe("postboi/kit action()", () => {
 		expect(result).toMatchObject({ status: 400 })
 		expect((result as { data: { error: string } }).data.error).toMatch(/postboi init/)
 		expect(fetch).not.toHaveBeenCalled()
+	})
+})
+
+describe("postboi/kit action() with a resolver", () => {
+	const defaults = { default: { from: "from@test.com", to: "to@test.com" } }
+
+	it("hands the resolver the parsed post and the request, and its options win", async () => {
+		const provider = new Mock(defaults)
+		const seen: Array<unknown> = []
+		const result = await action(provider, ({ event, data }) => {
+			seen.push(event, data.get("name"))
+			return {
+				subject: `New enquiry from ${data.get("name")}`,
+				reply_to: data.get("email") as string,
+			}
+		})(event({ _subject: "Posted subject", name: "Ada", email: "ada@example.com" }))
+
+		expect(result).toEqual({ success: true })
+		expect(seen[1]).toBe("Ada")
+		expect(seen[0]).toHaveProperty("request")
+		expect(provider.last?.subject).toBe("New enquiry from Ada")
+		expect(provider.last?.reply_to?.[0].address).toBe("ada@example.com")
+	})
+
+	it("passes a returned fail() straight through, without sending", async () => {
+		const provider = new Mock(defaults)
+		const result = await action(provider, ({ data }) =>
+			data.get("email") ? {} : fail(422, { missing: "email" })
+		)(event({ name: "Ada" }))
+
+		expect(result).toMatchObject({ status: 422, data: { missing: "email" } })
+		expect(provider.sent).toHaveLength(0)
+	})
+
+	it("keeps a _ field the resolver read out of the email, and only that one", async () => {
+		const provider = new Mock(defaults)
+		await action(provider, async ({ data }) => ({ to: await lookup(data.get("_blok")) }))(
+			event({ _blok: "blok_123", _note: "left alone", name: "Ada" })
+		)
+		async function lookup(blok: FormDataEntryValue | null) {
+			return blok === "blok_123" ? "housing@test.com" : undefined
+		}
+
+		expect(provider.last?.to[0].address).toBe("housing@test.com")
+		expect(provider.last?.html).not.toContain("blok_123")
+		// Unread, so it renders as before: only a consumed routing id leaves the table.
+		expect(provider.last?.html).toContain("left alone")
+		expect(provider.last?.html).toContain("Ada")
+	})
+
+	it("reads postboi's own fields without taking them out", async () => {
+		const provider = new Mock(defaults)
+		await action(provider, ({ data }) => ({ tags: [String(data.get("_subject"))] }))(
+			event({ _subject: "Quote", name: "Ada" })
+		)
+		expect(provider.last?.subject).toBe("Quote")
+	})
+
+	it("short-circuits a filled honeypot before the resolver runs", async () => {
+		const provider = new Mock(defaults)
+		const resolver = vi.fn(() => ({}))
+		const result = await action(provider, resolver)(event({ _honey: "cheap pills", name: "x" }))
+
+		expect(result).toEqual({ success: true })
+		expect(resolver).not.toHaveBeenCalled()
+		expect(provider.sent).toHaveLength(0)
+	})
+
+	it("lets the resolver swap posted URLs for attachments", async () => {
+		const provider = new Mock(defaults)
+		await action(provider, ({ data }) => {
+			const urls = data.getAll("Images").map(String)
+			data.delete("Images")
+			return { attachments: urls.map((url) => new File([url], url.split("/").at(-1)!)) }
+		})(event({ name: "Ada", Images: "https://cdn.test/a.jpg" }))
+
+		expect(provider.last?.attachments.map((a) => a.name)).toEqual(["a.jpg"])
+		expect(provider.last?.html).not.toContain("cdn.test")
+	})
+
+	it("treats a blank CMS string as unset, so the defaults apply", async () => {
+		const provider = new Mock(defaults)
+		const block = { to: "", from: "", subject: " " }
+		await action(provider, () => block)(event({ name: "Ada" }))
+
+		expect(provider.last?.to[0].address).toBe("to@test.com")
+		expect(provider.last?.from.address).toBe("from@test.com")
+		expect(provider.last?.subject).toBe("Mail sent from website")
+
+		// the same on a plain send
+		await provider.send({ to: "", body: "<p>x</p>" })
+		expect(provider.last?.to[0].address).toBe("to@test.com")
+	})
+
+	it("types: CMS strings fit without casts", () => {
+		// Compile-time only: these are the casts sites wrote around 0.56.
+		function never_called(block: { to?: string; from?: string; subject?: string }, name: string) {
+			void action(() => ({
+				to: block.to,
+				from: block.from,
+				subject: block.subject,
+				form: `Register Your Interest: ${name}`,
+			}))
+			void action({ form: "Products Order", from: block.from })
+		}
+		expect(typeof never_called).toBe("function")
 	})
 })
 

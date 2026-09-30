@@ -157,7 +157,7 @@ import { mail } from "postboi/kit"
 export const actions = { default: mail }
 ```
 
-Returns `{ success: true }` or `fail(400, { error })`. Explicit provider or defaults: `action(instance, { status?, ...send_options })` — again no `fields` wrapper. Full example: `/raw/sveltekit`.
+Returns `{ success: true }` or `fail(400, { error })`. Explicit provider or defaults: `action(instance, { status?, ...send_options })` — again no `fields` wrapper. When options depend on the post, the request or a CMS, pass a function instead: `action(async ({ event, data }) => ({ to: await lookup(data.get("_blok")), reply_to: String(data.get("email")) }))`. `data` is the parsed post (mutate it freely), returning `fail(…)` stops the send, a `_` field it reads that isn't postboi's own never reaches the email (so routing ids can ride in hidden inputs, never in the action URL), the honeypot is checked before it runs, and blank strings count as unset (a CMS `''` falls through to `default.*`). `remote()` takes the same function. Don't hand-write `mail()` + try/`is_spam`/`fail` + `remoteip` for this. Full example and the CMS-recipient recipe: `/raw/sveltekit`.
 
 Other frameworks, same pattern: `/raw/nextjs` `/raw/express` `/raw/hono` `/raw/remix` `/raw/nuxt` `/raw/astro`.
 

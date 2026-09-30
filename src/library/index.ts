@@ -723,6 +723,25 @@ function posted_options(posted: Partial<SendOptions>, form_addressing?: boolean)
 	return kept
 }
 
+/** The options a blank string leaves unset. */
+const BLANK_IS_UNSET = ["to", "cc", "bcc", "from", "reply_to", "subject", "form"] as const
+
+/**
+ * Drop options set to a blank string. An empty CMS field arrives as `''`, not `undefined`,
+ * and either way it means "not set": it should fall through to the post or the defaults,
+ * not beat `default.to` and fail with "No recipient".
+ */
+function unset_blanks(options: SendOptions): SendOptions {
+	const blank = BLANK_IS_UNSET.filter((key) => {
+		const value = options[key]
+		return typeof value === "string" && value.trim() === ""
+	})
+	if (blank.length === 0) return options
+	const kept = { ...options }
+	for (const key of blank) delete kept[key]
+	return kept
+}
+
 export abstract class EmailProvider<TResponse = unknown> extends Transport<
 	TResponse,
 	PreparedMessage
@@ -1264,7 +1283,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 
 		// `body` may be a promise (e.g. a framework's `request.formData()`) — resolve it first.
 		const body = await options.body
-		options = { ...options, body }
+		options = unset_blanks({ ...options, body })
 
 		// FormData — or a plain object of fields (Express/multer's `req.body`) — is parsed into
 		// extracted header fields plus a rendered HTML table (honouring any formatter).

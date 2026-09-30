@@ -237,6 +237,118 @@ await action(mail)({ request: new Request('http://x', { method: 'POST', body }) 
 expect(mail.last?.html).toContain('Ada')
 ```
 
+## Options from the post
+
+When the options depend on the submission, the request or a CMS, pass a function instead of
+an object. It gets the request `event` and the post as `data`, parsed once, and returns the
+send options:
+
+```typescript
+import { action } from 'postboi/kit'
+
+export const actions = {
+	default: action(async ({ event, data }) => ({
+		to: await lookup(data.get('_blok')),
+		subject: `New enquiry from ${data.get('name')}`,
+		reply_to: String(data.get('email')),
+		form: event.locals.site.form_name,
+	}))
+}
+```
+
+- `data` is the post. Change it if you need to: validate it, delete fields, add some.
+- Return `fail(…)` from `@sveltejs/kit` to stop the send. `action()` hands it back as is.
+- A `_` field you read that isn't one of postboi's own (`_subject`, `_reply_to`, `_form`
+  and the rest) never reaches the email, so an id can travel in a hidden input instead of
+  the action's URL. A `_` field you don't read renders as before.
+- The honeypot runs first. A bot that fills it gets `{ success: true }` and your function
+  never runs, so nothing is looked up or fetched on its behalf.
+- The visitor's IP, `is_spam` and `fail` on a send error all work as they do with an
+  object.
+- A blank string counts as unset, so an empty CMS field falls through to the post or
+  `default.*`. `from` takes any address here (the API still refuses one your account can't
+  send from, with `from_not_allowed`).
+
+`remote()` takes the same function. There a returned `fail(…)` becomes
+`{ success: false, error }`, using `error` from its data when there is one.
+
+### Recipe: form recipients from a CMS
+
+Each form block keeps its own recipient, sender and subject in the CMS. The form posts
+which block it is, and the server looks it up, so a visitor can't pick the recipient:
+
+```svelte
+<form method="POST" action="/mail">
+	<input type="hidden" name="_story" value={story.uuid} />
+	<input type="hidden" name="_blok" value={block._uid} />
+	<!-- the form's own fields -->
+</form>
+```
+
+```typescript
+// src/routes/mail/+page.server.ts
+import { fail } from '@sveltejs/kit'
+import { action } from 'postboi/kit'
+
+export const actions = {
+	default: action(async ({ data }) => {
+		const block = await find_form(String(data.get('_story')), String(data.get('_blok')))
+		if (!block) return fail(404, { error: 'Form not found' })
+		// Blank fields in the CMS fall through to default.to, default.from and the post.
+		return { to: block.to, from: block.from, subject: block.subject, form: block.title || true }
+	})
+}
+
+async function find_form(story: string, uid: string) {
+	const { data } = await storyblok.get(`cdn/stories/${story}`, { find_by: 'uuid' })
+	return find_block(data.story.content, uid)
+}
+```
+
+`_story` and `_blok` are read, so neither shows up in the email. `form: true` files an
+untitled block as a form submission without letting a posted `_form` choose one.
+
+### Recipe: reply-to and subject from the fields
+
+No hidden inputs mirroring the email field, and no subject built in the browser:
+
+```typescript
+export const actions = {
+	default: action(({ data }) => ({
+		reply_to: String(data.get('email')),
+		subject: `${data.get('topic')} enquiry from ${data.get('name')}`
+	}))
+}
+```
+
+postboi doesn't guess the reply-to from a field called `email` for you: plenty of forms
+have an email field that isn't the sender's, and a guessed reply-to would go to the wrong
+person without anyone noticing.
+
+### Recipe: attachments uploaded first
+
+When the browser uploads files first and posts their URLs, fetch them into `File`s and drop
+the field. Only fetch from the host you uploaded to, or the post decides what your server
+requests:
+
+```typescript
+export const actions = {
+	default: action(async ({ data }) => {
+		const urls = data.getAll('Images').map(String)
+		data.delete('Images')
+		const files = await Promise.all(
+			urls
+				.filter((url) => new URL(url).origin === UPLOADS_ORIGIN)
+				.map(async (url) => {
+					const response = await fetch(url)
+					return new File([await response.blob()], new URL(url).pathname.split('/').pop()!)
+				})
+		)
+		return { attachments: files }
+	})
+}
+```
+
 ## Using a configured instance
 
 Got a configured provider instance? Wrap it with `action()`. Any send option you pass
