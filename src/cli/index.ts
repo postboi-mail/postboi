@@ -54,6 +54,7 @@ import {
 	type PackageJson,
 	install_command,
 	is_bundled_framework,
+	version_drift,
 } from "./project.js"
 import {
 	find_worker,
@@ -107,7 +108,7 @@ import { offer_skill, refresh_skill, skill_command } from "./skill.js"
 import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
 import { api_command, ApiCommandError, error_json } from "./api.js"
 import { inbox_command } from "./inbox.js"
-import { CONFIG_FILES, doctor } from "./doctor.js"
+import { CONFIG_FILES, doctor, imports_config } from "./doctor.js"
 import { help_text } from "./help.js"
 import { dev_command } from "./dev.js"
 import { inspect_command } from "./inspect.js"
@@ -594,25 +595,15 @@ function ensure_install(files: Array<string>): void {
 }
 
 /**
- * SvelteKit only: make sure `postboi/remote` is excluded from Vite's dependency
- * prebundle, which would otherwise serve the remote-function module empty. Harmless
- * when remote functions aren't in use, so it's added preemptively.
+ * Any Vite project: add the `postboi()` plugin, which bundles postboi.config into the
+ * server build (without it the config works locally and is missing once deployed) and
+ * excludes `postboi/remote` from Vite's dependency prebundle. When the plugin can't be
+ * placed safely, SvelteKit still gets the exclude on its own, which remote functions need.
  */
-function ensure_remote_exclude(files: Array<string>): void {
+function ensure_vite_plugin(files: Array<string>): void {
 	const vite = files.find((f) => /^vite\.config\.(js|ts|mjs|mts)$/.test(f))
 	if (!vite) return
-	let pkg: PackageJson | undefined
-	try {
-		pkg = JSON.parse(readFileSync("package.json", "utf8"))
-	} catch {
-		return
-	}
-	if (!has_dependency(pkg, "@sveltejs/kit")) return
-
 	const source = readFileSync(vite, "utf8")
-
-	// Prefer the plugin: it supplies the optimizeDeps exclude *and* bundles postboi.config
-	// into the server build, which a hand-written exclude doesn't.
 	const plugin = add_vite_plugin(source)
 	if (plugin === "present") return
 	if (plugin !== "unable") {
@@ -623,7 +614,9 @@ function ensure_remote_exclude(files: Array<string>): void {
 		return
 	}
 
-	// Couldn't place the plugin safely — fall back to the exclude alone.
+	// Couldn't place the plugin safely. `sync` names the missing plugin when the config
+	// needs it; SvelteKit also gets the exclude alone, for remote functions.
+	if (!has_dependency(read_package(), "@sveltejs/kit")) return
 	const result = add_remote_exclude(source)
 	if (result === "present") return
 	if (result === "unable") {
@@ -695,6 +688,9 @@ function warn_unbundled_config(): void {
 	const vite = ["vite.config.ts", "vite.config.js"].find((f) => existsSync(f))
 	if (!vite) return
 	if (readFileSync(vite, "utf8").includes("postboi/vite")) return
+	// Server code that imports the config registers it itself, and the import carries the
+	// file into the bundle, so the plugin has nothing left to add.
+	if (imports_config("src", 2000)) return
 
 	const source = readFileSync(config_file, "utf8")
 	// Strip comments, then drop empty objects: every scaffolded config ships a `hooks` block
@@ -840,6 +836,13 @@ async function sync(): Promise<void> {
 	}
 	refresh_skill()
 	warn_unbundled_config()
+	const drift = version_drift()
+	if (drift) {
+		const pm = detect_package_manager([drift.lockfile])
+		console.log(
+			`${yellow("!")} node_modules has postboi ${bold(drift.installed)}, but ${bold(drift.lockfile)} pins ${bold(drift.locked)}. Run ${cyan(`${pm} install`)}`
+		)
+	}
 
 	const config_file = CONFIG_FILES.find((f) => existsSync(f))
 	const config_source = config_file ? readFileSync(config_file, "utf8") : undefined
@@ -1166,24 +1169,20 @@ async function cloud_init(prompts: Prompts, files: Array<string>): Promise<void>
 		await offer_host_push(prompts, files, values)
 	}
 	ensure_install(files)
-	ensure_remote_exclude(files)
+	ensure_vite_plugin(files)
 
 	// The committed home for defaults, hooks, and the publishable captcha key. A
 	// POSTBOI_TOKEN alone already routes send() to Postboi, but `provider: "postboi"` makes
 	// it explicit.
 	write_config("postboi", config_defaults, {}, cloud_account?.captcha_key)
 
-	// Lives inside node_modules — nothing to commit, no diffs, `bunx postboi sync` refreshes it.
-	const types_file = write_types(send_address, domains, [], {}, undefined, "postboi")
-	if (types_file) {
-		console.log(
-			`${green("✓")} typed ${bold("from")} to your addresses ${dim(`(generated into ${types_file})`)}`
-		)
-	}
-	if (write_runtime(cloud_account?.captcha_key, {}, read_env("VAPID_PUBLIC_KEY"))) {
-		console.log(`${green("✓")} baked your captcha key. Drop ${bold("<Captcha />")} into any form`)
-	}
-	if (types_file || cloud_account?.captcha_key) ensure_prepare()
+	// Then the sync the `prepare` script runs, so init leaves nothing for a first sync to
+	// do: the captcha key baked for <Captcha />, the from and form types, and a warning if
+	// the config still wouldn't reach a deployed build. It reads the token from this
+	// process's env, where the files just written aren't yet.
+	Object.assign(env, values)
+	await sync()
+	if (existsSync(TYPES_TARGET)) ensure_prepare()
 
 	// A custom sending domain, offered while we're here — optional and skippable, since
 	// the shared address already delivers. See offer_domain for the rules.
@@ -1328,7 +1327,7 @@ async function byo_init(prompts: Prompts, files: Array<string>): Promise<void> {
 
 	// 7. Make sure postboi itself is installed
 	ensure_install(files)
-	ensure_remote_exclude(files)
+	ensure_vite_plugin(files)
 
 	// 7b. Write postboi.config.ts — the committed home for provider + non-secret config.
 	write_config(provider.key, config_defaults, config_options)
@@ -1769,6 +1768,7 @@ async function channel_init(
 	await persist_credentials(prompts, files, values, team)
 
 	ensure_install(files)
+	ensure_vite_plugin(files)
 	write_channel_config(channel, provider.key, config_defaults, config_options)
 	if (channel === "whatsapp") await type_templates(provider, { ...config_options, ...values })
 
