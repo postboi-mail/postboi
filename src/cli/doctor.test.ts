@@ -125,6 +125,62 @@ describe("diagnose", () => {
 		expect(by_name(diagnose({ ...wired, skill: "missing" })).skill.level).toBe("warn")
 	})
 
+	it("a stale install warns with the reinstall for its lockfile", () => {
+		const { package: pkg } = by_name(
+			diagnose({
+				...wired,
+				drift: { installed: "0.54.3", locked: "0.56.0", lockfile: "bun.lock" },
+			})
+		)
+		expect(pkg.level).toBe("warn")
+		expect(pkg.detail).toContain("0.54.3")
+		expect(pkg.detail).toContain("0.56.0")
+		expect(pkg.fix).toBe("bun install")
+	})
+
+	it("says nothing about the captcha when no key exists anywhere", () => {
+		expect(by_name(diagnose(wired)).captcha).toBeUndefined()
+	})
+
+	it("a captcha key that matches everywhere is ok", () => {
+		const keys = { config: "pk_a", account: "pk_a", baked: "pk_a" }
+		expect(by_name(diagnose({ ...wired, captcha: keys })).captcha.level).toBe("ok")
+	})
+
+	it("a config key that isn't the account's, or is missing, points at sync", () => {
+		const other = by_name(
+			diagnose({ ...wired, captcha: { config: "pk_old", account: "pk_a", baked: "pk_a" } })
+		).captcha
+		expect(other.level).toBe("warn")
+		expect(other.detail).toContain("pk_old")
+		expect(other.fix).toBe("bunx postboi sync")
+		const missing = by_name(
+			diagnose({ ...wired, captcha: { account: "pk_a", baked: "pk_a" } })
+		).captcha
+		expect(missing.level).toBe("warn")
+		expect(missing.detail).toContain("no captcha.key")
+	})
+
+	it("a baked key that's missing or different points at sync, with or without a token", () => {
+		const unbaked = by_name(
+			diagnose({ ...wired, captcha: { config: "pk_a", account: "pk_a" } })
+		).captcha
+		expect(unbaked.level).toBe("warn")
+		expect(unbaked.detail).toContain("honeypot-only")
+		// Tokenless: the config is the key to compare against.
+		const stale = by_name(
+			diagnose({
+				...wired,
+				token: false,
+				account: undefined,
+				captcha: { config: "pk_a", baked: "pk_old" },
+			})
+		).captcha
+		expect(stale.level).toBe("warn")
+		expect(stale.detail).toContain("pk_old")
+		expect(stale.fix).toBe("bunx postboi sync")
+	})
+
 	it("another provider skips the account checks rather than failing them", () => {
 		const checks = diagnose({ ...wired, provider: "resend", token: false, account: undefined })
 		const named = by_name(checks)
@@ -199,6 +255,37 @@ describe("gather + doctor_command", () => {
 		const report = JSON.parse(lines.join("\n"))
 		expect(report.ok).toBe(true)
 		expect(report.checks.find((c: { name: string }) => c.name === "from").level).toBe("ok")
+	})
+
+	it("reads the captcha key three ways and the locked version", async () => {
+		const dir = project('export default config({ captcha: { key: "pk_config" } })\n')
+		writeFileSync(
+			join(dir, "node_modules", "postboi", "dist", "register.js"),
+			'export const captcha_key = "pk_baked"\n'
+		)
+		writeFileSync(
+			join(dir, "node_modules", "postboi", "package.json"),
+			'{ "name": "postboi", "version": "0.54.3" }'
+		)
+		writeFileSync(
+			join(dir, "bun.lock"),
+			'{\n  "packages": {\n    "postboi": ["postboi@0.56.0", "", {}, "sha512-x"],\n  }\n}\n'
+		)
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string) => {
+				const body = url.endsWith("/v1/domains")
+					? { send_address: "a@send.postboi.email", domains: [], captcha_key: "pk_account" }
+					: url.endsWith("/v1/account")
+						? { id: "acct_1", plan: "starter", send_address: "a@x", suspended: false }
+						: { webhooks: [] }
+				return new Response(JSON.stringify(body), { status: 200 })
+			})
+		)
+		const facts = await gather(dir)
+		expect(facts.captcha).toEqual({ config: "pk_config", baked: "pk_baked", account: "pk_account" })
+		expect(facts.drift).toEqual({ installed: "0.54.3", locked: "0.56.0", lockfile: "bun.lock" })
 	})
 
 	it("exits 1 when the token doesn't reach an account", async () => {
