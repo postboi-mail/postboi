@@ -142,6 +142,26 @@ describe("diagnose", () => {
 		expect(by_name(diagnose(wired)).captcha).toBeUndefined()
 	})
 
+	it("warns when <Captcha /> is rendered but no key exists anywhere", () => {
+		const check = by_name(
+			diagnose({ ...wired, captcha: { component: "src/routes/contact/+page.svelte" } })
+		).captcha
+		expect(check.level).toBe("warn")
+		expect(check.detail).toContain("src/routes/contact/+page.svelte")
+		expect(check.detail).toContain("honeypot-only")
+
+		// Another provider's <Captcha pk="…"> never has a baked key, and isn't meant to.
+		expect(
+			by_name(
+				diagnose({
+					...wired,
+					provider: "resend",
+					captcha: { component: "src/routes/contact/+page.svelte" },
+				})
+			).captcha
+		).toBeUndefined()
+	})
+
 	it("a captcha key that matches everywhere is ok", () => {
 		const keys = { config: "pk_a", account: "pk_a", baked: "pk_a" }
 		expect(by_name(diagnose({ ...wired, captcha: keys })).captcha.level).toBe("ok")
@@ -342,6 +362,38 @@ export const auth = betterAuth({ plugins: [magicLink({ sendMagicLink })] })`
 			"src/routes/login/+page.svelte": "<script>authClient.signIn.magicLink({ email })</script>",
 		})
 		expect(magic_link_check(dir)).toBeUndefined()
+	})
+
+	it("sees a browser call split across lines", () => {
+		const dir = app({
+			"src/lib/server/auth.ts": server,
+			"src/routes/login/+page.svelte":
+				"<script>await auth_client.signIn\n\t.magicLink({ email })</script>",
+		})
+		expect(magic_link_check(dir)).toBeUndefined()
+	})
+
+	it("gather finds the file that renders <Captcha />, and only that", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "")
+		const toggle = app({
+			"src/routes/push/+page.svelte":
+				'<script>import { push_toggle } from "postboi/svelte"</script>',
+		})
+		expect((await gather(toggle)).captcha?.component).toBeUndefined()
+
+		// a neighbouring import and a type import aren't <Captcha /> either
+		const neighbours = app({
+			"src/routes/push/+page.svelte":
+				'<script>import Foo from "./foo"\nimport { push_toggle } from "postboi/svelte"\nimport type { WebPushSubscription } from "postboi/svelte"</script>',
+		})
+		expect((await gather(neighbours)).captcha?.component).toBeUndefined()
+
+		const form = app({
+			"src/routes/push/+page.svelte":
+				'<script>import { push_toggle } from "postboi/svelte"</script>',
+			"src/routes/contact/+page.svelte": "<script>import Captcha from 'postboi/svelte'</script>",
+		})
+		expect((await gather(form)).captcha?.component).toBe("src/routes/contact/+page.svelte")
 	})
 
 	it("says nothing without BetterAuth's plugin", () => {
