@@ -240,6 +240,8 @@ await mail.send({ to: "a@b.c", subject: "Hi", body: "<p>x</p>" })
 // mail.sent[0], mail.canceled
 ```
 
+`postboi/kit` imports under `bun test` or plain Node without mocking `$app/server` (outside Vite it resolves to a build that never imports it), so test an action as `action(new Mock(...))({ request } as never)`. Only `remote()` needs SvelteKit. A hand-written `mail()` in a SvelteKit action fills in the visitor's IP for Turnstile itself once the app has the `postboi()` Vite plugin or loads `postboi/kit`; otherwise pass `captcha: { remoteip: getRequestEvent().getClientAddress() }`.
+
 Every channel has one: `postboi/sms-mock`, `postboi/whatsapp-mock`, `postboi/push-mock`, `postboi/chat-mock` — same `sent` array, same normalisation. Or set `provider: "mock"` in that channel's config section to route the zero-config function through it.
 
 Lint what the mock captured with `analyze` from `postboi/inspect` — synchronous, zero-network static analysis: client compatibility (caniemail-derived), Gmail clipping (~102KB), missing alt/lang/plain-text/List-Unsubscribe, dead and `http:` links. `report.status` is `"pass" | "info" | "warning" | "error"`; `check_links(report.links)` is the async opt-in that actually fetches the links. In CI: `bunx postboi inspect file.html` (exit 1 on warnings; `--links --json --subject`). The dev inbox shows the same analysis on every capture under its Report tab. `/raw/email-testing`

@@ -215,7 +215,9 @@ remote form read it from the request, and it's forwarded for managed captcha too
 it the verifier only ever sees your *server's* address, since that's where the send comes
 from.
 
-In a hand-written handler, set it yourself:
+A hand-written `mail()` in a SvelteKit action or remote function reads it too, once the
+app loads `postboi/kit` anywhere or has the `postboi()` Vite plugin. Anywhere else, set it
+yourself (an explicit `remoteip` always wins):
 
 ```typescript
 await mail({ body, captcha: { remoteip: getClientAddress() } })

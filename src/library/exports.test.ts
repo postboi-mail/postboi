@@ -38,6 +38,7 @@ describe("package exports", () => {
 			"env.ts",
 			"workers_env.ts", // Cloudflare binding reader, used by env.ts
 			"mail.ts",
+			"kit.ts", // postboi/kit under Vite: the ./kit export's svelte condition (the default is kit_base.ts)
 			"encoding.ts", // shared base64/base64url codecs, used by webhooks, push and FCM
 			"twilio_common.ts", // Twilio plumbing shared by the SMS and WhatsApp providers
 			"channels.ts", // shared zero-config resolution, used by each channel send.ts

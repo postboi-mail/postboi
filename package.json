@@ -36,7 +36,8 @@
 		"!dist/**/*.spec.*"
 	],
 	"sideEffects": [
-		"**/*.css"
+		"**/*.css",
+		"./dist/kit.js"
 	],
 	"svelte": "./dist/postboi.js",
 	"types": "./dist/postboi.d.ts",
@@ -343,7 +344,7 @@
 		"./kit": {
 			"types": "./dist/kit.d.ts",
 			"svelte": "./dist/kit.js",
-			"default": "./dist/kit.js"
+			"default": "./dist/kit_base.js"
 		},
 		"./vite": {
 			"types": "./dist/vite.d.ts",
