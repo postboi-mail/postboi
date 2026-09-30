@@ -606,9 +606,9 @@ the send; push tokens must be registered and stored first.**
 
 - `POST https://api.push.apple.com/3/device/{token}`. HTTP/2 only; drops HTTP/1.1
 - **Not the blocker it looks like.** APNs needs unary HTTP/2, not bidirectional streaming.
-  Deployed Workers reach APNs today via `fetch()`; on Node, undici's `allowH2` now defaults
-  to `true`. _Verify empirically on the target Node version_ — the default flipped at some
-  point. Fallback: `node:http2` behind a runtime check, or proxy via FCM
+  Deployed Workers reach APNs today via `fetch()`. On Node the global `fetch` does not:
+  `allowH2` is an opt-in on an undici `Client`, and the global never picks it up. So the
+  shipped provider uses `node:http2` wherever it exists (see below)
 - **Known gap:** `wrangler dev` on macOS fails APNs while production succeeds
   ([workerd#4841](https://github.com/cloudflare/workerd/issues/4841), open since Aug 2025).
   Doesn't block shipping, but the dev inbox must cover push properly since a Mac can't
@@ -669,9 +669,16 @@ vector can be reproduced.
 hand, because subscriptions expire constantly and normally, and the correct response is to
 delete your stored copy — not retry, not alert.
 
-**APNs is not implemented, and doesn't need to be.** Reaching iOS through FCM is one
-credential instead of two and avoids the HTTP/2 question entirely. Direct APNs stays open
-as a follow-up if someone wants to skip Firebase.
+**APNs shipped later, as the follow-up for skipping Firebase** (`postboi/apns`). It wasn't
+needed to reach iOS, since FCM forwards to APNs with one credential instead of two, but an
+iOS-only app shouldn't have to route through Google to get there. It sends over
+`node:http2` on Node and Bun and the global `fetch` on Workers and Deno (`push/http2.ts`),
+because Node's global `fetch` turned out to speak HTTP/1.1 only. Provider tokens are cached
+per key, since Apple rejects a new one more than once every 20 minutes, and both of its dead
+token answers (`Unregistered` as a 410, `BadDeviceToken` as a 400) normalize to the expiry
+`push.expired()` catches. `init --push` finds the downloaded `.p8` and checks the key, team
+and topic against APNs before writing them. Huawei Push Kit (`postboi/hms`) landed in the
+same stretch, for Android phones without Play Services.
 
 **Effort: a day, against the 1–2 week estimate** — the estimate assumed fighting the
 encryption, and the RFC vector meant it was either right or obviously wrong.
@@ -1343,7 +1350,7 @@ None block shipping — this is the "has it got better yet?" list.
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | APNs over `fetch()` fails in local workerd on macOS | [workerd#4841](https://github.com/cloudflare/workerd/issues/4841) — open, Aug 2025                                                                                                                                                                                         | Closing it means push can be smoke-tested locally                                   |
 | HTTP/2 bidirectional streaming (gRPC) in Workers    | [workerd#6455](https://github.com/cloudflare/workerd/issues/6455) — open, Mar 2026                                                                                                                                                                                         | **Not needed for APNs.** Only if we ever want a gRPC transport                      |
-| undici `allowH2` default                            | [nodejs/undici](https://github.com/nodejs/undici) `docs/docs/api/Client.md`                                                                                                                                                                                                | Currently `true`. If it flips, Node-side APNs needs a `node:http2` fallback         |
+| undici `allowH2` default                            | [nodejs/undici](https://github.com/nodejs/undici) `docs/docs/api/Client.md`                                                                                                                                                                                                | Moot now: the global `fetch` never used it, so APNs goes over `node:http2` on Node  |
 | UK A2P SMS termination rates                        | [Ofcom](https://www.ofcom.org.uk/phones-and-broadband/mobile-phones/a2p-sms-termination-market)                                                                                                                                                                            | MNO commitments expire **31 Dec 2028**. They set the floor under every UK SMS price |
 | UK SIM farm offence                                 | [Crime and Policing Act 2026 guidance](https://www.gov.uk/government/publications/possession-and-supply-of-sim-farms/crime-and-policing-act-2026-guidance-offences-relating-to-the-possession-and-supply-of-sim-farms-and-legitimate-uses-of-multiple-sim-devices-accessi) | 5+ SIMs = SIM farm; offence from **29 Oct 2026**, no business exemption             |
 | WhatsApp in-window pricing                          | Meta pricing docs                                                                                                                                                                                                                                                          | Utility templates and service messages become chargeable **1 Oct 2026**             |
