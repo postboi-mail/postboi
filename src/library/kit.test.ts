@@ -1,6 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { execFileSync } from "node:child_process"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { action, mail, remote_form_data, webhook } from "$library/kit.js"
+import { mail as send } from "$library/mail.js"
 import Mock from "$library/mock.js"
+
+// The request SvelteKit would be handling: `getRequestEvent()` answers with it inside one,
+// and throws outside, as the real one does.
+const request = vi.hoisted(() => ({
+	event: undefined as { getClientAddress(): string } | undefined,
+}))
+vi.mock("$app/server", async (original) => ({
+	...(await original<Record<string, unknown>>()),
+	getRequestEvent: () => {
+		if (!request.event) throw new Error("Can only read the current request event inside handle")
+		return request.event
+	},
+}))
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -24,8 +41,12 @@ function event(fields: Record<string, string>) {
 
 beforeEach(() => {
 	fetch.mockReset()
+	vi.stubEnv("POSTBOI_INBOX", "off")
 })
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+	vi.unstubAllEnvs()
+	request.event = undefined
+})
 
 describe("postboi/kit action()", () => {
 	it("sends with a configured instance and returns { success: true }", async () => {
@@ -115,6 +136,56 @@ describe("postboi/kit action()", () => {
 		expect(result).toMatchObject({ status: 400 })
 		expect((result as { data: { error: string } }).data.error).toMatch(/postboi init/)
 		expect(fetch).not.toHaveBeenCalled()
+	})
+})
+
+describe("a hand-written mail() under SvelteKit", () => {
+	it("passes the visitor's IP to Turnstile, as action() does", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ id: "1" }))
+		request.event = { getClientAddress: () => "203.0.113.7" }
+
+		const body = new FormData()
+		body.append("name", "Ada")
+		await send({ to: "to@test.com", body })
+		expect(JSON.parse(fetch.mock.calls.at(-1)![1].body).captcha_ip).toBe("203.0.113.7")
+
+		// an explicit remoteip still wins
+		await send({ to: "to@test.com", body: new FormData(), captcha: { remoteip: "198.51.100.1" } })
+		expect(JSON.parse(fetch.mock.calls.at(-1)![1].body).captcha_ip).toBe("198.51.100.1")
+	})
+
+	it("is a no-op outside a request", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ id: "1" }))
+		await send({ to: "to@test.com", body: new FormData() })
+		expect(JSON.parse(fetch.mock.calls.at(-1)![1].body).captcha_ip).toBeUndefined()
+	})
+})
+
+describe("postboi/kit outside Vite", () => {
+	const root = fileURLToPath(new URL("../../", import.meta.url))
+
+	it("resolves to a build that never imports $app/server", () => {
+		const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"))
+		expect(pkg.exports["./kit"].svelte).toBe("./dist/kit.js")
+		expect(pkg.exports["./kit"].default).toBe("./dist/kit_base.js")
+		// kit.js exists only to hand $app/server over. Every export it has is kit_base's, so
+		// without this a bundler drops it as unused and remote() finds no SvelteKit.
+		expect(pkg.sideEffects).toContain("./dist/kit.js")
+	})
+
+	it("imports action under plain bun, with no mock", () => {
+		// What a site's `bun test` does: no Vite, so no `$app/server` to resolve.
+		const script = `
+			const kit = await import(${JSON.stringify(`${root}src/library/kit_base.ts`)})
+			let remote_error = ""
+			try { kit.remote() } catch (e) { remote_error = e.message }
+			console.log(JSON.stringify({ action: typeof kit.action, remote_error }))
+		`
+		const out = JSON.parse(execFileSync("bun", ["-e", script], { encoding: "utf8" }).trim())
+		expect(out.action).toBe("function")
+		expect(out.remote_error).toMatch(/needs SvelteKit/)
 	})
 })
 

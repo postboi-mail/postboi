@@ -183,11 +183,16 @@ export const schema = v.object({
 
 ```ts
 // contact.remote.ts
+import { form, getRequestEvent } from '$app/server'
+import { mail } from 'postboi'
+
 export const send = form(schema, async (data) => {
 	const body: Record<string, string> = { name: data.name, email: data.email }
 	if (data._honey) body._honey = data._honey
 	if (data._captcha) body._captcha = data._captcha
-	await mail({ body })
+	// The visitor's IP, so Turnstile can reject a replayed token. mail() finds it itself
+	// when the app has the postboi() Vite plugin; passing it keeps this working without.
+	await mail({ body, captcha: { remoteip: getRequestEvent().getClientAddress() } })
 })
 ```
 
@@ -212,6 +217,24 @@ import { RESEND_API_KEY } from '$env/static/private'
 const resend = new Resend({ api_key: RESEND_API_KEY, default: { from: 'no-reply@example.com' } })
 
 export const contact = remote(resend, { to: 'team@example.com' })
+```
+
+## Testing actions
+
+`postboi/kit` imports under `bun test` or plain Node with no `$app/server` mock. Outside
+Vite it resolves to a build that leaves `$app/server` alone, so `action()`, `mail` and
+`webhook()` work as they do in the app. `remote()` is the one export that needs SvelteKit,
+and says so if you call it there.
+
+```ts
+import { action } from 'postboi/kit'
+import Mock from 'postboi/mock'
+
+const mail = new Mock({ default: { to: 'team@example.com', from: 'site@example.com' } })
+const body = new FormData()
+body.set('name', 'Ada')
+await action(mail)({ request: new Request('http://x', { method: 'POST', body }) } as never)
+expect(mail.last?.html).toContain('Ada')
 ```
 
 ## Using a configured instance

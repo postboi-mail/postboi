@@ -7,6 +7,7 @@ import { INBOX_DISCOVERY } from "$library/inbox.js"
 
 const CONFIG_MODULE = "/app/node_modules/postboi/dist/config.js"
 const INBOX_MODULE = "/app/node_modules/postboi/dist/inbox.js"
+const MAIL_MODULE = "/app/node_modules/postboi/dist/mail.js"
 
 let root: string
 
@@ -108,5 +109,19 @@ describe("vite plugin", () => {
 
 	it("excludes postboi/remote from prebundling, so remote forms reach the transform", () => {
 		expect(postboi().config()).toEqual({ optimizeDeps: { exclude: ["postboi/remote"] } })
+	})
+})
+
+describe("the request hook", () => {
+	it("hands mail() SvelteKit's request, on the server, under SvelteKit only", () => {
+		const kit = postboi()
+		kit.configResolved({ root, plugins: [{ name: "vite-plugin-sveltekit-setup" }] })
+		const code = kit.transform("// mail", MAIL_MODULE, { ssr: true })?.code
+		expect(code).toContain('from "$app/server"')
+		expect(code).toContain("sveltekit.request = __postboi_request")
+		expect(kit.transform("// mail", MAIL_MODULE, { ssr: false })).toBeNull()
+
+		// Plain Vite has no $app/server to import.
+		expect(plugin().transform("// mail", MAIL_MODULE, { ssr: true })).toBeNull()
 	})
 })

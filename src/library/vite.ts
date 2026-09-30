@@ -27,7 +27,7 @@ export interface ViteDevServer {
 export interface VitePlugin {
 	name: string
 	config(): { optimizeDeps: { exclude: Array<string> } }
-	configResolved(config: { root: string }): void
+	configResolved(config: { root: string; plugins?: ReadonlyArray<{ name: string }> }): void
 	configureServer(server: ViteDevServer): void
 	transform(
 		code: string,
@@ -81,6 +81,11 @@ function is_config_module(id: string): boolean {
 	return id.replace(/\\/g, "/").split("?")[0].endsWith("/postboi/dist/config.js")
 }
 
+/** Is this Postboi's zero-config `mail()` module — the one that holds the request hook? */
+function is_mail_module(id: string): boolean {
+	return id.replace(/\\/g, "/").split("?")[0].endsWith("/postboi/dist/mail.js")
+}
+
 /** Is this Postboi's inbox module — the one that holds the port hook? */
 function is_inbox_module(id: string): boolean {
 	return id.replace(/\\/g, "/").split("?")[0].endsWith("/postboi/dist/inbox.js")
@@ -132,6 +137,7 @@ export function postboi(options: PluginOptions = {}): VitePlugin {
 	let file: string | undefined
 	let inbox_port: number | null = null
 	let inbox_secure = false
+	let sveltekit = false
 
 	return {
 		name: "postboi",
@@ -139,6 +145,7 @@ export function postboi(options: PluginOptions = {}): VitePlugin {
 		config: () => ({ optimizeDeps: { exclude: ["postboi/remote"] } }),
 
 		configResolved(config) {
+			sveltekit = !!config.plugins?.some((p) => p.name.startsWith("vite-plugin-sveltekit"))
 			if (options.config === false) return
 			file = options.config
 				? isAbsolute(options.config)
@@ -184,6 +191,15 @@ export function postboi(options: PluginOptions = {}): VitePlugin {
 			if (file && is_config_module(id)) {
 				return {
 					code: `${code}\nset_bundled_config(() => import(${JSON.stringify(file)}))\n`,
+					map: null,
+				}
+			}
+			// Under SvelteKit, hand the zero-config `mail()` the request, so a hand-written send
+			// in an action or remote function passes the visitor's IP to Turnstile like
+			// `postboi/kit` does. Only SvelteKit has `$app/server` to import.
+			if (sveltekit && is_mail_module(id)) {
+				return {
+					code: `${code}\nimport { getRequestEvent as __postboi_request } from "$app/server"\nsveltekit.request = __postboi_request\n`,
 					map: null,
 				}
 			}

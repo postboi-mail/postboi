@@ -7,6 +7,7 @@ import type {
 	BatchResult,
 	CancelResponse,
 	ProviderBase,
+	CaptchaOptions,
 	Defaults,
 	FromAddress,
 } from "./index.js"
@@ -276,6 +277,35 @@ async function send_test(options: TestSendOptions): Promise<HostedTest> {
 	})
 }
 
+/**
+ * What SvelteKit's `$app/server` provides, when the app runs under SvelteKit. `postboi/kit`
+ * fills it in on load, and the `postboi()` Vite plugin fills in `request` here too, so a plain
+ * `mail()` in a form action or remote function can find the visitor's IP. Outside SvelteKit it
+ * stays empty and nothing reaches for it.
+ */
+export const sveltekit: { request?: () => { getClientAddress(): string }; form?: unknown } = {}
+
+/**
+ * Fill in the visitor's IP for Turnstile verification, so callers get it without threading
+ * `getClientAddress()` through themselves. An explicit `remoteip` always wins.
+ *
+ * `getRequestEvent()` throws outside a request (a build-time or test call), which must not
+ * take a send down — the IP sharpens verification, it is never a precondition for it.
+ */
+export function with_remoteip(
+	captcha: CaptchaOptions | undefined,
+	event?: { getClientAddress(): string }
+): CaptchaOptions | undefined {
+	if (captcha?.remoteip) return captcha
+	let remoteip: string | undefined
+	try {
+		remoteip = (event ?? sveltekit.request?.())?.getClientAddress()
+	} catch {
+		return captcha
+	}
+	return remoteip ? { ...captcha, remoteip } : captcha
+}
+
 // The bare send function. Exported below as `mail`, augmented with the resource
 // namespaces (`mail.recipients`, `mail.lists`, …).
 function send_mail(options: TestSendOptions): Promise<HostedTest>
@@ -293,6 +323,12 @@ async function send_mail(
 ): Promise<unknown> {
 	if (!Array.isArray(options) && "test" in options && typeof options.test === "string") {
 		return send_test(options as TestSendOptions)
+	}
+	// Read before the first await: without AsyncLocalStorage, SvelteKit only answers
+	// getRequestEvent() synchronously.
+	if (!Array.isArray(options)) {
+		const captcha = with_remoteip(options.captcha)
+		if (captcha !== options.captcha) options = { ...options, captcha }
 	}
 	const provider = await resolve_provider({ intercept: true })
 	if (Array.isArray(options)) return provider.send(options, batch)
