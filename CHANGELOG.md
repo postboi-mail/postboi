@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Fixed
+
+- A special form field whose plain value happens to be valid base64 (`_subject=Help`, `_form=Jobs`) is no longer decoded into garbage. A value is decoded only when it comes out as readable text.
+
 ## 0.57.0
 
 ### Breaking

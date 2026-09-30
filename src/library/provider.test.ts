@@ -175,6 +175,36 @@ describe("ProviderBase", () => {
 			expect(options.subject).toBe("Encoded Subject")
 		})
 
+		it("keeps a plain value that only happens to be valid base64", async () => {
+			const form = new FormData()
+			form.append("_subject", "Help")
+			form.append("_form", "Jobs")
+			form.append("_reply_to", "Test")
+
+			const { options } = await provider.form(form)
+			expect(options.subject).toBe("Help")
+			expect(options.form).toBe("Jobs")
+			expect(options.reply_to).toBe("Test")
+
+			// the last few of /usr/share/dict/words to be misread, one rule at a time
+			for (const word of ["also", "acid", "Lida", "ABCD"]) {
+				const one = new FormData()
+				one.append("_subject", word)
+				expect((await provider.form(one)).options.subject).toBe(word)
+			}
+		})
+
+		it("still decodes base64 text, unicode and all", async () => {
+			const form = new FormData()
+			form.append("_subject", b64("Café ☕, Tuesday"))
+			form.append("_to", b64("team@acme.co.uk"))
+			form.append("_form", b64("Contact"))
+			const { options } = await provider.form(form)
+			expect(options.subject).toBe("Café ☕, Tuesday")
+			expect(options.to).toBe("team@acme.co.uk")
+			expect(options.form).toBe("Contact")
+		})
+
 		it("renders ungrouped fields into an HTML table with title-cased labels", async () => {
 			const form = new FormData()
 			form.append("first_name", "Darby")

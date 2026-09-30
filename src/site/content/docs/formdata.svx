@@ -36,7 +36,9 @@ in the table:
 - `_to`, `_from`, `_cc`, `_bcc` (the last two comma-separated or repeated): **only with
   `form_addressing: true`**
 
-Values can be base64-encoded; they'll be decoded automatically.
+Values can be base64-encoded; they'll be decoded automatically. Only a value that decodes
+to readable text is decoded, so a plain one that happens to be valid base64 (`Help`,
+`Test`, `Jobs`) is left as typed.
 
 Anything you pass to the send itself wins over the body, so a posted field can never replace
 a recipient or subject your server chose. A blank string (`to: ''`, say, from an empty CMS
