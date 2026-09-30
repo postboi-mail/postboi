@@ -10,6 +10,14 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- A resolver gets `field(name)`: one text field, trimmed, or `undefined` when missing or blank, so a missing field no longer becomes the string "null".
+
+### Changed
+
+- `remote()` renders a `true` checkbox as "Yes" and leaves `false` out of the email and the stored fields, instead of "true" / "false".
+
 ### Fixed
 
 - A server-built HTML send that names a `form` is no longer captcha-gated by the API: it now carries `captcha_local`, since no widget token could come with it.

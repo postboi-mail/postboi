@@ -160,6 +160,11 @@ Worth knowing:
 - **Spam protection carries over.** `<Captcha />` renders the honeypot under a
   remote-safe name, and the managed captcha detects remote forms automatically. A tripped
   honeypot still reports `{ success: true }` to the bot.
+- **A failed send doesn't throw.** `mail.result` becomes `{ success: false, error }`, with
+  the reason in `error`, so handle it in the markup (the `{:else if mail.result}` branch
+  above) rather than in a `try` around the submit.
+- **Checkboxes read like answers.** A ticked box (`true`) is "Yes" in the email, and an
+  unticked one (`false`) is left out rather than listed as "false".
 
 ### A remote form with a schema
 
@@ -195,7 +200,11 @@ export const contact = remote(schema, ({ value }) => ({
 	<input {...contact.fields.email.as('email')} />
 	<button>Send</button>
 </form>
-{#if contact.result?.success}<p>Thanks{contact.result.subscribed ? ', and welcome aboard' : ''}!</p>{/if}
+{#if contact.result?.success}
+	<p>Thanks{contact.result.subscribed ? ', and welcome aboard' : ''}!</p>
+{:else if contact.result}
+	<p>{contact.result.error}</p>
+{/if}
 ```
 
 `value` is the post as your schema returned it. The honeypot, the captcha token, the
@@ -257,15 +266,18 @@ send options:
 import { action } from 'postboi/kit'
 
 export const actions = {
-	default: action(async ({ event, data }) => ({
-		to: await lookup(data.get('_blok')),
-		subject: `New enquiry from ${data.get('name')}`,
-		reply_to: String(data.get('email')),
+	default: action(async ({ event, field }) => ({
+		to: await lookup(field('_blok')),
+		subject: `New enquiry from ${field('name') ?? 'the website'}`,
+		reply_to: field('email'),
 		form: event.locals.site.form_name,
 	}))
 }
 ```
 
+- `field(name)` reads one text field, trimmed, and gives `undefined` when it's missing or
+  blank. Reach for it over `String(data.get(name))`, which turns a missing field into the
+  string `"null"`: a reply-to of "null", or a CMS lookup for `stories/null`.
 - `data` is the post. Change it if you need to: validate it, delete fields, add some.
 - Return `fail(…)` from `@sveltejs/kit` to stop the send. `action()` hands it back as is.
 - A `_` field you read that isn't one of postboi's own (`_subject`, `_reply_to`, `_form`
@@ -301,8 +313,10 @@ import { fail } from '@sveltejs/kit'
 import { action } from 'postboi/kit'
 
 export const actions = {
-	default: action(async ({ data }) => {
-		const block = await find_form(String(data.get('_story')), String(data.get('_blok')))
+	default: action(async ({ field }) => {
+		const story = field('_story')
+		const uid = field('_blok')
+		const block = story && uid ? await find_form(story, uid) : undefined
 		if (!block) return fail(404, { error: 'Form not found' })
 		// Blank fields in the CMS fall through to default.to, default.from and the post.
 		return { to: block.to, from: block.from, subject: block.subject, form: block.title || true }
@@ -324,9 +338,9 @@ No hidden inputs mirroring the email field, and no subject built in the browser:
 
 ```typescript
 export const actions = {
-	default: action(({ data }) => ({
-		reply_to: String(data.get('email')),
-		subject: `${data.get('topic')} enquiry from ${data.get('name')}`
+	default: action(({ field }) => ({
+		reply_to: field('email'),
+		subject: `${field('topic') ?? 'General'} enquiry from ${field('name') ?? 'the website'}`
 	}))
 }
 ```
