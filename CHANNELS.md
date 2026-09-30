@@ -5,7 +5,7 @@ SMS, push, RCS, WhatsApp and chat, behind one API.
 
 **Status: Phases 0, 1, 3, 4, 5 and 6 shipped** (Phase 6's WhatsApp half in code, its RCS
 half as documentation — see the phase for why that's the whole job). Phase 2 (hosted SMS)
-remains deliberately unbuilt. The four structural review follow-ups have also landed. This
+remains deliberately unbuilt. Phase 7 (managed push subscriptions) is proposed. The four structural review follow-ups have also landed. This
 document is the source of truth for the channel work — read it before starting a phase, and
 update it when a decision changes. Reasoning that led to these conclusions lives in this
 file's git history.
@@ -652,7 +652,8 @@ pipeline, serves our actual audience — ~3–5 days), and native Swift/Kotlin/F
 
 `push()` needs to resolve "user 123" → tokens. Start with **raw tokens passed by the
 caller** — simplest, and punts the problem. A `push.subscriptions` namespace on the hosted
-provider is the natural home later, alongside `contacts`.
+provider is the natural home later, alongside `contacts`. That's now planned as
+[Phase 7](#phase-7-managed-push-subscriptions-proposed).
 
 **Shipped**: Web Push (VAPID + `aes128gcm`), FCM, a mock, the browser helpers, and `push()`
 wired into `send()`'s cost ordering — where it now sits first, as the genuinely free channel.
@@ -1047,6 +1048,7 @@ Items 1 and 3 have a first cut; item 2 is still email-only.
   SMS and WhatsApp reach the same handset, and a second field would be a second thing to
   keep in step. Push subscriptions are still the caller's to store — `push()` takes raw
   subscriptions, as Phase 3 decided, and nothing about a contact has changed that.
+  [Phase 7](#phase-7-managed-push-subscriptions-proposed) proposes the hosted store.
 - **Per-channel suppressions** — the account's list is keyed `(channel, address)` now:
   `email`, `sms` and `whatsapp`. A texted **STOP** reaches it on its own: the Twilio poll
   adapter reads inbound replies for exactly one thing, an opt-out keyword (`is_opt_out`,
@@ -1059,6 +1061,160 @@ Items 1 and 3 have a first cut; item 2 is still email-only.
   contact has a number, the suppression list knows the channel, and the app already
   relays email through synced provider credentials, which is the same shape an SMS leg
   through synced Twilio credentials would take.
+
+---
+
+## Phase 7: managed push subscriptions (proposed)
+
+**Status: proposed, not started.** Web Push today leaves three jobs with the developer: a
+table of subscriptions, deleting rows when a send answers 404/410, and a register endpoint
+for the service worker to re-file rotated subscriptions to. None of it is hard, but every
+app writes the same version of it, and the table is the reason `push()` can only send to a
+device, never to a person. This phase moves that state onto the Postboi provider, opt-in,
+next to `contacts`. It is the push leg of [the audience layer](#where-this-could-go--the-audience-layer),
+and the "natural home later" that [Phase 3's subscription store](#the-subscription-store)
+deferred to.
+
+The BYO path does not change. `postboi/webpush` with raw subscriptions keeps working with
+no account, and stays documented as the default for anyone who doesn't use the Postboi
+provider. Web Push only for now: FCM, APNs, HMS and Expo tokens can follow the same shape
+later, keyed by `{ token, provider }` instead of endpoint.
+
+### What it gives a developer
+
+- **No subscriptions table.** Postboi stores rows keyed by endpoint.
+- **No expiry handling.** A 404/410 on a send deletes the row on our side. `push.expired()`
+  stays for BYO sends.
+- **No rotation endpoint.** The worker's `pushsubscriptionchange` handler re-files with
+  Postboi directly.
+- **Send to a person.** `push({ to: { user: "123" }, ... })` reaches every browser that
+  user subscribed, with results per device.
+- **Later, for free:** push in `lists.broadcast()`, and scheduled or digest pushes through
+  the existing `notifications` machinery.
+
+### The API, roughly
+
+Server, with the user's identity coming from your own session:
+
+```ts
+import { push } from "postboi"
+
+// POST /push/subscriptions: the one endpoint left, and it has no database behind it
+await push.subscriptions.add(await request.json(), { user: session.user.id })
+
+// Anywhere server-side
+await push({ to: { user: "123" }, title: "Order shipped", message: "On its way" })
+```
+
+`push.subscriptions` hangs off `push` the way `push.expired` does, and resolves through
+`POSTBOI_TOKEN` like the `mail.*` namespaces. Besides `add`: `remove(endpoint)`,
+`list({ user })`, and `import(rows)` for moving an existing table across.
+
+Client, for anonymous subscribers to a list (no backend involved):
+
+```ts
+const push = subscription({ register: "postboi", list: "New posts" })
+```
+
+Service worker:
+
+```ts
+receive({ register: "postboi" })
+```
+
+`register: "postboi"` uses the publishable key `bunx postboi sync` already bakes for the
+managed captcha, so neither side needs a key passed in.
+
+### Who may register what
+
+The browser POSTing its subscription straight to Postboi is the obvious design, and for
+anything tied to a user it is a hole: a publishable key is public, so anyone could file
+their own browser under someone else's `user` and start receiving that person's
+notifications. So registration splits three ways:
+
+| Registration | Goes direct from the browser? | Why |
+| --- | --- | --- |
+| Anonymous, to a list | Yes, publishable key | The worst case is junk subscribers. Rate limit per IP and per account |
+| Rotation (`old_endpoint` present) | Yes, publishable key | Endpoints are unguessable URLs, so presenting the old one proves ownership of its row, and the new row inherits its `user` and lists |
+| Bound to a user | No, through your server's `push.subscriptions.add` | Only your backend knows who is signed in |
+
+A later step could let the page register a user-bound subscription directly by carrying a
+short-lived token your server signs (`push.subscriptions.token(user)`). Not in the first
+cut: the one-line server call covers it, and a token scheme is more surface to get wrong.
+
+Two details the rotation path needs:
+
+- **Tombstones.** A rotation can arrive after the old endpoint has already 410'd and been
+  deleted. Keep expired endpoints, with their `user` and lists, for 30 days so a late
+  rotation can still claim them.
+- **A missing `old_endpoint`.** Some browsers fire `pushsubscriptionchange` without the old
+  subscription. `receive()` should record the endpoint it last filed (IndexedDB, inside the
+  worker) so it can present it anyway. Without either, the new subscription can only be
+  filed anonymously, and the user-bound row lapses at the next 410 as it does today.
+
+### Endpoints are an SSRF surface
+
+Once anyone can register an endpoint, our Workers will POST to whatever URL was
+registered, on every send and every broadcast. Accept only known push-service origins
+(`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `web.push.apple.com`,
+`*.notify.windows.com`) and reject everything else at registration, with the list kept in
+one place and extended when a browser adds a service.
+
+### Decisions
+
+1. **Who sends: Postboi.**
+   _Proposed: the send runs on the Postboi provider, as email does._ The alternative is the
+   SDK fetching a user's subscriptions and sending locally with its own VAPID key. That
+   still reads the store on every send, adds a hop, and can't do broadcasts or schedules,
+   so it has the dependency without the benefit.
+   This does put Postboi in the push send path, which the team-sync work was careful not to
+   do for third-party credentials ("nothing in the send path reads the store"). The line
+   still holds for that store: this is a Postboi-native feature using its own key custody
+   (next decision), in the same way hosted email is in the path by being the provider. It
+   is opt-in, and the provider has to be named: `POSTBOI_PUSH_PROVIDER=postboi`, never
+   inferred from `POSTBOI_TOKEN`, or every account with email configured would silently
+   stop inferring Web Push from its VAPID trio. `init --push` writes it.
+
+2. **Who holds the VAPID keys: Postboi, with export.**
+   _Proposed: mint a pair per account when managed push is switched on, unless the team
+   already has one._ Every subscription is bound to the public key it was made with, so:
+   - An account moving from BYO brings its existing pair (the one `postboi env` may already
+     hold), and `push.subscriptions.import` brings the rows. Minting fresh would orphan
+     every subscriber they have.
+   - The private key is exportable (`bunx postboi vapid --export`). Without that, leaving
+     Postboi silently loses every subscriber, which is lock-in we don't want to sell.
+   - The key lives in its own sealed store read at send time, not in `/v1/env`, so the
+     "CLI-time only" rule for synced credentials stays true as written.
+
+3. **What a subscription is keyed to: an opaque `user` string.**
+   _Proposed: `user` is whatever id the app already has, with no contact required._
+   Contacts are keyed by email today, and plenty of apps push to users they know only by an
+   internal id. Joining push into multi-channel broadcast later wants an `external_id` on
+   contacts so `user` can resolve to one, but that is a contacts change, not a blocker for
+   this phase.
+
+### Cost
+
+A subscription row is a few hundred bytes, the same order as a contact, so storage sits in
+the ~free column [above](#what-infrastructure-actually-costs-us). A send is a Worker
+`fetch` plus one ECDH and one AES-GCM per device (the VAPID signature is cached per push
+service origin), with no third-party fee. Broadcasts fan out through a Queue with bounded
+concurrency. That fits "bundled into the email tiers, never per contact"; revisit only if
+push volume on an account ever dwarfs its email.
+
+### Where the work lives
+
+- **This repo:** `push.subscriptions` and a `postboi` push loader in
+  `src/library/push/send.ts`; `PushTarget` widening to `{ user }`; `register: "postboi"` in
+  `client.ts`, `controller.ts`, `sw.ts` and the CLI's generated worker (which must stay in
+  step with `receive()`); `vapid --export` and the `init --push` path; docs in `push.svx`
+  and `provider.svx`.
+- **`postboi-app`:** subscription and tombstone tables, the registration routes with the
+  origin allowlist and rate limits, per-account VAPID key custody, the send route with
+  per-device results and 410 cleanup, Queue fan-out, and a dashboard count.
+
+**Effort: ~2–3 days in this repo, ~1–1.5 weeks in `postboi-app`.** Nothing external
+blocks it.
 
 ---
 
@@ -1206,6 +1362,7 @@ None block shipping — this is the "has it got better yet?" list.
 | 4     | `send()`                                   | ~2 days           | Phases 1 & 3                         |
 | 5     | Slack / Discord / Teams / Telegram         | hours each        | Phase 0                              |
 | 6     | RCS, then WhatsApp                         | ~3 days + ~1 week | Brand approval lead time             |
+| 7     | Managed push subscriptions (proposed)      | ~1.5–2 weeks      | —                                    |
 
 **Phases 0, 1, 3, 4 and 5 total roughly 3.5 weeks with no external dependency.** That's the
 ship-it-first slice — and with email already in place it's a more complete notifications
