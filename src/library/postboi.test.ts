@@ -196,6 +196,27 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(sent_json().captcha_local).toBeUndefined()
 	})
 
+	it("doesn't ask the API to captcha-gate a body the server built", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		// Filed under a form, but no visitor posted it, so no widget token can come with it.
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", form: "Quotes" })
+		expect(sent_json().form).toBe("Quotes")
+		expect(sent_json().captcha_local).toBe(true)
+
+		// A plain send names no form and asks nothing either way.
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().captcha_local).toBeUndefined()
+	})
+
+	it("sends no attachments for an empty list", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", attachments: [] })
+		expect(sent_json().attachments).toBeUndefined()
+	})
+
 	it("lets a posted _form pick an existing form, never name a new one", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
@@ -268,7 +289,7 @@ describe("the Postboi provider (zero-config)", () => {
 		await new Postboi().send({ to: "to@test.com", body: form, form: "Home Ownership Query" })
 		expect(sent_json().form).toBe("Home Ownership Query")
 
-		// a hand-rolled body can still be filed under a form — and is a form send for captcha
+		// a hand-rolled body can still be filed under a form (not captcha-gated: see below)
 		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", form: "form_abc123" })
 		const body = sent_json()
 		expect(body.form).toBe("form_abc123")
@@ -936,6 +957,22 @@ describe("top-level mail() — provider-agnostic dispatch", () => {
 		// The body must survive to the terminal — it is the reason to read a dev mail at all.
 		expect(log.mock.calls.at(-1)![0]).toMatch(/Sign in[\s\S]*link/)
 		expect(warn.mock.calls.at(-1)![0]).toMatch(/mail is logged to the console/)
+		log.mockRestore()
+		warn.mockRestore()
+	})
+
+	it("logs a fresh clone's mail with no from set, rather than refusing it", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "")
+		vi.stubEnv("POSTBOI_TOKEN", "")
+		vi.stubEnv("POSTBOI_FROM", "")
+		vi.stubEnv("NODE_ENV", "development")
+		const log = vi.spyOn(console, "log").mockImplementation(() => {})
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+		const result = await mail({ to: "to@test.com", subject: "Sign in", body: "<p>link</p>" })
+
+		expect(result).toMatchObject({ id: expect.stringMatching(/^mock-/) })
+		expect(log.mock.calls.at(-1)![0]).toMatch(/sender@postboi\.invalid/)
 		log.mockRestore()
 		warn.mockRestore()
 	})
