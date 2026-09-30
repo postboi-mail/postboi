@@ -80,6 +80,13 @@ describe("postboi/kit action()", () => {
 		expect(provider.last?.html).toContain("hi")
 	})
 
+	it("takes form: true, so a posted _form can't pick the form", async () => {
+		const provider = new Mock({ default: { from: "from@test.com", to: "to@test.com" } })
+		const result = await action(provider, { form: true })(event({ _form: "Made Up", name: "Ada" }))
+		expect(result).toEqual({ success: true })
+		expect(provider.last?.html).not.toContain("Made Up")
+	})
+
 	it("keeps `status` out of the send — it configures the failure, not the email", async () => {
 		const provider = new Mock({ default: { from: "from@test.com", to: "to@test.com" } })
 		const result = await action(provider, { status: 422, subject: "Hi" })(event({ message: "hi" }))

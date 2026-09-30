@@ -115,13 +115,13 @@ Returns `{ ok, results, delivered }` and never rejects once a channel was attemp
 
 Passing `FormData` as `body` renders a tidy HTML table. Field names and values are HTML-escaped, so a public form can't inject markup into the email you read — **don't escape them yourself on the way in**. Multi-line values keep their breaks as `<br>`. Building a `body` string by hand instead? Use `escape_html` (or `escape_lines`) from `postboi` on any interpolated user input.
 
-| Convention       |                                                                                                                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Grouping         | `fieldset→field` (literal `→`): `name="contact→email"`                                                                                                                       |
-| Special fields   | `_subject` `_reply_to` `_form` set send options instead of appearing in the table; the send's own options always win                                                         |
-| Addressing       | `_to` `_from` `_cc` `_bcc` are ignored unless the send passes `form_addressing: true` (a public post must never pick its recipient). Set `to` on the send or in `default.to` |
-| Standard pattern | a hidden `_reply_to` bound to the submitter's email, so replies reach them                                                                                                   |
-| Attachments      | file inputs become attachments; the form needs `enctype="multipart/form-data"`                                                                                               |
+| Convention       |                                                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grouping         | `fieldset→field` (literal `→`): `name="contact→email"`                                                                                                                                                                                            |
+| Special fields   | `_subject` `_reply_to` set send options instead of appearing in the table; the send's own options always win. A posted `_form` only picks a form the account already has (never creates one); on a public form pin `form: "Name"` or `form: true` |
+| Addressing       | `_to` `_from` `_cc` `_bcc` are ignored unless the send passes `form_addressing: true` (a public post must never pick its recipient). Set `to` on the send or in `default.to`                                                                      |
+| Standard pattern | a hidden `_reply_to` bound to the submitter's email, so replies reach them                                                                                                                                                                        |
+| Attachments      | file inputs become attachments; the form needs `enctype="multipart/form-data"`                                                                                                                                                                    |
 
 ### SvelteKit — pick the right one-liner
 
