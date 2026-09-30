@@ -166,6 +166,21 @@ describe("postboi/kit action() with a resolver", () => {
 		expect(provider.last?.reply_to?.[0].address).toBe("ada@example.com")
 	})
 
+	it("reads a field as a trimmed string, or undefined when it's missing or blank", async () => {
+		const provider = new Mock(defaults)
+		const seen: Array<unknown> = []
+		await action(provider, ({ field }) => {
+			seen.push(field("email"), field("missing"), field("blank"), field("_blok"))
+			return { reply_to: field("missing") }
+		})(event({ email: " ada@example.com ", blank: "  ", _blok: "b1", name: "Ada" }))
+
+		expect(seen).toEqual(["ada@example.com", undefined, undefined, "b1"])
+		// never the string "null": the default reply-to stands
+		expect(provider.last?.reply_to).toBeUndefined()
+		// a routing id read through field() is consumed like one read off data
+		expect(provider.last?.html).not.toContain("b1")
+	})
+
 	it("passes a returned fail() straight through, without sending", async () => {
 		const provider = new Mock(defaults)
 		const result = await action(provider, ({ data }) =>
@@ -477,9 +492,10 @@ describe("postboi/kit remote_form_data()", () => {
 		expect(data.has("skipped")).toBe(false)
 	})
 
-	it("stringifies the coerced number/boolean values remote forms produce", async () => {
-		const data = remote_form_data({ info: { height: 170, likes_dogs: true } })
+	it("stringifies numbers, says Yes for a ticked box and leaves an unticked one out", async () => {
+		const data = remote_form_data({ info: { height: 170, likes_dogs: true, updates: false } })
 		expect(data.get("info→height")).toBe("170")
-		expect(data.get("info→likes_dogs")).toBe("true")
+		expect(data.get("info→likes_dogs")).toBe("Yes")
+		expect(data.has("info→updates")).toBe(false)
 	})
 })
