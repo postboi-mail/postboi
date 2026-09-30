@@ -278,6 +278,12 @@ export const actions = {
 - `field(name)` reads one text field, trimmed, and gives `undefined` when it's missing or
   blank. Reach for it over `String(data.get(name))`, which turns a missing field into the
   string `"null"`: a reply-to of "null", or a CMS lookup for `stories/null`.
+  `field.all(name)` does the same for a field posted more than once (a checkbox group, a
+  list of uploaded file URLs) and gives every non-blank value, or `[]`. Both trim, so a
+  check that counts characters exactly, like a `maxlength` where a line break is one
+  character, reads `data` itself.
+- A reply-to that isn't an address (a visitor typing `asdf` in the email box) is dropped
+  with a warning rather than failing the send, so a typo doesn't cost you the submission.
 - `data` is the post. Change it if you need to: validate it, delete fields, add some.
 - Return `fail(…)` from `@sveltejs/kit` to stop the send. `action()` hands it back as is.
 - A `_` field you read that isn't one of postboi's own (`_subject`, `_reply_to`, `_form`
@@ -310,20 +316,22 @@ which block it is, and the server looks it up, so a visitor can't pick the recip
 ```typescript
 // src/routes/mail/+page.server.ts
 import { fail } from '@sveltejs/kit'
-import { action } from 'postboi/kit'
+import { action, type FieldReader } from 'postboi/kit'
 
 export const actions = {
 	default: action(async ({ field }) => {
-		const story = field('_story')
-		const uid = field('_blok')
-		const block = story && uid ? await find_form(story, uid) : undefined
+		const block = await find_form(field)
 		if (!block) return fail(404, { error: 'Form not found' })
 		// Blank fields in the CMS fall through to default.to, default.from and the post.
 		return { to: block.to, from: block.from, subject: block.subject, form: block.title || true }
 	})
 }
 
-async function find_form(story: string, uid: string) {
+// `FieldReader` is the type of `field`, for helpers that read the post themselves.
+async function find_form(field: FieldReader) {
+	const story = field('_story')
+	const uid = field('_blok')
+	if (!story || !uid) return undefined
 	const { data } = await storyblok.get(`cdn/stories/${story}`, { find_by: 'uuid' })
 	return find_block(data.story.content, uid)
 }

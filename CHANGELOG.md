@@ -10,6 +10,14 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `field.all(name)` in a resolver: every non-blank value of a field posted more than once, or `[]`.
+
+### Fixed
+
+- A reply-to that isn't an address (a visitor's typo, say) is dropped with a one-time warning instead of failing the whole send at the provider.
+
 ## 0.58.0
 
 ### Added
