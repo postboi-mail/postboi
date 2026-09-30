@@ -10,6 +10,26 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- A posted `_form` now only picks a form the account already has; it goes out as `form_posted` and never creates one. Create the form first, or pass `form_addressing: true` when your own code builds the body (#98).
+- Every FormData or form-fields send is now flagged `form: true`, with or without a captcha, so managed captcha gates it. A send whose captcha was settled locally (its own Turnstile secret, or `captcha: { turnstile: false }`) also carries `captcha_local` (#98).
+
+### Added
+
+- `form: true`, to file a send as a form submission without naming one and ignore any posted `_form` (#98).
+- `action()` and `remote()` take a resolver, `({ event, data }) => options | fail(…)`, in place of the options object. A `_` field it reads never reaches the email (#104).
+- `remote(schema, …)` takes a Standard Schema and keeps `_honey`/`_captcha` through SvelteKit's validation; a resolver's `after()` result is merged into the form's result (#105).
+- `parse_form`, `decode_special`, `SPECIAL_FIELDS`, `FORM_ADDRESSING`, `HONEYPOT_FIELDS` and `CAPTCHA_FIELDS` from the package root (#106).
+- A one-time warning when a form arrives with no captcha token although a captcha key is baked in (#105).
+
+### Fixed
+
+- The dev inbox no longer demands a `from` when the Postboi provider is configured (#99).
+- A plain `mail()` in a SvelteKit action or remote function fills in the visitor's IP for Turnstile, via `postboi/kit` or the `postboi()` Vite plugin (#103).
+- `postboi/kit` imports under `bun test` and plain Node without mocking `$app/server`; only `remote()` needs SvelteKit (#103).
+- A blank string for `to`, `cc`, `bcc`, `from`, `reply_to`, `subject` or `form` counts as unset and falls through to the post or `default.*` (#104).
+
 ## 0.56.0
 
 ### Breaking
