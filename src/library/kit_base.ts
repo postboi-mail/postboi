@@ -80,15 +80,24 @@ export type Resolver<T, F = never> = (submission: {
 /**
  * One text field from the post, trimmed, or `undefined` when it's missing, blank or a file.
  * `String(data.get("email"))` turns a missing field into the string `"null"`, which counts
- * as set: a `reply_to` of "null", or a CMS lookup for `stories/null`.
+ * as set: a `reply_to` of "null", or a CMS lookup for `stories/null`. `field.all(name)` is
+ * the same for a field posted more than once (a checkbox group): every non-blank value, in
+ * order, or `[]`. Both trim, so a check that counts characters exactly reads `data` itself.
  */
-export type FieldReader = (name: string) => string | undefined
+export type FieldReader = ((name: string) => string | undefined) & {
+	all(name: string): Array<string>
+}
 
 function field_reader(data: FormData): FieldReader {
-	return (name) => {
-		const value = data.get(name)
-		return typeof value === "string" && value.trim() ? value.trim() : undefined
-	}
+	const text = (value: FormDataEntryValue | null) =>
+		typeof value === "string" && value.trim() ? value.trim() : undefined
+	return Object.assign((name: string) => text(data.get(name)), {
+		all: (name: string) =>
+			data.getAll(name).flatMap((value) => {
+				const kept = text(value)
+				return kept === undefined ? [] : [kept]
+			}),
+	})
 }
 
 /** postboi's own `_` fields: a resolver reading these doesn't take them out of the post. */

@@ -181,6 +181,40 @@ describe("postboi/kit action() with a resolver", () => {
 		expect(provider.last?.html).not.toContain("b1")
 	})
 
+	it("reads every value of a repeated field with field.all", async () => {
+		const provider = new Mock(defaults)
+		const post = new FormData()
+		for (const [key, value] of [
+			["interest", " web "],
+			["interest", ""],
+			["interest", "print"],
+			["cv", new File(["x"], "cv.txt")],
+		] as const) {
+			post.append(key, value)
+		}
+		const seen: Array<unknown> = []
+		await action(provider, ({ field }) => {
+			seen.push(field.all("interest"), field.all("missing"), field.all("cv"))
+		})({ request: { formData: async () => post } } as never)
+		expect(seen).toEqual([["web", "print"], [], []])
+	})
+
+	it("drops a reply-to that isn't an address, so a typo doesn't fail the form", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+		const provider = new Mock(defaults)
+		const result = await action(provider, ({ field }) => ({ reply_to: field("email") }))(
+			event({ email: "asdf", name: "Ada" })
+		)
+		expect(result).toEqual({ success: true })
+		expect(provider.last?.reply_to).toBeUndefined()
+
+		// in a list, only the bad one goes
+		await provider.send({ body: "<p>x</p>", reply_to: ["Ada <ada@example.com>", "nope"] })
+		expect(provider.last?.reply_to?.map((a) => a.address)).toEqual(["ada@example.com"])
+		expect(warn.mock.calls.filter(([m]) => String(m).includes("reply-to"))).toHaveLength(1)
+		warn.mockRestore()
+	})
+
 	it("passes a returned fail() straight through, without sending", async () => {
 		const provider = new Mock(defaults)
 		const result = await action(provider, ({ data }) =>

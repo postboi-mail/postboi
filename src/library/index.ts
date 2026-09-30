@@ -789,6 +789,11 @@ function warn_missing_token(form: FormData, captcha: CaptchaOptions): void {
 	)
 }
 
+let warned_reply_to = false
+
+/** Shaped like an address: something, an @, a domain with a dot. The bar, not RFC 5322. */
+const ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 /** The options a blank string leaves unset. */
 const BLANK_IS_UNSET = ["to", "cc", "bcc", "from", "reply_to", "subject", "form"] as const
 
@@ -1123,6 +1128,27 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			: [await this.parse_attachment(files)]
 	}
 
+	/**
+	 * The reply-to minus any address that isn't one. It's often what a visitor typed in the
+	 * email box, and a provider refuses the whole send over `asdf`, so the visitor sees a
+	 * failed form over a typo. Dropped instead, and said once: the mail still goes, and
+	 * replying to it goes to the `from` address rather than nowhere.
+	 */
+	private usable_reply_to(reply_to: Array<Email> | Email | undefined) {
+		if (reply_to === undefined) return undefined
+		const addresses = this.parse_addresses(reply_to)
+		const usable = addresses.filter((a) => ADDRESS.test(a.address))
+		if (usable.length === addresses.length) return reply_to
+		if (!warned_reply_to) {
+			warned_reply_to = true
+			const bad = addresses.filter((a) => !usable.includes(a)).map((a) => a.address)
+			console.warn(
+				`postboi: dropped a reply-to that isn't an address (${bad.map((b) => JSON.stringify(b)).join(", ")}). The mail still goes; replies go to the from address.`
+			)
+		}
+		return usable.length > 0 ? usable : undefined
+	}
+
 	/** Normalize a flexible Email value into a concrete MailAddress. */
 	protected parse_email_address(email: Email): MailAddress {
 		if (typeof email === "string") {
@@ -1322,7 +1348,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			to,
 			// Undefined only reaches providers that set requires_from = false and handle it.
 			from: from as Email,
-			reply_to: options.reply_to ?? this.defaults.reply_to,
+			reply_to: this.usable_reply_to(options.reply_to ?? this.defaults.reply_to),
 			cc: options.cc ?? this.defaults.cc,
 			bcc: options.bcc ?? this.defaults.bcc,
 			subject: options.subject || "Mail sent from website",

@@ -61,7 +61,8 @@ quiet.
 ```
 
 Set `_reply_to` to the submitter's email so replies go back to them instead of your
-`from` address. See the [SvelteKit form](/sveltekit#the-form) for the hidden-field
+`from` address. A reply-to that isn't an address (a typo in the email box) is dropped with
+a warning, and the mail still goes, so replies go to your `from` address that time. See the [SvelteKit form](/sveltekit#the-form) for the hidden-field
 pattern. Typically that's all a contact form needs: a reply-to is enough for replies to
 reach the right person, with no per-message `from` or verified domain required.
 
