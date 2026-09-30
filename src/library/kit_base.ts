@@ -1,5 +1,6 @@
 import {
 	fail,
+	isActionFailure,
 	type RequestEvent,
 	type ActionFailure,
 	type RemoteForm,
@@ -11,7 +12,8 @@ import type { form as sveltekit_form } from "$app/server"
 // From ./mail.js directly, not the package root — the root statically re-exports the
 // Postboi provider class, which must stay a dynamic-only leaf (see LOADERS in mail.ts).
 import { mail as zero_config_mail, sveltekit, with_remoteip } from "./mail.js"
-import { is_error, is_spam, type SendOptions } from "./index.js"
+import { HONEYPOT_FIELD, is_error, is_spam, type Email, type SendOptions } from "./index.js"
+import { get_config } from "./config.js"
 // Type-only — the webhooks module itself is loaded lazily inside the handler, so
 // action-only users never pull the adapters or crypto into their bundle.
 import type { WebhookEvent, ReceiveOptions } from "./webhooks/index.js"
@@ -28,21 +30,97 @@ interface Mailer {
 }
 
 /** What a built action returns: the form succeeded, or a typed failure. */
-type ActionResult = { success: true } | ActionFailure<{ error: string }>
+type ActionResult<F = { error: string }> =
+	| { success: true }
+	| ActionFailure<{ error: string }>
+	| ActionFailure<F>
 
 /** A SvelteKit form action built by {@link action}. */
-type FormAction = (event: RequestEvent) => Promise<ActionResult>
+type FormAction<F = { error: string }> = (event: RequestEvent) => Promise<ActionResult<F>>
 
 /**
  * Send options merged into every send — handy for forcing a recipient or subject
  * server-side so the form can't set them. The form's own data is always the body, so
  * `body` is not settable here.
+ *
+ * Blank strings count as unset, so an empty CMS field falls through to the post or the
+ * defaults. `from` takes any address, because a CMS string can't satisfy the generated
+ * types; the API still refuses one the account can't send from (`from_not_allowed`).
  */
-export type ActionFields = Partial<Omit<SendOptions, "body">>
+export type ActionFields = Partial<Omit<SendOptions, "body" | "from">> & { from?: Email }
 
 export type ActionOptions = ActionFields & {
 	/** HTTP status returned when sending fails. Defaults to 400. */
 	status?: number
+}
+
+/**
+ * Options worked out per submission, from the request and the post. `data` is the post,
+ * parsed once: read it, change it (delete fields, validate), and return the options, or
+ * `fail(…)` to stop the send. A `_`-prefixed field it reads that isn't one of postboi's own
+ * (`_subject`, `_reply_to`, …) never reaches the email, so a routing id can ride in the body.
+ */
+export type Resolver<T, F = never> = (submission: {
+	event: RequestEvent
+	data: FormData
+}) => T | ActionFailure<F> | void | Promise<T | ActionFailure<F> | void>
+
+/** postboi's own `_` fields: a resolver reading these doesn't take them out of the post. */
+const OWN_FIELDS = new Set([
+	"_to",
+	"_from",
+	"_reply_to",
+	"_cc",
+	"_bcc",
+	"_subject",
+	"_form",
+	HONEYPOT_FIELD,
+	"_captcha",
+])
+
+const is_failure = <F>(value: unknown): value is ActionFailure<F> => isActionFailure(value)
+
+const TRACKED = ["get", "getAll", "has"] as const
+
+/**
+ * Run `fn`, recording which fields it reads off `data`, so the ones a resolver consumed can
+ * be dropped. The FormData is back to its own methods afterwards.
+ */
+async function track_reads<R>(data: FormData, fn: () => R | Promise<R>) {
+	const read = new Set<string>()
+	for (const method of TRACKED) {
+		const original = data[method].bind(data) as (name: string) => unknown
+		data[method] = ((name: string) => (read.add(name), original(name))) as never
+	}
+	try {
+		return { read, result: await fn() }
+	} finally {
+		for (const method of TRACKED) delete (data as unknown as Record<string, unknown>)[method]
+	}
+}
+
+/**
+ * The options for one submission: as given, or from the resolver. Null for a bot that filled
+ * the honeypot, which gets nothing run on its behalf (no lookups, no fetching URLs it posted).
+ */
+async function resolve<T extends ActionFields, F>(
+	given: T | Resolver<T, F> | undefined,
+	event: RequestEvent,
+	data: FormData
+): Promise<T | ActionFailure<F> | null> {
+	if (typeof given !== "function") return given ?? ({} as T)
+	// The project's own honeypot setting, as the provider will apply it (a mailer instance's
+	// own override is only seen at send time, which still drops the bot).
+	const honeypot = get_config().captcha?.honeypot
+	const trap = honeypot === false ? undefined : honeypot || HONEYPOT_FIELD
+	const honey = trap ? data.get(trap) : null
+	if (typeof honey === "string" && honey.trim()) return null
+	const { read, result } = await track_reads(data, () => given({ event, data }))
+	if (is_failure<F>(result)) return result
+	for (const name of read) {
+		if (name.startsWith("_") && !OWN_FIELDS.has(name) && name !== trap) data.delete(name)
+	}
+	return result ?? ({} as T)
 }
 
 /**
@@ -70,22 +148,36 @@ export type ActionOptions = ActionFields & {
  * export const actions = { default: action(mail, { to: "team@example.com" }) }
  * ```
  */
-export function action(options?: ActionOptions): FormAction
-export function action(mailer: Mailer, options?: ActionOptions): FormAction
-export function action(a?: Mailer | ActionOptions, b: ActionOptions = {}): FormAction {
+export function action<F = { error: string }>(
+	options?: ActionOptions | Resolver<ActionOptions, F>
+): FormAction<F>
+export function action<F = { error: string }>(
+	mailer: Mailer,
+	options?: ActionOptions | Resolver<ActionOptions, F>
+): FormAction<F>
+export function action<F>(
+	a?: Mailer | ActionOptions | Resolver<ActionOptions, F>,
+	b?: ActionOptions | Resolver<ActionOptions, F>
+): FormAction<F> {
 	const is_mailer = typeof (a as Mailer | undefined)?.send === "function"
 	const mailer = is_mailer ? (a as Mailer) : undefined
-	const { status = 400, ...fields } = is_mailer ? b : ((a as ActionOptions) ?? {})
+	const given = is_mailer ? b : (a as ActionOptions | Resolver<ActionOptions, F> | undefined)
 	const dispatch = mailer ? (o: SendOptions) => mailer.send(o) : zero_config_mail
 
 	return async (event) => {
+		let status = typeof given === "function" ? 400 : (given?.status ?? 400)
 		try {
 			const body = await event.request.formData()
+			const resolved = await resolve(given, event, body)
+			if (resolved === null) return { success: true }
+			if (is_failure<F>(resolved)) return resolved
+			const { status: failure_status = 400, ...fields } = resolved
+			status = failure_status
 			await dispatch({
 				...fields,
 				body,
 				captcha: with_remoteip(fields.captcha, event),
-			})
+			} as SendOptions)
 			return { success: true }
 		} catch (error) {
 			// A tripped honeypot pretends to succeed — no email is sent, and the bot learns nothing.
@@ -162,12 +254,18 @@ export function remote_form_data(
  * Field names follow the remote-form rules (JS paths — nesting instead of `→`):
  * `fields.contact.name` renders in the email exactly like a classic `contact→name` field.
  */
-export function remote(options?: ActionFields): RemoteMailForm
-export function remote(mailer: Mailer, options?: ActionFields): RemoteMailForm
-export function remote(a?: Mailer | ActionFields, b: ActionFields = {}): RemoteMailForm {
+export function remote(options?: ActionFields | Resolver<ActionFields, unknown>): RemoteMailForm
+export function remote(
+	mailer: Mailer,
+	options?: ActionFields | Resolver<ActionFields, unknown>
+): RemoteMailForm
+export function remote(
+	a?: Mailer | ActionFields | Resolver<ActionFields, unknown>,
+	b?: ActionFields | Resolver<ActionFields, unknown>
+): RemoteMailForm {
 	const is_mailer = typeof (a as Mailer | undefined)?.send === "function"
 	const mailer = is_mailer ? (a as Mailer) : undefined
-	const fields = is_mailer ? b : ((a as ActionFields) ?? {})
+	const given = is_mailer ? b : (a as ActionFields | Resolver<ActionFields, unknown> | undefined)
 	const dispatch = mailer ? (o: SendOptions) => mailer.send(o) : zero_config_mail
 	const form = sveltekit.form as typeof sveltekit_form | undefined
 	if (!form) {
@@ -178,11 +276,20 @@ export function remote(a?: Mailer | ActionFields, b: ActionFields = {}): RemoteM
 
 	return form("unchecked", async (data: RemoteFormInput) => {
 		try {
+			const body = remote_form_data(data)
+			const event = sveltekit.request?.() as RequestEvent
+			const resolved = await resolve(given, event, body)
+			if (resolved === null) return { success: true as const }
+			if (is_failure<unknown>(resolved)) {
+				const failure = resolved.data as { error?: unknown } | undefined
+				const error = typeof failure?.error === "string" ? failure.error : "Invalid submission"
+				return { success: false as const, error }
+			}
 			await dispatch({
-				...fields,
-				body: remote_form_data(data),
-				captcha: with_remoteip(fields.captcha),
-			})
+				...resolved,
+				body,
+				captcha: with_remoteip(resolved.captcha),
+			} as SendOptions)
 			return { success: true as const }
 		} catch (error) {
 			// A tripped honeypot pretends to succeed — no email is sent, and the bot learns nothing.

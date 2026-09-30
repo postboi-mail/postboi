@@ -39,7 +39,8 @@ in the table:
 Values can be base64-encoded; they'll be decoded automatically.
 
 Anything you pass to the send itself wins over the body, so a posted field can never replace
-a recipient or subject your server chose.
+a recipient or subject your server chose. A blank string (`to: ''`, say, from an empty CMS
+field) counts as not passed, and falls through to the body or the defaults.
 
 A form post is written by whoever submits it, so the fields that choose who a send goes to
 are ignored unless you ask for them. Honouring `_to` on a public form would let any visitor
