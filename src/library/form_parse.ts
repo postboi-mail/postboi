@@ -54,12 +54,33 @@ export type ParsedForm = {
 	fields: Array<[string, string]>
 }
 
-/** Decode a special field's value when it is base64, and pass it through otherwise. */
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+const UTF8 = new TextDecoder("utf-8", { fatal: true })
+const LETTERS_DECODE_TO = /^(?=.*[ @.])\w[\w@&!?,.'-]+(?: [\w@&!?,.':;-]+)*$/
+
+/**
+ * Decode a special field's value when it is base64 of some text, and pass it through
+ * otherwise. Plenty of plain values are valid base64 too: any word of four, eight or twelve
+ * letters, like `Help`, `Test` or `Jobs`. Those decode to control bytes or broken UTF-8,
+ * so a value is only decoded when what comes out reads as text.
+ */
 export function decode_special(str: string): string {
-	const base64_regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
-	if (!base64_regex.test(str)) return str
 	const clean = str.replace(/[\r\n]+/g, "")
-	return Buffer.from(clean, "base64").toString("utf8")
+	if (!clean || !BASE64.test(clean)) return str
+	let decoded: string
+	try {
+		decoded = UTF8.decode(Uint8Array.from(atob(clean), (char) => char.charCodeAt(0)))
+	} catch {
+		return str
+	}
+	// Control characters (a line break aside) mean it was never text.
+	if (/[\p{Cc}]/u.test(decoded.replace(/\n/g, ""))) return str
+	// A value of letters alone is far likelier a word than an encoding ("also" decodes to
+	// "j[("), where base64 of real text almost always carries a digit, `+`, `/` or `=`. So
+	// letters alone are decoded only into what an encoded field holds: words with single
+	// spaces between them, or an address.
+	if (/^[A-Za-z]+$/.test(clean) && !LETTERS_DECODE_TO.test(decoded)) return str
+	return decoded
 }
 
 /**
