@@ -127,9 +127,10 @@ export const actions = { default: action({ form: "Contact" }) }
 export const actions = { default: action({ form: true }) }
 ```
 
-Every FormData (or form-fields) send is a form submission, captcha or not. Naming a form
-marks a hand-rolled HTML send as one too, so [managed captcha](/spam) gates it
-like any FormData send. Forms are the Postboi provider's: on a project whose
+Every FormData (or form-fields) send is a form submission, captcha or not, and
+[managed captcha](/spam) gates it. Naming a form on an HTML body your server built files
+it the same way, but isn't gated: no visitor posted it, so there's no widget token to
+check. Forms are the Postboi provider's: on a project whose
 `postboi.config` names another provider, `sync` records that too, and `form` becomes a type
 error there rather than an option that silently does nothing.
 

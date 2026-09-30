@@ -388,9 +388,9 @@ export interface SendOptions {
 	 * The Postboi form this send belongs to, by name or `form_…` id. Every submission that
 	 * names a form is filed under it in the dashboard, where its fields become the columns
 	 * of a table and of the exports built from it. Case-insensitive at runtime; a name the
-	 * account doesn't have yet is created on first use. Naming a form marks the send as a
-	 * form submission, so managed captcha gates it like any FormData send. Ignored by every
-	 * other provider.
+	 * account doesn't have yet is created on first use. A FormData send that names one is
+	 * gated by managed captcha like any other; an HTML body your server built isn't, since
+	 * no widget token could come with it. Ignored by every other provider.
 	 *
 	 * `true` marks the send as a form submission without naming a form, and ignores any
 	 * `_form` in the post. Use it (or a name) on a public form: a posted `_form` can't then
@@ -549,8 +549,9 @@ export interface PreparedMessage {
 	/**
 	 * Managed-captcha forwarding. Present when the body was FormData and the provider does
 	 * managed verification (the Postboi provider): `token` is the widget's Turnstile token when one
-	 * arrived. `local` instead when the captcha was settled before the send left: verified
-	 * against a secret of your own, or turned off for this send.
+	 * arrived. `local` instead when there's nothing for the API to check: the captcha was
+	 * verified against a secret of your own or turned off for this send, or the body is one
+	 * your server built (no visitor posted it, so no token could come with it).
 	 */
 	captcha?: { token?: string; remoteip?: string; local?: boolean }
 	/**
@@ -1270,6 +1271,10 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			} as SendOptions
 			if (parsed.attachments.length > 0) options.attachments = parsed.attachments
 			if (parsed.fields.length > 0) fields = parsed.fields
+		} else if (options.form !== undefined) {
+			// A body the server built, filed under a form. No visitor posted it, so no widget
+			// token could ever come with it: there's nothing for the API's captcha to check.
+			captcha = { local: true }
 		}
 
 		const to = options.to ?? this.defaults.to
@@ -1323,7 +1328,11 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			subject: options.subject || "Mail sent from website",
 			html,
 			text,
-			attachments: options.attachments,
+			// An empty list is no attachments, so no provider sees `[]` and has to decide.
+			attachments:
+				Array.isArray(options.attachments) && options.attachments.length === 0
+					? undefined
+					: options.attachments,
 			idempotency_key: options.idempotency_key,
 			headers,
 			tags: options.tags,

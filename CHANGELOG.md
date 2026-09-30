@@ -12,7 +12,13 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Fixed
 
-- A special form field whose plain value happens to be valid base64 (`_subject=Help`, `_form=Jobs`) is no longer decoded into garbage. A value is decoded only when it comes out as readable text.
+### Added
+
+- A resolver gets `field(name)`: one text field, trimmed, or `undefined` when missing or blank, so a missing field no longer becomes the string "null".
+
+### Changed
+
+- `remote()` renders a `true` checkbox as "Yes" and leaves `false` out of the email and the stored fields, instead of "true" / "false".
 
 ## 0.57.0
 

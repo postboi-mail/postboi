@@ -74,7 +74,22 @@ export type ActionOptions = ActionFields & {
 export type Resolver<T, F = never> = (submission: {
 	event: RequestEvent
 	data: FormData
+	field: FieldReader
 }) => T | ActionFailure<F> | void | Promise<T | ActionFailure<F> | void>
+
+/**
+ * One text field from the post, trimmed, or `undefined` when it's missing, blank or a file.
+ * `String(data.get("email"))` turns a missing field into the string `"null"`, which counts
+ * as set: a `reply_to` of "null", or a CMS lookup for `stories/null`.
+ */
+export type FieldReader = (name: string) => string | undefined
+
+function field_reader(data: FormData): FieldReader {
+	return (name) => {
+		const value = data.get(name)
+		return typeof value === "string" && value.trim() ? value.trim() : undefined
+	}
+}
 
 /** postboi's own `_` fields: a resolver reading these doesn't take them out of the post. */
 const OWN_FIELDS = new Set<string>([...SPECIAL_FIELDS, ...HONEYPOT_FIELDS, ...CAPTCHA_FIELDS])
@@ -111,7 +126,9 @@ async function resolve<
 >(
 	given:
 		| T
-		| ((submission: S) => T | ActionFailure<F> | void | Promise<T | ActionFailure<F> | void>)
+		| ((
+				submission: S & { field: FieldReader }
+		  ) => T | ActionFailure<F> | void | Promise<T | ActionFailure<F> | void>)
 		| undefined,
 	submission: S
 ): Promise<T | ActionFailure<F> | null> {
@@ -123,7 +140,9 @@ async function resolve<
 	const trap = honeypot === false ? undefined : honeypot || HONEYPOT_FIELD
 	const honey = trap ? data.get(trap) : null
 	if (typeof honey === "string" && honey.trim()) return null
-	const { read, result } = await track_reads(data, () => given(submission))
+	const { read, result } = await track_reads(data, () =>
+		given({ ...submission, field: field_reader(data) })
+	)
 	if (is_failure<F>(result)) return result
 	for (const name of read) {
 		if (name.startsWith("_") && !OWN_FIELDS.has(name) && name !== trap) data.delete(name)
@@ -230,6 +249,7 @@ export type RemoteMailForm<
 export type RemoteResolver<V, R = object> = (submission: {
 	event: RequestEvent
 	data: FormData
+	field: FieldReader
 	value: V
 }) =>
 	| RemoteOptions<R>
@@ -294,6 +314,10 @@ export function remote_form_data(
 			if (item instanceof File) form.append(name, item)
 			else if (typeof item === "object" && !Array.isArray(item)) {
 				remote_form_data(item as Record<string, unknown>, form, name)
+			} else if (typeof item === "boolean") {
+				// A checkbox left unticked is a row of "false" nobody wants to read; a ticked one
+				// says so the way a person would.
+				if (item) form.append(name, "Yes")
 			} else form.append(name, String(item))
 		}
 	}
