@@ -28,13 +28,29 @@ await mail({ body: request.formData() })
 These keys are extracted from the body and applied to the send options instead of appearing
 in the table:
 
-- `_to`, `_from`, `_subject`, `_reply_to`
-- `_cc`, `_bcc`: comma-separated or repeated
+- `_subject`, `_reply_to`
 - `_form`: the Postboi form the submission is filed under, by name or `form_…` id, the
   same as the [`form`](/forms) send option. One route can serve every form on a site, each
   naming its own
+- `_to`, `_from`, `_cc`, `_bcc` (the last two comma-separated or repeated): **only with
+  `form_addressing: true`**
 
 Values can be base64-encoded; they'll be decoded automatically.
+
+Anything you pass to the send itself wins over the body, so a posted field can never replace
+a recipient or subject your server chose.
+
+A form post is written by whoever submits it, so the fields that choose who a send goes to
+are ignored unless you ask for them. Honouring `_to` on a public form would let any visitor
+send your mail to anyone. Set the recipient on the send, or with `default.to`, and turn
+`form_addressing` on only when the body comes from your own code:
+
+```typescript
+await mail({ body: form, form_addressing: true })
+```
+
+An ignored field is said once in the server's log, so a form that relied on it doesn't go
+quiet.
 
 ```html
 <input type="hidden" name="_form" value="Contact">

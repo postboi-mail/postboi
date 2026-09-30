@@ -108,7 +108,7 @@ describe("Mock provider", () => {
 		const form = new FormData()
 		form.append("_to", "form@test.com")
 		form.append("name", "Darby")
-		await mail.send({ body: form })
+		await mail.send({ body: form, form_addressing: true })
 
 		expect(mail.last?.to).toEqual([{ address: "form@test.com" }])
 		expect(mail.last?.html).toContain("Darby")
@@ -118,10 +118,65 @@ describe("Mock provider", () => {
 		const form = new FormData()
 		form.append("_to", "form@test.com")
 		form.append("name", "Darby")
-		await mail.send({ body: Promise.resolve(form) })
+		await mail.send({ body: Promise.resolve(form), form_addressing: true })
 
 		expect(mail.last?.to).toEqual([{ address: "form@test.com" }])
 		expect(mail.last?.html).toContain("Darby")
+	})
+
+	describe("a posted form's addressing", () => {
+		function posted() {
+			const form = new FormData()
+			form.append("_to", "victim@test.com")
+			form.append("_cc", "cc@test.com")
+			form.append("_bcc", "bcc@test.com")
+			form.append("_from", "spoof@test.com")
+			form.append("_subject", "Posted subject")
+			form.append("_reply_to", "visitor@test.com")
+			form.append("message", "hi")
+			return form
+		}
+
+		it("is ignored unless the send opts in, and says so", async () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+			await mail.send({ body: posted() })
+
+			expect(mail.last?.to).toEqual([{ address: "default-to@test.com" }])
+			expect(mail.last?.from).toEqual({ address: "default@test.com" })
+			expect(mail.last?.cc).toBeUndefined()
+			expect(mail.last?.bcc).toBeUndefined()
+			expect(mail.last?.html).not.toContain("victim@test.com")
+			// Posted fields that don't choose a recipient still apply.
+			expect(mail.last?.subject).toBe("Posted subject")
+			expect(mail.last?.reply_to).toEqual([{ address: "visitor@test.com" }])
+			warn.mockRestore()
+		})
+
+		it("never beats what the send itself passes, even when opted in", async () => {
+			await mail.send({
+				to: "team@test.com",
+				subject: "Server subject",
+				body: posted(),
+				form_addressing: true,
+			})
+
+			expect(mail.last?.to).toEqual([{ address: "team@test.com" }])
+			expect(mail.last?.subject).toBe("Server subject")
+			// Only what the send left out comes from the body.
+			expect(mail.last?.cc).toEqual([{ address: "cc@test.com" }])
+		})
+
+		it("lets an explicitly undefined option fall through to the body", async () => {
+			await mail.send({ subject: undefined, body: posted() })
+
+			expect(mail.last?.subject).toBe("Posted subject")
+		})
+
+		it("applies the same rule to a plain object of fields", async () => {
+			await mail.send({ to: "team@test.com", body: { _to: "victim@test.com", name: "x" } })
+
+			expect(mail.last?.to).toEqual([{ address: "team@test.com" }])
+		})
 	})
 
 	it("accepts a promise resolving to a string body", async () => {
@@ -131,7 +186,10 @@ describe("Mock provider", () => {
 	})
 
 	it("accepts a plain object of fields (e.g. Express req.body)", async () => {
-		await mail.send({ body: { _to: "form@test.com", name: "Darby", tags: ["a", "b"] } })
+		await mail.send({
+			body: { _to: "form@test.com", name: "Darby", tags: ["a", "b"] },
+			form_addressing: true,
+		})
 
 		expect(mail.last?.to).toEqual([{ address: "form@test.com" }])
 		expect(mail.last?.html).toContain("Darby")
