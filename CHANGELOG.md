@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.58.0
+
 ### Added
 
 - A resolver gets `field(name)`: one text field, trimmed, or `undefined` when missing or blank, so a missing field no longer becomes the string "null" (#108).
