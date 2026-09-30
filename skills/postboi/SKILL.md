@@ -340,7 +340,9 @@ Two orderings that matter live in `references/migration.md` beside this file: th
 project** sequence (`init --agent` → wire → hand over the claim URL → domain → webhooks —
 never blocking the code on DNS or on the claim) and **migrating from another ESP**
 (domain first, suppressions imported before anything sends, `?status=subscribed` on
-already-confirmed recipients, then the code swap). Read it before either.
+already-confirmed recipients, then the code swap). Read it before either. It also covers
+**upgrading postboi itself** on a site pinned to an old version (the renames since 0.0.x, and
+the breaking changes to check); the full history is `node_modules/postboi/CHANGELOG.md`.
 
 ## Hosted features (Postboi provider)
 
