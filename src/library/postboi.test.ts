@@ -969,6 +969,22 @@ describe("the dev inbox", () => {
 		expect(sent_json()).toMatchObject({ subject: "Local only" })
 	})
 
+	it("needs no from when the Postboi provider is the one it stands in for", async () => {
+		configure_real_provider()
+		vi.stubEnv("POSTBOI_FROM", "")
+		vi.stubEnv("NODE_ENV", "development")
+		vi.stubEnv("POSTBOI_INBOX", "4599")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("name", "Ada")
+		await mail({ to: "to@test.com", body: form })
+
+		// The real send would use the project's sending address, so the inbox doesn't refuse it.
+		expect(sent_url()).toBe("http://127.0.0.1:4599/__postboi/api/messages")
+		expect(JSON.stringify(sent_json())).toContain("sender@postboi.invalid")
+	})
+
 	it("never intercepts outside development, however loudly the env asks", async () => {
 		for (const node_env of ["production", "staging", ""]) {
 			configure_real_provider()

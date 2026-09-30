@@ -7,6 +7,8 @@ import type {
 	BatchResult,
 	CancelResponse,
 	ProviderBase,
+	Defaults,
+	FromAddress,
 } from "./index.js"
 import type { HostedTest } from "./inspect/hosted.js"
 import { PostboiError } from "./index.js"
@@ -97,6 +99,28 @@ let warned_shadowed_from = false
 let warned_dev_fallback = false
 let announced_inbox = false
 
+/** The provider `mail()` sends with: `POSTBOI_PROVIDER`, the config's `provider`, or a token. */
+function provider_key(config: PostboiConfig): string | undefined {
+	return (
+		read_env("POSTBOI_PROVIDER") ??
+		config.provider ??
+		(read_env("POSTBOI_TOKEN") ? "postboi" : undefined)
+	)
+}
+
+/**
+ * Defaults for a mock standing in for the configured provider. The Postboi provider needs no
+ * `from` (the API uses the project's sending address), so a mock standing in for it mustn't
+ * either: it gets a placeholder when neither the config nor the environment names one.
+ */
+function stand_in_defaults(config: PostboiConfig): Defaults {
+	const defaults = env_defaults()
+	if (provider_key(config) === "postboi" && !defaults.from && !config.default?.from) {
+		defaults.from = "Your Postboi sending address <sender@postboi.invalid>" as FromAddress
+	}
+	return defaults
+}
+
 /**
  * The local dev inbox standing in for whatever is configured, or null when none is
  * listening. Deliberately outranks a fully-credentialled provider: a laptop shouldn't be
@@ -113,7 +137,11 @@ async function resolve_dev_inbox(config: PostboiConfig): Promise<ProviderBase<un
 		console.log(`postboi: capturing mail in the dev inbox. Read it at ${inbox.url}`)
 	}
 	const Mock = await import("./mock.js").then((m) => m.default)
-	return new Mock({ sink: inbox.deliver, on_cancel: inbox.cancel, default: env_defaults() })
+	return new Mock({
+		sink: inbox.deliver,
+		on_cancel: inbox.cancel,
+		default: stand_in_defaults(config),
+	})
 }
 
 /**
@@ -151,10 +179,7 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 	}
 	// A POSTBOI_TOKEN alone is enough to send: with nothing else configured, dispatch to
 	// The Postboi provider — the zero-config path `bunx postboi init` sets up.
-	const key =
-		read_env("POSTBOI_PROVIDER") ??
-		config.provider ??
-		(read_env("POSTBOI_TOKEN") ? "postboi" : undefined)
+	const key = provider_key(config)
 
 	// Nothing to send with. In development that is the normal state of a fresh clone, so
 	// log the mail instead of failing and let the app code stay unconditional. Anywhere
@@ -169,7 +194,7 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 				)
 			}
 			const Mock = await import("./mock.js").then((m) => m.default)
-			return new Mock({ log: true, default: env_defaults() })
+			return new Mock({ log: true, default: stand_in_defaults(config) })
 		}
 		throw new PostboiError({
 			provider: "postboi",
