@@ -1,6 +1,14 @@
 import { title, escape_html, escape_lines, html_to_text } from "./utils.js"
 import { config_loaded, get_config } from "./config.js"
-import { check_captcha, merge_captcha, type CaptchaMode, type CaptchaOptions } from "./captcha.js"
+import {
+	check_captcha,
+	merge_captcha,
+	TURNSTILE_FIELD,
+	TURNSTILE_REMOTE_FIELD,
+	type CaptchaMode,
+	type CaptchaOptions,
+} from "./captcha.js"
+import { captcha_key } from "./register.js"
 import { ensure_env_loaded } from "./env.js"
 import { PostboiError, SpamError, type Channel } from "./errors.js"
 import {
@@ -740,6 +748,25 @@ function posted_options(posted: Partial<SendOptions>, form_addressing?: boolean)
 	return kept
 }
 
+let warned_missing_token = false
+
+/**
+ * Say once when a form arrives with no captcha token although `sync` baked a key for
+ * `<Captcha />`. Something between the widget and the send dropped it: superforms dropping
+ * `cf-turnstile-response`, or a remote form's schema that doesn't declare `_captcha`. The
+ * send is then refused (managed captcha) or goes out unverified, and neither says why.
+ */
+function warn_missing_token(form: FormData, captcha: CaptchaOptions): void {
+	if (warned_missing_token || !captcha_key || captcha.turnstile === false) return
+	if (form.has(TURNSTILE_FIELD) || form.has(TURNSTILE_REMOTE_FIELD)) return
+	warned_missing_token = true
+	console.warn(
+		`postboi: a form was sent with no captcha token, though this project has a key for <Captcha />. ` +
+			`Check <Captcha /> is inside the form, and that your form library or schema keeps ` +
+			`\`${TURNSTILE_FIELD}\` / \`${TURNSTILE_REMOTE_FIELD}\`. Opt a send out with captcha: { turnstile: false }.`
+	)
+}
+
 /** The options a blank string leaves unset. */
 const BLANK_IS_UNSET = ["to", "cc", "bcc", "from", "reply_to", "subject", "form"] as const
 
@@ -1295,6 +1322,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 		overrides?: CaptchaOptions
 	): Promise<{ token?: string; remoteip?: string } | undefined> {
 		const captcha = merge_captcha(this.#captcha, overrides)
+		warn_missing_token(form, captcha)
 		const verdict = await check_captcha(form, captcha, this.captcha_mode)
 		// The IP rides along so managed verification can pass it to siteverify — the send
 		// leaves our server, so the API would otherwise only ever see the server's address.

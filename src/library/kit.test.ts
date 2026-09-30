@@ -3,7 +3,10 @@ import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { fail } from "@sveltejs/kit"
-import { action, mail, remote_form_data, webhook } from "$library/kit.js"
+import * as v from "valibot"
+import type { StandardSchemaV1 } from "@standard-schema/spec"
+import { action, mail, remote, remote_form_data, webhook } from "$library/kit.js"
+import Postboi from "$library/postboi_provider.js"
 import { mail as send } from "$library/mail.js"
 import Mock from "$library/mock.js"
 
@@ -14,6 +17,8 @@ const request = vi.hoisted(() => ({
 }))
 vi.mock("$app/server", async (original) => ({
 	...(await original<Record<string, unknown>>()),
+	// What remote() hands SvelteKit, kept so a test can validate and submit like SvelteKit does.
+	form: (validate: unknown, fn: unknown) => ({ validate, fn }),
 	getRequestEvent: () => {
 		if (!request.event) throw new Error("Can only read the current request event inside handle")
 		return request.event
@@ -268,6 +273,76 @@ describe("postboi/kit action() with a resolver", () => {
 			void action({ form: "Products Order", from: block.from })
 		}
 		expect(typeof never_called).toBe("function")
+	})
+})
+
+describe("postboi/kit remote(schema)", () => {
+	/** What SvelteKit does with a remote form: validate the post against its schema, then call it. */
+	async function submit(built: unknown, post: Record<string, string>) {
+		const { validate, fn } = built as {
+			validate: StandardSchemaV1
+			fn: (value: unknown) => Promise<unknown>
+		}
+		const checked = await validate["~standard"].validate(post)
+		if (checked.issues) return { issues: checked.issues.map((i) => i.message) }
+		return fn(checked.value)
+	}
+
+	// Written for the form's own fields, with no _honey or _captcha: valibot drops them.
+	const schema = v.object({
+		name: v.pipe(v.string(), v.minLength(1)),
+		email: v.pipe(v.string(), v.email()),
+	})
+
+	it("keeps the honeypot and the captcha token the schema doesn't declare", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ id: "1" }))
+		request.event = { getClientAddress: () => "203.0.113.7" }
+		const post = { name: "Ada", email: "ada@example.com", _honey: "", _captcha: "tok_1" }
+		expect(await v.parseAsync(schema, post)).not.toHaveProperty("_captcha")
+
+		const result = await submit(
+			remote(new Postboi(), schema, ({ value }) => ({
+				to: "team@test.com",
+				reply_to: value.email,
+				after: async () => ({ subscribed: true, success: false }),
+			})),
+			post
+		)
+
+		expect(result).toEqual({ success: true, subscribed: true })
+		const sent = JSON.parse(fetch.mock.calls.at(-1)![1].body)
+		expect(sent.captcha_token).toBe("tok_1")
+		expect(sent.captcha_ip).toBe("203.0.113.7")
+		expect(sent.reply_to).toEqual({ email: "ada@example.com" })
+		expect(sent.html).not.toContain("tok_1")
+	})
+
+	it("drops a bot on the honeypot without sending or running after", async () => {
+		const provider = new Mock({ default: { from: "from@test.com", to: "to@test.com" } })
+		const after = vi.fn()
+		const result = await submit(
+			remote(provider, schema, () => ({ after })),
+			{
+				name: "Ada",
+				email: "ada@example.com",
+				_honey: "cheap pills",
+			}
+		)
+		expect(result).toEqual({ success: true })
+		expect(provider.sent).toHaveLength(0)
+		expect(after).not.toHaveBeenCalled()
+	})
+
+	it("leaves the schema's own issues alone", async () => {
+		const provider = new Mock({ default: { from: "from@test.com", to: "to@test.com" } })
+		const result = await submit(remote(provider, schema), {
+			name: "Ada",
+			email: "nope",
+			_captcha: "t",
+		})
+		expect(result).toHaveProperty("issues")
+		expect(provider.sent).toHaveLength(0)
 	})
 })
 
