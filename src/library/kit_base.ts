@@ -13,6 +13,7 @@ import type { form as sveltekit_form } from "$app/server"
 // Postboi provider class, which must stay a dynamic-only leaf (see LOADERS in mail.ts).
 import { mail as zero_config_mail, sveltekit, with_remoteip } from "./mail.js"
 import { HONEYPOT_FIELD, is_error, is_spam, type Email, type SendOptions } from "./index.js"
+import { get_config } from "./config.js"
 // Type-only — the webhooks module itself is loaded lazily inside the handler, so
 // action-only users never pull the adapters or crypto into their bundle.
 import type { WebhookEvent, ReceiveOptions } from "./webhooks/index.js"
@@ -79,14 +80,23 @@ const OWN_FIELDS = new Set([
 
 const is_failure = <F>(value: unknown): value is ActionFailure<F> => isActionFailure(value)
 
-/** Record which fields are read off `data`, so the ones a resolver consumed can be dropped. */
-function track_reads(data: FormData): Set<string> {
+const TRACKED = ["get", "getAll", "has"] as const
+
+/**
+ * Run `fn`, recording which fields it reads off `data`, so the ones a resolver consumed can
+ * be dropped. The FormData is back to its own methods afterwards.
+ */
+async function track_reads<R>(data: FormData, fn: () => R | Promise<R>) {
 	const read = new Set<string>()
-	for (const method of ["get", "getAll", "has"] as const) {
+	for (const method of TRACKED) {
 		const original = data[method].bind(data) as (name: string) => unknown
 		data[method] = ((name: string) => (read.add(name), original(name))) as never
 	}
-	return read
+	try {
+		return { read, result: await fn() }
+	} finally {
+		for (const method of TRACKED) delete (data as unknown as Record<string, unknown>)[method]
+	}
 }
 
 /**
@@ -99,12 +109,17 @@ async function resolve<T extends ActionFields, F>(
 	data: FormData
 ): Promise<T | ActionFailure<F> | null> {
 	if (typeof given !== "function") return given ?? ({} as T)
-	const honey = data.get(HONEYPOT_FIELD)
+	// The project's own honeypot setting, as the provider will apply it (a mailer instance's
+	// own override is only seen at send time, which still drops the bot).
+	const honeypot = get_config().captcha?.honeypot
+	const trap = honeypot === false ? undefined : honeypot || HONEYPOT_FIELD
+	const honey = trap ? data.get(trap) : null
 	if (typeof honey === "string" && honey.trim()) return null
-	const read = track_reads(data)
-	const result = await given({ event, data })
+	const { read, result } = await track_reads(data, () => given({ event, data }))
 	if (is_failure<F>(result)) return result
-	for (const name of read) if (name.startsWith("_") && !OWN_FIELDS.has(name)) data.delete(name)
+	for (const name of read) {
+		if (name.startsWith("_") && !OWN_FIELDS.has(name) && name !== trap) data.delete(name)
+	}
 	return result ?? ({} as T)
 }
 

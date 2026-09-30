@@ -198,6 +198,31 @@ describe("postboi/kit action() with a resolver", () => {
 		expect(provider.sent).toHaveLength(0)
 	})
 
+	it("follows the configured honeypot, and leaves the post's own methods alone", async () => {
+		const { configure, reset_config } = await import("$library/config.js")
+		const provider = new Mock(defaults)
+		const resolver = vi.fn(({ data }: { data: FormData }) => ({ tags: [String(data.get("_hp"))] }))
+		try {
+			configure({ captcha: { honeypot: "_hp" } })
+			expect(await action(provider, resolver)(event({ _hp: "bot", name: "x" }))).toEqual({
+				success: true,
+			})
+			expect(resolver).not.toHaveBeenCalled()
+
+			// Off means off: a filled `_honey` is just a field then.
+			configure({ captcha: { honeypot: false } })
+			const unguarded = new Mock(defaults)
+			const post = event({ _honey: "not a trap", name: "Ada" })
+			await action(unguarded, resolver)(post)
+			expect(resolver).toHaveBeenCalledOnce()
+			expect(unguarded.sent).toHaveLength(1)
+			const form = await (post as { request: Request }).request.formData()
+			expect(Object.hasOwn(form, "get")).toBe(false)
+		} finally {
+			reset_config()
+		}
+	})
+
 	it("lets the resolver swap posted URLs for attachments", async () => {
 		const provider = new Mock(defaults)
 		await action(provider, ({ data }) => {
