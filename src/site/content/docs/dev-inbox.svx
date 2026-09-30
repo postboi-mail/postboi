@@ -147,7 +147,9 @@ The inbox lists messages newest-first and shows each one four ways:
 
 Above them: `from`, `to`, `cc`, `bcc` and `reply_to` exactly as the provider would have
 received them, after defaults are applied and addresses parsed. If `reply_to` isn't what
-you expected, this is where you find out.
+you expected, this is where you find out. On the Postboi provider a send with no `from`
+is fine, because the API uses your project's sending address. The inbox can't know that
+address, so it shows `sender@postboi.invalid` in its place.
 
 The Report tab can also photograph the capture in **real clients** (Outlook on Windows,
 Gmail, Apple Mail) when a hosted [Postboi](https://postboi.app) account is connected: set
