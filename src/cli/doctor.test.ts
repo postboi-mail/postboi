@@ -149,6 +149,17 @@ describe("diagnose", () => {
 		expect(check.level).toBe("warn")
 		expect(check.detail).toContain("src/routes/contact/+page.svelte")
 		expect(check.detail).toContain("honeypot-only")
+
+		// Another provider's <Captcha pk="…"> never has a baked key, and isn't meant to.
+		expect(
+			by_name(
+				diagnose({
+					...wired,
+					provider: "resend",
+					captcha: { component: "src/routes/contact/+page.svelte" },
+				})
+			).captcha
+		).toBeUndefined()
 	})
 
 	it("a captcha key that matches everywhere is ok", () => {
@@ -369,6 +380,13 @@ export const auth = betterAuth({ plugins: [magicLink({ sendMagicLink })] })`
 				'<script>import { push_toggle } from "postboi/svelte"</script>',
 		})
 		expect((await gather(toggle)).captcha?.component).toBeUndefined()
+
+		// a neighbouring import and a type import aren't <Captcha /> either
+		const neighbours = app({
+			"src/routes/push/+page.svelte":
+				'<script>import Foo from "./foo"\nimport { push_toggle } from "postboi/svelte"\nimport type { WebPushSubscription } from "postboi/svelte"</script>',
+		})
+		expect((await gather(neighbours)).captcha?.component).toBeUndefined()
 
 		const form = app({
 			"src/routes/push/+page.svelte":

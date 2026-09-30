@@ -261,8 +261,9 @@ function captcha_check(facts: DoctorFacts): Check | undefined {
 	if (!want) {
 		// A <Captcha /> with no key anywhere is a honeypot and nothing else, and says so only
 		// in the browser's console. On an account with a widget the API then refuses its forms.
+		// Only the Postboi provider bakes a key; another one's <Captcha pk="…"> has its own.
 		const { component } = facts.captcha ?? {}
-		if (!component) return undefined
+		if (!component || (facts.provider && facts.provider !== "postboi")) return undefined
 		return {
 			name: "captcha",
 			level: "warn",
@@ -351,7 +352,7 @@ function unreachable_runtime(dir: string): string | undefined {
 }
 
 /** Collect the facts from the project directory and, with a token, the account. */
-export async function gather(dir = cwd()): Promise<DoctorFacts> {
+export async function gather(dir = cwd(), sources = project_sources(dir)): Promise<DoctorFacts> {
 	await ensure_env_loaded()
 	const config_file = CONFIG_FILES.find((f) => existsSync(`${dir}/${f}`))
 	const source = config_file ? readFileSync(`${dir}/${config_file}`, "utf8") : undefined
@@ -365,7 +366,7 @@ export async function gather(dir = cwd()): Promise<DoctorFacts> {
 		installed: existsSync(`${dir}/${TYPES_TARGET}`),
 		drift: version_drift(dir),
 		captcha: {
-			component: project_sources(dir)?.find(([, file]) => CAPTCHA_IMPORT.test(file))?.[0],
+			component: sources?.find(([, file]) => CAPTCHA_IMPORT.test(file))?.[0],
 			config: source ? config_captcha_key(source) : undefined,
 			baked: existsSync(`${dir}/${RUNTIME_TARGET}`)
 				? parse_runtime(readFileSync(`${dir}/${RUNTIME_TARGET}`, "utf8")).captcha_key
@@ -426,9 +427,12 @@ function project_sources(dir: string): Array<[string, string]> | undefined {
 	return sources
 }
 
-/** `<Captcha />` imported from one of the component entries (default, or by name). */
+/**
+ * `<Captcha />` imported from one of the component entries: the default import (optionally
+ * beside named ones), or `Captcha` by name. One import statement only, and never a type import.
+ */
 const CAPTCHA_IMPORT =
-	/import\s+(?:[\w$]+|\{[^}]*\bCaptcha\b[^}]*\})[\s\S]{0,80}?from\s*["']postboi\/(?:svelte|react|vue|astro)["']/
+	/import\s+(?:(?!type\b)[\w$]+(?:\s*,\s*\{[^}]*\})?|\{[^}]*\bCaptcha\b[^}]*\})\s*from\s*["']postboi\/(?:svelte|react|vue|astro)["']/
 
 /**
  * BetterAuth's `magicLink()` plugin mounts a public `POST /sign-in/magic-link` that mails
@@ -437,8 +441,7 @@ const CAPTCHA_IMPORT =
  * other way. So: warn when the plugin is there, its route isn't in `disabledPaths`, and
  * nothing in the project calls `signIn.magicLink` from the client.
  */
-export function magic_link_check(dir = cwd()): Check | undefined {
-	const sources = project_sources(dir)
+export function magic_link_check(dir = cwd(), sources = project_sources(dir)): Check | undefined {
 	if (!sources) return undefined
 	const plugin = sources.find(
 		([, source]) => source.includes("better-auth/plugins") && /\bmagicLink\s*\(/.test(source)
@@ -473,8 +476,10 @@ export function print_checks(checks: Array<Check>): void {
 }
 
 export async function doctor_command(args: Array<string>, dir = cwd()): Promise<number> {
-	const checks = diagnose(await gather(dir))
-	const auth = magic_link_check(dir)
+	// One read of the app's source for both checks that look at it.
+	const sources = project_sources(dir)
+	const checks = diagnose(await gather(dir, sources))
+	const auth = magic_link_check(dir, sources)
 	if (auth) checks.push(auth)
 	const failed = checks.some((check) => check.level === "fail")
 	if (args.includes("--json")) {
