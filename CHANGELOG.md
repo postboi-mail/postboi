@@ -10,15 +10,21 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
-### Fixed
-
 ### Added
 
-- A resolver gets `field(name)`: one text field, trimmed, or `undefined` when missing or blank, so a missing field no longer becomes the string "null".
+- A resolver gets `field(name)`: one text field, trimmed, or `undefined` when missing or blank, so a missing field no longer becomes the string "null" (#108).
 
 ### Changed
 
-- `remote()` renders a `true` checkbox as "Yes" and leaves `false` out of the email and the stored fields, instead of "true" / "false".
+- `remote()` renders a `true` checkbox as "Yes" and leaves `false` out of the email and the stored fields, instead of "true" / "false" (#108).
+
+### Fixed
+
+- A server-built HTML send that names a `form` is no longer captcha-gated by the API: it now carries `captcha_local`, since no widget token could come with it (#107).
+- The development console fallback with no provider configured no longer demands a `from`; it uses a placeholder, as the dev inbox does (#107).
+- `attachments: []` is treated as no attachments (#107).
+- `postboi doctor` flags a `<Captcha />` import when no captcha key exists anywhere, and sees a BetterAuth `signIn.magicLink(…)` call split across lines (#109).
+- A special form field whose plain value happens to be valid base64 (`_subject=Help`, `_form=Jobs`) is no longer decoded into garbage. A value is decoded only when it comes out as readable text (#110).
 
 ## 0.57.0
 
