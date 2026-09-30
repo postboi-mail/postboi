@@ -1095,42 +1095,68 @@ later, keyed by `{ token, provider }` instead of endpoint.
 - **No rotation endpoint.** The worker's `pushsubscriptionchange` handler re-files with
   Postboi directly.
 - **Send to a person.** `push({ to: { user: "123" }, ... })` reaches every browser that
-  user subscribed, with results per device.
+  user subscribed, and returns `{ sent, expired }` rather than throwing. A user with no
+  devices is `{ sent: 0 }`, not an error: that's a normal state, and the caller decides
+  whether it matters.
 - **Later, for free:** push in `lists.broadcast()`, and scheduled or digest pushes through
   the existing `notifications` machinery.
 
-### The API, roughly
+### The API
 
-Server, with the user's identity coming from your own session:
+The whole of a signed-in app's setup:
 
 ```ts
+// src/routes/push/+server.ts, written by `bunx postboi init --push`
 import { push } from "postboi"
 
-// POST /push/subscriptions: the one endpoint left, and it has no database behind it
-await push.subscriptions.add(await request.json(), { user: session.user.id })
+export const { POST, DELETE } = push.handler((event) => event.locals.user?.id)
+```
 
-// Anywhere server-side
+```ts
+// service worker
+receive()
+
+// page
+const push = subscription({ register: "/push" })
+
+// anywhere server-side
 await push({ to: { user: "123" }, title: "Order shipped", message: "On its way" })
 ```
 
-`push.subscriptions` hangs off `push` the way `push.expired` does, and resolves through
-`POSTBOI_TOKEN` like the `mail.*` namespaces. Besides `add`: `remove(endpoint)`,
-`list({ user })`, and `import(rows)` for moving an existing table across.
+The one line a developer writes is how to find the signed-in user. Everything else is
+generated or takes no arguments.
 
-Client, for anonymous subscribers to a list (no backend involved):
+**`push.handler(who)`** returns `POST` and `DELETE` route handlers. `POST` takes the
+subscription the page sends and files it under `who`'s answer; `DELETE` takes the endpoint
+and removes it. `who` gets whatever the framework passes a route handler, and the handler
+reads the `Request` from it: the argument itself (Next route handlers, Workers), its
+`.request` (SvelteKit, Astro, Remix), or `c.req.raw` (Hono). When `who` returns `null` or
+`undefined` the answer is a 401, which the toggle already treats as `register_failed` and
+rolls the browser subscription back. `init --push` writes the file for the detected
+framework, in the same pass that writes the service worker.
+
+Underneath it is `push.subscriptions`, which hangs off `push` the way `push.expired` does
+and resolves through `POSTBOI_TOKEN` like the `mail.*` namespaces: `add(subscription,
+{ user })`, `remove(endpoint)`, `list({ user })`, and `import(rows)` for moving an existing
+table across. Most apps never call it directly. It's there for frameworks whose handlers
+aren't `Request`-shaped (Express), and for scripts.
+
+**Public lists** are the one case with no server code at all:
 
 ```ts
-const push = subscription({ register: "postboi", list: "New posts" })
+const push = subscription({ list: "new-posts" })
 ```
 
-Service worker:
+The browser registers straight with Postboi on the publishable key. That's only safe for
+something anyone may read, so the rule is enforced on our side rather than by naming: a list
+accepts browser subscriptions only when it was created `public`. Anything per-user (an
+order, an account) goes through `push.handler` instead.
 
-```ts
-receive({ register: "postboi" })
-```
-
-`register: "postboi"` uses the publishable key `bunx postboi sync` already bakes for the
-managed captcha, so neither side needs a key passed in.
+**No arguments** on `receive()`, and none beyond `register` or `list` on `subscription()`,
+because `bunx postboi sync` bakes a managed-push flag and the publishable key next to the
+VAPID public key it already bakes. In managed mode the worker sends rotations to Postboi
+rather than to your route. A served-as-is `public/sw.js` gets the same values written in by
+the CLI.
 
 ### Who may register what
 
@@ -1139,15 +1165,31 @@ anything tied to a user it is a hole: a publishable key is public, so anyone cou
 their own browser under someone else's `user` and start receiving that person's
 notifications. So registration splits three ways:
 
-| Registration | Goes direct from the browser? | Why |
-| --- | --- | --- |
-| Anonymous, to a list | Yes, publishable key | The worst case is junk subscribers. Rate limit per IP and per account |
-| Rotation (`old_endpoint` present) | Yes, publishable key | Endpoints are unguessable URLs, so presenting the old one proves ownership of its row, and the new row inherits its `user` and lists |
-| Bound to a user | No, through your server's `push.subscriptions.add` | Only your backend knows who is signed in |
+| Registration                      | Goes direct from the browser?             | Why                                                                                                                                  |
+| --------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| To a `public` list                | Yes, publishable key                      | Anyone may read it by definition. Rate limit per IP and per account                                                                  |
+| Rotation (`old_endpoint` present) | Yes, publishable key                      | Endpoints are unguessable URLs, so presenting the old one proves ownership of its row, and the new row inherits its `user` and lists |
+| Bound to a user                   | No, through `push.handler` on your server | Only your backend knows who is signed in                                                                                             |
 
-A later step could let the page register a user-bound subscription directly by carrying a
-short-lived token your server signs (`push.subscriptions.token(user)`). Not in the first
-cut: the one-line server call covers it, and a token scheme is more surface to get wrong.
+### Considered, and not first
+
+- **A hand-written endpoint over `push.subscriptions.add`.** It works everywhere, but it's
+  four lines every app copies, plus a `DELETE` nobody remembers. It stays as the primitive
+  under `push.handler`.
+- **SvelteKit remote functions and Next server actions** (`subscription({ register })`
+  taking the function itself). Type-checked end to end, but it has to be written per
+  framework. A natural addition to `postboi/kit` later, on top of `push.handler`.
+- **A server-signed token and no route.** The server signs the user id locally with
+  `POSTBOI_TOKEN` and the page registers directly. It removes the route but brings back
+  carrying a value from server to page, which baking exists to avoid, and the token needs
+  refreshing.
+- **Verifying the app's own auth JWT** (Clerk, Supabase, Auth0) against a JWKS URL set in
+  the dashboard. Zero server code for those apps, none of it for cookie-session apps, and
+  it makes Postboi a verifier of other providers' tokens. Worth revisiting once there's
+  demand.
+- **`send({ to: { user } })` across every channel**, with Postboi resolving which channels
+  the person has. The best version of this, and it waits on `external_id` for contacts
+  (decision 3).
 
 Two details the rotation path needs:
 
@@ -1211,13 +1253,14 @@ push volume on an account ever dwarfs its email.
 
 ### Where the work lives
 
-- **This repo:** `push.subscriptions` and a `postboi` push loader in
-  `src/library/push/send.ts`; `PushTarget` widening to `{ user }`; `register: "postboi"` in
-  `client.ts`, `controller.ts`, `sw.ts` and the CLI's generated worker (which must stay in
-  step with `receive()`); `vapid --export` and the `init --push` path; docs in `push.svx`
-  and `provider.svx`.
-- **`postboi-app`:** subscription and tombstone tables, the registration routes with the
-  origin allowlist and rate limits, per-account VAPID key custody, the send route with
+- **This repo:** `push.handler` and `push.subscriptions`, and a `postboi` push loader, in
+  `src/library/push/send.ts`; `PushTarget` widening to `{ user }`; the managed-push flag and
+  publishable key in the sync bake; `list` and managed mode in `client.ts`, `controller.ts`,
+  `sw.ts` and the CLI's generated worker (which must stay in step with `receive()`);
+  `init --push` writing the route file per framework, and `vapid --export`; docs in
+  `push.svx` and `provider.svx`.
+- **`postboi-app`:** subscription and tombstone tables, `public` lists, the registration
+  routes with the origin allowlist and rate limits, per-account VAPID key custody, the send route with
   per-device results and 410 cleanup, Queue fan-out, and a dashboard count.
 
 **Effort: ~2–3 days in this repo, ~1–1.5 weeks in `postboi-app`.** Nothing external
