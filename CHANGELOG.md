@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.58.1
+
 ### Added
 
 - `field.all(name)` in a resolver: every non-blank value of a field posted more than once, or `[]`.
