@@ -112,12 +112,16 @@ function provider_key(config: PostboiConfig): string | undefined {
 /**
  * Defaults for a mock standing in for the configured provider. The Postboi provider needs no
  * `from` (the API uses the project's sending address), so a mock standing in for it mustn't
- * either: it gets a placeholder when neither the config nor the environment names one.
+ * either, and nor must the console fallback of a fresh clone with no provider at all: each
+ * gets a placeholder when neither the config nor the environment names one. A mock standing
+ * in for a provider that does need one still asks, since the real send would.
  */
 function stand_in_defaults(config: PostboiConfig): Defaults {
 	const defaults = env_defaults()
-	if (provider_key(config) === "postboi" && !defaults.from && !config.default?.from) {
-		defaults.from = "Your Postboi sending address <sender@postboi.invalid>" as FromAddress
+	const key = provider_key(config)
+	if ((key === undefined || key === "postboi") && !defaults.from && !config.default?.from) {
+		const whose = key === "postboi" ? "Your Postboi sending address" : "Your sending address"
+		defaults.from = `${whose} <sender@postboi.invalid>` as FromAddress
 	}
 	return defaults
 }

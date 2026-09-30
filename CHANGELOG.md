@@ -13,6 +13,17 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 ### Fixed
 
 - `postboi doctor` flags a `<Captcha />` import when no captcha key exists anywhere, and sees a BetterAuth `signIn.magicLink(…)` call split across lines.
+- A server-built HTML send that names a `form` is no longer captcha-gated by the API: it now carries `captcha_local`, since no widget token could come with it.
+- The development console fallback with no provider configured no longer demands a `from`; it uses a placeholder, as the dev inbox does.
+- `attachments: []` is treated as no attachments.
+
+### Added
+
+- A resolver gets `field(name)`: one text field, trimmed, or `undefined` when missing or blank, so a missing field no longer becomes the string "null".
+
+### Changed
+
+- `remote()` renders a `true` checkbox as "Yes" and leaves `false` out of the email and the stored fields, instead of "true" / "false".
 
 ## 0.57.0
 
