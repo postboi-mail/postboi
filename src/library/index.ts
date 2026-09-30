@@ -1,4 +1,11 @@
-import { title, escape_html, escape_lines, html_to_text } from "./utils.js"
+import { html_to_text } from "./utils.js"
+import {
+	decode_special,
+	FORM_ADDRESSING,
+	parse_form,
+	type FormParseOptions,
+	type ParsedForm,
+} from "./form_parse.js"
 import { config_loaded, get_config } from "./config.js"
 import {
 	check_captcha,
@@ -98,6 +105,18 @@ export {
 } from "./captcha.js"
 // The publishable key `bunx postboi sync` bakes in for the <Captcha /> components.
 export { captcha_key } from "./register.js"
+// The FormData parser the providers use, and the field names it treats specially, for
+// anything that handles the same posts outside a send (Postboi's hosted form endpoints).
+export {
+	parse_form,
+	decode_special,
+	SPECIAL_FIELDS,
+	FORM_ADDRESSING,
+	HONEYPOT_FIELDS,
+	CAPTCHA_FIELDS,
+	type FormParseOptions,
+	type ParsedForm,
+} from "./form_parse.js"
 // The table renderer escapes for you; these are for hand-rolled HTML bodies that
 // interpolate user input, so callers don't reinvent them (usually incompletely).
 export { escape_html, escape_lines } from "./utils.js"
@@ -723,7 +742,9 @@ function missing_config_hint(): string {
 }
 
 /** The posted fields that choose who a send goes to, or who it claims to be from. */
-const FORM_ADDRESSING = ["to", "cc", "bcc", "from"] as const
+const ADDRESSING_KEYS = FORM_ADDRESSING.map(
+	(field) => field.slice(1) as "to" | "cc" | "bcc" | "from"
+)
 let warned_form_addressing = false
 
 /**
@@ -733,7 +754,7 @@ let warned_form_addressing = false
  */
 function posted_options(posted: Partial<SendOptions>, form_addressing?: boolean) {
 	if (form_addressing) return posted
-	const ignored = FORM_ADDRESSING.filter((key) => posted[key] !== undefined)
+	const ignored = ADDRESSING_KEYS.filter((key) => posted[key] !== undefined)
 	if (ignored.length === 0) return posted
 	if (!warned_form_addressing) {
 		warned_form_addressing = true
@@ -1157,10 +1178,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 
 	/** Decode a base64 string if it looks like base64, otherwise return the original. */
 	protected decode_value(str: string): string {
-		const base64_regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
-		if (!base64_regex.test(str)) return str
-		const clean = str.replace(/[\r\n]+/g, "")
-		return Buffer.from(clean, "base64").toString("utf8")
+		return decode_special(str)
 	}
 
 	/**
@@ -1181,134 +1199,14 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 
 	/**
 	 * Parse FormData, extracting special header fields and rendering the remaining
-	 * data into a compact HTML table, grouped by the `fieldset→field` key syntax.
-	 * Returns the extracted SendOptions (to/from/etc) along with any File attachments, and
-	 * the rendered fields as the `[name, value]` pairs they came in as — the table for the
-	 * inbox, the pairs for anything that wants the submission as data.
+	 * data into a compact HTML table — see {@link parse_form} for the rules. Special values
+	 * go through {@link decode_value}, so a subclass can change how they're decoded.
 	 */
 	protected async parse_form_data(
 		form_data: FormData,
-		formatter?:
-			| {
-					fieldset?: ((label: string) => string) | null | false
-					name?: ((label: string) => string) | null | false
-			  }
-			| null
-			| false
-	): Promise<{
-		options: Partial<SendOptions>
-		attachments: Array<File>
-		fields: Array<[string, string]>
-	}> {
-		const options: Partial<SendOptions> = {}
-		const attachments: Array<File> = []
-		const fields: Array<[string, string]> = []
-		const grouped = new Map<string, Map<string, string | Array<string>>>()
-
-		// choose formatter behaviour
-		const identity = (s: string) => s
-		let format_fieldset: (s: string) => string
-		let format_name: (s: string) => string
-		if (formatter === null || formatter === false) {
-			format_fieldset = identity
-			format_name = identity
-		} else {
-			const fset = formatter?.fieldset
-			const fname = formatter?.name
-			format_fieldset = fset === undefined ? title : fset ? fset : identity
-			format_name = fname === undefined ? title : fname ? fname : identity
-		}
-
-		for (const [key, value] of form_data.entries()) {
-			if (value && typeof value === "object" && "name" in value && "type" in value) {
-				const file = value as File
-				// ignore empty file inputs (no name or zero length)
-				const size = (file as unknown as { size?: number }).size ?? 0
-				if (file.name && size > 0) attachments.push(file)
-			} else if (typeof value === "string") {
-				switch (key) {
-					case "_to":
-						options.to = this.decode_value(value)
-						continue
-					case "_subject":
-						options.subject = this.decode_value(value)
-						continue
-					case "_from":
-						// FormData carries arbitrary strings; a project-level `Register`
-						// augmentation can narrow `from` below `string`, hence the cast.
-						options.from = this.decode_value(value) as FromAddress
-						continue
-					case "_reply_to":
-						options.reply_to = this.decode_value(value)
-						continue
-					case "_cc":
-						options.cc = this.decode_value(value)
-						continue
-					case "_bcc":
-						options.bcc = this.decode_value(value)
-						continue
-					case "_form":
-						// The Postboi form to file the submission under, so one route can serve every
-						// form on a site. A registered FormName narrows below `string`, hence the cast.
-						options.form = this.decode_value(value) as FormName
-						continue
-				}
-
-				fields.push([key, value])
-				const [fieldset, field] = key.split("→")
-				if (field) {
-					if (!grouped.has(fieldset)) grouped.set(fieldset, new Map())
-					const map = grouped.get(fieldset)!
-					const existing = map.get(field)
-					if (existing) {
-						if (Array.isArray(existing)) existing.push(value)
-						else map.set(field, [existing, value])
-					} else {
-						map.set(field, value)
-					}
-				} else {
-					if (!grouped.has("general")) grouped.set("general", new Map())
-					const map = grouped.get("general")!
-					const existing = map.get(key)
-					if (existing) {
-						if (Array.isArray(existing)) existing.push(value)
-						else map.set(key, [existing, value])
-					} else {
-						map.set(key, value)
-					}
-				}
-			}
-		}
-
-		if (grouped.size > 0) {
-			const rows: Array<string> = []
-			for (const [fieldset, entries] of grouped) {
-				if (entries.size > 0) {
-					if (fieldset !== "general") {
-						// Labels derive from submitted field names, so they need escaping too —
-						// and formatters are documented as label→label string transforms, not
-						// a way to inject markup.
-						const header_label = escape_html(format_fieldset(fieldset))
-						rows.push(
-							`<tr><td colspan="2" style="padding: 15px 0 10px 0; font-weight: bold; font-size: 16px; border-bottom: 1px solid #ccc;">${header_label}</td></tr>`
-						)
-					}
-					const field_rows = Array.from(entries.entries()).map(([field, value]) => {
-						const label = escape_html(format_name(field))
-						const display = Array.isArray(value)
-							? `<ul style="margin: 0; padding-left: 20px;">${value.map((v) => `<li>${escape_lines(v)}</li>`).join("")}</ul>`
-							: escape_lines(value)
-						return `<tr><td style="padding: 5px 10px 5px 0; vertical-align: top;">${label}</td><td style="padding: 5px 0;">${display}</td></tr>`
-					})
-					rows.push(...field_rows)
-					if (fieldset !== "general")
-						rows.push(`<tr><td colspan="2" style="padding: 10px 0;"></td></tr>`)
-				}
-			}
-			options.body = `<table style="border-collapse: collapse; width: auto;">${rows.join("")}</table>`
-		}
-
-		return { options, attachments, fields }
+		formatter?: FormParseOptions["formatter"]
+	): Promise<ParsedForm> {
+		return parse_form(form_data, { formatter, decode: (value) => this.decode_value(value) })
 	}
 
 	/**

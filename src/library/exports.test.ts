@@ -52,6 +52,7 @@ describe("package exports", () => {
 			"mime.ts", // RFC 5322 composition, used by smtp.ts and gmail.ts
 			"oauth.ts", // shared token cache + Google service-account JWT, used by gmail.ts, sendpulse.ts and push/
 			"errors.ts", // normalized errors, re-exported from the root
+			"form_parse.ts", // the FormData parser and special-field lists, re-exported from the root
 			"transport.ts", // channel-agnostic provider base, re-exported from the root
 			"register.ts", // generated-types placeholder, reached via the root export
 			"inbox.ts", // dev inbox discovery, reached via mail.ts (and patched by postboi/vite)

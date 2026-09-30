@@ -167,6 +167,27 @@ await mail({
 `escape_html` for single-line values and attributes, `escape_lines` when the value may
 contain newlines.
 
+## Parsing a post yourself
+
+The parser every provider uses is exported, for code that handles the same posts without
+sending them through postboi, so they render identically:
+
+```typescript
+import { parse_form, HONEYPOT_FIELDS, CAPTCHA_FIELDS } from "postboi"
+
+const { options, fields, attachments } = parse_form(await request.formData(), {
+	max_fields: 100,
+	max_value_length: 50_000,
+	max_files: 20,
+})
+// options.subject, options.reply_to, options.form … and options.body, the table
+```
+
+It takes its own `escape_label` and `escape_value`, a `decode` for special values, and the
+same `formatter` as a send. It doesn't check the honeypot or the captcha: providers strip
+those first, and `HONEYPOT_FIELDS` and `CAPTCHA_FIELDS` name them. `SPECIAL_FIELDS` and
+`FORM_ADDRESSING` list the rest.
+
 ## Attachments
 
 Attachments work from file inputs (`details→files`) or via `attachments: File | File[]` on
