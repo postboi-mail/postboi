@@ -1,10 +1,12 @@
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 
 /** Package managers the CLI can install with. */
 export type PackageManager = "bun" | "pnpm" | "yarn" | "npm"
 
 export type PackageJson = {
 	name?: string
+	version?: string
 	homepage?: string
 	packageManager?: string
 	dependencies?: Record<string, string>
@@ -169,4 +171,46 @@ export function add_remote_exclude(source: string): string | "present" | "unable
 		)
 	}
 	return "unable"
+}
+
+/** Lockfiles we can read a postboi version out of, in the order they're believed. */
+const LOCKFILES = ["bun.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"]
+
+/**
+ * The postboi version a lockfile pins, read with a pattern per format rather than a parser
+ * per format. Undefined when the lockfile doesn't mention postboi (or bun's binary
+ * `bun.lockb`, which isn't read at all).
+ */
+export function locked_version(file: string, source: string): string | undefined {
+	if (file === "package-lock.json") {
+		try {
+			const lock = JSON.parse(source) as { packages?: Record<string, { version?: string }> }
+			return lock.packages?.["node_modules/postboi"]?.version
+		} catch {
+			return undefined
+		}
+	}
+	const pattern =
+		file === "bun.lock"
+			? /"postboi": \["postboi@([^"]+)"/
+			: file === "pnpm-lock.yaml"
+				? /^\s*['"]?\/?postboi@(\d[^:'"(\s]*)/m
+				: /^"?postboi@[^\n]*:\r?\n\s+version:? "?([^"\s]+)"?/m
+	return pattern.exec(source)?.[1]
+}
+
+/**
+ * postboi as installed in node_modules against postboi as the lockfile pins it, when both
+ * can be read and they differ. That's a stale install: a pull landed a bump and nobody
+ * re-ran the install, so every check and generated type runs against the old package.
+ */
+export function version_drift(
+	dir = "."
+): { installed: string; locked: string; lockfile: string } | undefined {
+	const installed = read_package(join(dir, "node_modules", "postboi", "package.json"))?.version
+	if (!installed) return undefined
+	const lockfile = LOCKFILES.find((f) => existsSync(join(dir, f)))
+	if (!lockfile) return undefined
+	const locked = locked_version(lockfile, readFileSync(join(dir, lockfile), "utf8"))
+	return locked && locked !== installed ? { installed, locked, lockfile } : undefined
 }

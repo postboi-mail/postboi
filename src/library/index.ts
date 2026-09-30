@@ -357,8 +357,12 @@ export interface SendOptions {
 	 * Let a FormData (or form-fields object) body's `_to`, `_cc`, `_bcc` and `_from` fields
 	 * address this send. Off by default: a form post is written by whoever submits it, so
 	 * honouring them lets any visitor send your mail to anyone. Turn it on only when the
-	 * body comes from your own code. `_reply_to`, `_subject` and `_form` always apply, and
-	 * anything you pass to the send itself beats what the body says either way.
+	 * body comes from your own code. `_reply_to` and `_subject` always apply, and anything you
+	 * pass to the send itself beats what the body says either way.
+	 *
+	 * It covers `_form` too. Without it a posted `_form` can only pick a form the account
+	 * already has (the API never creates one from a post); with it, a posted name the
+	 * account hasn't seen creates the form, as {@link SendOptions.form} does.
 	 */
 	form_addressing?: boolean
 	/**
@@ -368,8 +372,12 @@ export interface SendOptions {
 	 * account doesn't have yet is created on first use. Naming a form marks the send as a
 	 * form submission, so managed captcha gates it like any FormData send. Ignored by every
 	 * other provider.
+	 *
+	 * `true` marks the send as a form submission without naming a form, and ignores any
+	 * `_form` in the post. Use it (or a name) on a public form: a posted `_form` can't then
+	 * file the submission under another of your forms. See {@link SendOptions.form_addressing}.
 	 */
-	form?: FormName
+	form?: FormName | true
 	/**
 	 * Put your team's letterhead — the header and footer written in the Postboi dashboard
 	 * under Messages → Templates → Letterhead — around this send's HTML. Off unless you
@@ -522,11 +530,20 @@ export interface PreparedMessage {
 	/**
 	 * Managed-captcha forwarding. Present when the body was FormData and the provider does
 	 * managed verification (the Postboi provider): `token` is the widget's Turnstile token when one
-	 * arrived. Providers without managed captcha never see this set.
+	 * arrived. `local` instead when the captcha was settled before the send left: verified
+	 * against a secret of your own, or turned off for this send.
 	 */
-	captcha?: { token?: string; remoteip?: string }
-	/** The Postboi form the send names — see {@link SendOptions.form}. */
-	form?: string
+	captcha?: { token?: string; remoteip?: string; local?: boolean }
+	/**
+	 * The Postboi form the send names — see {@link SendOptions.form}. `true` on every
+	 * FormData (or form-fields) send that doesn't name one: it's a form submission either way.
+	 */
+	form?: string | true
+	/**
+	 * A `_form` posted in the body, when the send didn't set `form` itself. The API files the
+	 * submission under it only if the account already has that form; a post never creates one.
+	 */
+	form_posted?: string
 	/** Whether the send asks for the team's letterhead — see {@link SendOptions.letterhead}. */
 	letterhead?: boolean
 	/** Whether the send asks for Postboi's shell — see {@link SendOptions.shell}. */
@@ -767,6 +784,25 @@ function unset_blanks(options: SendOptions): SendOptions {
 	const kept = { ...options }
 	for (const key of blank) delete kept[key]
 	return kept
+}
+
+let warned_posted_form = false
+
+/**
+ * Where a posted `_form` goes. A visitor writes the post, so by default it can only pick one
+ * of the account's existing forms (`form_posted`, which the API never creates from). A send
+ * that sets `form` itself ignores it; `form_addressing` lets it name, and create, a form.
+ */
+function posted_form(posted: SendOptions["form"], options: SendOptions) {
+	if (typeof posted !== "string") return {}
+	if (options.form !== undefined) {
+		if (!warned_posted_form) {
+			warned_posted_form = true
+			console.warn("postboi: ignored _form in a posted form, because the send sets `form` itself.")
+		}
+		return {}
+	}
+	return options.form_addressing ? { form: posted as FormName } : { form_posted: posted }
 }
 
 export abstract class EmailProvider<TResponse = unknown> extends Transport<
@@ -1316,15 +1352,19 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 		// FormData — or a plain object of fields (Express/multer's `req.body`) — is parsed into
 		// extracted header fields plus a rendered HTML table (honouring any formatter).
 		const form = this.to_form_data(body)
-		let captcha: { token?: string; remoteip?: string } | undefined
+		let captcha: PreparedMessage["captcha"]
 		let fields: Array<[string, string]> | undefined
+		let form_posted: string | undefined
 		if (form) {
 			// Spam checks run first, and strip their plumbing fields so they never reach the email.
-			captcha = await this.enforce_captcha(form, options.captcha)
+			// Settled here (a secret of our own, or turned off) says so, so the API doesn't gate it.
+			captcha = (await this.enforce_captcha(form, options.captcha)) ?? { local: true }
 			const parsed = await this.parse_form_data(form, options.formatter)
-			const { body: table, ...posted } = parsed.options
+			const { body: table, form: posted, ...rest } = parsed.options
+			const picked = posted_form(posted, options)
+			form_posted = picked.form_posted
 			options = {
-				...posted_options(posted, options.form_addressing),
+				...posted_options({ ...rest, form: picked.form }, options.form_addressing),
 				// What the caller passed beats what the body says, so a posted field can never
 				// replace a recipient or subject the server chose.
 				...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)),
@@ -1392,7 +1432,9 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			scheduled_at,
 			tracking: options.tracking,
 			captcha,
-			form: options.form,
+			// Every form body is a form submission, whether or not a captcha came with it.
+			form: options.form ?? (form ? true : undefined),
+			form_posted,
 			// Presentation falls back to the project's own defaults, the way an address does.
 			letterhead: options.letterhead ?? this.defaults.letterhead,
 			shell: options.shell ?? this.defaults.shell,

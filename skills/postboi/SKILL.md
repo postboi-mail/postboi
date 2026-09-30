@@ -115,13 +115,13 @@ Returns `{ ok, results, delivered }` and never rejects once a channel was attemp
 
 Passing `FormData` as `body` renders a tidy HTML table. Field names and values are HTML-escaped, so a public form can't inject markup into the email you read — **don't escape them yourself on the way in**. Multi-line values keep their breaks as `<br>`. Building a `body` string by hand instead? Use `escape_html` (or `escape_lines`) from `postboi` on any interpolated user input.
 
-| Convention       |                                                                                                                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Grouping         | `fieldset→field` (literal `→`): `name="contact→email"`                                                                                                                       |
-| Special fields   | `_subject` `_reply_to` `_form` set send options instead of appearing in the table; the send's own options always win                                                         |
-| Addressing       | `_to` `_from` `_cc` `_bcc` are ignored unless the send passes `form_addressing: true` (a public post must never pick its recipient). Set `to` on the send or in `default.to` |
-| Standard pattern | a hidden `_reply_to` bound to the submitter's email, so replies reach them                                                                                                   |
-| Attachments      | file inputs become attachments; the form needs `enctype="multipart/form-data"`                                                                                               |
+| Convention       |                                                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grouping         | `fieldset→field` (literal `→`): `name="contact→email"`                                                                                                                                                                                            |
+| Special fields   | `_subject` `_reply_to` set send options instead of appearing in the table; the send's own options always win. A posted `_form` only picks a form the account already has (never creates one); on a public form pin `form: "Name"` or `form: true` |
+| Addressing       | `_to` `_from` `_cc` `_bcc` are ignored unless the send passes `form_addressing: true` (a public post must never pick its recipient). Set `to` on the send or in `default.to`                                                                      |
+| Standard pattern | a hidden `_reply_to` bound to the submitter's email, so replies reach them                                                                                                                                                                        |
+| Attachments      | file inputs become attachments; the form needs `enctype="multipart/form-data"`                                                                                                                                                                    |
 
 ### SvelteKit — pick the right one-liner
 
@@ -200,6 +200,8 @@ Manual honeypot — a visually hidden input named `_honey`. **Don't use `display
 ```
 
 A filled honeypot skips the send: `postboi/kit` still returns `{ success: true }` (the bot learns nothing); direct `mail()` throws a `SpamError` — catch with `is_spam(error)` and pretend success. Bring-your-own Cloudflare Turnstile: set `TURNSTILE_SECRET_KEY` and add the widget — note that setting the secret **enforces** the captcha on every FormData send (opt a send out with `captcha: { turnstile: false }`). `/raw/spam`
+
+**Auth libraries mount their own "send to any email" routes, and the honeypot and captcha don't cover them.** BetterAuth's `magicLink()` plugin exposes `POST /api/auth/sign-in/magic-link` through the catch-all: it mails any posted address, passes posted fields to `sendMagicLink`, and skips the app's own throttle. When the app sends its sign-in links itself, set `disabledPaths: ["/sign-in/magic-link"]` in `betterAuth({ … })`; when the browser does use the route, rate-limit it and keep request data out of the subject and body. Auth.js's email provider has the same shape. `bunx postboi doctor` flags an open BetterAuth magic-link route that nothing in the project calls. `/raw/spam`
 
 ## Webhooks (delivery events)
 
@@ -342,7 +344,9 @@ Two orderings that matter live in `references/migration.md` beside this file: th
 project** sequence (`init --agent` → wire → hand over the claim URL → domain → webhooks —
 never blocking the code on DNS or on the claim) and **migrating from another ESP**
 (domain first, suppressions imported before anything sends, `?status=subscribed` on
-already-confirmed recipients, then the code swap). Read it before either.
+already-confirmed recipients, then the code swap). Read it before either. It also covers
+**upgrading postboi itself** on a site pinned to an old version (the renames since 0.0.x, and
+the breaking changes to check); the full history is `node_modules/postboi/CHANGELOG.md`.
 
 ## Hosted features (Postboi provider)
 
