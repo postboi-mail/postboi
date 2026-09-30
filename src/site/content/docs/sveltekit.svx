@@ -161,40 +161,50 @@ Worth knowing:
   remote-safe name, and the managed captcha detects remote forms automatically. A tripped
   honeypot still reports `{ success: true }` to the bot.
 
-### Writing your own remote form
+### A remote form with a schema
 
 `remote()` uses SvelteKit's `unchecked` mode, so it accepts whatever the form submits and
-the spam fields arrive intact. Writing your own `form(schema, ...)` instead, for typed
-fields and `issues()`, changes that: **SvelteKit validates against your schema first and
-drops anything undeclared, silently.** Leave the spam fields out and the honeypot is inert
-and the captcha token never arrives, with no error to tell you.
-
-Declare them, and forward them to `mail()`:
-
-```ts
-// contact.schema.ts
-export const schema = v.object({
-	name: v.pipe(v.string(), v.minLength(1)),
-	email: v.pipe(v.string(), v.email()),
-	_honey: v.optional(v.string()), // HONEYPOT_FIELD
-	_captcha: v.optional(v.string()) // TURNSTILE_REMOTE_FIELD
-})
-```
+the spam fields arrive intact. For typed fields and `issues()`, pass a
+[Standard Schema](https://standardschema.dev) (valibot, zod, arktype) first. Write it for
+your own fields only: `remote()` keeps `_honey` and `_captcha` out of your schema and puts
+them back after, so SvelteKit's validation can't drop them.
 
 ```ts
 // contact.remote.ts
-import { form, getRequestEvent } from '$app/server'
-import { mail } from 'postboi'
+import * as v from 'valibot'
+import { remote } from 'postboi/kit'
 
-export const send = form(schema, async (data) => {
-	const body: Record<string, string> = { name: data.name, email: data.email }
-	if (data._honey) body._honey = data._honey
-	if (data._captcha) body._captcha = data._captcha
-	// The visitor's IP, so Turnstile can reject a replayed token. mail() finds it itself
-	// when the app has the postboi() Vite plugin; passing it keeps this working without.
-	await mail({ body, captcha: { remoteip: getRequestEvent().getClientAddress() } })
+const schema = v.object({
+	name: v.pipe(v.string(), v.minLength(1)),
+	email: v.pipe(v.string(), v.email())
 })
+
+export const contact = remote(schema, ({ value }) => ({
+	reply_to: value.email,
+	subject: `New enquiry from ${value.name}`,
+	// Runs once the email has gone; what it returns is merged into the result.
+	after: async () => ({ subscribed: await subscribe(value.email) })
+}))
 ```
+
+```svelte
+<form {...contact}>
+	<Captcha />
+	<input {...contact.fields.name.as('text')} />
+	{#each contact.fields.name.issues() as issue}<p>{issue.message}</p>{/each}
+	<input {...contact.fields.email.as('email')} />
+	<button>Send</button>
+</form>
+{#if contact.result?.success}<p>Thanks{contact.result.subscribed ? ', and welcome aboard' : ''}!</p>{/if}
+```
+
+`value` is the post as your schema returned it. The honeypot, the captcha token, the
+visitor's IP and a failed send are handled as they are for any `remote()`. A tripped
+honeypot returns `{ success: true }` without running `after`, and an `after` that throws is
+your error rather than a failed send, so it isn't caught.
+
+With a Postboi captcha key baked in, a form that arrives with no token at all is said once
+in the server's log. That's the sign a form library or a schema of your own dropped it.
 
 `_captcha` rather than `cf-turnstile-response`: remote-form field names must be valid JS
 paths, so the managed loader renames the token field. postboi strips both before rendering.

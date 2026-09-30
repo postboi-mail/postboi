@@ -9,10 +9,18 @@ import {
 // Type-only: `form` itself comes from `sveltekit`, which kit.ts fills in under Vite. This
 // module never imports `$app/server`, so a plain `bun test` can import it (see kit.ts).
 import type { form as sveltekit_form } from "$app/server"
+import type { StandardSchemaV1 } from "@standard-schema/spec"
 // From ./mail.js directly, not the package root — the root statically re-exports the
 // Postboi provider class, which must stay a dynamic-only leaf (see LOADERS in mail.ts).
 import { mail as zero_config_mail, sveltekit, with_remoteip } from "./mail.js"
-import { HONEYPOT_FIELD, is_error, is_spam, type Email, type SendOptions } from "./index.js"
+import {
+	HONEYPOT_FIELD,
+	TURNSTILE_REMOTE_FIELD,
+	is_error,
+	is_spam,
+	type Email,
+	type SendOptions,
+} from "./index.js"
 // Type-only — the webhooks module itself is loaded lazily inside the handler, so
 // action-only users never pull the adapters or crypto into their bundle.
 import type { WebhookEvent, ReceiveOptions } from "./webhooks/index.js"
@@ -77,6 +85,19 @@ const OWN_FIELDS = new Set([
 	"_captcha",
 ])
 
+/**
+ * The request a remote form is handling, for its resolver. Read before any await (SvelteKit
+ * only answers synchronously without AsyncLocalStorage), and never fatal: a send doesn't
+ * depend on it.
+ */
+function request_event(): RequestEvent {
+	try {
+		return sveltekit.request?.() as RequestEvent
+	} catch {
+		return undefined as unknown as RequestEvent
+	}
+}
+
 const is_failure = <F>(value: unknown): value is ActionFailure<F> => isActionFailure(value)
 
 /** Record which fields are read off `data`, so the ones a resolver consumed can be dropped. */
@@ -93,16 +114,23 @@ function track_reads(data: FormData): Set<string> {
  * The options for one submission: as given, or from the resolver. Null for a bot that filled
  * the honeypot, which gets nothing run on its behalf (no lookups, no fetching URLs it posted).
  */
-async function resolve<T extends ActionFields, F>(
-	given: T | Resolver<T, F> | undefined,
-	event: RequestEvent,
-	data: FormData
+async function resolve<
+	T extends ActionFields,
+	F,
+	S extends { event: RequestEvent; data: FormData },
+>(
+	given:
+		| T
+		| ((submission: S) => T | ActionFailure<F> | void | Promise<T | ActionFailure<F> | void>)
+		| undefined,
+	submission: S
 ): Promise<T | ActionFailure<F> | null> {
 	if (typeof given !== "function") return given ?? ({} as T)
+	const { data } = submission
 	const honey = data.get(HONEYPOT_FIELD)
 	if (typeof honey === "string" && honey.trim()) return null
 	const read = track_reads(data)
-	const result = await given({ event, data })
+	const result = await given(submission)
 	if (is_failure<F>(result)) return result
 	for (const name of read) if (name.startsWith("_") && !OWN_FIELDS.has(name)) data.delete(name)
 	return result ?? ({} as T)
@@ -153,7 +181,7 @@ export function action<F>(
 		let status = typeof given === "function" ? 400 : (given?.status ?? 400)
 		try {
 			const body = await event.request.formData()
-			const resolved = await resolve(given, event, body)
+			const resolved = await resolve(given, { event, data: body })
 			if (resolved === null) return { success: true }
 			if (is_failure<F>(resolved)) return resolved
 			const { status: failure_status = 400, ...fields } = resolved
@@ -184,11 +212,73 @@ export function action<F>(
  */
 export const mail: FormAction = action()
 
-/** What a remote mail form resolves to: `mail.result` after a submission. */
-export type RemoteResult = { success: true } | { success: false; error: string }
+/**
+ * What a remote mail form resolves to: `mail.result` after a submission. `R` is what an
+ * `after` hook returned, merged in on a successful send (absent when the honeypot tripped).
+ */
+export type RemoteResult<R = object> =
+	| ({ success: true } & Partial<R>)
+	| { success: false; error: string }
 
 /** The remote mail form built by {@link remote} — spread it onto a `<form>` element. */
-export type RemoteMailForm = RemoteForm<RemoteFormInput, RemoteResult>
+export type RemoteMailForm<
+	Input extends RemoteFormInput = RemoteFormInput,
+	R = object,
+> = RemoteForm<Input, RemoteResult<R>>
+
+/**
+ * A remote form's options, from the submission. As {@link Resolver}, plus `value` (the post as
+ * your schema validated it, or as submitted) and `after`: run once the email has gone, and
+ * whatever it returns is merged into the form's result, `{ success: true, subscribed }` say.
+ * An `after` that throws is your error, not a failed send, so it isn't caught.
+ */
+export type RemoteResolver<V, R = object> = (submission: {
+	event: RequestEvent
+	data: FormData
+	value: V
+}) =>
+	| RemoteOptions<R>
+	| ActionFailure<unknown>
+	| void
+	| Promise<RemoteOptions<R> | ActionFailure<unknown> | void>
+
+type RemoteOptions<R> = ActionFields & { after?: () => R | Promise<R> }
+
+/** A Standard Schema over a remote form's fields: valibot, zod, arktype and the rest. */
+type Schema = StandardSchemaV1<RemoteFormInput, Record<string, unknown>>
+
+const is_schema = (value: unknown): value is Schema =>
+	typeof value === "object" && value !== null && "~standard" in value
+
+/** The spam fields a schema gets on top of its own. */
+const SPAM_FIELDS = [HONEYPOT_FIELD, TURNSTILE_REMOTE_FIELD]
+
+/**
+ * `schema`, but keeping the honeypot and the captcha token. SvelteKit validates a remote form
+ * against its schema and drops every field the schema doesn't declare, silently, so a schema
+ * written for the form's own fields would switch spam protection off. They're taken out
+ * before your schema sees the input and put back on its output.
+ */
+function with_spam_fields<S extends Schema>(schema: S): S {
+	const standard = schema["~standard"]
+	return {
+		"~standard": {
+			...standard,
+			validate(input: unknown) {
+				const fields = { ...(input as Record<string, unknown>) }
+				const spam: Record<string, unknown> = {}
+				for (const name of SPAM_FIELDS) {
+					if (name in fields) spam[name] = fields[name]
+					delete fields[name]
+				}
+				const keep = (result: StandardSchemaV1.Result<Record<string, unknown>>) =>
+					result.issues ? result : { value: { ...result.value, ...spam } }
+				const result = standard.validate(fields)
+				return result instanceof Promise ? result.then(keep) : keep(result)
+			},
+		},
+	} as S
+}
 
 /**
  * Convert the structured data a remote `form` hands back into the FormData the send
@@ -239,18 +329,29 @@ export function remote_form_data(
  * Field names follow the remote-form rules (JS paths — nesting instead of `→`):
  * `fields.contact.name` renders in the email exactly like a classic `contact→name` field.
  */
-export function remote(options?: ActionFields | Resolver<ActionFields, unknown>): RemoteMailForm
-export function remote(
+export function remote<R = object>(
+	options?: ActionFields | RemoteResolver<RemoteFormInput, R>
+): RemoteMailForm<RemoteFormInput, R>
+export function remote<R = object>(
 	mailer: Mailer,
-	options?: ActionFields | Resolver<ActionFields, unknown>
-): RemoteMailForm
-export function remote(
-	a?: Mailer | ActionFields | Resolver<ActionFields, unknown>,
-	b?: ActionFields | Resolver<ActionFields, unknown>
-): RemoteMailForm {
-	const is_mailer = typeof (a as Mailer | undefined)?.send === "function"
-	const mailer = is_mailer ? (a as Mailer) : undefined
-	const given = is_mailer ? b : (a as ActionFields | Resolver<ActionFields, unknown> | undefined)
+	options?: ActionFields | RemoteResolver<RemoteFormInput, R>
+): RemoteMailForm<RemoteFormInput, R>
+export function remote<S extends Schema, R = object>(
+	schema: S,
+	options?: ActionFields | RemoteResolver<StandardSchemaV1.InferOutput<S>, R>
+): RemoteMailForm<StandardSchemaV1.InferInput<S>, R>
+export function remote<S extends Schema, R = object>(
+	mailer: Mailer,
+	schema: S,
+	options?: ActionFields | RemoteResolver<StandardSchemaV1.InferOutput<S>, R>
+): RemoteMailForm<StandardSchemaV1.InferInput<S>, R>
+export function remote(...args: Array<unknown>): RemoteMailForm<RemoteFormInput, object> {
+	const mailer =
+		typeof (args[0] as Mailer | undefined)?.send === "function"
+			? (args.shift() as Mailer)
+			: undefined
+	const schema = is_schema(args[0]) ? (args.shift() as Schema) : undefined
+	const given = args[0] as RemoteOptions<object> | RemoteResolver<unknown, object> | undefined
 	const dispatch = mailer ? (o: SendOptions) => mailer.send(o) : zero_config_mail
 	const form = sveltekit.form as typeof sveltekit_form | undefined
 	if (!form) {
@@ -259,29 +360,37 @@ export function remote(
 		)
 	}
 
-	return form("unchecked", async (data: RemoteFormInput) => {
+	const handler = async (value: RemoteFormInput) => {
+		let after: RemoteOptions<object>["after"]
 		try {
-			const body = remote_form_data(data)
-			const event = sveltekit.request?.() as RequestEvent
-			const resolved = await resolve(given, event, body)
+			const body = remote_form_data(value)
+			const resolved = await resolve(given, { event: request_event(), data: body, value })
 			if (resolved === null) return { success: true as const }
 			if (is_failure<unknown>(resolved)) {
 				const failure = resolved.data as { error?: unknown } | undefined
 				const error = typeof failure?.error === "string" ? failure.error : "Invalid submission"
 				return { success: false as const, error }
 			}
+			const { after: then, ...fields } = resolved
+			after = then
 			await dispatch({
-				...resolved,
+				...fields,
 				body,
-				captcha: with_remoteip(resolved.captcha),
+				captcha: with_remoteip(fields.captcha),
 			} as SendOptions)
-			return { success: true as const }
 		} catch (error) {
 			// A tripped honeypot pretends to succeed — no email is sent, and the bot learns nothing.
 			if (is_spam(error)) return { success: true as const }
 			return { success: false as const, error: is_error(error) ? error.message : String(error) }
 		}
-	})
+		return { success: true as const, ...(await after?.()) }
+	}
+
+	if (!schema) return form("unchecked", handler)
+	// The schema's checks (booleans must be optional, and so on) are SvelteKit's to make on the
+	// caller's own schema type; here it's already erased to Schema.
+	const checked = form as unknown as (schema: Schema, fn: typeof handler) => unknown
+	return checked(with_spam_fields(schema), handler) as RemoteMailForm<RemoteFormInput, object>
 }
 
 /**
