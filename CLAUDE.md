@@ -16,7 +16,8 @@ are `src/site/`, and it is built with SvelteKit and Tailwind v4.
 Releases come out of a merge. Label the PR `release:patch`, `release:minor` or
 `release:major` and merging it freezes the outgoing docs, bumps, validates,
 publishes to npm, tags, cuts the GitHub release and moves the examples' pins.
-Pre-1.0 a breaking change is a **minor**.
+Pre-1.0 a breaking change is a **minor**. A PR that changes the SDK or CLI adds its lines
+under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md); the release renames that heading.
 
 When asked to "cut a release" / "release" / "publish a new version" with no PR to
 label, follow **[RELEASING.md](RELEASING.md)** — run the Release workflow by hand,

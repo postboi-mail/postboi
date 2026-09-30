@@ -29,9 +29,10 @@ These keys are extracted from the body and applied to the send options instead o
 in the table:
 
 - `_subject`, `_reply_to`
-- `_form`: the Postboi form the submission is filed under, by name or `form_…` id, the
-  same as the [`form`](/forms) send option. One route can serve every form on a site, each
-  naming its own
+- `_form`: which of your Postboi forms the submission is filed under, by name or `form_…`
+  id. One route can serve every form on a site, each naming its own. A posted name can only
+  pick a form your account already has: a post never creates one (see
+  [Naming the form](#naming-the-form))
 - `_to`, `_from`, `_cc`, `_bcc` (the last two comma-separated or repeated): **only with
   `form_addressing: true`**
 
@@ -106,7 +107,26 @@ the API keeps answering to the old name, so what's already shipped keeps landing
 right place. The one exception: create a *new* form under a name an older one used to have, and that name now
 means the new form.
 
-Naming a form marks the send as a form submission, so [managed captcha](/spam) gates it
+A posted `_form` is weaker than the option. The visitor writes the post, so it can only
+pick a form your account already has, and an unknown name files the submission under no
+form rather than creating one. Otherwise anyone could file a submission under another of
+your forms, setting off that form's notifications, or invent names until the account hits
+its form limit. Create the form first (name it from code once, or in the dashboard), or
+pass `form_addressing: true` when the body comes from your own code and the name should
+create it.
+
+On a public form, set `form` on the send. A name pins it; `form: true` files it as a form
+submission without naming one. Either way a posted `_form` is ignored, and said once in the
+server's log:
+
+```typescript
+export const actions = { default: action({ form: "Contact" }) }
+// or, with no form to name:
+export const actions = { default: action({ form: true }) }
+```
+
+Every FormData (or form-fields) send is a form submission, captcha or not. Naming a form
+marks a hand-rolled HTML send as one too, so [managed captcha](/spam) gates it
 like any FormData send. Forms are the Postboi provider's: on a project whose
 `postboi.config` names another provider, `sync` records that too, and `form` becomes a type
 error there rather than an option that silently does nothing.

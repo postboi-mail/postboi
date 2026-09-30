@@ -23,9 +23,11 @@ export const actions = {
 ```
 
 Or on any `mail()` call: `mail({ to, body: request.formData(), form: "Home Ownership Query" })`.
-When one route serves several forms, let each form name itself with a hidden
-`<input type="hidden" name="_form" value="Home Ownership Query">` instead (see
-[FormData](/formdata)).
+When one route serves several forms, let each form pick itself with a hidden
+`<input type="hidden" name="_form" value="Home Ownership Query">` instead. A posted name
+only picks a form the account already has, so a visitor can't invent new ones (see
+[Naming the form](/formdata#naming-the-form)). On a route that serves one form, set `form`
+on the send, or `form: true` if there's no name to give it, and a posted `_form` is ignored.
 A name is created on first use and matched case-insensitively; `bunx postboi sync` makes
 your account's forms autocomplete on `form`, and a name it doesn't know yet is still fine. See
 [Naming the form](/formdata#naming-the-form) for the details, including what a rename does.

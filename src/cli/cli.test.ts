@@ -43,7 +43,10 @@ import {
 	has_dependency,
 	install_command,
 	is_bundled_framework,
+	locked_version,
+	version_drift,
 } from "./project.js"
+import { imports_config } from "./doctor.js"
 import {
 	create_prompts,
 	create_auto_prompts,
@@ -457,6 +460,76 @@ describe("project detection", () => {
 		expect(is_bundled_framework(["next.config.js"], { dependencies: { next: "^15" } })).toBe(false)
 		expect(is_bundled_framework(["vite.config.ts"], { dependencies: { react: "^19" } })).toBe(false)
 		expect(is_bundled_framework([])).toBe(false)
+	})
+})
+
+describe("stale install (sync, doctor)", () => {
+	it("reads the locked postboi version out of every lockfile format", () => {
+		expect(
+			locked_version("bun.lock", '    "postboi": ["postboi@0.56.0", "", {}, "sha512-x"],\n')
+		).toBe("0.56.0")
+		expect(
+			locked_version(
+				"package-lock.json",
+				JSON.stringify({ packages: { "node_modules/postboi": { version: "0.56.0" } } })
+			)
+		).toBe("0.56.0")
+		// pnpm v9, then v6's leading slash; a scoped look-alike doesn't count.
+		const pnpm =
+			"packages:\n\n  '@acme/postboi@9.9.9':\n    resolution: {}\n\n  postboi@0.56.0(svelte@5.0.0):\n"
+		expect(locked_version("pnpm-lock.yaml", pnpm)).toBe("0.56.0")
+		expect(locked_version("pnpm-lock.yaml", "packages:\n  /postboi@0.55.1:\n")).toBe("0.55.1")
+		// yarn classic, then berry.
+		expect(
+			locked_version("yarn.lock", 'postboi@^0.56.0:\n  version "0.56.0"\n  resolved "x"\n')
+		).toBe("0.56.0")
+		expect(locked_version("yarn.lock", '"postboi@npm:^0.56.0":\n  version: 0.56.0\n')).toBe(
+			"0.56.0"
+		)
+		expect(locked_version("bun.lock", '"svelte": ["svelte@5.0.0"]')).toBeUndefined()
+		expect(locked_version("package-lock.json", "not json")).toBeUndefined()
+	})
+
+	it("reports node_modules behind the lockfile, and nothing when they agree", () => {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-drift-"))
+		mkdirSync(join(dir, "node_modules", "postboi"), { recursive: true })
+		writeFileSync(join(dir, "node_modules", "postboi", "package.json"), '{"version":"0.54.3"}')
+		writeFileSync(
+			join(dir, "package-lock.json"),
+			JSON.stringify({ packages: { "node_modules/postboi": { version: "0.56.0" } } })
+		)
+		expect(version_drift(dir)).toEqual({
+			installed: "0.54.3",
+			locked: "0.56.0",
+			lockfile: "package-lock.json",
+		})
+		writeFileSync(join(dir, "node_modules", "postboi", "package.json"), '{"version":"0.56.0"}')
+		expect(version_drift(dir)).toBeUndefined()
+	})
+})
+
+describe("missing Vite plugin warning (sync)", () => {
+	function src(files: Record<string, string>): string {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-src-"))
+		for (const [path, source] of Object.entries(files)) {
+			mkdirSync(dirname(join(dir, path)), { recursive: true })
+			writeFileSync(join(dir, path), source)
+		}
+		return dir
+	}
+
+	it("is skipped when server code under src/ imports the config", () => {
+		const dir = src({
+			"lib/server/mail.ts": 'import "$/postboi.config"\nimport { mail } from "postboi"',
+		})
+		expect(imports_config(dir)).toBe(true)
+	})
+
+	it("still fires when nothing imports it, and holds back on a tree too big to read", () => {
+		const dir = src({ "routes/+page.server.ts": 'import { mail } from "postboi"', "app.ts": "" })
+		expect(imports_config(dir)).toBe(false)
+		expect(imports_config(dir, 1)).toBeUndefined()
+		expect(imports_config(join(dir, "missing"))).toBeUndefined()
 	})
 })
 

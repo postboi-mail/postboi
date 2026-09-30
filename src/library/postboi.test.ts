@@ -180,6 +180,62 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(body.form).toBe(true)
 	})
 
+	it("flags every form body as a form, even with the captcha settled locally", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("name", "Ada")
+		await new Postboi().send({ to: "to@test.com", body: form, captcha: { turnstile: false } })
+		// filed as a form, and told the API the captcha was dealt with before it left
+		expect(sent_json().form).toBe(true)
+		expect(sent_json().captcha_local).toBe(true)
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().form).toBeUndefined()
+		expect(sent_json().captcha_local).toBeUndefined()
+	})
+
+	it("lets a posted _form pick an existing form, never name a new one", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const post = () => {
+			const form = new FormData()
+			form.append("_form", "Made Up")
+			form.append("name", "Ada")
+			return form
+		}
+
+		// a post can only select: the API matches form_posted against forms the team already has
+		await new Postboi().send({ to: "to@test.com", body: post() })
+		expect(sent_json().form).toBe(true)
+		expect(sent_json().form_posted).toBe("Made Up")
+
+		// form_addressing trusts the post like the send's own option, so the name can create
+		await new Postboi().send({ to: "to@test.com", body: post(), form_addressing: true })
+		expect(sent_json().form).toBe("Made Up")
+		expect(sent_json().form_posted).toBeUndefined()
+	})
+
+	it("ignores a posted _form when the send sets form, and says so once", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+		for (const form_option of [true, "Contact"] as const) {
+			const form = new FormData()
+			form.append("_form", "Made Up")
+			form.append("name", "Ada")
+			await new Postboi().send({ to: "to@test.com", body: form, form: form_option })
+			expect(sent_json().form).toBe(form_option)
+			expect(sent_json().form_posted).toBeUndefined()
+			expect(sent_json().html).not.toContain("Made Up")
+		}
+		expect(warn.mock.calls.filter(([m]) => String(m).includes("_form"))).toHaveLength(1)
+		warn.mockRestore()
+	})
+
 	it("sends the submission's fields as data beside the rendered table", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
@@ -967,6 +1023,22 @@ describe("the dev inbox", () => {
 		// The one thing that must never happen in dev: a real send to a real address.
 		expect(sent_url()).toBe("http://127.0.0.1:4599/__postboi/api/messages")
 		expect(sent_json()).toMatchObject({ subject: "Local only" })
+	})
+
+	it("needs no from when the Postboi provider is the one it stands in for", async () => {
+		configure_real_provider()
+		vi.stubEnv("POSTBOI_FROM", "")
+		vi.stubEnv("NODE_ENV", "development")
+		vi.stubEnv("POSTBOI_INBOX", "4599")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		const form = new FormData()
+		form.append("name", "Ada")
+		await mail({ to: "to@test.com", body: form })
+
+		// The real send would use the project's sending address, so the inbox doesn't refuse it.
+		expect(sent_url()).toBe("http://127.0.0.1:4599/__postboi/api/messages")
+		expect(JSON.stringify(sent_json())).toContain("sender@postboi.invalid")
 	})
 
 	it("never intercepts outside development, however loudly the env asks", async () => {

@@ -68,6 +68,16 @@ export interface SendParams {
 	 * form the submission is filed under (by name or `form_…` id); `true` just flags it.
 	 */
 	form?: boolean | string
+	/**
+	 * A `_form` from the visitor's post. Only selects a form the account already has; the API
+	 * never creates one from it. Ignored when `form` names one.
+	 */
+	form_posted?: string
+	/**
+	 * The sender settled the captcha itself (its own Turnstile secret, or turned off for this
+	 * send), so the API files the submission without gating it.
+	 */
+	captcha_local?: boolean
 	/** The submission's `[name, value]` entries, the data the table in `html` was drawn from. */
 	fields?: Array<[string, string]>
 	/**
@@ -1119,7 +1129,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			tracking: message.tracking,
 			captcha_token: message.captcha?.token,
 			captcha_ip: message.captcha?.remoteip,
-			form: message.form ?? (message.captcha ? true : undefined),
+			captcha_local: message.captcha?.local,
+			form: message.form,
+			form_posted: message.form_posted,
 			letterhead: message.letterhead,
 			shell: message.shell,
 			style: message.style,

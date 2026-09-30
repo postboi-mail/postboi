@@ -100,7 +100,9 @@ It bundles the first `postboi.config.*` it finds from the Vite root upward (pass
 `postboi({ config: 'path/to/config.ts' })` to point elsewhere, or `config: false` to skip
 it), and only into the server build, so a config file with hooks and secrets in it never
 reaches the browser. The plugin also carries the `optimizeDeps` exclude that
-[remote forms](/sveltekit#remote-functions) need.
+[remote forms](/sveltekit#remote-functions) need. `bunx postboi init` adds it for you, and
+`bunx postboi sync` warns when a config with defaults or hooks has no plugin to carry it,
+unless a file under `src/` imports the config itself, which bundles it just as well.
 
 Without a bundler in the picture, register config at startup instead with
 `configure({ ... })`:
