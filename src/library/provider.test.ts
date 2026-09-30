@@ -415,7 +415,7 @@ describe("ProviderBase", () => {
 			form.append("message", "Hello")
 			form.append("file", new File(["x"], "x.txt", { type: "text/plain" }))
 
-			const result = await provider.prepare({ body: form })
+			const result = await provider.prepare({ body: form, form_addressing: true })
 			expect(result.to).toBe("form-to@test.com")
 			expect(result.from).toBe("form-from@test.com")
 			expect(typeof result.html).toBe("string")

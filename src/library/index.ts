@@ -346,6 +346,14 @@ export interface SendOptions {
 	 */
 	captcha?: CaptchaOptions
 	/**
+	 * Let a FormData (or form-fields object) body's `_to`, `_cc`, `_bcc` and `_from` fields
+	 * address this send. Off by default: a form post is written by whoever submits it, so
+	 * honouring them lets any visitor send your mail to anyone. Turn it on only when the
+	 * body comes from your own code. `_reply_to`, `_subject` and `_form` always apply, and
+	 * anything you pass to the send itself beats what the body says either way.
+	 */
+	form_addressing?: boolean
+	/**
 	 * The Postboi form this send belongs to, by name or `form_…` id. Every submission that
 	 * names a form is filed under it in the dashboard, where its fields become the columns
 	 * of a table and of the exports built from it. Case-insensitive at runtime; a name the
@@ -687,6 +695,32 @@ function missing_config_hint(): string {
 		"runtime: add postboi() from postboi/vite (Vite/SvelteKit), import the config from " +
 		"your server entry, or call configure() at startup."
 	)
+}
+
+/** The posted fields that choose who a send goes to, or who it claims to be from. */
+const FORM_ADDRESSING = ["to", "cc", "bcc", "from"] as const
+let warned_form_addressing = false
+
+/**
+ * The send options a posted body may set. Its addressing is dropped unless the send opted in
+ * with `form_addressing`, because a public form's post is written by whoever submits it.
+ * Said once per process, since the send then goes to the default recipient, or refuses.
+ */
+function posted_options(posted: Partial<SendOptions>, form_addressing?: boolean) {
+	if (form_addressing) return posted
+	const ignored = FORM_ADDRESSING.filter((key) => posted[key] !== undefined)
+	if (ignored.length === 0) return posted
+	if (!warned_form_addressing) {
+		warned_form_addressing = true
+		console.warn(
+			`postboi: ignored ${ignored.map((key) => `_${key}`).join(", ")} in a posted form. A form ` +
+				"post can't choose who a send goes to: pass the address to the send yourself, or " +
+				"`form_addressing: true` when the body comes from your own code."
+		)
+	}
+	const kept = { ...posted }
+	for (const key of ignored) delete kept[key]
+	return kept
 }
 
 export abstract class EmailProvider<TResponse = unknown> extends Transport<
@@ -1241,7 +1275,14 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			// Spam checks run first, and strip their plumbing fields so they never reach the email.
 			captcha = await this.enforce_captcha(form, options.captcha)
 			const parsed = await this.parse_form_data(form, options.formatter)
-			options = { ...options, ...parsed.options }
+			const { body: table, ...posted } = parsed.options
+			options = {
+				...posted_options(posted, options.form_addressing),
+				// What the caller passed beats what the body says, so a posted field can never
+				// replace a recipient or subject the server chose.
+				...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)),
+				body: table ?? options.body,
+			} as SendOptions
 			if (parsed.attachments.length > 0) options.attachments = parsed.attachments
 			if (parsed.fields.length > 0) fields = parsed.fields
 		}
