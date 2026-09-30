@@ -549,8 +549,9 @@ export interface PreparedMessage {
 	/**
 	 * Managed-captcha forwarding. Present when the body was FormData and the provider does
 	 * managed verification (the Postboi provider): `token` is the widget's Turnstile token when one
-	 * arrived. `local` instead when the captcha was settled before the send left: verified
-	 * against a secret of your own, or turned off for this send.
+	 * arrived. `local` instead when there's nothing for the API to check: the captcha was
+	 * verified against a secret of your own or turned off for this send, or the body is one
+	 * your server built (no visitor posted it, so no token could come with it).
 	 */
 	captcha?: { token?: string; remoteip?: string; local?: boolean }
 	/**
