@@ -4,8 +4,17 @@ import { ensure_env_loaded, read_env } from "../library/env.js"
 import { api, ApiCommandError } from "./api.js"
 import { cloud_base, fetch_domains, type PostboiDomain } from "./postboi.js"
 import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
+import { detect_package_manager, version_drift } from "./project.js"
 import { skill_state } from "./skill.js"
-import { config_default_from, config_provider, from_status, TYPES_TARGET } from "./typegen.js"
+import {
+	config_captcha_key,
+	config_default_from,
+	config_provider,
+	from_status,
+	parse_runtime,
+	RUNTIME_TARGET,
+	TYPES_TARGET,
+} from "./typegen.js"
 
 /**
  * `postboi doctor` — is this project wired? The question every agent asks first and
@@ -37,6 +46,13 @@ export interface DoctorFacts {
 	provider?: string
 	default_from?: string
 	installed: boolean
+	/** node_modules/postboi against the version the lockfile pins, when the two differ. */
+	drift?: { installed: string; locked: string; lockfile: string }
+	/**
+	 * The publishable captcha key three ways: committed in the config, on the account,
+	 * and baked into the installed package, which is the one `<Captcha />` actually uses.
+	 */
+	captcha?: { config?: string; account?: string; baked?: string }
 	token: boolean
 	/** `GET /v1/account`, or a string naming why it failed. Absent when there is no token. */
 	account?:
@@ -76,14 +92,21 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 	const hosted = on_postboi(facts)
 
 	checks.push(
-		facts.installed
-			? { name: "package", level: "ok", detail: "postboi is installed" }
-			: {
+		facts.installed && facts.drift
+			? {
 					name: "package",
-					level: "fail",
-					detail: "postboi isn't installed in this project",
-					fix: "bunx postboi init",
+					level: "warn",
+					detail: `node_modules has postboi ${facts.drift.installed}, but ${facts.drift.lockfile} pins ${facts.drift.locked}`,
+					fix: `${detect_package_manager([facts.drift.lockfile])} install`,
 				}
+			: facts.installed
+				? { name: "package", level: "ok", detail: "postboi is installed" }
+				: {
+						name: "package",
+						level: "fail",
+						detail: "postboi isn't installed in this project",
+						fix: "bunx postboi init",
+					}
 	)
 
 	// A config file that exists and a config file that arrives are different facts. The
@@ -221,8 +244,42 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 		}
 	}
 
+	const captcha = captcha_check(facts)
+	if (captcha) checks.push(captcha)
 	checks.push({ name: "skill", ...skill_check(facts.skill) })
 	return checks
+}
+
+/**
+ * Does `<Captcha />` have the right key? The account's key wins, the committed config is
+ * what a tokenless build (CI) bakes from, and the installed package is what the component
+ * reads. Nothing to say when no key exists anywhere.
+ */
+function captcha_check(facts: DoctorFacts): Check | undefined {
+	const { config, account, baked } = facts.captcha ?? {}
+	const want = account ?? config
+	if (!want) return undefined
+	if (account && config !== account) {
+		return {
+			name: "captcha",
+			level: "warn",
+			detail: config
+				? `captcha.key in ${facts.config_file ?? "the config"} is ${config}, but the account's key is ${account}`
+				: "no captcha.key in the config, so a build without POSTBOI_TOKEN bakes no key for <Captcha />",
+			fix: "bunx postboi sync",
+		}
+	}
+	if (facts.installed && baked !== want) {
+		return {
+			name: "captcha",
+			level: "warn",
+			detail: baked
+				? `the installed package has ${baked} baked in, not ${want}, so <Captcha /> uses the wrong key`
+				: "no key baked into the installed package, so <Captcha /> is honeypot-only",
+			fix: "bunx postboi sync",
+		}
+	}
+	return { name: "captcha", level: "ok", detail: `<Captcha /> has ${want}` }
 }
 
 function skill_check(state: DoctorFacts["skill"]): Omit<Check, "name"> {
@@ -246,36 +303,40 @@ function skill_check(state: DoctorFacts["skill"]): Omit<Check, "name"> {
 	}
 }
 
-/** How many source files under `convex/` are worth reading before giving up on an answer. */
+/** How many source files under a folder are worth reading before giving up on an answer. */
 const SCAN_CAP = 200
+
+/**
+ * Does any source file under `folder` import the config (or call `configure()`)? Importing
+ * it anywhere is enough, because `config()` registers as a side effect. Undefined when
+ * the folder is missing, unreadable, or too big to read: the cap bounds the reading, not
+ * the answer, so a caller never says "nothing imports it" about a file it skipped.
+ */
+export function imports_config(folder: string, cap = SCAN_CAP): boolean | undefined {
+	if (!existsSync(folder)) return undefined
+	try {
+		const files = readdirSync(folder, { recursive: true }) as Array<string>
+		const sources = files.filter((file) => /\.(ts|mts|js|mjs)$/.test(file))
+		if (sources.length > cap) return undefined
+		return sources.some((file) => {
+			const source = readFileSync(`${folder}/${file}`, "utf8")
+			return source.includes("postboi.config") || /\bconfigure\s*\(/.test(source)
+		})
+	} catch {
+		// An unreadable tree is not a diagnosis. Say nothing rather than guess.
+		return undefined
+	}
+}
 
 /**
  * A runtime in this project that bundles server code without a filesystem and without a
  * bundler plugin we can install — Convex, whose own bundle takes none — and that nothing
  * has handed the config to. `read_disk` returns `{}` there, so the file is simply absent
  * at runtime: no error, no hook, no defaults, and mail that looks wrong a fortnight
- * later. Importing the config anywhere in that tree is enough, because `config()`
- * registers as a side effect.
+ * later.
  */
 function unreachable_runtime(dir: string): string | undefined {
-	const functions = `${dir}/convex`
-	if (!existsSync(functions)) return undefined
-	try {
-		const files = readdirSync(functions, { recursive: true }) as Array<string>
-		const sources = files.filter((file) => /\.(ts|mts|js|mjs)$/.test(file))
-		// The cap bounds the reading, not the answer. Stopping early and then warning
-		// anyway would name the one import we skipped — somebody being told to add a line
-		// their code already has is worse than not being told anything.
-		if (sources.length > SCAN_CAP) return undefined
-		const carried = sources.some((file) => {
-			const source = readFileSync(`${functions}/${file}`, "utf8")
-			return source.includes("postboi.config") || /\bconfigure\s*\(/.test(source)
-		})
-		return carried ? undefined : "Convex"
-	} catch {
-		// An unreadable tree is not a diagnosis. Say nothing rather than guess.
-		return undefined
-	}
+	return imports_config(`${dir}/convex`) === false ? "Convex" : undefined
 }
 
 /** Collect the facts from the project directory and, with a token, the account. */
@@ -291,6 +352,13 @@ export async function gather(dir = cwd()): Promise<DoctorFacts> {
 		provider,
 		default_from: source ? config_default_from(source) : undefined,
 		installed: existsSync(`${dir}/${TYPES_TARGET}`),
+		drift: version_drift(dir),
+		captcha: {
+			config: source ? config_captcha_key(source) : undefined,
+			baked: existsSync(`${dir}/${RUNTIME_TARGET}`)
+				? parse_runtime(readFileSync(`${dir}/${RUNTIME_TARGET}`, "utf8")).captcha_key
+				: undefined,
+		},
 		token: Boolean(token),
 		webhook_secret: Boolean(read_env("POSTBOI_WEBHOOK_SECRET")),
 		skill: skill_state(`${dir}/.claude/skills/postboi/SKILL.md`),
@@ -312,8 +380,55 @@ export async function gather(dir = cwd()): Promise<DoctorFacts> {
 		api<{ webhooks: Array<unknown> }>("/v1/webhooks").catch(() => undefined),
 	])
 	facts.domains = identity?.domains
+	if (facts.captcha) facts.captcha.account = identity?.captcha_key
 	facts.webhooks = hooks?.webhooks.length
 	return facts
+}
+
+/** Where app code lives across the frameworks we set up, and what counts as a source file. */
+const SOURCE_DIRS = ["src", "app", "lib", "server"]
+const SOURCE_FILE = /\.(ts|mts|js|mjs|tsx|jsx|svelte|vue|astro)$/
+
+/**
+ * BetterAuth's `magicLink()` plugin mounts a public `POST /sign-in/magic-link` that mails
+ * a link to any posted address, outside the app's own throttle. That's the product when
+ * the browser signs in through it, and an open relay when the app sends its links some
+ * other way. So: warn when the plugin is there, its route isn't in `disabledPaths`, and
+ * nothing in the project calls `signIn.magicLink` from the client.
+ */
+export function magic_link_check(dir = cwd()): Check | undefined {
+	const sources: Array<[string, string]> = []
+	try {
+		for (const folder of SOURCE_DIRS) {
+			if (!existsSync(`${dir}/${folder}`)) continue
+			const files = readdirSync(`${dir}/${folder}`, { recursive: true }) as Array<string>
+			for (const file of files) {
+				if (!SOURCE_FILE.test(file) || file.includes("node_modules")) continue
+				// ponytail: a project past 2000 source files gets no answer rather than one
+				// that might have missed the client call in a file it never read.
+				if (sources.length >= 2000) return undefined
+				const path = `${folder}/${file}`
+				sources.push([path, readFileSync(`${dir}/${path}`, "utf8")])
+			}
+		}
+	} catch {
+		return undefined
+	}
+	const plugin = sources.find(
+		([, source]) => source.includes("better-auth/plugins") && /\bmagicLink\s*\(/.test(source)
+	)
+	if (!plugin) return undefined
+	const disabled = sources.some(
+		([, source]) => source.includes("disabledPaths") && source.includes("/sign-in/magic-link")
+	)
+	const called = sources.some(([, source]) => /signIn\.magicLink\s*\(/.test(source))
+	if (disabled || called) return undefined
+	return {
+		name: "auth",
+		level: "warn",
+		detail: `${plugin[0]} adds BetterAuth's magicLink(), whose public POST /sign-in/magic-link mails a link to any address, and nothing here calls it from the browser`,
+		fix: 'if the app sends its own sign-in links, add disabledPaths: ["/sign-in/magic-link"] to betterAuth()',
+	}
 }
 
 const MARK: Record<Level, string> = {
@@ -332,6 +447,8 @@ export function print_checks(checks: Array<Check>): void {
 
 export async function doctor_command(args: Array<string>, dir = cwd()): Promise<number> {
 	const checks = diagnose(await gather(dir))
+	const auth = magic_link_check(dir)
+	if (auth) checks.push(auth)
 	const failed = checks.some((check) => check.level === "fail")
 	if (args.includes("--json")) {
 		console.log(JSON.stringify({ ok: !failed, checks }, null, 2))

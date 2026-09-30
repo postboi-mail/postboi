@@ -39,6 +39,9 @@ echo "▶ releasing $TAG"
 PREV="$(node -p "require('./src/site/config/versions.json').latest")"
 bun scripts/snapshot-docs.ts --version "$VERSION" --before "${DOCS_BEFORE:-HEAD}"
 
+# --- changelog: `## Unreleased` becomes `## $VERSION` (shared with release.yml) ---
+bash scripts/stamp-changelog.sh "$VERSION"
+
 # --- validate (before the irreversible steps) --------------------------------
 # The same gates release.yml runs — the two paths must not drift.
 npm run lint
@@ -54,7 +57,7 @@ if ! git diff --quiet -- src/site/config/versions.json src/site/content; then
 	git commit -m "Freeze the $PREV docs before $VERSION goes out"
 fi
 
-git add package.json
+git add package.json CHANGELOG.md
 git commit -m "$VERSION"
 git tag -a "$TAG" -m "$VERSION"
 

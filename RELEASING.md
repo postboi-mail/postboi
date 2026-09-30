@@ -28,7 +28,10 @@ On merge, `release.yml` runs, in order:
    are read from the commit the PR landed on, so whatever docs the release PR
    itself changed can't leak into the archive. Committed as
    `Freeze the <prev> docs before <version> goes out`.
-2. **Bumps `package.json`** and commits the bare version (`0.36.0`).
+2. **Bumps `package.json`**, turns `## Unreleased` in
+   [`CHANGELOG.md`](CHANGELOG.md) into `## <version>` with a fresh empty
+   `## Unreleased` above it ([`stamp-changelog.sh`](scripts/stamp-changelog.sh)),
+   and commits both as the bare version (`0.36.0`).
 3. **Validates** — `lint`, `check`, `test`, the credential-pollution test run
    from ci.yml, and `build` (which runs `publint` on the packed output). This
    matters more than it looks: commits pushed with `GITHUB_TOKEN` never trigger
@@ -43,8 +46,8 @@ On merge, `release.yml` runs, in order:
    `Examples: catch up with <version>`, and runs every example's `ci` script
    against the real published package.
 
-So a release PR contains what it always did — the code, and the docs edits for
-the new version — and nothing about releasing. Don't hand-snapshot the docs in
+So a release PR contains the code, the docs edits for the new version, and its
+lines under `## Unreleased` in `CHANGELOG.md`, and nothing about releasing. Don't hand-snapshot the docs in
 it: the workflow does that from the pre-merge commit, and it refuses to run if
 the snapshot directory already exists.
 
@@ -91,6 +94,19 @@ while one runs and one waits silently cancels the waiting one. Merge release
 PRs one at a time; if a queued release did get cancelled, release it by
 dispatch.
 
+## The changelog
+
+[`CHANGELOG.md`](CHANGELOG.md) is what someone upgrading a site reads instead of the
+commit history, and it ships in the npm package so agents find it in `node_modules`.
+Every PR that changes the SDK or CLI adds a line under `## Unreleased`, in
+`### Breaking`, `### Added` or `### Fixed`. A breaking entry names the old and new
+option or export and says what to change. Leave out docs-only, site, example and CI
+changes.
+
+Don't write the version heading yourself. Both release paths rename `## Unreleased`
+to `## X.Y.Z` in the version commit and open a new empty one above it. The step
+refuses if the heading is missing and warns if the section is empty.
+
 ## Choosing the bump
 
 - **patch** — fixes, docs, anything that can't change a working call.
@@ -124,8 +140,9 @@ commit before them as `docs_before`.
 npm run release -- X.Y.Z      # or: patch | minor | major
 ```
 
-[`scripts/release.sh`](scripts/release.sh) freezes the docs (the same
-`snapshot-docs.ts` the workflow runs, so the two can't drift), bumps, validates,
+[`scripts/release.sh`](scripts/release.sh) freezes the docs and stamps the changelog
+(the same `snapshot-docs.ts` and `stamp-changelog.sh` the workflow runs, so the two
+can't drift), bumps, validates,
 commits, tags and pushes. The tag push triggers `publish.yml`, which publishes
 and cuts the GitHub release. Set `DOCS_BEFORE=<ref>` if the new version's doc
 edits are already on `main`. The examples aren't part of it — once npm is serving
@@ -168,5 +185,6 @@ _old_ version's pages — that's what `DOCS_BEFORE` exists for.
 ## Conventions
 
 - Commit message for a release is the bare version (`0.7.0`), matching history.
+- Changelog lines go under `## Unreleased` in the PR that makes the change.
 - Tags are `vX.Y.Z`. Pre-`0.7.0` releases predate the script and are untagged.
 - Pre-1.0, breaking changes are **minor** bumps.
