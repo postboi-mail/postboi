@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { diagnose, doctor_command, gather, type DoctorFacts } from "./doctor.js"
+import { diagnose, doctor_command, gather, magic_link_check, type DoctorFacts } from "./doctor.js"
 
 afterEach(() => {
 	vi.restoreAllMocks()
@@ -218,5 +218,46 @@ describe("gather + doctor_command", () => {
 		expect(await doctor_command([], dir)).toBe(1)
 		const facts = await gather(dir)
 		expect(facts.account).toEqual({ error: "Invalid or revoked API key.", code: "invalid_token" })
+	})
+})
+
+describe("magic_link_check: an auth route that mails any address", () => {
+	function app(files: Record<string, string>): string {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-auth-"))
+		for (const [path, source] of Object.entries(files)) {
+			mkdirSync(join(dir, path, ".."), { recursive: true })
+			writeFileSync(join(dir, path), source)
+		}
+		return dir
+	}
+	const server = `import { betterAuth } from "better-auth"
+import { magicLink } from "better-auth/plugins"
+export const auth = betterAuth({ plugins: [magicLink({ sendMagicLink })] })`
+
+	it("warns when the plugin's route is open and nothing in the app calls it", () => {
+		const check = magic_link_check(app({ "src/lib/server/auth.ts": server }))
+		expect(check?.level).toBe("warn")
+		expect(check?.detail).toContain("src/lib/server/auth.ts")
+		expect(check?.fix).toContain('disabledPaths: ["/sign-in/magic-link"]')
+	})
+
+	it("is quiet once disabledPaths switches the route off", () => {
+		const disabled = server.replace(
+			"betterAuth({",
+			'betterAuth({ disabledPaths: ["/sign-in/magic-link"],'
+		)
+		expect(magic_link_check(app({ "src/lib/server/auth.ts": disabled }))).toBeUndefined()
+	})
+
+	it("is quiet when the browser signs in through the route", () => {
+		const dir = app({
+			"src/lib/server/auth.ts": server,
+			"src/routes/login/+page.svelte": "<script>authClient.signIn.magicLink({ email })</script>",
+		})
+		expect(magic_link_check(dir)).toBeUndefined()
+	})
+
+	it("says nothing without BetterAuth's plugin", () => {
+		expect(magic_link_check(app({ "src/app.ts": "export const x = 1" }))).toBeUndefined()
 	})
 })

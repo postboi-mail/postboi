@@ -201,6 +201,8 @@ Manual honeypot — a visually hidden input named `_honey`. **Don't use `display
 
 A filled honeypot skips the send: `postboi/kit` still returns `{ success: true }` (the bot learns nothing); direct `mail()` throws a `SpamError` — catch with `is_spam(error)` and pretend success. Bring-your-own Cloudflare Turnstile: set `TURNSTILE_SECRET_KEY` and add the widget — note that setting the secret **enforces** the captcha on every FormData send (opt a send out with `captcha: { turnstile: false }`). `/raw/spam`
 
+**Auth libraries mount their own "send to any email" routes, and the honeypot and captcha don't cover them.** BetterAuth's `magicLink()` plugin exposes `POST /api/auth/sign-in/magic-link` through the catch-all: it mails any posted address, passes posted fields to `sendMagicLink`, and skips the app's own throttle. When the app sends its sign-in links itself, set `disabledPaths: ["/sign-in/magic-link"]` in `betterAuth({ … })`; when the browser does use the route, rate-limit it and keep request data out of the subject and body. Auth.js's email provider has the same shape. `bunx postboi doctor` flags an open BetterAuth magic-link route that nothing in the project calls. `/raw/spam`
+
 ## Webhooks (delivery events)
 
 ```ts

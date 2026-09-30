@@ -316,6 +316,52 @@ export async function gather(dir = cwd()): Promise<DoctorFacts> {
 	return facts
 }
 
+/** Where app code lives across the frameworks we set up, and what counts as a source file. */
+const SOURCE_DIRS = ["src", "app", "lib", "server"]
+const SOURCE_FILE = /\.(ts|mts|js|mjs|tsx|jsx|svelte|vue|astro)$/
+
+/**
+ * BetterAuth's `magicLink()` plugin mounts a public `POST /sign-in/magic-link` that mails
+ * a link to any posted address, outside the app's own throttle. That's the product when
+ * the browser signs in through it, and an open relay when the app sends its links some
+ * other way. So: warn when the plugin is there, its route isn't in `disabledPaths`, and
+ * nothing in the project calls `signIn.magicLink` from the client.
+ */
+export function magic_link_check(dir = cwd()): Check | undefined {
+	const sources: Array<[string, string]> = []
+	try {
+		for (const folder of SOURCE_DIRS) {
+			if (!existsSync(`${dir}/${folder}`)) continue
+			const files = readdirSync(`${dir}/${folder}`, { recursive: true }) as Array<string>
+			for (const file of files) {
+				if (!SOURCE_FILE.test(file) || file.includes("node_modules")) continue
+				// ponytail: a project past 2000 source files gets no answer rather than one
+				// that might have missed the client call in a file it never read.
+				if (sources.length >= 2000) return undefined
+				const path = `${folder}/${file}`
+				sources.push([path, readFileSync(`${dir}/${path}`, "utf8")])
+			}
+		}
+	} catch {
+		return undefined
+	}
+	const plugin = sources.find(
+		([, source]) => source.includes("better-auth/plugins") && /\bmagicLink\s*\(/.test(source)
+	)
+	if (!plugin) return undefined
+	const disabled = sources.some(
+		([, source]) => source.includes("disabledPaths") && source.includes("/sign-in/magic-link")
+	)
+	const called = sources.some(([, source]) => /signIn\.magicLink\s*\(/.test(source))
+	if (disabled || called) return undefined
+	return {
+		name: "auth",
+		level: "warn",
+		detail: `${plugin[0]} adds BetterAuth's magicLink(), whose public POST /sign-in/magic-link mails a link to any address, and nothing here calls it from the browser`,
+		fix: 'if the app sends its own sign-in links, add disabledPaths: ["/sign-in/magic-link"] to betterAuth()',
+	}
+}
+
 const MARK: Record<Level, string> = {
 	ok: green("✓"),
 	warn: yellow("!"),
@@ -332,6 +378,8 @@ export function print_checks(checks: Array<Check>): void {
 
 export async function doctor_command(args: Array<string>, dir = cwd()): Promise<number> {
 	const checks = diagnose(await gather(dir))
+	const auth = magic_link_check(dir)
+	if (auth) checks.push(auth)
 	const failed = checks.some((check) => check.level === "fail")
 	if (args.includes("--json")) {
 		console.log(JSON.stringify({ ok: !failed, checks }, null, 2))

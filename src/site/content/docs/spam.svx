@@ -225,6 +225,33 @@ It sits beside `turnstile` rather than inside it on purpose. Captcha options mer
 so an IP nested in there would replace a configured `{ secret_key }` wholesale and quietly
 switch verification off.
 
+## Auth libraries
+
+The honeypot and the captcha guard sends that go through Postboi. An auth library can
+mount its own route that sends mail, and nothing on this page reaches it. BetterAuth's
+`magicLink()` plugin, for one, adds `POST /api/auth/sign-in/magic-link` to the catch-all
+handler. It mails a sign-in link to any address that's posted, hands the posted fields to
+your `sendMagicLink`, and skips whatever throttle your own forms have. A bot can use it to
+send your mail to anyone, with its own text in the subject or body if your callback puts
+request data there.
+
+If your app sends sign-in links itself (its own form, its own rate limit), switch the
+library's route off:
+
+```typescript
+// src/lib/server/auth.ts
+export const auth = betterAuth({
+	disabledPaths: ['/sign-in/magic-link'],
+	plugins: [magicLink({ sendMagicLink })]
+})
+```
+
+If the browser does call that route, give it the same limits as your forms and keep
+request data out of the email. Auth.js's email provider and other libraries with email
+sign-in mount a similar route, so check what your auth catch-all exposes.
+`bunx postboi doctor` flags a BetterAuth `magicLink()` whose route is open while nothing
+in the project calls it from the browser.
+
 ## Configuration
 
 Both layers work with zero config, but everything is adjustable: globally in
