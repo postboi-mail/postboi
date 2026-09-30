@@ -29,6 +29,7 @@ export const HELP: Array<HelpSection> = [
 				command: "init",
 				summary: "Set up the Postboi provider or a provider of your own",
 				details: [
+					"Installs postboi, adds the postboi() Vite plugin, writes postboi.config and runs sync",
 					"--agent: zero prompts, zero sign-in. Provisions a claimable sandbox account (made for AI coding agents and CI)",
 					"--sms · --whatsapp · --push · --chat: set up that channel instead",
 				],
@@ -36,6 +37,9 @@ export const HELP: Array<HelpSection> = [
 			{
 				command: "sync",
 				summary: "Pull synced team credentials and refresh the generated from/template types",
+				details: [
+					"Bakes the captcha key for <Captcha />; warns when node_modules is behind the lockfile",
+				],
 			},
 			{
 				command: "env",
@@ -45,7 +49,8 @@ export const HELP: Array<HelpSection> = [
 			{ command: "vapid", summary: "Mint a VAPID key pair for Web Push, printed to stdout" },
 			{
 				command: "doctor",
-				summary: "Is this project wired? Token, provider, from address, webhooks, skill",
+				summary:
+					"Is this project wired? Install, token, provider, from address, webhooks, captcha key, skill",
 				details: ["--json · exit 1 on a failure"],
 			},
 			{

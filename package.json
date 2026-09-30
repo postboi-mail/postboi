@@ -29,6 +29,7 @@
 		"postboi": "dist/cli.js"
 	},
 	"files": [
+		"CHANGELOG.md",
 		"FREEDOOM-LICENSE.txt",
 		"dist",
 		"skills",
