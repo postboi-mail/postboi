@@ -261,6 +261,19 @@ async function send_test(options: TestSendOptions): Promise<HostedTest> {
 export const sveltekit: { request?: () => { getClientAddress(): string }; form?: unknown } = {}
 
 /**
+ * The request SvelteKit is handling, or undefined outside one (or outside SvelteKit). Read it
+ * before any await: without AsyncLocalStorage SvelteKit only answers synchronously. Never
+ * throws, since nothing that reads it depends on it.
+ */
+export function current_request(): { getClientAddress(): string } | undefined {
+	try {
+		return sveltekit.request?.()
+	} catch {
+		return undefined
+	}
+}
+
+/**
  * Fill in the visitor's IP for Turnstile verification, so callers get it without threading
  * `getClientAddress()` through themselves. An explicit `remoteip` always wins.
  *
@@ -274,7 +287,7 @@ export function with_remoteip(
 	if (captcha?.remoteip) return captcha
 	let remoteip: string | undefined
 	try {
-		remoteip = (event ?? sveltekit.request?.())?.getClientAddress()
+		remoteip = (event ?? current_request())?.getClientAddress()
 	} catch {
 		return captcha
 	}
