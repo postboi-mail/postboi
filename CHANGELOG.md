@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Fixed
+
+- `postboi doctor` flags a `<Captcha />` import when no captcha key exists anywhere, and sees a BetterAuth `signIn.magicLink(…)` call split across lines.
+
 ## 0.57.0
 
 ### Breaking

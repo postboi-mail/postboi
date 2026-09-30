@@ -79,7 +79,8 @@ writes the key into your config for you. If the component warns that no key is b
 re-run `bunx postboi sync` (and restart the dev server), or pass one explicitly with
 `pk="pk_…"` from your [dashboard](https://postboi.app/dashboard/keys). `bunx postboi doctor`
 compares the three copies (your config, your account, and the installed package) and
-names the one that's out of step.
+names the one that's out of step. It also flags a file that renders `<Captcha />` when
+there's no key anywhere, since the component only says so in the browser's console.
 
 Props, all optional: `pk` (key override), `origin` (loader origin), and `honeypot`
 (`false` to render no honeypot field). Without any key the component is honeypot-only and

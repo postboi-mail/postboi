@@ -52,7 +52,7 @@ export interface DoctorFacts {
 	 * The publishable captcha key three ways: committed in the config, on the account,
 	 * and baked into the installed package, which is the one `<Captcha />` actually uses.
 	 */
-	captcha?: { config?: string; account?: string; baked?: string }
+	captcha?: { config?: string; account?: string; baked?: string; component?: string }
 	token: boolean
 	/** `GET /v1/account`, or a string naming why it failed. Absent when there is no token. */
 	account?:
@@ -258,7 +258,18 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 function captcha_check(facts: DoctorFacts): Check | undefined {
 	const { config, account, baked } = facts.captcha ?? {}
 	const want = account ?? config
-	if (!want) return undefined
+	if (!want) {
+		// A <Captcha /> with no key anywhere is a honeypot and nothing else, and says so only
+		// in the browser's console. On an account with a widget the API then refuses its forms.
+		const { component } = facts.captcha ?? {}
+		if (!component) return undefined
+		return {
+			name: "captcha",
+			level: "warn",
+			detail: `${component} renders <Captcha />, but no captcha key is baked in, so it's honeypot-only and its forms send no token`,
+			fix: facts.token ? "bunx postboi sync" : "bunx postboi init",
+		}
+	}
 	if (account && config !== account) {
 		return {
 			name: "captcha",
@@ -354,6 +365,7 @@ export async function gather(dir = cwd()): Promise<DoctorFacts> {
 		installed: existsSync(`${dir}/${TYPES_TARGET}`),
 		drift: version_drift(dir),
 		captcha: {
+			component: project_sources(dir)?.find(([, file]) => CAPTCHA_IMPORT.test(file))?.[0],
 			config: source ? config_captcha_key(source) : undefined,
 			baked: existsSync(`${dir}/${RUNTIME_TARGET}`)
 				? parse_runtime(readFileSync(`${dir}/${RUNTIME_TARGET}`, "utf8")).captcha_key
@@ -390,13 +402,11 @@ const SOURCE_DIRS = ["src", "app", "lib", "server"]
 const SOURCE_FILE = /\.(ts|mts|js|mjs|tsx|jsx|svelte|vue|astro)$/
 
 /**
- * BetterAuth's `magicLink()` plugin mounts a public `POST /sign-in/magic-link` that mails
- * a link to any posted address, outside the app's own throttle. That's the product when
- * the browser signs in through it, and an open relay when the app sends its links some
- * other way. So: warn when the plugin is there, its route isn't in `disabledPaths`, and
- * nothing in the project calls `signIn.magicLink` from the client.
+ * The app's own source files, as `[path, source]`. Undefined past 2000 files, or when a
+ * folder can't be read: a check that might have missed the one file it needed gives no
+ * answer rather than a wrong one.
  */
-export function magic_link_check(dir = cwd()): Check | undefined {
+function project_sources(dir: string): Array<[string, string]> | undefined {
 	const sources: Array<[string, string]> = []
 	try {
 		for (const folder of SOURCE_DIRS) {
@@ -404,8 +414,7 @@ export function magic_link_check(dir = cwd()): Check | undefined {
 			const files = readdirSync(`${dir}/${folder}`, { recursive: true }) as Array<string>
 			for (const file of files) {
 				if (!SOURCE_FILE.test(file) || file.includes("node_modules")) continue
-				// ponytail: a project past 2000 source files gets no answer rather than one
-				// that might have missed the client call in a file it never read.
+				// ponytail: a hard cap, not a smarter walk; raise it if a real project hits it.
 				if (sources.length >= 2000) return undefined
 				const path = `${folder}/${file}`
 				sources.push([path, readFileSync(`${dir}/${path}`, "utf8")])
@@ -414,6 +423,23 @@ export function magic_link_check(dir = cwd()): Check | undefined {
 	} catch {
 		return undefined
 	}
+	return sources
+}
+
+/** `<Captcha />` imported from one of the component entries (default, or by name). */
+const CAPTCHA_IMPORT =
+	/import\s+(?:[\w$]+|\{[^}]*\bCaptcha\b[^}]*\})[\s\S]{0,80}?from\s*["']postboi\/(?:svelte|react|vue|astro)["']/
+
+/**
+ * BetterAuth's `magicLink()` plugin mounts a public `POST /sign-in/magic-link` that mails
+ * a link to any posted address, outside the app's own throttle. That's the product when
+ * the browser signs in through it, and an open relay when the app sends its links some
+ * other way. So: warn when the plugin is there, its route isn't in `disabledPaths`, and
+ * nothing in the project calls `signIn.magicLink` from the client.
+ */
+export function magic_link_check(dir = cwd()): Check | undefined {
+	const sources = project_sources(dir)
+	if (!sources) return undefined
 	const plugin = sources.find(
 		([, source]) => source.includes("better-auth/plugins") && /\bmagicLink\s*\(/.test(source)
 	)
@@ -421,7 +447,8 @@ export function magic_link_check(dir = cwd()): Check | undefined {
 	const disabled = sources.some(
 		([, source]) => source.includes("disabledPaths") && source.includes("/sign-in/magic-link")
 	)
-	const called = sources.some(([, source]) => /signIn\.magicLink\s*\(/.test(source))
+	// `\s*` around the dot: `auth_client.signIn` on one line and `.magicLink(…)` on the next.
+	const called = sources.some(([, source]) => /signIn\s*\.\s*magicLink\s*\(/.test(source))
 	if (disabled || called) return undefined
 	return {
 		name: "auth",
