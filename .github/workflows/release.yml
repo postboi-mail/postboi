@@ -199,6 +199,13 @@ jobs:
           bun scripts/snapshot-docs.ts --version "$VERSION" --before "$BEFORE"
           echo "prev=$prev" >> "$GITHUB_OUTPUT"
 
+      # The release PR added its lines under `## Unreleased`; they become this
+      # version's section, and a fresh empty `## Unreleased` opens above it.
+      - name: Stamp the changelog
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: bash scripts/stamp-changelog.sh "$VERSION"
+
       # The same gates ci.yml runs — these commits are pushed with GITHUB_TOKEN,
       # which never triggers ci.yml, so this run IS their CI. Everything after
       # them is a push, a publish or a tag, and none of those come back.
@@ -236,7 +243,7 @@ jobs:
             git commit -m "Freeze the $PREV docs before $VERSION goes out"
           fi
 
-          git add package.json
+          git add package.json CHANGELOG.md
           git commit -m "$VERSION"
           git tag -a "$TAG" -m "$VERSION"
 
