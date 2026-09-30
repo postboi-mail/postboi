@@ -14,7 +14,10 @@ import type { StandardSchemaV1 } from "@standard-schema/spec"
 // Postboi provider class, which must stay a dynamic-only leaf (see LOADERS in mail.ts).
 import { mail as zero_config_mail, sveltekit, with_remoteip } from "./mail.js"
 import {
+	CAPTCHA_FIELDS,
 	HONEYPOT_FIELD,
+	HONEYPOT_FIELDS,
+	SPECIAL_FIELDS,
 	TURNSTILE_REMOTE_FIELD,
 	is_error,
 	is_spam,
@@ -73,17 +76,7 @@ export type Resolver<T, F = never> = (submission: {
 }) => T | ActionFailure<F> | void | Promise<T | ActionFailure<F> | void>
 
 /** postboi's own `_` fields: a resolver reading these doesn't take them out of the post. */
-const OWN_FIELDS = new Set([
-	"_to",
-	"_from",
-	"_reply_to",
-	"_cc",
-	"_bcc",
-	"_subject",
-	"_form",
-	HONEYPOT_FIELD,
-	"_captcha",
-])
+const OWN_FIELDS = new Set<string>([...SPECIAL_FIELDS, ...HONEYPOT_FIELDS, ...CAPTCHA_FIELDS])
 
 /**
  * The request a remote form is handling, for its resolver. Read before any await (SvelteKit
