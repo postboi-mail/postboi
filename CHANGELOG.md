@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.59.0
+
 ### Added
 
 - Managed push: with `POSTBOI_PUSH_PROVIDER=postboi`, Postboi keeps your Web Push subscriptions and their VAPID key, so `push()` can send to a person (`to: { user: "123" }`) or a public list (`to: { list: "new-posts" }`) and answers `{ sent, expired, failed }`. Expired browsers are cleaned up on Postboi's side. `POSTBOI_TOKEN` alone never selects it.
