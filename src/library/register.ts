@@ -26,3 +26,10 @@ export const whatsapp_templates: Record<string, string> = {}
 /** The account's VAPID **public** key, baked by `bunx postboi sync` — what lets the
  * browser half of push (`subscribe()`, the toggle controller) need no key passed in. */
 export const vapid_public_key: string | undefined = undefined
+
+/**
+ * Managed push (`POSTBOI_PUSH_PROVIDER=postboi`), baked by `bunx postboi sync`: the API a
+ * browser files itself with, on the publishable key above. Undefined for every other push
+ * provider, which is what keeps `subscription()` and `receive()` posting to your own routes.
+ */
+export const managed_push: { api: string } | undefined = undefined

@@ -46,7 +46,11 @@ export const HELP: Array<HelpSection> = [
 				summary: "The synced credentials",
 				details: ["push · pull [--force] · remove <KEY>"],
 			},
-			{ command: "vapid", summary: "Mint a VAPID key pair for Web Push, printed to stdout" },
+			{
+				command: "vapid",
+				summary:
+					"Mint a VAPID key pair for Web Push, printed to stdout. --export prints managed push's pair",
+			},
 			{
 				command: "doctor",
 				summary:

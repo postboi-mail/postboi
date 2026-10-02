@@ -40,6 +40,9 @@ type SendResponse = { id: string; message: SentPush }
  */
 export default class MockPush extends PushProvider<SendResponse> {
 	protected readonly provider = "mock"
+	// Stands in for every push provider in development, managed push included, so a send to
+	// `{ user }` or `{ list }` is captured rather than refused.
+	protected override readonly audiences = true
 	#expired: boolean
 	#recorder: MockRecorder<SentPush>
 
@@ -82,7 +85,14 @@ export default class MockPush extends PushProvider<SendResponse> {
 			})
 		}
 		return this.#recorder.capture({
-			to: typeof message.to === "string" ? message.to : message.to.endpoint,
+			to:
+				typeof message.to === "string"
+					? message.to
+					: "endpoint" in message.to
+						? message.to.endpoint
+						: "user" in message.to
+							? `user:${message.to.user}`
+							: `list:${message.to.list}`,
 			title: message.title,
 			message: message.message,
 			url: message.url,

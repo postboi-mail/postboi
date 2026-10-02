@@ -10,6 +10,24 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- Managed push: with `POSTBOI_PUSH_PROVIDER=postboi`, Postboi keeps your Web Push subscriptions and their VAPID key, so `push()` can send to a person (`to: { user: "123" }`) or a public list (`to: { list: "new-posts" }`) and answers `{ sent, expired, failed }`. Expired browsers are cleaned up on Postboi's side. `POSTBOI_TOKEN` alone never selects it.
+- `push.handler(who)` returns the `POST` and `DELETE` route handlers that file a browser under the signed-in user, for any framework whose handlers carry a `Request` (SvelteKit, Next, Astro, Remix, Hono, Workers).
+- `push.subscriptions.add`, `.remove`, `.list` and `.import`, the rows managed push holds, for Express and for moving an existing table across.
+- `subscription({ list })` from `postboi/push` follows a public list straight from the page, with no route of your own.
+- `receive()` from `postboi/push/sw` needs no options with managed push: a rotated subscription is re-filed with Postboi, which moves the old one's person and lists onto it.
+- `postboi/push/postboi` exports the managed push provider class, `PostboiPush`.
+- `bunx postboi init --push` offers managed push on a Postboi account: it switches it on (bringing the VAPID pair already in your env, so existing subscribers keep working), writes `POSTBOI_PUSH_PROVIDER=postboi`, and writes the route for SvelteKit, Next or Astro.
+- `bunx postboi vapid --export` prints the pair managed push holds, private key included, so leaving keeps your subscribers.
+- `bunx postboi sync` bakes managed push into the package when `POSTBOI_PUSH_PROVIDER=postboi`, along with the account's own VAPID public key.
+
+### Changed
+
+- `PushTarget` also takes `{ user }` and `{ list }`. Every provider but `postboi` and the mock refuses one with `invalid_target`. A custom push provider that reads `message.to` as a subscription or a string now has a third case to narrow away.
+- The page and the service worker remember the endpoint they last filed (in IndexedDB), so a rotation on a browser that doesn't say which subscription it replaced still sends `old_endpoint`. The worker `init --push` writes does the same.
+- `push.expired(error)` is false for an error from the Postboi provider: its 404 is the API answering (no such list), never a push service saying a device is gone.
+
 ## 0.58.1
 
 ### Added

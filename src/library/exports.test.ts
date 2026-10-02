@@ -83,6 +83,9 @@ describe("package exports", () => {
 			"push/send.ts", // the zero-config push(), re-exported from the root
 			"push/controller.ts", // the neutral toggle state machine, re-exported through push/client.ts
 			"push/toggle.ts", // its reactive Svelte wrapper, re-exported through postboi/svelte
+			"push/managed.ts", // push.handler and push.subscriptions, hung off the root's push()
+			"push/door.ts", // managed push's browser door, reached via push/client.ts and push/sw.ts
+			"push/memory.ts", // the last-filed endpoint in IndexedDB, shared by the page and the worker
 			"whatsapp/types.ts", // pure types, re-exported from the root
 			"whatsapp/provider.ts", // the WhatsApp base class, reached via each provider
 			"whatsapp/send.ts", // the zero-config whatsapp(), re-exported from the root

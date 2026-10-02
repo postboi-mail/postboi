@@ -143,8 +143,14 @@ export type WireResult =
 	| { source: string; action: "created" | "updated" }
 
 export interface WireOptions {
-	/** Endpoint a rotated subscription is POSTed to. */
+	/** Endpoint a rotated subscription is POSTed to. Ignored with `managed`. */
 	register: string
+	/**
+	 * Managed push: a rotation goes to Postboi's browser door on the publishable key rather
+	 * than to `register`. The bundled shape reads both from what `bunx postboi sync` bakes;
+	 * a raw file can't, so they're written into it.
+	 */
+	managed?: { publishable_key: string; api: string }
 	/**
 	 * VAPID public key, for the generated worker only — a raw file can't read the one
 	 * `bunx postboi sync` bakes into the package. Omitted, a rotation is only re-filed on
@@ -194,6 +200,15 @@ function header(): string {
 
 /** The bundled shape: one import and one call. */
 function import_block(options: WireOptions): string {
+	if (options.managed) {
+		return `import { receive } from "postboi/push/sw"
+
+// Shows the notification, opens the right tab on click, and re-subscribes when the browser
+// rotates this subscription. With managed push the rotation goes to Postboi itself, which
+// moves the old subscription's person and lists onto the new one — so no arguments.
+receive()
+`
+	}
 	return `import { receive } from "postboi/push/sw"
 
 // Shows the notification, opens the right tab on click, and re-subscribes when the browser
@@ -214,10 +229,19 @@ receive({ register: ${JSON.stringify(options.register)} })
  */
 function handler_block(options: WireOptions): string {
 	const key = options.key
+	const managed = options.managed
+	const register = managed ? `${managed.api.replace(/\/$/, "")}/v1/push/browser` : options.register
 	return `// These are the same handlers \`receive()\` from postboi/push/sw registers, written out
 // because this file is served exactly as written and can't import. Yours to edit.
 
-const POSTBOI_REGISTER = ${JSON.stringify(options.register)}
+${
+	managed
+		? `// Managed push: a rotated subscription is re-filed with Postboi on your publishable key,
+// and Postboi moves the old one's person and lists onto it.
+const POSTBOI_REGISTER = ${JSON.stringify(register)}
+const POSTBOI_KEY = ${JSON.stringify(managed.publishable_key)}`
+		: `const POSTBOI_REGISTER = ${JSON.stringify(register)}`
+}
 ${
 	key
 		? `// The VAPID public key the page subscribes with, needed to re-subscribe after a rotation.\nconst POSTBOI_VAPID_KEY = ${JSON.stringify(key)}`
@@ -279,20 +303,54 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 			}
 			const json = subscription.toJSON()
 			// \`old_endpoint\` is what makes this a swap rather than a leak: delete that row,
-			// then store the rest. It's absent on browsers that don't say what was replaced.
-			await fetch(POSTBOI_REGISTER, {
+			// then store the rest. Browsers that don't say what was replaced get the endpoint
+			// the page last filed instead, which postboi/push notes for exactly this.
+			const filed = await postboi_filed("get")
+			const replaced = (event.oldSubscription && event.oldSubscription.endpoint) || filed?.endpoint
+			const old_endpoint = replaced !== json.endpoint ? replaced : undefined
+			const response = await fetch(POSTBOI_REGISTER, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({
+				body: JSON.stringify({${managed ? "\n\t\t\t\t\tkey: POSTBOI_KEY," : ""}
 					endpoint: json.endpoint,
 					expirationTime: json.expirationTime ?? null,
 					keys: json.keys,
-					...(event.oldSubscription && { old_endpoint: event.oldSubscription.endpoint }),
+					...(old_endpoint && { old_endpoint }),${managed ? "\n\t\t\t\t\t...(filed?.list && { list: filed.list })," : ""}
 				}),
 			})
+			if (response.ok) {
+				await postboi_filed("put", { endpoint: json.endpoint, ...(filed?.list && { list: filed.list }) })
+			}
 		})()
 	)
 })
+
+// The subscription this origin last filed, shared with the page through IndexedDB (the
+// same store postboi/push writes). Best effort: no IndexedDB reads as nothing filed.
+function postboi_filed(mode, value) {
+	return new Promise((resolve) => {
+		if (typeof indexedDB === "undefined") return resolve(undefined)
+		try {
+			const open = indexedDB.open("postboi-push", 1)
+			open.onupgradeneeded = () => open.result.createObjectStore("filed")
+			open.onerror = () => resolve(undefined)
+			open.onsuccess = () => {
+				try {
+					const store = open.result
+						.transaction("filed", mode === "put" ? "readwrite" : "readonly")
+						.objectStore("filed")
+					const request = mode === "put" ? store.put(value, "endpoint") : store.get("endpoint")
+					request.onsuccess = () => resolve(mode === "put" ? undefined : request.result)
+					request.onerror = () => resolve(undefined)
+				} catch {
+					resolve(undefined)
+				}
+			}
+		} catch {
+			resolve(undefined)
+		}
+	})
+}
 `
 }
 

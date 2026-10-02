@@ -177,3 +177,58 @@ describe("subscription", () => {
 		expect(controller.now().on).toBe(true)
 	})
 })
+
+describe("subscription({ list })", () => {
+	it("follows a public list straight from the page, on the publishable key", async () => {
+		client.subscribe.mockResolvedValue(SUBSCRIPTION as never)
+		const fetch = vi.fn(async () => ({ ok: true }))
+		vi.stubGlobal("fetch", fetch)
+
+		const controller = subscription({
+			list: "new-posts",
+			publishable_key: "pk_test",
+			api: "https://api.test/",
+		})
+		await controller.enable()
+		expect(fetch).toHaveBeenCalledWith("https://api.test/v1/push/browser", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ key: "pk_test", ...SUBSCRIPTION, list: "new-posts" }),
+		})
+		expect(controller.now()).toMatchObject({ on: true })
+
+		client.unsubscribe.mockResolvedValue(SUBSCRIPTION as never)
+		await controller.disable()
+		expect(fetch).toHaveBeenLastCalledWith("https://api.test/v1/push/browser", {
+			method: "DELETE",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				key: "pk_test",
+				endpoint: SUBSCRIPTION.endpoint,
+				list: "new-posts",
+			}),
+		})
+	})
+
+	it("rolls the browser back when the list isn't public", async () => {
+		client.subscribe.mockResolvedValue(SUBSCRIPTION as never)
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => ({ ok: false, status: 403 }))
+		)
+		const controller = subscription({ list: "private", publishable_key: "pk_test" })
+		await controller.enable()
+		expect(client.unsubscribe).toHaveBeenCalled()
+		expect(controller.now()).toMatchObject({ on: false, reason: "register_failed" })
+	})
+
+	it("says managed push isn't baked when there's no publishable key", async () => {
+		client.subscribe.mockResolvedValue(SUBSCRIPTION as never)
+		const fetch = vi.fn()
+		vi.stubGlobal("fetch", fetch)
+		const controller = subscription({ list: "new-posts" })
+		await controller.enable()
+		expect(fetch).not.toHaveBeenCalled()
+		expect(controller.now()).toMatchObject({ on: false, reason: "register_failed" })
+	})
+})

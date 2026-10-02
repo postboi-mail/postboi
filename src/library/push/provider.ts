@@ -12,8 +12,10 @@ import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
 import { ensure_env_loaded } from "../env.js"
 import type { PushDefaults, PushOptions, PushProviderOptions, PreparedPush } from "./types.js"
+import { is_audience } from "./types.js"
 
 export type {
+	PushAudience,
 	PushDefaults,
 	PushOptions,
 	PushProviderOptions,
@@ -28,6 +30,13 @@ export abstract class PushProvider<TResponse = unknown> extends Transport<TRespo
 	protected readonly channel: Channel = "push"
 
 	protected defaults: PushDefaults
+
+	/**
+	 * Can this provider resolve a person or a list (`{ user }`, `{ list }`)? Only the
+	 * Postboi provider holds subscriptions to look one up in; every other provider sends
+	 * to exactly the device it is handed.
+	 */
+	protected readonly audiences: boolean = false
 
 	constructor(options: PushProviderOptions = {}) {
 		super(options)
@@ -61,6 +70,14 @@ export abstract class PushProvider<TResponse = unknown> extends Transport<TRespo
 				code: "no_target",
 				message:
 					"No push target. Pass the subscription or device token the client registered with.",
+			})
+		}
+		if (is_audience(to) && !this.audiences) {
+			throw new PostboiError({
+				provider: this.provider,
+				channel: "push",
+				code: "invalid_target",
+				message: `${"user" in to ? "{ user }" : "{ list }"} needs managed push, where Postboi keeps the subscriptions. Set POSTBOI_PUSH_PROVIDER=postboi (\`bunx postboi init --push\` does), or pass the subscription itself.`,
 			})
 		}
 		if (!options.message?.trim()) {
@@ -119,6 +136,9 @@ export abstract class PushProvider<TResponse = unknown> extends Transport<TRespo
 	 */
 	static is_expired(error: unknown): boolean {
 		if (!(error instanceof PostboiError)) return false
+		// The Postboi provider's 404 is its own API answering (no such list), never a push
+		// service saying a device is gone — it tombstones dead browsers itself.
+		if (error.provider === "postboi") return false
 		// A push service says "gone" with a status; APNs says it with a 400 and a reason
 		// (`BadDeviceToken`), which no status could distinguish from a malformed request.
 		// Providers normalize that case to this code, so the check stays one line here

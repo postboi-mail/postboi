@@ -273,3 +273,51 @@ describe("the generated worker matches receive()", () => {
 		expect(gen.posted).toEqual([["/push/subscriptions", STORED]])
 	})
 })
+
+describe("the generated managed worker matches receive()", () => {
+	const MANAGED = { publishable_key: "pk_test", api: "https://api.test" }
+	const GENERATED = (
+		wire_worker({ path: "public/sw.js", url: "/sw.js", kind: "raw" }, undefined, {
+			register: "/unused",
+			key: VAPID_KEY,
+			managed: MANAGED,
+		}) as { source: string }
+	).source
+
+	afterEach(() => {
+		vi.unstubAllGlobals()
+	})
+
+	async function both(event: Record<string, unknown>) {
+		const a = fake_worker({ subscription: fake_subscription() })
+		new Function("self", "fetch", GENERATED)(a.scope, a.fetch)
+		const b = fake_worker({ subscription: fake_subscription() })
+		for (const [key, value] of Object.entries(b.scope)) vi.stubGlobal(key, value)
+		vi.stubGlobal("fetch", b.fetch)
+		receive({ key: VAPID_KEY, ...MANAGED })
+		await a.fire("pushsubscriptionchange", event)
+		await b.fire("pushsubscriptionchange", event)
+		return [a.record(), b.record()] as const
+	}
+
+	it("re-files a rotation with Postboi on the publishable key, old endpoint included", async () => {
+		const [gen, lib] = await both({ oldSubscription: { endpoint: "https://push.example/old" } })
+		expect(gen).toEqual(lib)
+		expect(gen.posted).toEqual([
+			[
+				"https://api.test/v1/push/browser",
+				{ key: "pk_test", ...STORED, old_endpoint: "https://push.example/old" },
+			],
+		])
+	})
+
+	it("writes the bundled shape as a bare receive()", () => {
+		const wired = wire_worker(
+			{ path: "src/service-worker.ts", url: "/service-worker.js", kind: "bundled" },
+			undefined,
+			{ register: "/unused", managed: MANAGED }
+		) as { source: string }
+		expect(wired.source).toContain("receive()\n")
+		expect(wired.source).not.toContain("/unused")
+	})
+})
