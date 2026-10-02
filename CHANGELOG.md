@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `mail.lists.broadcast()` sends a list a text: `channel: "sms"` with `text`, or `channel: "whatsapp"` with an approved `template`, to every subscribed contact with a `phone`, through the team's own synced provider.
+
 ## 0.58.1
 
 ### Added

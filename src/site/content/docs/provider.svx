@@ -620,6 +620,39 @@ that recipient's signed one-click link (the same target as the header). The rest
 surface: `mail.lists.all()`, `mail.lists.get(id)` (with recipients), `mail.lists.rename(id, name)`,
 `mail.lists.delete(id)`, and `mail.recipients.remove(list_id, email)`.
 
+### A broadcast as a text
+
+The same list can be texted. `channel: "sms"` sends one message to every subscribed
+recipient whose contact has a `phone`; `channel: "whatsapp"` sends them an approved
+template. Both go through **your** provider, with the credentials `postboi env push`
+synced to the team, so the texts are on your Twilio, SMS Works, PureSMS, SNS or Meta bill
+and Postboi never sends one of its own:
+
+```ts
+await mail.lists.broadcast("Newsletter", {
+	channel: "sms",
+	from: "Acme", // or sync POSTBOI_SMS_FROM
+	text: "Hi {name|there}, the sale starts at 9. Reply STOP to opt out.",
+})
+
+await mail.lists.broadcast("Newsletter", {
+	channel: "whatsapp",
+	template: "sale_starts", // approved name (Meta) or Content SID (Twilio)
+	variables: { 1: "{name|there}" },
+})
+```
+
+The provider is `send_via` when you name one, else the synced `POSTBOI_SMS_PROVIDER` (or
+`POSTBOI_WHATSAPP_PROVIDER`) that `postboi init` writes, else the one provider your synced
+credentials can only mean. Twilio's are never guessed at, because anyone using Voice or
+Verify holds them too. Placeholders fill as an email's do, plus `{phone}`.
+
+WhatsApp is templates only on purpose: a free-form message only reaches someone who wrote
+to you in the last 24 hours, and a list is the people who didn't. A number that texted
+STOP is on the channel's suppression list and is skipped. Say how to opt out in the text
+itself, and send from a number rather than a sender ID if you want the replies: nobody can
+reply to `Acme`.
+
 ## Contacts (the audience)
 
 A **contact** is one address on your account. Its `name` and `data` live once and are

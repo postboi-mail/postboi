@@ -50,6 +50,8 @@ await mail.recipients.add(name_or_id, recipients, { status? }) // upserts — se
 await mail.recipients.set_status(name_or_id, email, status)
 await mail.recipients.remove(name_or_id, email)
 await mail.lists.broadcast(name_or_id, { from?, reply_to?, subject, body?, text?, scheduled_at? })
+await mail.lists.broadcast(name_or_id, { channel: "sms", text, from?, send_via?, scheduled_at? })
+await mail.lists.broadcast(name_or_id, { channel: "whatsapp", template, variables?, language?, from?, send_via?, scheduled_at? })
 
 // notifications (see The Postboi provider)
 await mail.notifications.all(name_or_id)

@@ -850,6 +850,33 @@ describe("the Postboi provider — account API", () => {
 		expect(body.body).toBeUndefined()
 	})
 
+	it("broadcast() sends a text as the route takes it", async () => {
+		fetch.mockResolvedValue(respond({ json: { ids: ["m1"], recipients: 1, scheduled_at: "now" } }))
+		await provider().lists.broadcast("l1", {
+			channel: "sms",
+			from: "Postboi",
+			text: "Hi {name}",
+			scheduled_at: "2030-01-01T09:00:00.000Z",
+		})
+		expect(sent_json()).toEqual({
+			channel: "sms",
+			from: "Postboi",
+			text: "Hi {name}",
+			scheduled_at: "2030-01-01T09:00:00.000Z",
+		})
+
+		await provider().lists.broadcast("l1", {
+			channel: "whatsapp",
+			template: "order_update",
+			variables: { 1: "{name}" },
+		})
+		expect(sent_json()).toEqual({
+			channel: "whatsapp",
+			template: "order_update",
+			variables: { 1: "{name}" },
+		})
+	})
+
 	it("manages suppressions", async () => {
 		fetch.mockResolvedValue(respond({ json: { suppressions: [{ email: "x@test.com" }] } }))
 		const rows = await provider().suppressions.all()
