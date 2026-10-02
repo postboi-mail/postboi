@@ -5,6 +5,7 @@ import type { PushDefaults, PushOptions } from "./types.js"
 import { PushProvider } from "./provider.js"
 import { channel_send, type ChannelResolution } from "../channels.js"
 import { read_env } from "../env.js"
+import { handler, subscriptions } from "./managed.js"
 
 type PushConstructor = new (options: Record<string, unknown>) => PushProvider<unknown>
 
@@ -15,6 +16,9 @@ const LOADERS: ChannelResolution<PushProvider<unknown>>["loaders"] = {
 	apns: () => import("./apns.js").then((m) => m.default as unknown as PushConstructor),
 	hms: () => import("./hms.js").then((m) => m.default as unknown as PushConstructor),
 	expo: () => import("./expo.js").then((m) => m.default as unknown as PushConstructor),
+	// Managed push. Named, never inferred: it has no registry entry, so no credential can
+	// select it — a POSTBOI_TOKEN alone must not stop a VAPID trio inferring Web Push.
+	postboi: () => import("./postboi.js").then((m) => m.default as unknown as PushConstructor),
 	mock: () => import("./mock.js").then((m) => m.default as unknown as PushConstructor),
 }
 
@@ -50,6 +54,11 @@ const RESOLUTION: ChannelResolution<PushProvider<unknown>> = {
  * right response is to delete your stored copy — not to retry, and not to alert. It
  * hangs off `push` itself so the send and its routine failure check are one import.
  *
+ * With managed push (`POSTBOI_PUSH_PROVIDER=postboi`) there is no stored copy to delete:
+ * Postboi holds the subscriptions, `to` can be `{ user }` or `{ list }`, and the answer is
+ * `{ sent, expired, failed }`. `push.handler` is the route that files a browser under the
+ * signed-in user, and `push.subscriptions` is the rows themselves.
+ *
  * @example
  * ```ts
  * import { push } from "postboi"
@@ -62,4 +71,6 @@ const RESOLUTION: ChannelResolution<PushProvider<unknown>> = {
  */
 export const push = Object.assign(channel_send<PushOptions>(RESOLUTION), {
 	expired: PushProvider.is_expired,
+	handler,
+	subscriptions,
 })

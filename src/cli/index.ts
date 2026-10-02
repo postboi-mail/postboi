@@ -85,6 +85,7 @@ import {
 	fetch_domains,
 	fetch_forms,
 	fetch_env_vars,
+	push_key,
 	push_env_vars,
 	start_connect,
 	poll_connect,
@@ -93,6 +94,7 @@ import {
 	type PostboiDomain,
 } from "./postboi.js"
 import { credential_env_keys } from "../library/registry.js"
+import { push_route, MANUAL_ROUTE } from "./push_route.js"
 import { generate_vapid_keys } from "../library/push/webpush.js"
 import {
 	write_types,
@@ -856,14 +858,22 @@ async function sync(): Promise<void> {
 	// Templates come from Meta or Twilio, not from Postboi, so this runs with or without a
 	// token — and starting it first lets it overlap whatever account requests follow.
 	const templates_promise = fetch_whatsapp_templates()
-	const bake = async (key: string | undefined, source: string) => {
+	// Managed push: the browser files itself with Postboi, so the build needs to know where.
+	// Named, never guessed from a token — `null` clears a previous bake when the env names
+	// another push provider, and an unset one leaves whatever the last run wrote.
+	const push_provider = read_env("POSTBOI_PUSH_PROVIDER")
+	const managed =
+		push_provider === "postboi" ? { api: cloud_base() } : push_provider ? null : undefined
+	const bake = async (key: string | undefined, source: string, managed_key?: string) => {
 		const { sids } = await templates_promise
 		// The VAPID public key rides along from local env — public by definition, and
-		// baking it is what lets subscribe() and the push toggle need no key at all.
-		const vapid = read_env("VAPID_PUBLIC_KEY")
-		if (write_runtime(key, sids, vapid)) {
+		// baking it is what lets subscribe() and the push toggle need no key at all. With
+		// managed push the account's own key wins over a stale local copy.
+		const vapid = managed_key ?? read_env("VAPID_PUBLIC_KEY")
+		if (write_runtime(key, sids, vapid, managed)) {
 			console.log(`${green("✓")} captcha key baked for <Captcha /> ${dim(`(from ${source})`)}`)
 			if (vapid) console.log(`${green("✓")} VAPID public key baked, so subscribe() needs no key`)
+			if (managed) console.log(`${green("✓")} managed push baked, so receive() needs no route`)
 		}
 	}
 	/** Say what got typed, once, however sync got here. */
@@ -889,9 +899,16 @@ async function sync(): Promise<void> {
 	// Forms drive the generated `form` types the same way domains drive `from`; a fetch
 	// that fails keeps the last generated names rather than erasing them.
 	const forms_promise = fetch_forms(cloud_base(), token)
+	// Managed push's public key, likewise started now rather than after everything else.
+	const managed_key_promise = managed
+		? push_key(cloud_base(), token, { kind: "get" }).then((result) =>
+				result.ok ? result.key.public_key : undefined
+			)
+		: Promise.resolve(undefined)
 	const account = await fetch_domains(cloud_base(), token)
 	if (!account) {
-		await bake(config_key, config_file ?? "config")
+		// The account's VAPID key may still have arrived, and it beats a stale local copy.
+		await bake(config_key, config_file ?? "config", await managed_key_promise)
 		const { names, variables } = await templates_promise
 		if (write_types(undefined, [], names, variables, undefined, provider_name))
 			report_templates(names)
@@ -933,7 +950,12 @@ async function sync(): Promise<void> {
 	}
 
 	const captcha_key = account.captcha_key ?? config_key
-	await bake(captcha_key, account.captcha_key ? "the Postboi provider" : (config_file ?? "config"))
+	const managed_key = await managed_key_promise
+	await bake(
+		captcha_key,
+		account.captcha_key ? "the Postboi provider" : (config_file ?? "config"),
+		managed_key
+	)
 	// Keep the committed config as the tokenless source of truth for the key.
 	if (account.captcha_key && config_file && config_source && account.captcha_key !== config_key) {
 		const next = upsert_captcha_key(config_source, account.captcha_key)
@@ -1610,7 +1632,8 @@ const CHANNEL_INIT = {
 async function offer_service_worker(
 	prompts: Prompts,
 	files: Array<string>,
-	key: string | undefined
+	key: string | undefined,
+	managed?: { publishable_key: string; api: string; page: string }
 ): Promise<void> {
 	let pkg: PackageJson | undefined
 	try {
@@ -1640,13 +1663,17 @@ async function offer_service_worker(
 		return
 	}
 
-	const register = await prompts.ask("  Endpoint a subscription is filed at", {
-		default: "/push/subscriptions",
-	})
+	// Managed push files rotations with Postboi itself, so there is no route to ask about.
+	const register = managed
+		? managed.page
+		: await prompts.ask("  Endpoint a subscription is filed at", {
+				default: "/push/subscriptions",
+			})
 
 	const result = wire_worker(target, found ? readFileSync(found.path, "utf8") : undefined, {
 		register,
 		key,
+		...(managed && { managed: { publishable_key: managed.publishable_key, api: managed.api } }),
 	})
 
 	if (result === "present") {
@@ -1681,6 +1708,21 @@ async function channel_init(
 ): Promise<void> {
 	// The team-credentials fetch doesn't depend on the pick, so it overlaps think-time.
 	const team_promise = synced_credentials()
+
+	// Push on a Postboi account can skip the subscription bookkeeping altogether. Offered
+	// first unless the project already sends Web Push its own way, so a re-run of an
+	// existing setup (an unattended one above all, which takes the first answer) keeps it.
+	if (channel === "push" && read_env("POSTBOI_TOKEN")) {
+		const byo_already =
+			read_env("VAPID_PRIVATE_KEY") !== undefined && read_env("POSTBOI_PUSH_PROVIDER") !== "postboi"
+		const managed = { label: "Postboi keeps them", value: true, hint: "send to a user or a list" }
+		const own = { label: "My own push service", value: false, hint: "you store the subscriptions" }
+		const choice = await prompts.select<boolean>(
+			bold("Who keeps the push subscriptions?"),
+			byo_already ? [own, managed] : [managed, own]
+		)
+		if (choice) return managed_push_init(prompts, files)
+	}
 
 	// The registries are separate const-narrowed tuples; the map widens each to the shared
 	// shape, which carries every field used here.
@@ -1789,6 +1831,133 @@ async function channel_init(
 
 	console.log(`\n${green(bold("Done!"))}\n`)
 	for (const line of spec.done(provider)) console.log(dim(line) + "\n")
+}
+
+/**
+ * `init --push`, managed: Postboi holds the VAPID key and the subscriptions.
+ *
+ * Switches managed push on for the account — bringing the pair the project already sends
+ * with when there is one, so its subscribers keep working — then writes
+ * `POSTBOI_PUSH_PROVIDER=postboi` (named, never inferred) and the public key, bakes what
+ * the browser side needs, and offers the two files: the route that files a browser under
+ * the signed-in user, and the service worker.
+ */
+async function managed_push_init(prompts: Prompts, files: Array<string>): Promise<void> {
+	const token = read_env("POSTBOI_TOKEN")!
+	const base = cloud_base()
+
+	let result: Awaited<ReturnType<typeof push_key>>
+	const public_key = read_env("VAPID_PUBLIC_KEY")
+	const private_key = read_env("VAPID_PRIVATE_KEY")
+	if (
+		public_key &&
+		private_key &&
+		(await prompts.confirm(
+			"Bring the VAPID pair in your env, so the browsers already subscribed keep receiving?"
+		))
+	) {
+		result = await push_key(base, token, {
+			kind: "import",
+			public_key,
+			private_key,
+			subject: read_env("VAPID_SUBJECT"),
+		})
+		if (!result.ok && result.status === 409) {
+			// The account already sends with another pair, and that one is kept: the browsers
+			// subscribed under the env's pair won't hear anything through Postboi.
+			console.log(`${yellow("!")} ${result.reason}`)
+			result = await push_key(base, token, { kind: "get" })
+			if (result.ok) {
+				console.log(
+					`${yellow("!")} Kept the account's own pair. Browsers subscribed under the pair in your env won't receive through Postboi.`
+				)
+			}
+		} else if (result.ok) {
+			console.log(`${green("✓")} Postboi now sends with your pair`)
+			console.log(
+				dim(
+					"  Move your stored subscriptions across with push.subscriptions.import(rows), up to 1000 a call."
+				)
+			)
+		}
+	} else {
+		result = await push_key(base, token, { kind: "enable" })
+		if (result.ok) console.log(`${green("✓")} managed push is on for this account`)
+	}
+	if (!result.ok) {
+		console.log(
+			red(`
+Couldn't switch managed push on: ${result.reason}.`)
+		)
+		return exit(1)
+	}
+
+	const values = { POSTBOI_PUSH_PROVIDER: "postboi", VAPID_PUBLIC_KEY: result.key.public_key }
+	const targets = await choose_env_targets(prompts, files)
+	write_env_values(targets, values)
+	await offer_host_push(prompts, files, values)
+	env.POSTBOI_PUSH_PROVIDER = "postboi"
+	ensure_install(files)
+	ensure_vite_plugin(files)
+
+	// The browser files itself on the publishable key, which rides with the domains.
+	const account = await fetch_domains(base, token)
+	const publishable_key = account?.captcha_key
+	if (existsSync(TYPES_TARGET)) {
+		if (write_runtime(publishable_key, {}, result.key.public_key, { api: base })) {
+			console.log(`${green("✓")} baked the key and the API, so the browser side needs no options`)
+			ensure_prepare()
+		}
+	}
+
+	let pkg: PackageJson | undefined
+	try {
+		pkg = JSON.parse(readFileSync("package.json", "utf8")) as PackageJson
+	} catch {
+		// No package.json: no framework to write a route for, and the manual calls are printed.
+	}
+	const route = push_route(pkg, existsSync)
+	let page = "/push"
+	if (route && !existsSync(route.path)) {
+		if (
+			await prompts.confirm(
+				`${bold("Create")} ${cyan(route.path)} ${bold("to file browsers under the signed-in user?")}`
+			)
+		) {
+			mkdirSync(dirname(route.path), { recursive: true })
+			writeFileSync(route.path, route.source)
+			console.log(`${green("✓")} created ${bold(route.path)}. Point its one line at your session`)
+		}
+		page = route.url
+	} else if (route) {
+		console.log(
+			dim(`  ${route.path} is already there; it should export push.handler's POST and DELETE.`)
+		)
+		page = route.url
+	} else {
+		console.log(dim("\n  In the route the page posts its subscription to:"))
+		console.log(`${MANUAL_ROUTE.replace(/^/gm, "    ")}`)
+	}
+
+	if (publishable_key) {
+		await offer_service_worker(prompts, files, result.key.public_key, {
+			publishable_key,
+			api: base,
+			page,
+		})
+	}
+
+	console.log(`\n${green(bold("Done!"))}\n`)
+	console.log(
+		dim(
+			'import { push } from "postboi"\n\nawait push({ to: { user: "123" }, title: "Order shipped", message: "On its way" })'
+		) + "\n"
+	)
+	console.log(
+		dim(
+			'A public list needs no route at all: subscription({ list: "new-posts" }) on the page, once the list is opened to browsers on its page in the dashboard.'
+		) + "\n"
+	)
 }
 
 /**
@@ -1926,7 +2095,8 @@ async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = fals
  * separately into `wrangler secret put` would install halves of two different pairs and
  * fail on every send with a 401.
  */
-async function vapid_command(): Promise<void> {
+async function vapid_command(args: Array<string> = []): Promise<void> {
+	if (args.includes("--export")) return vapid_export()
 	const { public_key, private_key } = await generate_vapid_keys()
 	console.log(`VAPID_PUBLIC_KEY=${public_key}`)
 	console.log(`VAPID_PRIVATE_KEY=${private_key}`)
@@ -1934,6 +2104,41 @@ async function vapid_command(): Promise<void> {
 		dim(
 			"\n# The public key also goes to the browser's `subscribe({ key })`." +
 				"\n# Keep the pair: every subscription is bound to the key it subscribed with."
+		)
+	)
+}
+
+/**
+ * `postboi vapid --export`: print the pair managed push holds for this account, private
+ * half included. Leaving Postboi must never cost anyone their subscribers — every browser
+ * is bound to the key it subscribed under, so this pair, in VAPID_* lines, is what lets
+ * `postboi/webpush` carry on sending to them from anywhere.
+ */
+async function vapid_export(): Promise<void> {
+	await ensure_env_loaded()
+	const token = read_env("POSTBOI_TOKEN")
+	if (!token) {
+		console.log(red("No POSTBOI_TOKEN. Run `bunx postboi init` first."))
+		return exit(1)
+	}
+	const result = await push_key(cloud_base(), token, { kind: "get", export: true })
+	if (!result.ok) {
+		console.log(
+			red(
+				result.status === 404
+					? "Managed push isn't on for this account, so there is no key to export."
+					: `Export failed: ${result.reason}.`
+			)
+		)
+		return exit(1)
+	}
+	console.log(`VAPID_PUBLIC_KEY=${result.key.public_key}`)
+	console.log(`VAPID_PRIVATE_KEY=${result.key.private_key ?? ""}`)
+	console.log(`VAPID_SUBJECT=${result.key.subject}`)
+	console.log(
+		dim(
+			"\n# The pair your subscribers are bound to. With these and POSTBOI_PUSH_PROVIDER=webpush," +
+				"\n# postboi/webpush sends to the same browsers; push.subscriptions.list() pages out the rows."
 		)
 	)
 }
@@ -1952,7 +2157,7 @@ async function main(): Promise<void> {
 		return
 	}
 	if (command === "doctor") return doctor(argv.slice(3))
-	if (command === "vapid") return vapid_command()
+	if (command === "vapid") return vapid_command(argv.slice(3))
 	if (command === "sync") return sync()
 	if (command === "env") return env_command(argv.slice(3))
 	if (command === "dev") return dev_command(argv.slice(3))

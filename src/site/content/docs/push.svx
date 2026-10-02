@@ -20,7 +20,8 @@ instead of SMS doesn't save a percentage, it saves the entire cost.
 
 **The address has to be registered first.** An email address or a phone number is something
 you can be told. A push target only exists once the device has subscribed and handed it to
-you, so you have to store it, and it will expire.
+you, so you have to store it, and it will expire. Or, for Web Push on a Postboi account,
+[let Postboi store it](#managed-push) and send to a person instead of a device.
 
 ## Setup
 
@@ -71,6 +72,114 @@ Those are the **server** imports: the senders. The client half is a different im
 on purpose: `postboi/push`, next, carries no provider and no private key, so neither can
 end up in a client bundle by accident. A phone gets the same helper as `postboi/push/expo`,
 [below](#in-the-app).
+
+## Managed push
+
+With every provider above, your app keeps a table of subscriptions, deletes rows when a send
+answers 410, and serves an endpoint for the service worker to re-file rotated subscriptions
+to. None of it is hard, but every app writes the same version of it, and the table is why a
+send can only go to a device and never to a person.
+
+On a Postboi account, Postboi can keep that state for you:
+
+```bash
+bunx postboi init --push   # pick "Postboi keeps them"
+```
+
+That switches managed push on for the account, writes `POSTBOI_PUSH_PROVIDER=postboi`, and
+offers the two files a signed-in app needs: a route and a service worker. After that a send
+names a person, by whatever id your app already has:
+
+```typescript
+import { push } from "postboi"
+
+const { sent, expired } = await push({
+	to: { user: "123" },
+	title: "Order shipped",
+	message: "On its way",
+})
+```
+
+It reaches every browser that person turned notifications on in. Someone with no browsers is
+`{ sent: 0 }`, not an error, because that is a normal state and you decide whether it
+matters. Browsers the push service says are gone are cleaned up on Postboi's side, so there is
+nothing to delete and no `push.expired()` to call.
+
+**The route** files a browser under whoever is signed in. `init --push` writes it for
+SvelteKit, Next and Astro, and the one line you change is how your app knows who that is:
+
+```typescript
+// src/routes/push/+server.ts
+import { push } from "postboi"
+
+export const { POST, DELETE } = push.handler((event) => event.locals.user?.id)
+```
+
+`push.handler` reads the `Request` out of whatever your framework hands a route: the argument
+itself (Next, Workers), its `.request` (SvelteKit, Astro, Remix) or Hono's `c.req.raw`. A
+signed-out request answers 401, and the toggle on the page undoes the subscription rather than
+leaving a browser subscribed to something nothing can reach. `DELETE` only unfiles a browser
+that belongs to the person asking.
+
+**The page** posts to that route, and **the worker** needs no options at all, because
+`bunx postboi sync` bakes the account's key and its publishable key into the package. A
+rotated subscription goes straight to Postboi, which moves the old one's person and lists
+onto it:
+
+```typescript
+// page
+const push = subscription({ register: "/push" })
+
+// src/service-worker.ts
+receive()
+```
+
+**A public list needs no route at all.** Open a list to browsers on its page in the dashboard
+(or `push_public: true` on `PATCH /v1/lists/:id`), and the page subscribes to it on the
+publishable key alone:
+
+```typescript
+const push = subscription({ list: "new-posts" })
+```
+
+```typescript
+await push({ to: { list: "new-posts" }, title: "New post", message: "Managed push is out" })
+```
+
+Only a list you opened takes subscriptions from a browser, because a publishable key is
+public. Anything tied to a person goes through your own route, since only your server knows
+who is signed in.
+
+**The rows themselves** are `push.subscriptions`, for a framework whose handlers aren't
+`Request`-shaped (Express) and for scripts:
+
+```typescript
+await push.subscriptions.add(subscription, { user: "123", lists: ["new-posts"] })
+await push.subscriptions.remove(endpoint, { user: "123" })
+const { subscriptions, cursor } = await push.subscriptions.list({ user: "123" })
+```
+
+**Moving an existing setup across** keeps your subscribers. Every subscription is bound to the
+VAPID key it was made with, so `init --push` offers to bring the pair already in your env
+instead of minting a new one. Then move the rows, up to 1000 a call:
+
+```typescript
+await push.subscriptions.import(rows.map((row) => ({ subscription: row.subscription, user: row.user_id })))
+```
+
+**Leaving** keeps them too. `bunx postboi vapid --export` prints the pair Postboi holds,
+private half included, as `VAPID_*` lines, and `postboi/webpush` sends to the same browsers
+from anywhere.
+
+A few limits worth knowing:
+
+- Managed push is Web Push only for now. FCM, APNs, HMS and Expo tokens stay with you.
+- One send reaches up to 1000 browsers. A bigger list is refused whole with a 413 rather than
+  half sent.
+- Endpoints are only accepted on the push services browsers use (FCM, Mozilla, Apple and
+  Windows), because Postboi posts to whatever is stored.
+- `POSTBOI_TOKEN` on its own never selects managed push. It has to be named, so an account
+  that sends email through Postboi and Web Push from a VAPID trio keeps doing exactly that.
 
 ## Subscribing, in the browser
 
@@ -407,6 +516,9 @@ for (const [i, result] of results.entries()) {
 ```
 
 (Holding a provider instance directly? The same check is `PushProvider.is_expired()`.)
+
+With [managed push](#managed-push) none of this is yours: Postboi tombstones the endpoint
+and keeps it for 30 days, in case the browser re-files a rotated subscription late.
 
 ## Payload size
 

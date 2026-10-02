@@ -25,6 +25,9 @@ idiom — deliberately WET, so "postboi in `<framework>`" is one folder, complet
   `bunx postboi init --push` mints the VAPID pair and bakes the public half into the
   package, so nothing carries it to the browser by hand. The server-only apps (Hono,
   Express, Workers) carry the full server surface and point here for the browser half.
+  The SvelteKit app shows managed push instead: Postboi keeps the subscriptions, the route
+  is one `push.handler` line, `push({ to: { user } })` sends to a person, and a public
+  list is followed from the page with no route at all.
 
 Every example is exercised by CI (`bun run ci` in each folder — a typecheck or build),
 so none of this rots quietly.

@@ -27,6 +27,8 @@
 import { from_base64url } from "../encoding.js"
 import { vapid_public_key } from "../register.js"
 import { subscription_json, type PushSubscriptionJSON } from "./client.js"
+import { door, rotate as rotate_with_postboi, type DoorOptions } from "./door.js"
+import { recall, remember } from "./memory.js"
 import type { PushPayload } from "./types.js"
 
 /**
@@ -44,7 +46,7 @@ export type RotatedSubscription = PushSubscriptionJSON & { old_endpoint?: string
 export type NotificationSpec = { title: string } & NotificationOptions
 
 /** Options for {@link receive}. */
-export interface ReceiveOptions {
+export interface ReceiveOptions extends DoorOptions {
 	/**
 	 * VAPID **public** key, base64url, used to re-subscribe after a rotation — the string
 	 * itself, or a function that resolves it, called only when a rotation actually needs
@@ -72,8 +74,10 @@ export interface ReceiveOptions {
 	 * {@link RotatedSubscription} JSON, or a function for anything beyond that. Normally the
 	 * same endpoint the toggle's `register` posts to.
 	 *
-	 * Without it a rotation is noticed and then forgotten, which is what not having this
-	 * handler at all already does.
+	 * With managed push (`bunx postboi sync` baked it) leave this out: a rotation goes to
+	 * Postboi itself, which moves the old row's person and lists onto the new one.
+	 * Without either, a rotation is noticed and then forgotten, which is what not having
+	 * this handler at all already does.
 	 */
 	register?: string | ((subscription: RotatedSubscription) => Promise<unknown>)
 	/**
@@ -271,7 +275,10 @@ async function rotate(
 	event: SubscriptionChangeEventLike,
 	options: ReceiveOptions
 ): Promise<void> {
-	if (!options.register) return
+	// Your own route when you named one; Postboi's door when this build is managed; and
+	// nowhere otherwise.
+	const managed = !options.register && door(options) !== null
+	if (!options.register && !managed) return
 
 	let subscription = event.newSubscription ?? null
 	if (!subscription) {
@@ -293,9 +300,17 @@ async function rotate(
 		})
 	}
 
-	const old_endpoint = event.oldSubscription?.endpoint
-	await file(options.register, {
-		...subscription_json(subscription),
-		...(old_endpoint && { old_endpoint }),
-	})
+	// The browser names the subscription it replaced, or doesn't — then the one the page
+	// last filed (memory.ts) stands in, because without it the new subscription can't claim
+	// the old one's row and the person it belonged to stops hearing anything.
+	const filed = await recall()
+	const json = subscription_json(subscription)
+	const replaced = event.oldSubscription?.endpoint ?? filed?.endpoint
+	const old_endpoint = replaced !== json.endpoint ? replaced : undefined
+	if (managed) {
+		await rotate_with_postboi(json, old_endpoint, filed?.list, options)
+		return
+	}
+	await file(options.register!, { ...json, ...(old_endpoint && { old_endpoint }) })
+	await remember({ endpoint: json.endpoint, ...(filed?.list && { list: filed.list }) })
 }

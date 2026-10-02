@@ -314,6 +314,10 @@
 			"types": "./dist/push/native.d.ts",
 			"default": "./dist/push/native.js"
 		},
+		"./push/postboi": {
+			"types": "./dist/push/postboi.d.ts",
+			"default": "./dist/push/postboi.js"
+		},
 		"./whatsapp-twilio": {
 			"types": "./dist/whatsapp/twilio.d.ts",
 			"default": "./dist/whatsapp/twilio.js"

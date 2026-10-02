@@ -5,6 +5,6 @@
 import { receive } from "postboi/push/sw"
 
 // Shows the notification, opens the right tab on click, and re-subscribes when the browser
-// rotates this subscription — the last of which only fires inside a worker, which is why
-// it can't live on the page with the rest of postboi/push.
-receive({ register: "/push" })
+// rotates this subscription. With managed push the rotation goes to Postboi itself, which
+// moves the old subscription's person and lists onto the new one, so no arguments.
+receive()

@@ -5,7 +5,7 @@ SMS, push, RCS, WhatsApp and chat, behind one API.
 
 **Status: Phases 0, 1, 3, 4, 5 and 6 shipped** (Phase 6's WhatsApp half in code, its RCS
 half as documentation — see the phase for why that's the whole job). Phase 2 (hosted SMS)
-remains deliberately unbuilt. Phase 7 (managed push subscriptions) is proposed. The four structural review follow-ups have also landed. This
+remains deliberately unbuilt. Phase 7 (managed push subscriptions) has its first slice built. The four structural review follow-ups have also landed. This
 document is the source of truth for the channel work — read it before starting a phase, and
 update it when a decision changes. Reasoning that led to these conclusions lives in this
 file's git history.
@@ -653,7 +653,7 @@ pipeline, serves our actual audience — ~3–5 days), and native Swift/Kotlin/F
 `push()` needs to resolve "user 123" → tokens. Start with **raw tokens passed by the
 caller** — simplest, and punts the problem. A `push.subscriptions` namespace on the hosted
 provider is the natural home later, alongside `contacts`. That's now planned as
-[Phase 7](#phase-7-managed-push-subscriptions-proposed).
+[Phase 7](#phase-7-managed-push-subscriptions--first-slice-built).
 
 **Shipped**: Web Push (VAPID + `aes128gcm`), FCM, a mock, the browser helpers, and `push()`
 wired into `send()`'s cost ordering — where it now sits first, as the genuinely free channel.
@@ -1053,9 +1053,9 @@ Items 1 and 3 have a first cut; item 2 is still email-only.
 - **Delivery profiles** — a contact carries `phone` (E.164, validated as definitive: a
   national number is rejected rather than guessed at). One number, not one per channel:
   SMS and WhatsApp reach the same handset, and a second field would be a second thing to
-  keep in step. Push subscriptions are still the caller's to store — `push()` takes raw
-  subscriptions, as Phase 3 decided, and nothing about a contact has changed that.
-  [Phase 7](#phase-7-managed-push-subscriptions-proposed) proposes the hosted store.
+  keep in step. Push subscriptions are the caller's to store unless they opt into
+  [managed push](#phase-7-managed-push-subscriptions--first-slice-built), which keys them
+  by an opaque `user` rather than by contact; joining the two waits on `external_id`.
 - **Per-channel suppressions** — the account's list is keyed `(channel, address)` now:
   `email`, `sms` and `whatsapp`. A texted **STOP** reaches it on its own: the Twilio poll
   adapter reads inbound replies for exactly one thing, an opt-out keyword (`is_opt_out`,
@@ -1071,9 +1071,20 @@ Items 1 and 3 have a first cut; item 2 is still email-only.
 
 ---
 
-## Phase 7: managed push subscriptions (proposed)
+## Phase 7: managed push subscriptions ✅ **first slice built**
 
-**Status: proposed, not started.** Web Push today leaves three jobs with the developer: a
+**Status: built, on the proposal below, with these differences.** Fan-out runs inside the
+send request with bounded concurrency and a cap of 1000 browsers a send (a bigger audience
+is refused whole, 413), not through a Queue; the Queue is what lifts the cap. A send's
+target can also be `{ list }`, since a public list nobody can send to would be pointless.
+A browser with no `old_endpoint` and no public list to follow is refused at the browser
+door rather than filed with no owner, because that row could never be reached; the page
+and the worker record the last filed endpoint in IndexedDB so the old one is almost always
+there to present. The key is minted by `POST /v1/push/keys` (the switch-on), sealed with
+the env-vars sealing key, and read only by the send route and `GET ?private=1`. Not yet
+built: push in `lists.broadcast()`, scheduled and digest pushes, FCM/APNs/HMS/Expo tokens.
+
+Web Push today leaves three jobs with the developer: a
 table of subscriptions, deleting rows when a send answers 404/410, and a register endpoint
 for the service worker to re-file rotated subscriptions to. None of it is hard, but every
 app writes the same version of it, and the table is the reason `push()` can only send to a
