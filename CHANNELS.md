@@ -1048,7 +1048,7 @@ more than one channel to route between.
 
 ### Status: the first slice has landed
 
-Items 1 and 3 have a first cut; item 2 is still email-only.
+Items 1 and 3 have a first cut, and item 2 has shipped for SMS and WhatsApp.
 
 - **Delivery profiles** — a contact carries `phone` (E.164, validated as definitive: a
   national number is rejected rather than guessed at). One number, not one per channel:
@@ -1064,10 +1064,13 @@ Items 1 and 3 have a first cut; item 2 is still email-only.
   the SMS half of "legally required anyway". Nothing in the platform _sends_ SMS or
   WhatsApp (Phase 2 stays declined), so today the list is a record the API, CLI and
   dashboard expose and `send()` callers can honour — not a gate on a hosted send path.
-- **`lists.broadcast()` multi-channel** — unbuilt, and now the obvious next step: the
-  contact has a number, the suppression list knows the channel, and the app already
-  relays email through synced provider credentials, which is the same shape an SMS leg
-  through synced Twilio credentials would take.
+- **`lists.broadcast()` multi-channel** — shipped. `channel: "sms"` or `"whatsapp"` on
+  `/v1/lists/:id/send` queues one text per subscribed contact with a `phone`; the dispatcher
+  sends each through the team's synced provider exactly as an email "send via" goes through
+  theirs (`channel_send.ts` in postboi-app, sharing the relay's `open_provider`). The
+  provider is resolved at accept time and written into the payload. WhatsApp is template
+  only, and the channel's suppression list is the gate. Still Phase 2's line: with no
+  synced provider there is no text broadcast. Not yet in the dashboard composer.
 
 ---
 

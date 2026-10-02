@@ -386,8 +386,12 @@ export type Suppression = {
  */
 export type SuppressionTarget = string | { phone: string; channel?: "sms" | "whatsapp" }
 
-/** The message broadcast to every recipient on a list. */
-export interface BroadcastOptions {
+/** The message broadcast to every recipient on a list: an email, or a text. */
+export type BroadcastOptions = EmailBroadcast | SmsBroadcast | WhatsappBroadcast
+
+/** One email per subscribed recipient. */
+export interface EmailBroadcast {
+	channel?: "email"
 	/** Omitted = the account's sending address. Narrowed by `bunx postboi sync`. */
 	from?: FromAddress
 	reply_to?: Email
@@ -402,11 +406,53 @@ export interface BroadcastOptions {
 	scheduled_at?: Date | string | Duration
 }
 
+/** What a text broadcast shares, whichever channel it is on. */
+interface TextBroadcast {
+	/** A number or an alphanumeric sender ID. Omitted = the synced `POSTBOI_<CHANNEL>_FROM`. */
+	from?: string
+	/**
+	 * The provider to send through, by its registry key (`"twilio"`, `"smsworks"`, `"meta"`).
+	 * Omitted = the synced `POSTBOI_<CHANNEL>_PROVIDER`, else the one provider the team's
+	 * synced credentials can only mean.
+	 */
+	send_via?: string
+	/** Deliver later — a `Date`, ISO 8601 string, or relative duration like `{ days: 1 }`. */
+	scheduled_at?: Date | string | Duration
+}
+
+/**
+ * One text per subscribed recipient whose contact has a `phone`, through the team's own
+ * synced SMS provider. Numbers that texted STOP are skipped.
+ */
+export interface SmsBroadcast extends TextBroadcast {
+	channel: "sms"
+	/** The message. `{key}` placeholders fill as an email's do, plus `{phone}`. */
+	text: string
+}
+
+/**
+ * One WhatsApp message per subscribed recipient with a `phone`. Always a template: free-form
+ * WhatsApp only reaches someone who wrote in during the last 24 hours, and a list is the
+ * people who didn't.
+ */
+export interface WhatsappBroadcast extends TextBroadcast {
+	channel: "whatsapp"
+	/** An approved template, by name (Meta) or Content SID, `HX…` (Twilio). */
+	template: string
+	/** The template's values; each may carry `{key}` placeholders of its own. */
+	variables?: Record<string, string>
+	/** The language the template was approved in (Meta). */
+	language?: string
+}
+
 /** The result of a broadcast: one queued message id per recipient. */
 export interface BroadcastResponse {
 	ids: Array<string>
 	recipients: number
 	scheduled_at: string
+	/** Text broadcasts: the channel, and the provider the texts go through. */
+	channel?: "sms" | "whatsapp"
+	send_via?: string
 }
 
 /**
@@ -698,21 +744,28 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		 * `{key}` placeholders are filled from each recipient's `data`, and one-click
 		 * unsubscribe headers are added for you.
 		 */
-		broadcast: (list: string, options: BroadcastOptions): Promise<BroadcastResponse> =>
-			this.#api(`/lists/${encodeURIComponent(list)}/send`, {
-				body: {
-					from: options.from ? this.email_name(this.parse_email_address(options.from)) : undefined,
-					reply_to: options.reply_to
-						? this.email_name(this.parse_email_address(options.reply_to))
-						: undefined,
-					subject: options.subject,
-					html: options.body,
-					text: options.text,
-					scheduled_at: options.scheduled_at
-						? this.resolve_scheduled_at(options.scheduled_at).toISOString()
-						: undefined,
-				},
-			}),
+		broadcast: (list: string, options: BroadcastOptions): Promise<BroadcastResponse> => {
+			const scheduled_at = options.scheduled_at
+				? this.resolve_scheduled_at(options.scheduled_at).toISOString()
+				: undefined
+			return this.#api(`/lists/${encodeURIComponent(list)}/send`, {
+				body:
+					options.channel === "sms" || options.channel === "whatsapp"
+						? { ...options, scheduled_at }
+						: {
+								from: options.from
+									? this.email_name(this.parse_email_address(options.from))
+									: undefined,
+								reply_to: options.reply_to
+									? this.email_name(this.parse_email_address(options.reply_to))
+									: undefined,
+								subject: options.subject,
+								html: options.body,
+								text: options.text,
+								scheduled_at,
+							},
+			})
+		},
 	}
 
 	/** A list's recipients. `list` is a name or id throughout. */
