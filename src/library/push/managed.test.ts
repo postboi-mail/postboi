@@ -6,6 +6,7 @@ import { push } from "./send.js"
 import { handler } from "./managed.js"
 import { PostboiError } from "../errors.js"
 import { reset_config } from "../config.js"
+import { infer_channel_provider } from "../registry.js"
 
 const SUBSCRIPTION = {
 	endpoint: "https://fcm.googleapis.com/fcm/send/abc123",
@@ -71,13 +72,12 @@ describe("managed push", () => {
 		expect(fetch_mock.mock.calls[0][0]).toBe("https://api.test/v1/push/send")
 
 		// A token and a VAPID trio: still Web Push, which is what the trio was minted for.
-		vi.stubEnv("POSTBOI_PUSH_PROVIDER", "")
-		vi.stubEnv("VAPID_PUBLIC_KEY", VAPID.public_key)
-		vi.stubEnv("VAPID_PRIVATE_KEY", VAPID.private_key)
-		vi.stubEnv("VAPID_SUBJECT", VAPID.subject)
-		fetch_mock.mockResolvedValueOnce(new Response(null, { status: 201 }))
-		await push({ to: SUBSCRIPTION, message: "hi" })
-		expect(fetch_mock.mock.calls[1][0]).toBe(SUBSCRIPTION.endpoint)
+		// Asked of inference directly, with only those set, so a machine carrying every
+		// credential (CI's polluted run) can't make the answer ambiguous.
+		const set = new Set(["POSTBOI_TOKEN", "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"])
+		expect(infer_channel_provider("push", (env) => set.has(env))).toBe("webpush")
+		// And no credential at all ever infers managed push.
+		expect(infer_channel_provider("push", () => true)).not.toBe("postboi")
 	})
 
 	it("an audience is refused by every provider that can't look one up", async () => {
