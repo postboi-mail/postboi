@@ -14,7 +14,8 @@ import type { PostboiDomain, PostboiForm } from "./postboi.js"
  *   either way — the type answers "is this plausibly my address", not "will it deliver".
  * - `register.js`: the account's publishable captcha key, which is what lets the
  *   framework `<Captcha />` components work with no props, plus Twilio's name→Content SID
- *   map, which is what lets a Twilio send name its template instead of quoting an `HX…`.
+ *   map, which is what lets a Twilio send name its template instead of quoting an `HX…`,
+ *   and, with managed push, the API a browser files itself with (`managed_push`).
  */
 
 /** The placeholder `.d.ts` the package ships, overwritten with the generated union. */
@@ -148,11 +149,13 @@ export declare const vapid_public_key: string | undefined
 export function render_runtime(
 	captcha_key: string | undefined,
 	template_sids: Record<string, string> = {},
-	vapid_public_key: string | undefined = undefined
+	vapid_public_key: string | undefined = undefined,
+	managed_push: { api: string } | undefined = undefined
 ): string {
 	return `${HEADER}export const captcha_key = ${JSON.stringify(captcha_key)}
 export const whatsapp_templates = ${JSON.stringify(template_sids)}
 export const vapid_public_key = ${JSON.stringify(vapid_public_key)}
+export const managed_push = ${managed_push ? JSON.stringify({ api: managed_push.api }) : "undefined"}
 `
 }
 
@@ -207,19 +210,23 @@ export function parse_runtime(source: string): {
 	captcha_key?: string
 	sids: Record<string, string>
 	vapid_public_key?: string
+	managed_push?: { api: string }
 } {
 	const key = /captcha_key = "([^"]*)"/.exec(source)?.[1]
 	const vapid = /vapid_public_key = "([^"]*)"/.exec(source)?.[1]
 	const map = /whatsapp_templates = (\{.*\})/.exec(source)?.[1]
+	const api = /managed_push = \{"api":"([^"]*)"\}/.exec(source)?.[1]
+	const managed_push = api ? { api } : undefined
 	try {
 		return {
 			captcha_key: key,
 			vapid_public_key: vapid,
 			sids: map ? (JSON.parse(map) as Record<string, string>) : {},
+			managed_push,
 		}
 	} catch {
 		// A hand-edited or half-written file is no worse than none — fall back to empty.
-		return { captcha_key: key, vapid_public_key: vapid, sids: {} }
+		return { captcha_key: key, vapid_public_key: vapid, sids: {}, managed_push }
 	}
 }
 
@@ -267,18 +274,22 @@ export function write_types(
 export function write_runtime(
 	captcha_key: string | undefined,
 	template_sids: Record<string, string> = {},
-	vapid_public_key: string | undefined = undefined
+	vapid_public_key: string | undefined = undefined,
+	// `null` turns managed push off; `undefined` keeps whatever the last run said.
+	managed_push: { api: string } | null | undefined = undefined
 ): string | null {
 	if (!existsSync(RUNTIME_TARGET)) return null
 	const current = parse_runtime(installed(RUNTIME_TARGET))
 	const key = captcha_key ?? current.captcha_key
 	const vapid = vapid_public_key ?? current.vapid_public_key
+	const managed = managed_push === null ? undefined : (managed_push ?? current.managed_push)
 	// An empty map means this run resolved no templates — a Meta project, or a fetch that
 	// failed — not that the account's templates are gone. Keeping the last good map is what
 	// stops a blip from turning every named Twilio template into an invalid ContentSid.
 	const sids = Object.keys(template_sids).length > 0 ? template_sids : current.sids
-	if (!key && !vapid && Object.keys(sids).length === 0) return null
-	replace(RUNTIME_TARGET, render_runtime(key, sids, vapid))
+	if (!key && !vapid && !managed && Object.keys(sids).length === 0 && !current.managed_push)
+		return null
+	replace(RUNTIME_TARGET, render_runtime(key, sids, vapid, managed))
 	return RUNTIME_TARGET
 }
 

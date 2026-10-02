@@ -84,8 +84,9 @@ in deployed or production-mode sends.
 **If you're an AI coding agent:** run `init --agent` when no `POSTBOI_TOKEN` exists and
 no human is available to sign in, then **surface the claim URL prominently** in your
 summary. It's the one thing only your human can do. `postboi whoami` re-prints it any
-time. The other channels accept the flag too (`init --push --agent` mints VAPID keys and
-wires the service worker with no prompts); channels that need paid credentials (SMS,
+time. The other channels accept the flag too (`init --push --agent` switches on
+[managed push](/push#managed-push) on a Postboi account, or mints VAPID keys when the
+project already sends Web Push its own way, and wires the service worker with no prompts); channels that need paid credentials (SMS,
 WhatsApp) will tell you exactly which env var they're missing instead of prompting.
 
 `--agent` also **detects the project's domain** (astro `site`, `package.json`

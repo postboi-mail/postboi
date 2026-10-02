@@ -436,6 +436,78 @@ export async function push_env_vars(
 	}
 }
 
+/** The account's managed-push key, as `/v1/push/keys` answers it. */
+export interface PushKey {
+	public_key: string
+	subject: string
+	/** Only on an export. */
+	private_key?: string
+}
+
+/** A key call's answer: the key, or the API's reason for refusing. */
+export type PushKeyResult =
+	| { ok: true; key: PushKey }
+	| { ok: false; status?: number; reason: string }
+
+/**
+ * Managed push's key calls: `GET` reads it (`export` adds the private half), `POST` switches
+ * managed push on (minting a pair, or returning the one there), `PUT` brings an existing
+ * pair so the subscriptions made under it keep working.
+ */
+export async function push_key(
+	base: string,
+	token: string,
+	action:
+		| { kind: "get"; export?: boolean }
+		| { kind: "enable" }
+		| { kind: "import"; public_key: string; private_key: string; subject?: string },
+	fetch_fn: FetchLike = fetch
+): Promise<PushKeyResult> {
+	const url = `${base}/v1/push/keys${action.kind === "get" && action.export ? "?private=1" : ""}`
+	const init: RequestInit =
+		action.kind === "get"
+			? {}
+			: action.kind === "enable"
+				? { method: "POST" }
+				: {
+						method: "PUT",
+						body: JSON.stringify({
+							public_key: action.public_key,
+							private_key: action.private_key,
+							...(action.subject && { subject: action.subject }),
+						}),
+					}
+	try {
+		const response = await fetch_fn(url, {
+			...init,
+			headers: {
+				Authorization: `Bearer ${token}`,
+				...(init.body ? { "content-type": "application/json" } : {}),
+			},
+		})
+		const data = (await response.json().catch(() => ({}))) as Partial<PushKey> & {
+			message?: string
+		}
+		if (response.ok && typeof data.public_key === "string") {
+			return {
+				ok: true,
+				key: {
+					public_key: data.public_key,
+					subject: data.subject ?? "",
+					...(typeof data.private_key === "string" && { private_key: data.private_key }),
+				},
+			}
+		}
+		return {
+			ok: false,
+			status: response.status,
+			reason: data.message ?? `the API answered ${response.status}`,
+		}
+	} catch {
+		return { ok: false, reason: "could not reach the Postboi API" }
+	}
+}
+
 /** Best-effort: open `url` in the default browser. The URL is always printed anyway. */
 export function open_browser(url: string, os: string = platform): boolean {
 	const spec =

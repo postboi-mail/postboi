@@ -2,7 +2,8 @@
  * The push channel's public types.
  *
  * Free of runtime imports so the package root can widen `Hooks` to include
- * {@link PreparedPush} without pulling a push provider into the email module graph.
+ * {@link PreparedPush} without pulling a push provider into the email module graph —
+ * `is_audience` is the one function here, and it imports nothing.
  */
 import type { TransportOptions } from "../transport.js"
 
@@ -24,13 +25,33 @@ export interface WebPushSubscription {
 }
 
 /**
- * Where a push notification goes. A Web Push subscription object, or a device token string
- * for FCM, APNs, HMS or Expo.
- *
- * Note this is a **stored credential, not an address**: unlike an email or a phone number,
- * you cannot know it in advance — the device has to register first and hand it to you.
+ * An audience only the Postboi provider can resolve, because it holds the subscriptions:
+ * a person by your own id (every browser they subscribed), or a list by name or id (every
+ * browser following it). Sent with `POSTBOI_PUSH_PROVIDER=postboi`; any other provider
+ * refuses one with `invalid_target`, since it has nothing to look the audience up in.
  */
-export type PushTarget = WebPushSubscription | string
+export type PushAudience = { user: string | number } | { list: string }
+
+/**
+ * Where a push notification goes. A Web Push subscription object, a device token string
+ * for FCM, APNs, HMS or Expo, or — on the Postboi provider — a person or a list.
+ *
+ * A subscription or a token is a **stored credential, not an address**: unlike an email or
+ * a phone number, you cannot know it in advance — the device has to register first and
+ * hand it to you. That is the bookkeeping the Postboi provider does for you, which is why
+ * only it can take a {@link PushAudience}.
+ */
+export type PushTarget = WebPushSubscription | string | PushAudience
+
+/** Is this target a person or a list rather than one device? */
+export function is_audience(target: unknown): target is PushAudience {
+	return (
+		typeof target === "object" &&
+		target !== null &&
+		!("endpoint" in target) &&
+		("user" in target || "list" in target)
+	)
+}
 
 /**
  * The JSON a Web Push service worker receives in its `push` event — what

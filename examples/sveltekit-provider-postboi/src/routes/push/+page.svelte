@@ -1,15 +1,17 @@
 <script lang="ts">
 	import { subscription } from "postboi/svelte"
 
-	// postboi bakes the VAPID public key into the package, so nothing has to carry it to
-	// the browser. `register` is where the subscription the browser mints gets filed —
-	// the /push endpoint below — which is how the server learns where to push. `on`,
-	// `busy` and `reason` are reactive, so read them straight off it.
+	// `register` is the route next door, which files this browser under whoever is signed
+	// in. With managed push, `bunx postboi sync` bakes the account's key into the package,
+	// so nothing carries it to the browser. `on`, `busy` and `reason` are reactive.
 	//
 	// No worker path: subscribe() finds SvelteKit's /service-worker.js on its own. That
-	// worker is one line — `receive()` from postboi/push/sw — and handles the rotations
-	// nothing here can see.
+	// worker is a bare `receive()`, and a rotated subscription goes straight to Postboi.
 	const push = subscription({ register: "/push" })
+
+	// A public list needs no route at all: open the list to browsers on its page in the
+	// dashboard, and the page subscribes on the publishable key alone.
+	const news = subscription({ list: "news" })
 
 	let status = $state("")
 
@@ -33,6 +35,16 @@
 	<button onclick={test} disabled={!push.on}>Send me one</button>
 	<!-- missing_key lands here too — run `bunx postboi init --push`, then restart. -->
 	{#if push.reason}<p>{push.reason}</p>{:else if status}<p>{status}</p>{/if}
+
+	<h2>A public list</h2>
+	<p>
+		Follow the <code>news</code> list from this page, with no server code. Send to it with
+		<code>push(&lbrace; to: &lbrace; list: "news" &rbrace; &rbrace;)</code>.
+	</p>
+	<button onclick={news.toggle} disabled={news.busy}>
+		{news.on ? "Unfollow" : "Follow news"}
+	</button>
+	{#if news.reason}<p>{news.reason}</p>{/if}
 </main>
 
 <style>

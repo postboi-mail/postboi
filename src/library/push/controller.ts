@@ -15,6 +15,8 @@
  */
 import { subscribe, unsubscribe } from "./client.js"
 import type { PushSubscriptionJSON } from "./client.js"
+import { follow, unfollow, type DoorOptions } from "./door.js"
+import { forget, remember } from "./memory.js"
 
 /** The browser driver's own reasons — the walls `subscribe()` can hit. */
 type BrowserReason = NonNullable<ReturnType<typeof subscribe.reason>>
@@ -69,12 +71,19 @@ export interface PushDriver<TRegistration, TReason extends string> {
 /** Where to file a registration: a URL, or a function for anything beyond a POST. */
 export type Filing<TRegistration> = string | ((registration: TRegistration) => Promise<unknown>)
 
-export interface SubscriptionOptions {
+export interface SubscriptionOptions extends DoorOptions {
 	/**
 	 * VAPID public key — the same one the server signs with. Optional once
 	 * `bunx postboi sync` has baked it; subscribe() resolves the default.
 	 */
 	key?: string
+	/**
+	 * Managed push: follow this public list, filed with Postboi straight from the page on
+	 * the publishable key, with no server code at all. The list has to be public (its
+	 * page in the dashboard, or `push_public` over the API) — anything tied to a person goes
+	 * through your server with `register` instead.
+	 */
+	list?: string
 	/**
 	 * Where to file the subscription the browser mints: a URL it's POSTed to as JSON,
 	 * or a function for anything beyond that. Without it the subscription is only held
@@ -284,6 +293,9 @@ export function machine<TRegistration, TReason extends string>(
  * wrapper for. Call `toggle()`/`enable()` from a click: browsers auto-deny permission
  * prompts that aren't tied to a user gesture, and once denied they never ask again.
  *
+ * With managed push, `register` is the route `push.handler` serves, or `list` follows a
+ * public list with no route at all.
+ *
  * @example
  * ```ts
  * import { subscription } from "postboi/push"
@@ -294,6 +306,26 @@ export function machine<TRegistration, TReason extends string>(
  * ```
  */
 export function subscription(options: SubscriptionOptions = {}) {
+	const { list } = options
+	const register: Filing<PushSubscriptionJSON> | undefined =
+		options.register ?? (list ? (registration) => follow(registration, list, options) : undefined)
+	const unregister: Filing<PushSubscriptionJSON> | undefined =
+		options.unregister ??
+		(list ? (registration) => unfollow(registration, list, options) : undefined)
+	const identify = ({ endpoint }: PushSubscriptionJSON) => ({ endpoint })
+
+	// Whatever files it, the endpoint is noted where the service worker can read it: some
+	// browsers rotate a subscription without saying which one it replaced, and the old
+	// endpoint is the only proof of ownership a rotation carries.
+	async function file_and_remember(registration: PushSubscriptionJSON): Promise<void> {
+		await file(register!, registration, "POST", identify)
+		await remember({ endpoint: registration.endpoint, ...(list && { list }) })
+	}
+	async function forget_and_unfile(registration: PushSubscriptionJSON): Promise<void> {
+		await forget()
+		await file(unregister!, registration, "DELETE", identify)
+	}
+
 	return machine<PushSubscriptionJSON, BrowserReason>(
 		{
 			supported: subscribe.supported,
@@ -301,9 +333,12 @@ export function subscription(options: SubscriptionOptions = {}) {
 			subscribe: () => subscribe({ key: options.key, sw: options.sw }),
 			unsubscribe,
 			reason: subscribe.reason,
-			identify: ({ endpoint }) => ({ endpoint }),
+			identify,
 		},
-		options
+		{
+			register: register && file_and_remember,
+			unregister: unregister && forget_and_unfile,
+		}
 	)
 }
 
