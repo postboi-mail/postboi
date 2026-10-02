@@ -77,8 +77,10 @@ export async function unfollow(
 
 /**
  * Re-file a rotated subscription, from the service worker. The replacement inherits the
- * old row's person and lists on Postboi's side; `list` is only for a rotation with no old
- * endpoint to present, so a public list's follower isn't lost with it.
+ * old row's person and lists on Postboi's side; `list` is the fallback for when there is
+ * no old row to inherit from (none presented, or its tombstone already purged), so a public
+ * list's follower isn't lost with it. A list its owner has since closed is dropped by the
+ * door rather than refusing the rotation.
  */
 export async function rotate(
 	subscription: PushSubscriptionJSON,

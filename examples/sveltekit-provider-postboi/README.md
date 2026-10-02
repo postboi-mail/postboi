@@ -132,6 +132,10 @@ The contact form is the classic; the rest of postboi wires in the same way:
 - **`POST /notify`** — the other channels: `sms()`, `whatsapp()` and `slack()` from one
   endpoint. `{ "channel": "sms", "to": "+447700900123", "message": "…" }` — in
   development SMS and WhatsApp are logged, not sent.
-- **`/push`** — Web Push end to end: the `subscription()` toggle from `postboi/svelte`
-  (reactive — `push.on`, `push.toggle`), the subscription stored server-side, and
-  `push()` sending to it. Mint the VAPID pair with `bunx postboi init --push` first.
+- **`/push`** — managed Web Push end to end: the `subscription()` toggle from
+  `postboi/svelte` (reactive — `push.on`, `push.toggle`), a route that is one
+  `push.handler` line, and `push({ to: { user } })` sending to every browser that person
+  turned on. Postboi keeps the subscriptions, so there's no table and no cleanup. The page
+  also follows a public list with no route at all. Run `bunx postboi init --push` and
+  pick "Postboi keeps them" first. The other framework apps show the same feature with
+  your own subscription store.

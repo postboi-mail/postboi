@@ -899,9 +899,16 @@ async function sync(): Promise<void> {
 	// Forms drive the generated `form` types the same way domains drive `from`; a fetch
 	// that fails keeps the last generated names rather than erasing them.
 	const forms_promise = fetch_forms(cloud_base(), token)
+	// Managed push's public key, likewise started now rather than after everything else.
+	const managed_key_promise = managed
+		? push_key(cloud_base(), token, { kind: "get" }).then((result) =>
+				result.ok ? result.key.public_key : undefined
+			)
+		: Promise.resolve(undefined)
 	const account = await fetch_domains(cloud_base(), token)
 	if (!account) {
-		await bake(config_key, config_file ?? "config")
+		// The account's VAPID key may still have arrived, and it beats a stale local copy.
+		await bake(config_key, config_file ?? "config", await managed_key_promise)
 		const { names, variables } = await templates_promise
 		if (write_types(undefined, [], names, variables, undefined, provider_name))
 			report_templates(names)
@@ -943,11 +950,7 @@ async function sync(): Promise<void> {
 	}
 
 	const captcha_key = account.captcha_key ?? config_key
-	const managed_key = managed
-		? await push_key(cloud_base(), token, { kind: "get" }).then((result) =>
-				result.ok ? result.key.public_key : undefined
-			)
-		: undefined
+	const managed_key = await managed_key_promise
 	await bake(
 		captcha_key,
 		account.captcha_key ? "the Postboi provider" : (config_file ?? "config"),
@@ -1860,10 +1863,16 @@ async function managed_push_init(prompts: Prompts, files: Array<string>): Promis
 			subject: read_env("VAPID_SUBJECT"),
 		})
 		if (!result.ok && result.status === 409) {
+			// The account already sends with another pair, and that one is kept: the browsers
+			// subscribed under the env's pair won't hear anything through Postboi.
 			console.log(`${yellow("!")} ${result.reason}`)
 			result = await push_key(base, token, { kind: "get" })
-		}
-		if (result.ok) {
+			if (result.ok) {
+				console.log(
+					`${yellow("!")} Kept the account's own pair. Browsers subscribed under the pair in your env won't receive through Postboi.`
+				)
+			}
+		} else if (result.ok) {
 			console.log(`${green("✓")} Postboi now sends with your pair`)
 			console.log(
 				dim(
