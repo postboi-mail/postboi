@@ -1,3 +1,7 @@
+// The still-working deploy of the docs site. `alchemy.run.ts` is the intended replacement:
+// the same Worker, custom domain, flags and observability, deployed by `alchemy deploy`
+// with no wrangler and no adapter. This file goes, with `@sveltejs/adapter-cloudflare`,
+// once a first `alchemy deploy --stage prod --adopt` has taken the Worker over.
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "postboi",

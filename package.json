@@ -26,6 +26,9 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.test.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.test.json --watch",
 		"format": "oxfmt",
+		"infra:deploy": "alchemy deploy",
+		"infra:destroy": "alchemy destroy",
+		"infra:plan": "alchemy plan",
 		"lint": "oxfmt --check . && eslint .",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run",
@@ -461,6 +464,9 @@
 		}
 	},
 	"devDependencies": {
+		"@alchemy.run/frontend-frameworks": "2.0.0-beta.83",
+		"@effect/platform-bun": "4.0.6",
+		"@effect/platform-node": "4.0.6",
 		"@effect/vitest": "4.0.6",
 		"@eslint/js": "10.0.1",
 		"@fontsource-variable/archivo": "5.3.0",
@@ -487,6 +493,7 @@
 		"@types/node": "26.6.5",
 		"@types/react": "19.3.0",
 		"@types/unist": "3.0.3",
+		"alchemy": "2.0.0-beta.83",
 		"carbon-icons-svelte": "13.17.0",
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
