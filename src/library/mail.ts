@@ -101,11 +101,9 @@ let warned_dev_fallback = false
 let announced_inbox = false
 
 /** The provider `mail()` sends with: `POSTBOI_PROVIDER`, the config's `provider`, or a token. */
-function provider_key(config: PostboiConfig): string | undefined {
+function provider_key(config: PostboiConfig, get: typeof read_env = read_env): string | undefined {
 	return (
-		read_env("POSTBOI_PROVIDER") ??
-		config.provider ??
-		(read_env("POSTBOI_TOKEN") ? "postboi" : undefined)
+		get("POSTBOI_PROVIDER") ?? config.provider ?? (get("POSTBOI_TOKEN") ? "postboi" : undefined)
 	)
 }
 
@@ -149,19 +147,39 @@ async function resolve_dev_inbox(config: PostboiConfig): Promise<ProviderBase<un
 	})
 }
 
+/** What {@link resolve_provider} takes. */
+export interface ResolveOptions {
+	/** Stand the dev inbox (or the console mock) in front of the configured provider. */
+	intercept?: boolean
+	/**
+	 * Values that beat the environment, by variable name. `postboi/effect`'s `Mailer.layer`
+	 * reads `POSTBOI_PROVIDER` and `POSTBOI_TOKEN` through Effect's `Config`, so an app's
+	 * own `ConfigProvider` can supply them; they arrive here rather than being written to
+	 * the environment, and everything else about picking a provider stays this one rule.
+	 */
+	env?: Record<string, string | undefined>
+}
+
 /**
  * Construct the provider named by `POSTBOI_PROVIDER` from environment variables.
  *
  * `intercept` is set on the send path only. The `mail.lists` / `mail.contacts` namespaces
  * resolve without it, so managing an audience in dev still talks to the real API — it's
  * sending that we stand in front of, not everything the token can do.
+ *
+ * Exported for `postboi/effect`, which builds its `Mailer` service from it; not part of the
+ * package root.
  */
-async function resolve_provider({ intercept = false } = {}): Promise<ProviderBase<unknown>> {
+export async function resolve_provider({
+	intercept = false,
+	env = {},
+}: ResolveOptions = {}): Promise<ProviderBase<unknown>> {
 	// Load global config (postboi.config.ts / package.json) first, so hooks and the
 	// `provider` fallback are available; ProviderBase merges the rest at construction.
 	const config = await load_config()
 	// Make `.env` values visible in dev (SvelteKit etc. don't put them on process.env).
 	await ensure_env_loaded()
+	const get = (name: string): string | undefined => env[name] ?? read_env(name)
 
 	// Before any credential is looked at: with an inbox open, what's configured doesn't
 	// matter, and neither does a missing credential.
@@ -184,13 +202,13 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 	}
 	// A POSTBOI_TOKEN alone is enough to send: with nothing else configured, dispatch to
 	// The Postboi provider — the zero-config path `bunx postboi init` sets up.
-	const key = provider_key(config)
+	const key = provider_key(config, get)
 
 	// Nothing to send with. In development that is the normal state of a fresh clone, so
 	// log the mail instead of failing and let the app code stay unconditional. Anywhere
 	// else it is a broken deploy: throw, because a magic link or receipt that silently
 	// becomes a console line locks people out with no error anywhere.
-	if (!key || (key === "postboi" && !read_env("POSTBOI_TOKEN"))) {
+	if (!key || (key === "postboi" && !get("POSTBOI_TOKEN"))) {
 		if (is_development()) {
 			if (!warned_dev_fallback) {
 				warned_dev_fallback = true
@@ -232,7 +250,7 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 			: ""
 	for (const field of meta?.fields ?? []) {
 		// env wins, then a non-secret value from the config file, then the field default.
-		const value = read_env(field.env) ?? from_config?.[field.arg] ?? field.default
+		const value = get(field.env) ?? from_config?.[field.arg] ?? field.default
 		if (value === undefined) {
 			throw new PostboiError({
 				provider: key,
@@ -247,6 +265,9 @@ async function resolve_provider({ intercept = false } = {}): Promise<ProviderBas
 	// read, so it logs. `new Mock()` stays silent — that is the test path, where the point is
 	// asserting on `sent`, not printing to the run.
 	if (key === "mock") options.log = true
+	// The Postboi provider reads POSTBOI_TOKEN itself, so a token that arrived as an
+	// override rather than in the environment has to be handed to it.
+	if (key === "postboi" && env.POSTBOI_TOKEN !== undefined) options.token = env.POSTBOI_TOKEN
 
 	const Provider = await load()
 	return new Provider(options)

@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with tagged `PostboiError`, a `Mailer` service with config and mock layers, `SendRequest` schema and `with_retry`. `effect` is an optional peer dependency; nothing else in the package imports it.
+
 ### Fixed
 
 - `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) types on SvelteKit 3. The shipped declarations named `RemoteForm` and `RemoteFormInput` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`, so they failed to resolve and every field read as `any` (an error instead, without `skipLibCheck`). Both now come from `$app/server`, and `RemoteFormInput` is exported from `postboi/kit`, so the fields and result are typed as `Input` says.
