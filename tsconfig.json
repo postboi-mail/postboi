@@ -6,5 +6,5 @@
 		"strict": true,
 		"types": ["node", "$app/types"]
 	},
-	"include": ["src"]
+	"include": ["src", "vite.config.ts"]
 }

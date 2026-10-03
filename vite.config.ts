@@ -1,4 +1,6 @@
 import { fileURLToPath, URL } from "node:url"
+import type { Element, Parent, Root, RootContent, Text } from "hast"
+import type { VFile } from "vfile"
 import adapter from "@sveltejs/adapter-cloudflare"
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte"
 import { escapeSvelte, mdsvex } from "mdsvex"
@@ -8,25 +10,29 @@ import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vitest/config"
 import { sveltekit } from "@sveltejs/kit/vite"
 
+/** A node of the tree a rehype plugin walks. */
+type Node = Root | RootContent
+
+const children = (node: Node): Array<RootContent> => ("children" in node ? node.children : [])
+
 const tableCellFormatter = () => {
-	return (tree) => {
-		const ancestors = []
+	return (tree: Root) => {
+		const ancestors: Array<Element> = []
 
-		const visit = (node, parent = null, index = 0) => {
+		const visit = (node: Node, parent: Parent | null = null, index = 0) => {
 			const isElement = node.type === "element"
-			const isRoot = node.type === "root"
 
-			if (isElement) {
+			if (node.type === "element") {
 				ancestors.push(node)
 			}
 
 			if (node.type === "text") {
 				const textNode = node
 
-				if (typeof textNode.value === "string" && textNode.value.includes("\\|")) {
+				if (textNode.value.includes("\\|")) {
 					const directParent = ancestors[ancestors.length - 1]
 					const grandParent = ancestors[ancestors.length - 2]
-					const isCodeBlock = directParent.tagName === "code" && grandParent.tagName === "pre"
+					const isCodeBlock = directParent?.tagName === "code" && grandParent?.tagName === "pre"
 
 					if (!isCodeBlock) {
 						textNode.value = textNode.value.replace(/\\\|/g, "|")
@@ -34,28 +40,21 @@ const tableCellFormatter = () => {
 				}
 			}
 
-			if (isElement) {
+			if (node.type === "element") {
 				const el = node
+				const childText = el.children.length === 1 ? el.children[0] : undefined
 
-				if (
-					el.tagName === "code" &&
-					Array.isArray(el.children) &&
-					el.children.length === 1 &&
-					el.children[0].type === "text"
-				) {
+				if (el.tagName === "code" && childText?.type === "text") {
 					const parentNode = ancestors[ancestors.length - 2]
-					const isBlockCode = parentNode.tagName === "pre"
+					const isBlockCode = parentNode?.tagName === "pre"
 
 					const insideTableCell = ancestors.some((ancestor) => {
 						if (ancestor === el) return false
 
-						const a = ancestor
-
-						return a.tagName === "td" || a.tagName === "th"
+						return ancestor.tagName === "td" || ancestor.tagName === "th"
 					})
 
-					const childText = el.children[0]
-					let raw = typeof childText.value === "string" ? childText.value : ""
+					let raw = childText.value
 
 					if (raw.includes("\\|")) {
 						raw = raw.replace(/\\\|/g, "|")
@@ -70,7 +69,7 @@ const tableCellFormatter = () => {
 
 							if (segments.length > 1) {
 								const replacements = segments.flatMap((segment, segmentIndex) => {
-									const codeNode = {
+									const codeNode: Element = {
 										type: "element",
 										tagName: "code",
 										properties: el.properties,
@@ -81,7 +80,9 @@ const tableCellFormatter = () => {
 										return [codeNode]
 									}
 
-									return [codeNode, { type: "text", value: " " }]
+									const space: Text = { type: "text", value: " " }
+
+									return [codeNode, space]
 								})
 
 								parentChildren.splice(index, 1, ...replacements)
@@ -98,10 +99,12 @@ const tableCellFormatter = () => {
 				}
 			}
 
-			const childNodes = isElement || isRoot ? node.children : []
+			if ("children" in node) {
+				const childNodes = node.children
 
-			for (let i = 0; i < childNodes.length; i += 1) {
-				visit(childNodes[i], node, i)
+				for (let i = 0; i < childNodes.length; i += 1) {
+					visit(childNodes[i], node, i)
+				}
 			}
 
 			if (isElement) {
@@ -117,24 +120,24 @@ const tableCellFormatter = () => {
 // links (e.g. `/settings`) that would otherwise resolve against the latest site
 // — 404ing on renamed slugs and yanking the reader out of the version. Rewrite
 // such links to the version's own base path.
-const versionScopedLinks = () => (tree, file) => {
-	const path = file?.filename ?? file?.path ?? file?.history?.[0] ?? ""
+const versionScopedLinks = () => (tree: Root, file: VFile & { filename?: string }) => {
+	const path = file.filename ?? file.path ?? file.history[0] ?? ""
 	const match = /[/\\]content[/\\](v\d[^/\\]*)[/\\]/.exec(path)
 
 	if (!match) return
 
 	const base = `/${match[1]}`
 
-	const visit = (node) => {
+	const visit = (node: Node) => {
 		if (node.type === "element" && node.tagName === "a") {
-			const href = node.properties?.href
+			const href = node.properties.href
 
 			if (typeof href === "string" && href.startsWith("/") && !href.startsWith("//")) {
 				node.properties.href = href === "/" ? base : `${base}${href}`
 			}
 		}
 
-		for (const child of node.children ?? []) visit(child)
+		for (const child of children(node)) visit(child)
 	}
 
 	visit(tree)

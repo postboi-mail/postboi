@@ -48,12 +48,20 @@ const CANDIDATES: ReadonlyArray<WorkerTarget> = [
 	{ path: "public/service-worker.js", url: "/service-worker.js", kind: "raw" },
 ]
 
-/** The file names a svelte config comes as. */
+/**
+ * The file names a svelte config comes as: `svelte.config.*` on SvelteKit 2, and on
+ * SvelteKit 3, which has no svelte.config, the `sveltekit()` call in `vite.config.*`. The
+ * svelte config is listed first so a project that has both is read from the one Kit reads.
+ */
 const SVELTE_CONFIGS = [
 	"svelte.config.js",
 	"svelte.config.ts",
 	"svelte.config.mjs",
 	"svelte.config.mts",
+	"vite.config.js",
+	"vite.config.ts",
+	"vite.config.mjs",
+	"vite.config.mts",
 ]
 
 /**
@@ -65,14 +73,18 @@ const SVELTE_CONFIGS = [
  * read is textual and covers only the shape we're sure of: a string literal. (The other
  * `serviceWorker` key, `kit.serviceWorker`, takes an object, so it can't match.) A value
  * that's computed, or that doesn't resolve the way SvelteKit would resolve it, falls back
- * to the standard locations.
+ * to the standard locations. A vite config counts only when it calls `sveltekit()`: any
+ * Vite project has one, and only Kit's names a worker source under that key.
  */
 function configured_worker(
 	exists: (path: string) => boolean,
 	read: (path: string) => string | undefined
 ): WorkerTarget | undefined {
 	const config = SVELTE_CONFIGS.find(exists)
-	const source = config && read(config)
+	let source = config && read(config)
+	if (config?.startsWith("vite.config.") && source && !/\bsveltekit\s*\(/.test(source)) {
+		source = undefined
+	}
 	const named = source && /\bserviceWorker\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(source)?.[1]
 	if (!named) return undefined
 	// SvelteKit resolves the entry with or without an extension, and as a directory.
