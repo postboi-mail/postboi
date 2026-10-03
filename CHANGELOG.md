@@ -14,6 +14,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 - `postboi/kit`, `postboi/vite` and `postboi/remote` support SvelteKit 3 (peer range now `^2 || ^3`). Nothing changes on SvelteKit 2.
 - `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) is now read off SvelteKit's own `form`, so one declaration types on both majors. Its fields and result are typed as before.
+- `postboi init` reads `files.serviceWorker` off the `sveltekit()` call in `vite.config.*` on a SvelteKit 3 project, which has no `svelte.config`, so a custom worker source is found rather than a second worker written beside it.
 
 ## 0.60.0
 
