@@ -103,6 +103,9 @@ describe("Mailer", () => {
 })
 
 describe("from_error", () => {
+	// The last test stubs the environment; a failed assertion must not leak it.
+	afterEach(() => vi.unstubAllEnvs())
+
 	it.effect("maps a PostboiError onto the tagged error with every field", () =>
 		Effect.gen(function* () {
 			const thrown = new PostboiErrorClass({
@@ -174,7 +177,6 @@ describe("from_error", () => {
 			const error = yield* Effect.flip(send_mail({ to: "ada@example.com", body: "<p>Hi</p>" }))
 			expect(error._tag).toBe("PostboiError")
 			if (error._tag === "PostboiError") expect(error.code).toBe("no_provider")
-			vi.unstubAllEnvs()
 		})
 	)
 })
@@ -209,10 +211,21 @@ describe("SendRequest", () => {
 		})
 	)
 
-	it.effect("a text-only request sends its text as the body", () =>
+	it.effect("a text-only request sends its text as the body, escaped, line breaks kept", () =>
 		Effect.gen(function* () {
 			const request = yield* decode_send_request({ to: "ada@example.com", text: "Hi" })
 			expect(send_options(request)).toEqual({ body: "Hi", text: "Hi", to: "ada@example.com" })
+			// A string body is HTML to every provider, so what was typed must not become markup.
+			const typed = yield* decode_send_request({ to: "ada@example.com", text: "1 < 2 & so\non" })
+			expect(send_options(typed).body).toBe("1 &lt; 2 &amp; so<br>on")
+			expect(send_options(typed).text).toBe("1 < 2 & so\non")
+		})
+	)
+
+	it.effect("refuses an empty list of addresses", () =>
+		Effect.gen(function* () {
+			const error = yield* Effect.flip(decode_send_request({ to: [], html: "<p>Hi</p>" }))
+			expect(error.message).toMatch(/to/)
 		})
 	)
 
