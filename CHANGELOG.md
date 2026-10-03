@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with tagged `PostboiError`, a `Mailer` service with config and mock layers, `SendRequest` schema and `with_retry`. `effect` is an optional peer dependency; nothing else in the package imports it.
+
 ### Changed
 
 - `postboi/kit`, `postboi/vite` and `postboi/remote` support SvelteKit 3 (peer range now `^2 || ^3`). Nothing changes on SvelteKit 2.

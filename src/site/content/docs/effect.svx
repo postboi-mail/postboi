@@ -1,0 +1,165 @@
+---
+title: Effect
+name: Effect
+description: Postboi in an Effect program. Typed errors, a Mailer service with config and mock layers, a wire schema and a retry helper.
+category: Frameworks
+---
+
+Postboi is an email provider, and `postboi/effect` is its SDK for an
+[Effect](https://effect.website) program: the same `mail()` as everywhere else, as an
+Effect, with the failures in the error channel as tagged errors you can `catchTag`. The
+rest of the package stays as it is. `effect` is an optional peer dependency that only this
+entry imports, so nothing changes for anyone not using it.
+
+```bash
+bun add postboi effect
+```
+
+Set up a provider as usual (`bunx postboi init` sets `POSTBOI_TOKEN`, or
+[pick another provider](/providers)), then send:
+
+```typescript
+import { Effect } from 'effect'
+import { send_mail } from 'postboi/effect'
+
+const program = send_mail({
+	to: 'ada@example.com',
+	subject: 'Welcome',
+	body: '<p>Hello</p>'
+}).pipe(
+	Effect.catchTag('PostboiError', (error) =>
+		Effect.logError(`${error.provider} answered ${error.status}: ${error.message}`)
+	)
+)
+
+await Effect.runPromise(program)
+```
+
+## Errors
+
+Every send is `Effect<SendResponse, PostboiError | SkipSend | Spam>`:
+
+| Tag            | When                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `PostboiError` | The provider or the transport failed. Same fields as the [class on the root](/errors): `provider`, `channel`, `status`, `code`, `raw`. |
+| `SkipSend`     | A `before.send` [hook](/hooks) cancelled the send. `code` is what the hook threw with, `skipped` by default.                           |
+| `Spam`         | A `FormData` body tripped the [honeypot](/spam).                                                                                      |
+
+A skip and a spam verdict have their own tags rather than a `code` on `PostboiError`,
+because a program usually lets them through where it would retry or report a failure.
+Anything that is not one of the package's own errors is a defect: a bug, not an outcome
+to handle.
+
+`from_error(error)` is the mapping on its own, and `tried(() => promise)` runs any
+promise-returning call from the package through it, so `mail.lists.create(…)` or a
+provider you constructed yourself gets the same error channel:
+
+```typescript
+import { mail } from 'postboi'
+import { tried } from 'postboi/effect'
+
+const create = tried(() => mail.lists.create('Newsletter', { confirmation: true }))
+```
+
+## The Mailer service
+
+`Mailer` is the provider as a service, for a program that wants to say what it needs
+rather than reach for the environment:
+
+```typescript
+import { Effect } from 'effect'
+import { Mailer } from 'postboi/effect'
+
+const welcome = Effect.fn('welcome')(function* (to: string) {
+	const mailer = yield* Mailer
+	return yield* mailer.send({ to, subject: 'Welcome', body: '<p>Hello</p>' })
+})
+
+Effect.runPromise(welcome('ada@example.com').pipe(Effect.provide(Mailer.layer)))
+```
+
+Three layers:
+
+- **`Mailer.layer`** resolves the provider `mail()` would use, once, when the layer is
+  built. `POSTBOI_PROVIDER` and `POSTBOI_TOKEN` are read through `Config`, so your own
+  `ConfigProvider` can supply them and a value it gives beats the environment. Everything
+  else about the choice (the config file's `provider`, each provider's credential, the
+  [dev inbox](/dev-inbox) in development) is the package's one rule, shared with `mail()`.
+  A missing credential fails the layer with a `PostboiError` carrying `no_provider`,
+  `no_token` or `missing_env`.
+- **`Mailer.layerProvider(provider)`** wraps one you constructed:
+  `Mailer.layerProvider(new Resend({ api_key }))`.
+- **`Mailer.layerMock(mock)`** wraps the recording mock from [`postboi/mock`](/providers#mock-provider),
+  for tests. Pass your own instance to read `mock.sent` back.
+
+```typescript
+import { it, expect } from '@effect/vitest'
+import { Effect } from 'effect'
+import Mock from 'postboi/mock'
+import { Mailer } from 'postboi/effect'
+
+const mock = new Mock({ default: { from: 'tests@example.com' } })
+
+// `welcome` is the function from the section above.
+it.effect('welcomes a new member', () =>
+	Effect.gen(function* () {
+		yield* welcome('ada@example.com')
+		expect(mock.last?.to[0].address).toBe('ada@example.com')
+	}).pipe(Effect.provide(Mailer.layerMock(mock)))
+)
+```
+
+## The other channels
+
+One function per channel, each wrapping the zero-config function of the same name on
+the root: `send_sms`, `send_push`, `send_whatsapp`, and `send_slack`, `send_discord`,
+`send_teams`, `send_telegram` and `send_bluesky` for chat (the platform is the name, as
+on the root). `send(options)` is the [multi-channel `send()`](/send); its per-channel
+outcomes stay in the result, and only a send that could not be attempted at all fails.
+`cancel_mail(id)` cancels a [scheduled](/scheduling) email.
+
+## A request to send, over the wire
+
+`SendRequest` is a `Schema` for the subset of `SendOptions` a server can accept from a
+form post or a JSON body: `to`, `from`, `reply_to`, `cc`, `bcc`, `subject`, `text`,
+`html`, `headers` and `tags`, with at least one of `html` and `text`. It is deliberately
+not the whole of `SendOptions`, which carries functions, `FormData` and promises that have
+no wire form.
+
+```typescript
+import { Effect } from 'effect'
+import { HttpServerRequest, HttpServerResponse } from 'effect/http'
+import { SendRequest, send_mail, send_options } from 'postboi/effect'
+
+const handle = Effect.gen(function* () {
+	const request = yield* HttpServerRequest.schemaBodyJson(SendRequest)
+	const response = yield* send_mail(send_options(request))
+	return yield* HttpServerResponse.json(response)
+})
+```
+
+`decode_send_request(value)` decodes an unknown value; `send_options(request)` turns the
+decoded request into what `send_mail` takes. A text-only request keeps its text as the
+plain-text part and sends it as the body too, escaped with its line breaks kept, since a
+string body is HTML to every provider.
+
+## Retrying
+
+`with_retry(effect, { times, base })` retries a `PostboiError` whose status is 429 or 5xx,
+with exponential backoff from `base` (500 milliseconds by default) and at most `times`
+more attempts (2 by default). A 4xx, a skip and a spam verdict fail at once, and so does
+an error with no status: a refusal before the request and a request that never got an
+answer arrive the same way, and only the transport can tell them apart.
+
+```typescript
+import { send_mail, with_retry } from 'postboi/effect'
+
+const send = with_retry(send_mail({ to, subject, body }), { times: 3, base: '1 second' })
+```
+
+This overlaps the transport's own [retry rule](/errors#retries), so pick one. The
+provider's `retries` option retries the HTTP request inside the send, before hooks see an
+error, and it also retries a network failure, which `with_retry` cannot see; `with_retry`
+retries the whole Effect, hooks included.
+Setting both stacks them: a `retries: 2` provider inside a `with_retry` of 2 makes up to
+nine requests.

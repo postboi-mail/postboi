@@ -155,6 +155,23 @@ bun run test
 bun run build   # the package
 ```
 
+### Deploying the docs site
+
+The docs are a SvelteKit site on Cloudflare Workers, described in `alchemy.run.ts` as an
+[alchemy](https://alchemy.run) stack: `Cloudflare.Website.SvelteKit` builds the site and
+deploys it with no wrangler configuration and no adapter.
+
+```bash
+bun run infra:plan -- --stage prod       # what a deploy would change
+bun run infra:deploy -- --stage prod     # docs.postboi.app, from main
+bun run infra:deploy -- --stage pr-123   # a pull request's preview, on its workers.dev URL
+bun run infra:destroy -- --stage pr-123  # and take it down again
+```
+
+It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment (or
+`alchemy login`). The first production deploy adopts the Worker wrangler already made
+(`--adopt`); until that has happened, `wrangler.jsonc` is the deploy that still works.
+
 PRs are welcome, new providers especially. Match the code style (snake_case, no
 semicolons), add tests, and run `check` and `lint` before pushing. Releases are covered in
 [RELEASING.md](RELEASING.md).

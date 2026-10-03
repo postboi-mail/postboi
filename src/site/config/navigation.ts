@@ -63,6 +63,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "hono", name: "Hono", icon: true },
 					{ slug: "express", name: "Express", icon: true },
 					{ slug: "cloudflare-workers", name: "Cloudflare Workers", icon: true },
+					{ slug: "effect", name: "Effect" },
 				],
 			},
 			{
