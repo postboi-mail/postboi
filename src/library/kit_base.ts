@@ -1,11 +1,4 @@
-import {
-	fail,
-	isActionFailure,
-	type RequestEvent,
-	type ActionFailure,
-	type RemoteForm,
-	type RemoteFormInput,
-} from "@sveltejs/kit"
+import { fail, isActionFailure, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
 // Type-only: `form` itself comes from `sveltekit`, which kit.ts fills in under Vite. This
 // module never imports `$app/server`, so a plain `bun test` can import it (see kit.ts).
 import type { form as sveltekit_form } from "$app/server"
@@ -104,6 +97,28 @@ function field_reader(data: FormData): FieldReader {
 const OWN_FIELDS = new Set<string>([...SPECIAL_FIELDS, ...HONEYPOT_FIELDS, ...CAPTCHA_FIELDS])
 
 const is_failure = <F>(value: unknown): value is ActionFailure<F> => isActionFailure(value)
+
+/**
+ * SvelteKit's `RemoteFormInput` and `RemoteForm`, spelled so one declaration reads on both
+ * majors: SvelteKit 2 exports the pair from `@sveltejs/kit` and SvelteKit 3 moved it to
+ * `$app/server`, and a shipped `.d.ts` can only name one place. `form` itself has lived on
+ * `$app/server` all along, so the input is restated (it is the public shape of what a form
+ * posts) and the form is read off `form`'s own return type.
+ *
+ * `form` is overloaded, and an instantiation expression has to satisfy every overload's
+ * constraint at once: the unchecked overload wants a `RemoteFormInput` and the checked one
+ * wants a Standard Schema. An intersection of the two is both, and the checked overload,
+ * the last one, which is the one `ReturnType` reads, infers its input back out of the
+ * schema half, which is `Input` again. So the fields come out typed exactly as `Input`
+ * says, on both majors; `any` here would have made every field an unknown one.
+ */
+export interface RemoteFormInput {
+	[key: string]: MaybeArray<string | number | boolean | File | RemoteFormInput> | undefined
+}
+type MaybeArray<T> = T | Array<T>
+type RemoteForm<Input extends RemoteFormInput, Output> = ReturnType<
+	typeof sveltekit_form<Input & StandardSchemaV1<Input, Record<string, unknown>>, Output>
+>
 
 const TRACKED = ["get", "getAll", "has"] as const
 

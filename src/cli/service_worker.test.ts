@@ -47,6 +47,17 @@ describe("find_worker", () => {
 		})
 	})
 
+	/** SvelteKit 3 has no svelte.config: the same option is `files.serviceWorker` on the
+	 * `sveltekit()` call in vite.config. Any Vite project has that file, so it only counts
+	 * when it is Kit's. */
+	it("reads files.serviceWorker off the sveltekit() call in a vite config", () => {
+		const config = `export default defineConfig({ plugins: [sveltekit({ files: { serviceWorker: "src/lib/worker" } })] })`
+		const exists = has("vite.config.ts", "src/lib/worker.ts", "src/service-worker.ts")
+		expect(find_worker(exists, () => config)?.path).toBe("src/lib/worker.ts")
+		const other = `export default defineConfig({ plugins: [somethingElse({ serviceWorker: "src/lib/worker" })] })`
+		expect(find_worker(exists, () => other)?.path).toBe("src/service-worker.ts")
+	})
+
 	it("prefers the configured source over the standard locations", () => {
 		const config = `export default { kit: { files: { serviceWorker: "src/lib/worker.ts" } } }`
 		const exists = has("svelte.config.js", "src/lib/worker.ts", "src/service-worker.ts")

@@ -397,7 +397,7 @@
 		     drawn under the pair. Every page in the product opens this way. -->
 		<div class="mb-4 p-4 pb-0 lg:p-0 lg:pt-2 lg:pl-1">
 			<div class="flex items-center gap-2.5">
-				<a href={resolve("/")} class="flex items-center" aria-label={brandingConfig.name}>
+				<a href={resolve("")} class="flex items-center" aria-label={brandingConfig.name}>
 					<BrandLogo defaultRaw={logoRaw} wink={!page.error} class="[&_svg]:size-10" />
 				</a>
 				<span
@@ -480,7 +480,6 @@
 										{@const href = contentHref(child.slug)}
 										{@const isActive = currentPath === href}
 										<a
-											// @ts-expect-error arg cannot be cast as `resolve`s expected type
 											href={resolve(href)}
 											onmouseenter={(event) => {
 												showHoverIndicator(event.currentTarget)
@@ -510,7 +509,6 @@
 					{@const href = contentHref(item.slug)}
 					{@const isActive = currentPath === href}
 					<a
-						// @ts-expect-error arg cannot be cast as `resolve`s expected type
 						href={resolve(href)}
 						onmouseenter={(event) => {
 							showHoverIndicator(event.currentTarget)

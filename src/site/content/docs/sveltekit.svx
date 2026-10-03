@@ -128,8 +128,9 @@ no `+page.server.ts`, no action, no endpoint. The component *is* the app:
 Two lines of setup, since the feature is experimental:
 
 ```js
-// svelte.config.js — or inline in the sveltekit() vite plugin
-kit: { experimental: { remoteFunctions: true } }
+// svelte.config.js on SvelteKit 2 (kit: { experimental: { remoteFunctions: true } }),
+// or the sveltekit() call in vite.config.ts on SvelteKit 3:
+sveltekit({ experimental: { remoteFunctions: true } })
 ```
 
 ```ts
