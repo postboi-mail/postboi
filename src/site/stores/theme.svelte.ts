@@ -1,4 +1,4 @@
-import { browser } from "$app/environment"
+import { browser } from "$app/env"
 import { contentUiDefaults } from "$site/config/content-ui"
 
 export const themes = ["light", "dark"] as const

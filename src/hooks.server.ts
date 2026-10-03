@@ -1,4 +1,4 @@
-import type { Handle } from "@sveltejs/kit"
+import type { Handle } from "@sveltejs/kit/hooks"
 
 /**
  * The docs moved to docs.postboi.app; docs.postboi.email forwards the links already loose in
