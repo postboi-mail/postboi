@@ -139,14 +139,17 @@ const handle = Effect.gen(function* () {
 ```
 
 `decode_send_request(value)` decodes an unknown value; `send_options(request)` turns the
-decoded request into what `send_mail` takes.
+decoded request into what `send_mail` takes. A text-only request keeps its text as the
+plain-text part and sends it as the body too, escaped with its line breaks kept, since a
+string body is HTML to every provider.
 
 ## Retrying
 
 `with_retry(effect, { times, base })` retries a `PostboiError` whose status is 429 or 5xx,
 with exponential backoff from `base` (500 milliseconds by default) and at most `times`
 more attempts (2 by default). A 4xx, a skip and a spam verdict fail at once, and so does
-an error with no status, which never reached a provider.
+an error with no status: a refusal before the request and a request that never got an
+answer arrive the same way, and only the transport can tell them apart.
 
 ```typescript
 import { send_mail, with_retry } from 'postboi/effect'
@@ -154,8 +157,9 @@ import { send_mail, with_retry } from 'postboi/effect'
 const send = with_retry(send_mail({ to, subject, body }), { times: 3, base: '1 second' })
 ```
 
-This is the transport's own [retry rule](/errors#retries) restated for the error channel,
-so pick one spelling. The provider's `retries` option retries the HTTP request inside the
-send, before hooks see an error; `with_retry` retries the whole Effect, hooks included.
+This overlaps the transport's own [retry rule](/errors#retries), so pick one. The
+provider's `retries` option retries the HTTP request inside the send, before hooks see an
+error, and it also retries a network failure, which `with_retry` cannot see; `with_retry`
+retries the whole Effect, hooks included.
 Setting both stacks them: a `retries: 2` provider inside a `with_retry` of 2 makes up to
 nine requests.

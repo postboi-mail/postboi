@@ -28,7 +28,8 @@ import type { WhatsappOptions } from "./whatsapp/types.js"
 import type { ChatOptions } from "./chat/types.js"
 import type Mock from "./mock.js"
 import { is_error, is_spam, SkipSendError } from "./errors.js"
-import { mail, cancel, resolve_provider } from "./mail.js"
+import { mail, cancel, resolve_provider, with_remoteip } from "./mail.js"
+import { escape_lines } from "./utils.js"
 import { sms } from "./sms/send.js"
 import { push } from "./push/send.js"
 import { whatsapp } from "./whatsapp/send.js"
@@ -222,13 +223,7 @@ export class Mailer extends Context.Service<
 >()("postboi/effect/Mailer") {
 	/** A `Mailer` over a provider you constructed yourself. */
 	static layerProvider(provider: ProviderBase<unknown>): Layer.Layer<Mailer> {
-		return Layer.succeed(
-			Mailer,
-			Mailer.of({
-				send: (options) => tried<SendResponse>(() => provider.send(options)),
-				cancel: (id) => tried(() => provider.cancel(id)),
-			})
-		)
+		return Layer.succeed(Mailer, service_over(provider))
 	}
 
 	/**
@@ -242,8 +237,7 @@ export class Mailer extends Context.Service<
 	 * {@link PostboiError} carrying `no_provider`, `no_token` or `missing_env`, as a send
 	 * from `mail()` would.
 	 */
-	static readonly layer: Layer.Layer<Mailer, SendError> = Layer.effect(
-		Mailer,
+	static readonly layer: Layer.Layer<Mailer, SendError> = Layer.unwrap(
 		Effect.gen(function* () {
 			const provider = yield* Config.option(Config.String("POSTBOI_PROVIDER"))
 			const token = yield* Config.option(Config.Redacted("POSTBOI_TOKEN"))
@@ -256,10 +250,7 @@ export class Mailer extends Context.Service<
 					},
 				})
 			)
-			return Mailer.of({
-				send: (options) => tried<SendResponse>(() => resolved.send(options)),
-				cancel: (id) => tried(() => resolved.cancel(id)),
-			})
+			return Mailer.layerProvider(resolved)
 		}).pipe(
 			// A config value that is present is always a readable string, so the only way
 			// Config can fail here is a provider that cannot be read at all, which is a bug
@@ -287,10 +278,32 @@ export class Mailer extends Context.Service<
 	}
 }
 
+/**
+ * The service over one provider. `send` fills in the visitor's IP for captcha
+ * verification exactly as `mail()` does, read before the first await so SvelteKit can
+ * still answer `getRequestEvent()`; a `Mailer` send inside a form action otherwise
+ * verified Turnstile without the IP `mail()` would have sent.
+ */
+function service_over(provider: ProviderBase<unknown>): Mailer["Service"] {
+	return Mailer.of({
+		send(options) {
+			const captcha = with_remoteip(options.captcha)
+			const sent = captcha === options.captcha ? options : { ...options, captcha }
+			return tried<SendResponse>(() => provider.send(sent))
+		},
+		cancel: (id) => tried(() => provider.cancel(id)),
+	})
+}
+
 // ─── Wire shapes ─────────────────────────────────────────────────────────────
 
 const Address = Schema.String.pipe(Schema.check(Schema.isNonEmpty()))
-const Addresses = Schema.Union([Address, Schema.Array(Address)])
+// A list of addresses has to hold one: `to: []` is a send to nobody, and refusing it at
+// the door says so in the request's own words rather than in a provider's.
+const Addresses = Schema.Union([
+	Address,
+	Schema.Array(Address).pipe(Schema.check(Schema.isNonEmpty())),
+])
 
 /**
  * The subset of {@link SendOptions} a server can accept over the wire: a request to send,
@@ -329,11 +342,15 @@ export const decode_send_request = Schema.decodeUnknownEffect(SendRequest)
 
 /**
  * Turn a decoded {@link SendRequest} into the options `send_mail` (or `Mailer.send`)
- * takes. `html` is the body; a text-only request sends its text as the body too, which
- * every provider delivers readably, and keeps it as the plain-text part.
+ * takes. `html` is the body; a text-only request keeps its text as the plain-text part
+ * and sends it as the body too, escaped with its line breaks kept (`escape_lines`),
+ * because a string `body` is always HTML to a provider: raw, a `<` or an `&` in the
+ * text would be read as markup and a line break would collapse into a space.
  */
 export function send_options(request: SendRequest): SendOptions {
-	const options: SendOptions = { body: request.html ?? request.text ?? "" }
+	const options: SendOptions = {
+		body: request.html ?? escape_lines(request.text ?? ""),
+	}
 	if (request.to !== undefined) options.to = plural(request.to)
 	if (request.from !== undefined) options.from = request.from as FromAddress
 	if (request.reply_to !== undefined) options.reply_to = plural(request.reply_to)
@@ -354,10 +371,13 @@ function plural(value: string | ReadonlyArray<string>): string | Array<string> {
 // ─── Retry ───────────────────────────────────────────────────────────────────
 
 /**
- * Is this a failure worth trying again? The transport's own rule, restated for the error
- * channel: a {@link PostboiError} whose `status` is 429 or 5xx. A 4xx is the request's
- * fault and comes back the same way; a skip or a spam verdict was asked for; and an error
- * with no status never reached a provider, so there is nothing to wait out.
+ * Is this a failure worth trying again? The transport's response rule, restated for the
+ * error channel: a {@link PostboiError} whose `status` is 429 or 5xx. A 4xx is the
+ * request's fault and comes back the same way; a skip or a spam verdict was asked for;
+ * and an error with no status is not retried here, because a refusal before the request
+ * (`no_provider`, a missing credential) and a request that never got an answer (a
+ * timeout, a dropped connection) arrive the same way, and only the transport, which saw
+ * the request, can tell them apart. Its `retries` option is what retries those.
  */
 export function retryable(error: unknown): boolean {
 	return (
@@ -380,10 +400,11 @@ export interface RetryOptions {
  * a 5xx. Exponential backoff from `base`, at most `times` more attempts, and any other
  * failure fails at once.
  *
- * This and the provider's own `retries` option are two spellings of the same rule, so
- * pick one. The provider retries the HTTP request inside the send, before hooks see an
- * error; this retries the whole Effect, hooks included. Setting both stacks them, so a
- * `retries: 2` provider inside a `with_retry` of 2 makes up to nine requests.
+ * This and the provider's own `retries` option overlap, so pick one. The provider retries
+ * the HTTP request inside the send, before hooks see an error, and it also retries a
+ * network failure, which this cannot see (see {@link retryable}); this retries the whole
+ * Effect, hooks included. Setting both stacks them, so a `retries: 2` provider inside a
+ * `with_retry` of 2 makes up to nine requests.
  */
 export function with_retry<A, E, R>(
 	effect: Effect.Effect<A, E, R>,
