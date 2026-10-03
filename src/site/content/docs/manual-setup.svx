@@ -110,6 +110,9 @@ export const init: ServerInit = () => {
 }
 ```
 
+On SvelteKit 3 the flag comes from `$app/env` and the type from `@sveltejs/kit/hooks`; the
+hook itself is unchanged.
+
 > Avoid `process.env.NODE_ENV` in the config file: a self-hosted Node deploy that
 > forgets to set it falls into the wrong branch silently. Prefer the two patterns above.
 

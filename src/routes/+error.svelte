@@ -34,7 +34,7 @@
 	</div>
 
 	<a
-		href={resolve("/")}
+		href={resolve("")}
 		class="key inline-flex items-center rounded-sm bg-brand-yellow px-4 py-2.5 text-brand-ink"
 	>
 		<span class="docket">Back to the docs</span>

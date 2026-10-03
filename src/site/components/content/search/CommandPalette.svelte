@@ -194,7 +194,6 @@
 
 	function selectResult(result: ReturnType<typeof searchContent>[number]) {
 		const href = `${result.slug}${result.anchor ?? ""}`
-		// @ts-expect-error arg cannot be cast as `resolve`'s expected type
 		void goto(resolve(href))
 		close()
 	}

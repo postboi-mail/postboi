@@ -1,11 +1,4 @@
-import {
-	fail,
-	isActionFailure,
-	type RequestEvent,
-	type ActionFailure,
-	type RemoteForm,
-	type RemoteFormInput,
-} from "@sveltejs/kit"
+import { fail, isActionFailure, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
 // Type-only: `form` itself comes from `sveltekit`, which kit.ts fills in under Vite. This
 // module never imports `$app/server`, so a plain `bun test` can import it (see kit.ts).
 import type { form as sveltekit_form } from "$app/server"
@@ -104,6 +97,24 @@ function field_reader(data: FormData): FieldReader {
 const OWN_FIELDS = new Set<string>([...SPECIAL_FIELDS, ...HONEYPOT_FIELDS, ...CAPTCHA_FIELDS])
 
 const is_failure = <F>(value: unknown): value is ActionFailure<F> => isActionFailure(value)
+
+/**
+ * SvelteKit's `RemoteFormInput` and `RemoteForm`, spelled so one declaration reads on both
+ * majors: SvelteKit 2 exports the pair from `@sveltejs/kit` and SvelteKit 3 moved it to
+ * `$app/server`, and a shipped `.d.ts` can only name one place. `form` itself has lived on
+ * `$app/server` all along, so the input is restated (it is the public shape of what a form
+ * posts) and the form is read off `form`'s own return type. The input is instantiated as
+ * `any` rather than `RemoteFormInput` because `form` is overloaded and an instantiation
+ * has to satisfy every overload's constraint, which only `any` does; the fields come out
+ * typed exactly as they do for `RemoteFormInput` (every path is a field), and the output
+ * is what the caller said it is.
+ */
+export interface RemoteFormInput {
+	[key: string]: MaybeArray<string | number | boolean | File | RemoteFormInput> | undefined
+}
+type MaybeArray<T> = T | Array<T>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the only type every overload takes
+type RemoteForm<Output> = ReturnType<typeof sveltekit_form<any, Output>>
 
 const TRACKED = ["get", "getAll", "has"] as const
 
@@ -245,9 +256,12 @@ export type RemoteResult<R = object> =
 
 /** The remote mail form built by {@link remote} — spread it onto a `<form>` element. */
 export type RemoteMailForm<
+	// Kept so a `RemoteMailForm<RemoteFormInput, R>` written against an earlier release
+	// still reads; the fields are typed the same whatever is said here (see RemoteForm).
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	Input extends RemoteFormInput = RemoteFormInput,
 	R = object,
-> = RemoteForm<Input, RemoteResult<R>>
+> = RemoteForm<RemoteResult<R>>
 
 /**
  * A remote form's options, from the submission. As {@link Resolver}, plus `value` (the post as

@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Changed
+
+- `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) is now read off SvelteKit's own `form` rather than naming `RemoteForm` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`. Its fields and result are typed as before.
+
 ### Fixed
 
 - A relative `scheduled_at` adds its weeks, days, hours, minutes and seconds as fixed spans, as documented: `{ days: 1 }` is 24 hours from now wherever it runs, where it used to be the same wall-clock time tomorrow in the machine's own time zone (23 or 25 hours across a clock change).

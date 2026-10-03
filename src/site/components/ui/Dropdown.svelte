@@ -215,7 +215,6 @@
 				{#if item.href}
 					<a
 						bind:this={itemRefEls[i]}
-						// @ts-expect-error
 						href={resolve(item.href)}
 						role="option"
 						aria-selected={item.active}
