@@ -10,6 +10,12 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi migrate resend` moves a Resend account over in one command: domains registered with their DNS records printed, audiences as lists with contacts imported without re-confirmation, webhooks re-registered at the same URLs with Postboi's event names. `--dry-run` reads and writes nothing (with `--json`, the plan is the document); running it twice skips what is already here, and one refusal (a domain another account owns, a webhook URL Postboi won't take) goes on its own row while the rest still moves, exit 1 at the end.
+- `mail.recipients.add()` takes `status: "unsubscribed"` (per row or for the call), so an opt-out brought over from another provider lands unsubscribed and is never mailed on the way.
+- `mail.messages.get()` returns `delivered_at` and `outcomes`: the lifecycle after a send left, in the receiving server's own words (the `250` on a delivery, why SES was still trying on a `delayed` row, the `550` behind a bounce).
+
 ## 0.60.0
 
 ### Added

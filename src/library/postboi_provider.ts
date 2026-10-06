@@ -124,8 +124,20 @@ export interface MessageDetails {
 	html?: string
 	text?: string
 	scheduled_at?: string
+	/** When the receiving server took it, on SES's own clock. Absent until it has. */
+	delivered_at?: string
 	opened_at?: string
 	open_count: number
+	/**
+	 * What happened after it left, oldest first, in the receiving server's own words:
+	 * `delivered` with the 250 that took it, `delayed` with why SES is still trying, or
+	 * `bounced` with the 550. `detail` is absent when the event carried no words.
+	 */
+	outcomes?: Array<{
+		type: "delivered" | "delayed" | "bounced" | "complained" | "rejected" | "failed"
+		at: string
+		detail?: string
+	}>
 	/** The form this submission was filed under, when it was one. */
 	form?: { id: string; name: string }
 	/** A submission's fields as `[name, value]` pairs, in submission order. */
@@ -786,8 +798,12 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			list: string,
 			recipients: ListRecipientInput | Array<ListRecipientInput>,
 			options: {
-				/** Starting status for these recipients — overrides the list's default. */
-				status?: "subscribed" | "pending"
+				/**
+				 * Starting status for these recipients — overrides the list's default.
+				 * `"subscribed"` for people who already confirmed elsewhere (no confirmation is
+				 * sent), `"unsubscribed"` for their opt-outs, kept on the list and never mailed.
+				 */
+				status?: MembershipStatus
 			} = {}
 		): Promise<{
 			added: number

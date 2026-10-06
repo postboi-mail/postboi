@@ -114,6 +114,7 @@ import { CONFIG_FILES, doctor, imports_config } from "./doctor.js"
 import { help_text } from "./help.js"
 import { dev_command } from "./dev.js"
 import { inspect_command } from "./inspect.js"
+import { migrate_command } from "./migrate.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 
 type Prompts = ReturnType<typeof create_prompts>
@@ -2162,6 +2163,7 @@ async function main(): Promise<void> {
 	if (command === "env") return env_command(argv.slice(3))
 	if (command === "dev") return dev_command(argv.slice(3))
 	if (command === "inspect") return inspect_command(argv.slice(3))
+	if (command === "migrate") return migrate_command(argv.slice(3))
 	// Before the account commands: a temp inbox needs no POSTBOI_TOKEN.
 	if (command === "inbox") {
 		process.exitCode = await inbox_command(argv.slice(3))

@@ -26,23 +26,24 @@ goes to stderr as `{ "error": { "message", "code" } }` with exit 1; branch on th
 
 Postboi provider. Full reference: <https://api.postboi.app>
 
-| Command                      | What it does                                                                                                                           |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `bunx postboi whoami`        | The account behind your token                                                                                                          |
-| `bunx postboi send`          | One email, now: `--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]`                                     |
-| `bunx postboi send-address`  | Default sending address: `[name@yourdomain.com]`                                                                                       |
-| `bunx postboi lists`         | Lists: `add <name> · send <list> --subject <s> --text, --html or --file <body> · delete <ref>`                                         |
-| `bunx postboi recipients`    | A list's recipients: `<list> add <email>… · <list> remove <email>`                                                                     |
-| `bunx postboi contacts`      | The audience: `add <email> [--name --phone --data] · <email> · remove <email>`                                                         |
-| `bunx postboi domains`       | Sending domains: `add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>`                                                |
-| `bunx postboi webhooks`      | Webhooks: `add <url> · rotate <id> · deliveries <id> · delete <id>`                                                                    |
-| `bunx postboi members`       | Members: `invite <email> · remove <ref> · revoke <ref>`                                                                                |
-| `bunx postboi messages`      | Recent messages: `[status] · <id> (status, opens, fields) · cancel <id>`                                                               |
-| `bunx postboi exports`       | Exports: `download [--form <form>] [--xlsx] [--out <file>]` · `add <name> --to <emails> --weekly · run · pause · resume · delete <id>` |
-| `bunx postboi suppressions`  | Suppressed addresses: `add <email or +phone> · remove <email or +phone>`                                                               |
-| `bunx postboi forms`         | The forms submissions are filed under: `(named in your code)`                                                                          |
-| `bunx postboi notifications` | A list's digests: `<list> · <list> add --to <emails> --weekly or --on-signup · <list> delete <id>`                                     |
-| `bunx postboi testing`       | Email tests: `add [--label] [--clients] · <id> (the report) · clients · delete <id>`                                                   |
+| Command                       | What it does                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bunx postboi whoami`         | The account behind your token                                                                                                                                                                                                                    |
+| `bunx postboi send`           | One email, now: `--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]`                                                                                                                                               |
+| `bunx postboi send-address`   | Default sending address: `[name@yourdomain.com]`                                                                                                                                                                                                 |
+| `bunx postboi lists`          | Lists: `add <name> · send <list> --subject <s> --text, --html or --file <body> · delete <ref>`                                                                                                                                                   |
+| `bunx postboi recipients`     | A list's recipients: `<list> add <email>… · <list> remove <email>`                                                                                                                                                                               |
+| `bunx postboi contacts`       | The audience: `add <email> [--name --phone --data] · <email> · remove <email>`                                                                                                                                                                   |
+| `bunx postboi domains`        | Sending domains: `add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>`                                                                                                                                                          |
+| `bunx postboi migrate resend` | Move a Resend account here: domains, audiences as lists, webhooks: `[--key <resend key>] [--only domains,lists,webhooks] [--dry-run] [--json]` · `Reads RESEND_API_KEY when --key is absent. Safe to run twice: what is here already is skipped` |
+| `bunx postboi webhooks`       | Webhooks: `add <url> · rotate <id> · deliveries <id> · delete <id>`                                                                                                                                                                              |
+| `bunx postboi members`        | Members: `invite <email> · remove <ref> · revoke <ref>`                                                                                                                                                                                          |
+| `bunx postboi messages`       | Recent messages: `[status] · <id> (status, opens, fields) · cancel <id>`                                                                                                                                                                         |
+| `bunx postboi exports`        | Exports: `download [--form <form>] [--xlsx] [--out <file>]` · `add <name> --to <emails> --weekly · run · pause · resume · delete <id>`                                                                                                           |
+| `bunx postboi suppressions`   | Suppressed addresses: `add <email or +phone> · remove <email or +phone>`                                                                                                                                                                         |
+| `bunx postboi forms`          | The forms submissions are filed under: `(named in your code)`                                                                                                                                                                                    |
+| `bunx postboi notifications`  | A list's digests: `<list> · <list> add --to <emails> --weekly or --on-signup · <list> delete <id>`                                                                                                                                               |
+| `bunx postboi testing`        | Email tests: `add [--label] [--clients] · <id> (the report) · clients · delete <id>`                                                                                                                                                             |
 
 A bare noun lists; `list` says the same. Add --json to any of them for the API's response as JSON (errors carry the API's code).
 
