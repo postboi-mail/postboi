@@ -52,7 +52,6 @@ function stub_accounts(options: { postboi?: Record<string, unknown> } = {}) {
 		"GET /v1/lists": { lists: [] },
 		"POST /v1/lists": { id: "list_1", name: "Newsletter" },
 		"POST /v1/lists/list_1/recipients": { added: 2, updated: 0, pending: 0 },
-		"PATCH /v1/lists/list_1/recipients": { email: "gone@example.com", status: "unsubscribed" },
 		"GET /v1/webhooks": { webhooks: [] },
 		"POST /v1/webhooks": { id: "wh_1", url: "https://app.example/hooks", secret: "whsec_new" },
 		...options.postboi,
@@ -72,12 +71,19 @@ function stub_accounts(options: { postboi?: Record<string, unknown> } = {}) {
 			const answer = resend[pathname]
 			return new Response(JSON.stringify(answer ?? { data: [] }), { status: 200 })
 		}
-		const answer = postboi[`${method} ${pathname}`]
+		const answer = postboi[`${method} ${pathname}`] as
+			| { status: number; body: unknown }
+			| Record<string, unknown>
+			| undefined
 		if (!answer)
 			return new Response(
 				JSON.stringify({ message: `no stub for ${method} ${pathname}${search}` }),
 				{ status: 500 }
 			)
+		// A stub shaped `{ status, body }` is a refusal; anything else is the 200 body.
+		if (typeof answer.status === "number" && "body" in answer) {
+			return new Response(JSON.stringify(answer.body), { status: answer.status })
+		}
 		return new Response(JSON.stringify(answer), { status: 200 })
 	})
 	vi.stubGlobal("fetch", fetch_fn)
@@ -115,13 +121,8 @@ describe("migrate resend", () => {
 				"/v1/lists/list_1/recipients?status=subscribed",
 				[
 					{ email: "ada@example.com", name: "Ada Lovelace" },
-					{ email: "gone@example.com", name: undefined },
+					{ email: "gone@example.com", name: undefined, status: "unsubscribed" },
 				],
-			],
-			[
-				"PATCH",
-				"/v1/lists/list_1/recipients",
-				{ email: "gone@example.com", status: "unsubscribed" },
 			],
 			[
 				"POST",
@@ -155,16 +156,71 @@ describe("migrate resend", () => {
 		// Recipients still upsert; nothing else is created again.
 		expect(writes.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toEqual([
 			"POST /v1/lists/list_1/recipients",
-			"PATCH /v1/lists/list_1/recipients",
 		])
 	})
 
-	it("--dry-run reads Resend and writes nothing, and --json prints the summary", async () => {
+	it("--dry-run reads Resend and writes nothing, and --json prints the plan", async () => {
 		const { calls, lines, log } = stub_accounts()
 		await migrate_command(["resend", "--dry-run", "--json"], { log })
 		expect(calls.every((c) => c.url.startsWith("https://api.resend.com"))).toBe(true)
 		expect(lines).toHaveLength(1)
-		expect(JSON.parse(lines[0])).toEqual({ dry_run: true, domains: [], lists: [], webhooks: [] })
+		expect(JSON.parse(lines[0])).toEqual({
+			dry_run: true,
+			plan: {
+				domains: [{ name: "acme.example", status: "verified" }],
+				lists: [{ name: "Newsletter", subscribed: 1, unsubscribed: 1 }],
+				webhooks: [
+					{
+						url: "https://app.example/hooks",
+						events: ["email.delivered", "email.bounced"],
+						dropped: ["email.delivery_delayed"],
+						disabled: false,
+					},
+					{ url: "https://app.example/old", events: ["email.sent"], dropped: [], disabled: true },
+				],
+			},
+			domains: [],
+			lists: [],
+			webhooks: [],
+		})
+	})
+
+	it("matches a list the way the app does, trimmed and without case", async () => {
+		const { calls, log } = stub_accounts({
+			postboi: { "GET /v1/lists": { lists: [{ id: "list_1", name: "newsletter" }] } },
+		})
+		await migrate_command(["resend", "--only", "lists"], { log })
+		const writes = calls.filter(
+			(c) => !c.url.startsWith("https://api.resend.com") && c.method !== "GET"
+		)
+		expect(writes.map((c) => `${c.method} ${new URL(c.url).pathname}`)).not.toContain(
+			"POST /v1/lists"
+		)
+	})
+
+	it("a refused item goes on its row and the rest still moves", async () => {
+		const { calls, lines, log } = stub_accounts({
+			postboi: {
+				"POST /v1/domains": {
+					status: 409,
+					body: { code: "domain_taken", message: "Another account owns acme.example." },
+				},
+			},
+		})
+		await migrate_command(["resend", "--json"], { log })
+		const writes = calls.filter(
+			(c) => !c.url.startsWith("https://api.resend.com") && c.method !== "GET"
+		)
+		expect(writes.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toContain(
+			"POST /v1/webhooks"
+		)
+		const summary = JSON.parse(lines.at(-1) ?? "")
+		expect(summary.domains).toEqual([
+			{ domain: "acme.example", existed: false, error: "Another account owns acme.example." },
+		])
+		expect(summary.webhooks[0].id).toBe("wh_1")
+		expect(process.exitCode).toBe(1)
+		process.exitCode = undefined
 	})
 
 	it("--only narrows what is read", async () => {

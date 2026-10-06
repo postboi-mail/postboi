@@ -39,11 +39,8 @@ function say(line = ""): void {
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
-export async function api<T>(
-	path: string,
-	init: { method?: string; body?: unknown } = {},
-	fetch_fn: FetchLike = fetch
-): Promise<T> {
+/** The token every account command sends, or the `no_token` refusal main() prints. */
+export async function postboi_token(): Promise<string> {
 	await ensure_env_loaded()
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
@@ -52,6 +49,15 @@ export async function api<T>(
 			"no_token"
 		)
 	}
+	return token
+}
+
+export async function api<T>(
+	path: string,
+	init: { method?: string; body?: unknown } = {},
+	fetch_fn: FetchLike = fetch
+): Promise<T> {
+	const token = await postboi_token()
 	let response: Response
 	try {
 		response = await fetch_fn(`${cloud_base()}${path}`, {
@@ -88,14 +94,7 @@ async function api_file(
 	path: string,
 	fetch_fn: FetchLike = fetch
 ): Promise<{ filename: string | undefined; bytes: Uint8Array }> {
-	await ensure_env_loaded()
-	const token = read_env("POSTBOI_TOKEN")
-	if (!token) {
-		throw new ApiCommandError(
-			"No POSTBOI_TOKEN found. Run `postboi init` to sign in first.",
-			"no_token"
-		)
-	}
+	const token = await postboi_token()
 	let response: Response
 	try {
 		response = await fetch_fn(`${cloud_base()}${path}`, {
@@ -320,7 +319,7 @@ async function recipients(args: Array<string>): Promise<void> {
 // ── Contacts ─────────────────────────────────────────────────────────────────
 
 /** Pull `--name value` / `--data value` flags out of an arg list, returning the rest. */
-function take_flags(
+export function take_flags(
 	args: Array<string>,
 	names: Array<string>,
 	switches: Array<string> = []

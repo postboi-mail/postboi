@@ -1,6 +1,14 @@
 import { ensure_env_loaded, read_env } from "../library/env.js"
-import { api, ApiCommandError, print_domain_setup, table, type DomainDetail } from "./api.js"
-import { bold, cyan, dim, green, yellow } from "./prompts.js"
+import {
+	api,
+	ApiCommandError,
+	postboi_token,
+	print_domain_setup,
+	table,
+	take_flags,
+	type DomainDetail,
+} from "./api.js"
+import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
 
 /**
  * `postboi migrate resend`: read a Resend account with its own API key and recreate what
@@ -19,6 +27,10 @@ import { bold, cyan, dim, green, yellow } from "./prompts.js"
  *
  * Re-running is safe: a domain, list or webhook that is already here is skipped by name
  * or URL, and recipients upsert. `--dry-run` reads Resend and writes nothing.
+ *
+ * One refusal never stops the rest: a domain another account owns, a list over quota or a
+ * webhook URL Postboi won't take is recorded on its own row (`error`) and said, the run
+ * carries on, and the exit code is 1 at the end so a script knows something was left.
  */
 
 const RESEND = "https://api.resend.com"
@@ -93,12 +105,20 @@ export interface MigrationPlan {
 /** What the run did, for `--json` and the closing summary. */
 export interface MigrationSummary {
 	dry_run: boolean
+	/** What was read from Resend, which under `--dry-run` is the whole answer. */
+	plan: {
+		domains: MigrationPlan["domains"]
+		lists: Array<{ name: string; subscribed: number; unsubscribed: number }>
+		webhooks: MigrationPlan["webhooks"]
+	}
 	domains: Array<{
 		domain: string
-		status: string
+		status?: string
 		existed: boolean
 		/** The DNS records still to publish, when the domain was registered by this run. */
 		records?: DomainDetail["records"]
+		/** Why Postboi refused it, when it did; the rest of the run went on. */
+		error?: string
 	}>
 	lists: Array<{
 		name: string
@@ -106,6 +126,7 @@ export interface MigrationSummary {
 		updated: number
 		unsubscribed: number
 		existed: boolean
+		error?: string
 	}>
 	webhooks: Array<{
 		url: string
@@ -114,6 +135,7 @@ export interface MigrationSummary {
 		id?: string
 		secret?: string
 		skipped?: string
+		error?: string
 	}>
 }
 
@@ -129,9 +151,18 @@ async function resend_list<T extends { id: string }>(
 	let after: string | undefined
 	for (;;) {
 		const query = `limit=100${after ? `&after=${encodeURIComponent(after)}` : ""}`
-		const response = await fetch_fn(`${RESEND}${path}?${query}`, {
-			headers: { Authorization: `Bearer ${key}` },
-		})
+		let response: Response
+		try {
+			response = await fetch_fn(`${RESEND}${path}?${query}`, {
+				headers: { Authorization: `Bearer ${key}` },
+			})
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error)
+			throw new ApiCommandError(
+				`Could not reach Resend (${reason}). Are you online?`,
+				"unreachable"
+			)
+		}
 		if (response.status === 401 || response.status === 403) {
 			throw new ApiCommandError(
 				"Resend refused the key. Pass a full-access key with --key, or set RESEND_API_KEY.",
@@ -150,7 +181,8 @@ async function resend_list<T extends { id: string }>(
 		const page = body?.data ?? []
 		rows.push(...page)
 		const last = page.at(-1)
-		if (!body?.has_more || !last) return rows
+		// A cursor that didn't move is an endpoint ignoring `after`; stop rather than spin.
+		if (!body?.has_more || !last || last.id === after) return rows
 		after = last.id
 	}
 }
@@ -205,8 +237,31 @@ export async function read_resend(
 /** The app's cap on one recipients call. */
 const RECIPIENTS_PER_CALL = 10_000
 
+type Say = (line?: string) => void
+
+/**
+ * One item's writes. The API's refusal (a 4xx with its own code) is this item's and goes
+ * on its row; anything else (offline, a 5xx) is the run's and still throws.
+ */
+async function attempt(
+	say: Say,
+	label: string,
+	write: () => Promise<void>
+): Promise<string | undefined> {
+	try {
+		await write()
+		return undefined
+	} catch (error) {
+		const code = error instanceof ApiCommandError ? error.code : undefined
+		const ours = !code || code === "unreachable" || code === "no_token" || code.startsWith("http_5")
+		if (ours) throw error
+		say(`${red("✗")} ${bold(label)}: ${(error as Error).message} ${dim(`(${code})`)}`)
+		return (error as Error).message
+	}
+}
+
 /** `table` and `print_domain_setup` write to stdout themselves, so under `--json` they are skipped. */
-async function migrate_domains(plan: MigrationPlan, say: (line?: string) => void, json: boolean) {
+async function migrate_domains(plan: MigrationPlan, say: Say, json: boolean) {
 	const out: MigrationSummary["domains"] = []
 	if (plan.domains.length === 0) return out
 	say(bold("\nDomains"))
@@ -214,24 +269,25 @@ async function migrate_domains(plan: MigrationPlan, say: (line?: string) => void
 		"/v1/domains"
 	)
 	for (const { name } of plan.domains) {
-		const already = existing.find((d) => d.domain === name)
+		const already = existing.find((d) => d.domain.toLowerCase() === name)
 		if (already) {
 			say(`${dim("–")} ${bold(name)} is already here (${already.status})`)
 			out.push({ domain: name, status: already.status, existed: true })
 			continue
 		}
-		const detail = await api<DomainDetail>("/v1/domains", {
-			method: "POST",
-			body: { domain: name },
+		const row: MigrationSummary["domains"][number] = { domain: name, existed: false }
+		row.error = await attempt(say, name, async () => {
+			const detail = await api<DomainDetail>("/v1/domains", {
+				method: "POST",
+				body: { domain: name },
+			})
+			say(`${green("✓")} registered ${bold(detail.domain)}`)
+			if (!json) print_domain_setup(detail)
+			row.domain = detail.domain
+			row.status = detail.status
+			row.records = detail.records
 		})
-		say(`${green("✓")} registered ${bold(detail.domain)}`)
-		if (!json) print_domain_setup(detail)
-		out.push({
-			domain: detail.domain,
-			status: detail.status,
-			existed: false,
-			records: detail.records,
-		})
+		out.push(row)
 	}
 	say(
 		dim(
@@ -241,53 +297,63 @@ async function migrate_domains(plan: MigrationPlan, say: (line?: string) => void
 	return out
 }
 
-async function migrate_lists(plan: MigrationPlan, say: (line?: string) => void) {
+/** The app matches a list's name trimmed and without case, so the skip has to as well. */
+function list_key(name: string): string {
+	return name.trim().toLowerCase()
+}
+
+async function migrate_lists(plan: MigrationPlan, say: Say) {
 	const out: MigrationSummary["lists"] = []
 	if (plan.lists.length === 0) return out
 	say(bold("\nAudiences → lists"))
 	const { lists: existing } = await api<{ lists: Array<{ id: string; name: string }> }>("/v1/lists")
 	for (const list of plan.lists) {
-		let id: string
-		let existed = false
-		const found = existing.find((l) => l.name === list.name)
-		if (found) {
-			id = found.id
-			existed = true
-		} else {
-			const created = await api<{ id: string }>("/v1/lists", {
-				method: "POST",
-				body: { name: list.name },
-			})
-			id = created.id
+		const name = list.name.trim()
+		const found = existing.find((l) => list_key(l.name) === list_key(name))
+		const row: MigrationSummary["lists"][number] = {
+			name,
+			added: 0,
+			updated: 0,
+			unsubscribed: 0,
+			existed: Boolean(found),
 		}
-		let added = 0
-		let updated = 0
-		const everyone = [...list.subscribed, ...list.unsubscribed]
-		for (let i = 0; i < everyone.length; i += RECIPIENTS_PER_CALL) {
+		row.error = await attempt(say, name, async () => {
+			let id: string
+			if (found) {
+				id = found.id
+			} else {
+				const created = await api<{ id: string }>("/v1/lists", {
+					method: "POST",
+					body: { name },
+				})
+				id = created.id
+			}
 			// `?status=subscribed`: these people already confirmed with Resend, so a
-			// double-opt-in list must not write to every one of them again.
-			const result = await api<{ added: number; updated: number }>(
-				`/v1/lists/${encodeURIComponent(id)}/recipients?status=subscribed`,
-				{ method: "POST", body: everyone.slice(i, i + RECIPIENTS_PER_CALL) }
+			// double-opt-in list must not write to every one of them again. An opt-out
+			// says so on its own row and lands unsubscribed, never subscribed on the way.
+			const everyone = [
+				...list.subscribed,
+				...list.unsubscribed.map((r) => ({ ...r, status: "unsubscribed" as const })),
+			]
+			for (let i = 0; i < everyone.length; i += RECIPIENTS_PER_CALL) {
+				const result = await api<{ added: number; updated: number }>(
+					`/v1/lists/${encodeURIComponent(id)}/recipients?status=subscribed`,
+					{ method: "POST", body: everyone.slice(i, i + RECIPIENTS_PER_CALL) }
+				)
+				row.added += result.added
+				row.updated += result.updated
+			}
+			row.unsubscribed = list.unsubscribed.length
+			say(
+				`${green("✓")} ${bold(name)}${found ? dim(" (existing list)") : ""}: ${row.added} added, ${row.updated} already here, ${row.unsubscribed} unsubscribed`
 			)
-			added += result.added
-			updated += result.updated
-		}
-		for (const { email } of list.unsubscribed) {
-			await api(`/v1/lists/${encodeURIComponent(id)}/recipients`, {
-				method: "PATCH",
-				body: { email, status: "unsubscribed" },
-			})
-		}
-		say(
-			`${green("✓")} ${bold(list.name)}${existed ? dim(" (existing list)") : ""}: ${added} added, ${updated} already here, ${list.unsubscribed.length} unsubscribed`
-		)
-		out.push({ name: list.name, added, updated, unsubscribed: list.unsubscribed.length, existed })
+		})
+		out.push(row)
 	}
 	return out
 }
 
-async function migrate_webhooks(plan: MigrationPlan, say: (line?: string) => void) {
+async function migrate_webhooks(plan: MigrationPlan, say: Say) {
 	const out: MigrationSummary["webhooks"] = []
 	if (plan.webhooks.length === 0) return out
 	say(bold("\nWebhooks"))
@@ -310,18 +376,20 @@ async function migrate_webhooks(plan: MigrationPlan, say: (line?: string) => voi
 			out.push(row)
 			continue
 		}
-		const endpoint = await api<{ id: string; url: string; secret: string }>("/v1/webhooks", {
-			method: "POST",
-			body: { url: hook.url, name: "Imported from Resend", events: hook.events },
+		row.error = await attempt(say, hook.url, async () => {
+			const endpoint = await api<{ id: string; url: string; secret: string }>("/v1/webhooks", {
+				method: "POST",
+				body: { url: hook.url, name: "Imported from Resend", events: hook.events },
+			})
+			row.id = endpoint.id
+			row.secret = endpoint.secret
+			say(`${green("✓")} ${bold(endpoint.url)} ${dim(`(${endpoint.id})`)}`)
+			say(`  ${dim("events:")} ${hook.events.join(", ")}`)
+			say(`  ${dim("secret:")} ${endpoint.secret}`)
+			if (hook.dropped.length > 0) {
+				say(`  ${yellow("!")} not on Postboi, dropped: ${hook.dropped.join(", ")}`)
+			}
 		})
-		row.id = endpoint.id
-		row.secret = endpoint.secret
-		say(`${green("✓")} ${bold(endpoint.url)} ${dim(`(${endpoint.id})`)}`)
-		say(`  ${dim("events:")} ${hook.events.join(", ")}`)
-		say(`  ${dim("secret:")} ${endpoint.secret}`)
-		if (hook.dropped.length > 0) {
-			say(`  ${yellow("!")} not on Postboi, dropped: ${hook.dropped.join(", ")}`)
-		}
 		out.push(row)
 	}
 	say(
@@ -332,7 +400,7 @@ async function migrate_webhooks(plan: MigrationPlan, say: (line?: string) => voi
 	return out
 }
 
-function print_plan(plan: MigrationPlan, say: (line?: string) => void) {
+function print_plan(plan: MigrationPlan, say: Say) {
 	say(bold("\nWhat would move"))
 	if (plan.domains.length > 0) {
 		table(
@@ -376,13 +444,8 @@ export async function migrate_command(
 			"Usage: postboi migrate resend [--key <resend key>] [--only domains,lists,webhooks] [--dry-run] [--json]"
 		)
 	}
-	const flags: Record<string, string> = {}
-	const on = new Set<string>()
-	for (let i = 0; i < rest.length; i++) {
-		if (rest[i] === "--key" || rest[i] === "--only") flags[rest[i].slice(2)] = rest[++i] ?? ""
-		else if (rest[i] === "--dry-run" || rest[i] === "--json") on.add(rest[i].slice(2))
-		else throw new ApiCommandError(`Unknown option: ${rest[i]}`)
-	}
+	const { flags, on, rest: unknown } = take_flags(rest, ["key", "only"], ["dry-run", "json"])
+	if (unknown.length > 0) throw new ApiCommandError(`Unknown option: ${unknown[0]}`)
 	const json = on.has("json")
 	const dry_run = on.has("dry-run")
 	const log = deps.log ?? ((line: string) => console.log(line))
@@ -406,11 +469,29 @@ export async function migrate_command(
 		}
 	}
 
+	// Before the read, which can be thousands of requests: a run that will write needs
+	// the token, and finding that out afterwards is the whole read wasted.
+	if (!dry_run) await postboi_token()
+
 	say(dim("Reading your Resend account…"))
 	const plan = await read_resend(key, only, fetch_fn)
 	if (!json) print_plan(plan, say)
 
-	const summary: MigrationSummary = { dry_run, domains: [], lists: [], webhooks: [] }
+	const summary: MigrationSummary = {
+		dry_run,
+		plan: {
+			domains: plan.domains,
+			lists: plan.lists.map((l) => ({
+				name: l.name,
+				subscribed: l.subscribed.length,
+				unsubscribed: l.unsubscribed.length,
+			})),
+			webhooks: plan.webhooks,
+		},
+		domains: [],
+		lists: [],
+		webhooks: [],
+	}
 	if (dry_run) {
 		say(dim("\n--dry-run: nothing written. Run it again without the flag to move them."))
 	} else {
@@ -435,4 +516,11 @@ export async function migrate_command(
 		say(`  3. Once verified, change it to ${cyan('provider: "postboi"')}. No code changes.`)
 	}
 	if (json) log(JSON.stringify(summary, null, 2))
+	const refused = [...summary.domains, ...summary.lists, ...summary.webhooks].filter((r) => r.error)
+	if (refused.length > 0) {
+		say(
+			`\n${red(`${refused.length} refused`)}; the rest moved. Fix and run again: what is here is skipped.`
+		)
+		process.exitCode = 1
+	}
 }

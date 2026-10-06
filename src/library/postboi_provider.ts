@@ -798,8 +798,12 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			list: string,
 			recipients: ListRecipientInput | Array<ListRecipientInput>,
 			options: {
-				/** Starting status for these recipients — overrides the list's default. */
-				status?: "subscribed" | "pending"
+				/**
+				 * Starting status for these recipients — overrides the list's default.
+				 * `"subscribed"` for people who already confirmed elsewhere (no confirmation is
+				 * sent), `"unsubscribed"` for their opt-outs, kept on the list and never mailed.
+				 */
+				status?: MembershipStatus
 			} = {}
 		): Promise<{
 			added: number

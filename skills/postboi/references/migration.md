@@ -37,7 +37,7 @@ Order matters — the old provider keeps sending until the new domain verifies.
    	-d '[{ "email": "a@b.co", "name": "Ada", "data": { "plan": "pro" } }]'
    ```
 
-   **Critical on double-opt-in lists:** pass `?status=subscribed` (or per-row `"status": "subscribed"`) for already-confirmed subscribers — those rows get **no** confirmation email. Omitting it re-confirms the entire imported base.
+   **Critical on double-opt-in lists:** pass `?status=subscribed` (or per-row `"status": "subscribed"`) for already-confirmed subscribers — those rows get **no** confirmation email. Omitting it re-confirms the entire imported base. An opt-out from the old provider is a row with `"status": "unsubscribed"`: kept on the list, never mailed, never passing through subscribed on the way.
 
 5. Swap the sending code (see [Migrating existing email code](#migrating-existing-email-code-to-postboi)), and flip `default.from` once the domain is verified.
 6. `webhooks add` + `sync`; port suppress-on-bounce logic to the normalized events.
