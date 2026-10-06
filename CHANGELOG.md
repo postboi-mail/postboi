@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `mail.messages.get()` returns `delivered_at` and `outcomes`: the lifecycle after a send left, in the receiving server's own words (the `250` on a delivery, why SES was still trying on a `delayed` row, the `550` behind a bounce).
+
 ## 0.60.0
 
 ### Added
