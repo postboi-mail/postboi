@@ -423,7 +423,7 @@ async function contacts(args: Array<string>): Promise<void> {
 
 // ── Domains ────────────────────────────────────────────────────────────────
 
-interface DomainDetail {
+export interface DomainDetail {
 	id: string
 	domain: string
 	status: string
@@ -432,7 +432,7 @@ interface DomainDetail {
 }
 
 /** The records table + registrar shortcut a pending domain needs. */
-function print_domain_setup(detail: DomainDetail): void {
+export function print_domain_setup(detail: DomainDetail): void {
 	if (detail.status === "verified") {
 		return say(`${green("✓")} ${bold(detail.domain)} is verified`)
 	}

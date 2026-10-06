@@ -116,6 +116,14 @@ export const HELP: Array<HelpSection> = [
 				details: ["add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>"],
 			},
 			{
+				command: "migrate resend",
+				summary: "Move a Resend account here: domains, audiences as lists, webhooks",
+				details: [
+					"[--key <resend key>] [--only domains,lists,webhooks] [--dry-run] [--json]",
+					"Reads RESEND_API_KEY when --key is absent. Safe to run twice: what is here already is skipped",
+				],
+			},
+			{
 				command: "webhooks",
 				summary: "Webhooks",
 				details: ["add <url> · rotate <id> · deliveries <id> · delete <id>"],

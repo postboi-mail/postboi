@@ -12,6 +12,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
+- `postboi migrate resend` moves a Resend account over in one command: domains registered with their DNS records printed, audiences as lists with contacts imported without re-confirmation, webhooks re-registered at the same URLs with Postboi's event names. `--dry-run` reads and writes nothing; running it twice skips what is already here.
 - `mail.messages.get()` returns `delivered_at` and `outcomes`: the lifecycle after a send left, in the receiving server's own words (the `250` on a delivery, why SES was still trying on a `delayed` row, the `550` behind a bounce).
 
 ## 0.60.0

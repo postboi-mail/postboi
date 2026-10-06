@@ -10,6 +10,18 @@ entire imported list, an old provider still sending into a domain the new one ju
 
 Until a domain verifies, sends come from the account's shared `send.postboi.email` address. That works immediately, so **never block the code migration on DNS** — and never block wiring the code on the claim either: sandboxed sends prove the integration end to end (they're in the message log), and in dev the [dev inbox](https://docs.postboi.app/raw/dev-inbox) captures everything locally anyway.
 
+## Migrating from Resend
+
+One command: `bunx postboi migrate resend --dry-run` reads the Resend account behind
+`RESEND_API_KEY` (or `--key re_…`) and says what would move; without the flag it registers
+each domain here and prints its DNS records, turns each audience into a list with its
+contacts (`?status=subscribed`, so nobody is re-confirmed, and Resend's unsubscribed stay
+unsubscribed), and re-registers each webhook at the same URL with the same events in
+Postboi's names and a fresh secret. Re-running skips what is already here. Templates, API
+keys and the suppression list don't move (no templates API here, keys are never
+exportable, Resend has no suppression export) and the command says so. Then the ordering
+below from step 5: keep `provider: "resend"` until the domain verifies, flip it, done.
+
 ## Migrating from another ESP
 
 Order matters — the old provider keeps sending until the new domain verifies.
