@@ -78,10 +78,14 @@ written.
 - **No mailbox count on any plan.** An idle mailbox is one row; what costs anything
   (received mail, its storage, an agent holding a long poll) grows with use. What a burst
   of new addresses does cost is agentboi.email's name on the disposable-domain lists, so
-  Free may make 10 a day (`DAILY_MAILBOX_LIMITS`, deleted ones counted, 429
-  `mailbox_rate_limited`), a paid plan has no limit, and 50 in a day on any plan is an
-  operator alert and nothing more. Storage has no allowance yet beyond the existing
-  message caps; if one is needed it is a storage allowance, not a count.
+  Free may make 10 a UTC day (`DAILY_MAILBOX_LIMIT`, deleted ones counted, 429
+  `mailbox_rate_limited`), a paid plan has no limit, a plan the table doesn't name is held
+  to Free's number, and an unclaimed account (an `init --agent` key holds one) makes 3 in
+  its whole life. The day's fiftieth on any plan is an operator alert and nothing more.
+  Storage has no allowance yet beyond the existing message caps; if one is needed it is a
+  storage allowance, not a count.
+- **Deleting a team retires its agentboi.email addresses** (migration 0092), so an
+  address that was one agent's is never another team's, even once the rows are gone.
 - **"support" is reserved** on the shared namespace, so the examples say `orders`.
 - **Not built in Phase 1**: folders, labels and read state (`mailbox_threads`), the
   Members → Agents view, Admin → Mailboxes, the claim page on agentboi.email (the existing

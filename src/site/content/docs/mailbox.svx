@@ -155,7 +155,8 @@ in your Received log, and the address is never given to anyone else.
 
 |                       |                                                       |
 | --------------------- | ----------------------------------------------------- |
-| Mailboxes             | Free 3, Starter 25, Pro 100, Scale 500                |
+| Mailboxes             | No limit on how many. Free makes 10 a day (UTC)       |
+| Unclaimed account     | 3 mailboxes in all, until somebody claims it          |
 | Received mail         | Free, and doesn't count against your sends            |
 | A message             | Up to 10 MB                                           |
 | Unclaimed             | Receives, can't send, deleted after 14 days           |
