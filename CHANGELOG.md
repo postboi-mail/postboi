@@ -24,6 +24,16 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
   server writes the In-Reply-To and References headers from it and files the send in that
   conversation. Ignored by other providers.
 
+## 0.62.0
+
+### Breaking
+
+- `postboi/kit` needs SvelteKit 3 (`@sveltejs/kit` `^3.0.0`). SvelteKit 2 is no longer supported.
+
+### Fixed
+
+- `<Captcha />` works inside a SvelteKit 3 remote form. SvelteKit 3 scopes every remote form field name to its form and rejects any field that isn't, so the honeypot and the Turnstile token made each submission fail with `form_field_unbound`. The component now gives both the form's scope, including the token input Turnstile adds later. Field names of a `.for(key)` instance are scoped to the base form, which it follows too.
+
 ## 0.61.1
 
 ### Fixed
