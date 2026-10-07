@@ -98,6 +98,8 @@ export interface SendParams {
 	preheader?: string
 	/** Small print under the frame (or at the end of `html` without the shell), escaped. */
 	footnote?: string
+	/** A received message's id (`in_…`) this answers: the server writes the threading headers. */
+	in_reply_to?: string
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -1206,6 +1208,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			style: message.style,
 			preheader: message.preheader,
 			footnote: message.footnote,
+			in_reply_to: message.in_reply_to,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}

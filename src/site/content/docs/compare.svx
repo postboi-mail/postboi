@@ -64,6 +64,7 @@ The other channels and the provider switch are extras on top of that.
 | Hosted form endpoints (no backend)               | ✅                                             | ❌                             |
 | Local dev inbox, no code changes                 | ✅ `/__postboi`                                | ❌                             |
 | Throwaway inboxes for tests and agents           | ✅ [Tempboi](/temp-inbox), no account          | Test addresses that simulate delivery and bounces |
+| Mailboxes an AI agent keeps                      | ✅ [agentboi.email](/mailbox), no account to make one | Inboxes, in private beta in October 2026 |
 | An agent can set it up without you signing in    | ✅ `postboi init --agent`                      | Needs an account and API key first |
 | Free tier                                        | 3,000 a month, 100 a day                       | 3,000 a month, 100 a day       |
 | First paid plan                                  | £9 for 40,000 a month                          | $20 for 50,000 a month         |

@@ -225,6 +225,62 @@ export const HELP: Array<HelpSection> = [
 		],
 	},
 	{
+		title: "Agent mailboxes",
+		note: "agentboi.email; no POSTBOI_TOKEN needed to make one",
+		entries: [
+			{
+				command: "mailbox new",
+				summary: "Make an address your agent keeps, and print it",
+				details: [
+					"[--address <name>] [--name <label>] [--domain <yours>] [--json] [--env]",
+					"With POSTBOI_TOKEN it is your team's; without, it sends once you open its claim link",
+					"--env prints export POSTBOI_MAILBOX_KEY=… for eval",
+				],
+			},
+			{
+				command: "mailbox watch",
+				summary: "Print mail as it arrives, one line each, with who is talking",
+				details: [
+					"[address] --all --json (NDJSON) --trust <owner, thread, stranger or suspect> --tag --from --subject",
+					"--exec <cmd>: run per mail with ID THREAD TRUST FROM SUBJECT REPLY_TEXT CODE LINK set",
+				],
+			},
+			{
+				command: "mailbox wait",
+				summary: "Wait for one mail, then exit",
+				details: [
+					"[address] --from --subject --tag --trust (/regex/ works) --timeout <sec> --new",
+					"--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout",
+				],
+			},
+			{
+				command: "mailbox read",
+				summary: "One mail in full: what they wrote, minus the quoted thread",
+				details: ["[id or latest] [address] --html --raw --json"],
+			},
+			{
+				command: "mailbox reply",
+				summary: "Answer a mail in its thread",
+				details: ['<id> [address] --text "…" (or --html) --cc a,b --bcc c --subject "…"'],
+			},
+			{
+				command: "mailbox send",
+				summary: "A new message from the mailbox",
+				details: ['[address] --to a@b.com,c@d.com --subject "…" --text "…"'],
+			},
+			{ command: "mailbox threads", summary: "Its conversations, newest activity first" },
+			{
+				command: "mailbox ls",
+				summary: "Mailboxes on this machine",
+				details: ["key [address]: a new key, the old one stops · rm [address]"],
+			},
+		],
+		footer: [
+			"The mailbox made or used last is the default; POSTBOI_MAILBOX_KEY overrides",
+			"it (the key alone finds its mailbox), POSTBOI_MAILBOX_URL moves the host.",
+		],
+	},
+	{
 		title: "Options",
 		entries: [
 			{ command: "-h, --help", summary: "Show this help" },

@@ -381,6 +381,10 @@
 		"./inbox": {
 			"types": "./dist/temp_inbox.d.ts",
 			"default": "./dist/temp_inbox.js"
+		},
+		"./mailbox": {
+			"types": "./dist/mailbox.d.ts",
+			"default": "./dist/mailbox.js"
 		}
 	},
 	"peerDependencies": {

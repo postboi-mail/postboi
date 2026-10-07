@@ -110,6 +110,7 @@ import { offer_skill, refresh_skill, skill_command } from "./skill.js"
 import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
 import { api_command, ApiCommandError, error_json } from "./api.js"
 import { inbox_command } from "./inbox.js"
+import { mailbox_command } from "./mailbox.js"
 import { CONFIG_FILES, doctor, imports_config } from "./doctor.js"
 import { help_text } from "./help.js"
 import { dev_command } from "./dev.js"
@@ -2167,6 +2168,11 @@ async function main(): Promise<void> {
 	// Before the account commands: a temp inbox needs no POSTBOI_TOKEN.
 	if (command === "inbox") {
 		process.exitCode = await inbox_command(argv.slice(3))
+		return
+	}
+	// Likewise a mailbox: without a token it is one of its own, waiting to be claimed.
+	if (command === "mailbox") {
+		process.exitCode = await mailbox_command(argv.slice(3))
 		return
 	}
 	if (command && (await api_command(command, argv.slice(3)))) return

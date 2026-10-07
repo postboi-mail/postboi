@@ -5,12 +5,100 @@ conversations when it is allowed to, and a person can see every one of those thi
 stop any of them. Postboi's version is **agentboi.email**: the mailbox that stays, beside
 tempboi.email, the one that goes.
 
-**Status: planning, October 2026.** Nothing here is built. This document is the source of
-truth for the mailbox work in both repos: read it before starting a phase, and update it
-when a decision changes. The research it rests on is summarised in
+**Status: Phases 0 and 1 built, October 2026.** `agentboi.email` is registered. The
+mailbox that receives, reads, replies and sends is in both repos on
+`claude/agent-mailboxes-planning-y0p3hu`; the held queue, jev's mailbox rubric and MCP are
+still to come. [Built so far](#built-so-far) says what shipped and where it parted from the
+plan below, and [Before launch](#before-launch) lists the zone and SES steps that only a
+person with the Cloudflare and AWS consoles can take. This document is the source of truth
+for the mailbox work in both repos: read it before starting a phase, and update it when a
+decision changes. The research it rests on is summarised in
 [Appendix A](#appendix-a--the-field-in-october-2026), with links; the codebase facts in
 [What we already have](#what-we-already-have) were read from the code the week this was
 written.
+
+## Built so far
+
+**postboi-app**, migration 0091:
+
+- `agentboi.email` is a third site on the Worker, fenced by host the way tempboi.email is
+  (`$library/agentboi`, `reroute`, `handle`). It has its own page (make a mailbox in one
+  press, the key said once), `llms.txt`, `robots.txt` and `sitemap.xml`, and no cookie
+  banner, Analytics or service worker.
+- `/v1/mailboxes`: create (anonymous, or with a team key), list, get, rename, delete,
+  rotate the key, `messages` with an `after` cursor and `wait`, `wait` with a timeout,
+  one message, its raw `.eml`, its attachments (served `sandbox`), reply, send, threads
+  and one thread. In `openapi.json` under a Mailboxes tag.
+- Mail arrives through Email Routing at `/v1/inbound` (an `AGENT_DOMAIN` branch before any
+  account lookup, refusing an unknown, deleted, suspended or oversized mailbox at SMTP
+  time) and through SES on a team's own `reply.<domain>` (`/v1/sns/inbound`). Both file it
+  with `ingest_inbound`, so it is a row in the team's Received log with its thread, and
+  `email.received` webhooks carry `mailbox`, `trust`, `reply_text` and `codes`.
+- Sending goes through `/v1/send`'s own gates (paused account, quota, the unverified
+  daily cap, rate) and `deliver`, threaded with `In-Reply-To` and `References`, logged in
+  the Sent log, and reviewed by jev on the agentboi lane while the account is young.
+  `/v1/send` learned `in_reply_to` (an inbound id) for any team send.
+- Dashboard: **Mailboxes** under the team (whole-team members), to make, rename, rotate
+  and delete, with the key shown once. In the sidebar and the palette.
+- The audit log names a mailbox's actions as `Mailbox <address>`.
+
+**postboi (SDK)**:
+
+- `postboi/mailbox`: `mailbox()` resolves from `POSTBOI_MAILBOX_KEY` or makes one, plus
+  `mailbox.create`, `mailbox.open` and `mailbox.list` (team key). A `Mailbox` has `wait`,
+  `list`, `read`, `watch`, `reply`, `send`, `threads`, `thread`, `info`, `rename`,
+  `rotate` and `delete`. The long-poll helpers moved into `long_poll.ts`, shared with
+  `postboi/inbox`. `src/testing/fake_agentboi.ts` is a fake server for tests.
+- `mail()` and the Postboi provider take `in_reply_to`.
+- `postboi mailbox new|ls|watch|wait|read|reply|send|threads|key|rm`, remembering keys in
+  `~/.config/postboi/mailboxes.json` (mode 0600).
+- Docs: `mailbox.svx`, the navigation and products entries, `agents.svx`, `compare.svx`,
+  the CLI reference and the skill. Three lines under `## Unreleased`.
+
+### Where it parted from the plan
+
+- **The key is `mb_…` and lives on the mailbox row, not in `api_keys`.** A mailbox key
+  can then never pass `api_auth` anywhere else: every other route answers 401 by
+  construction rather than by a scope check somebody has to remember. A team's `pb_` key
+  opens every mailbox of the team; a client workspace key opens none yet.
+- **An unclaimed mailbox receives and does not send at all.** There is no `owner` field
+  and no write-to-the-owner allowance yet. A send is refused with the code `unclaimed` and
+  the account's claim link, which is the same claim flow `init --agent` already uses, so
+  the agent can hand the link to a person. Open decision 5 is settled that way for now.
+- **What only a mailbox needs is a side table**, `mailbox_messages` (seq, tag, trust,
+  reply_text, codes, links, raw_key), keyed on the inbound row and deleted with it. The
+  Received log's table and writes are untouched. `messages` gained nothing: a send from a
+  mailbox is an ordinary row with the mailbox's address as its From.
+- **No `mailbox.*` webhook events.** `email.received` carries the mailbox fields, so a
+  team's existing endpoint hears agent mail without subscribing to anything new.
+- **Trust is `owner`, `thread`, `stranger` or `suspect`.** `known` waits for the
+  allowlist. `owner` is a whole-team member's address with DMARC passing; `suspect` is
+  jev's junk verdict, an SES spam fail or a DMARC fail. jev's agent-aimed rubric is still
+  Phase 3.
+- **Mailboxes are bundled per plan**: 3 on Free, 25 Starter, 100 Pro, 500 Scale
+  (`MAILBOX_LIMITS`). Storage has no allowance yet beyond the existing message caps.
+- **"support" is reserved** on the shared namespace, so the examples say `orders`.
+- **Not built in Phase 1**: folders, labels and read state (`mailbox_threads`), the
+  Members → Agents view, Admin → Mailboxes, the claim page on agentboi.email (the existing
+  claim link is used), `init --agent --mailbox`, `sync` typing mailbox names, and the
+  disclosure footer.
+
+## Before launch
+
+Things only a person with the consoles can do. Nothing is broken without them, but no mail
+reaches `agentboi.email` until the first two are done.
+
+1. **Cloudflare zone for agentboi.email** on the same account as the Worker. Turn on Email
+   Routing and point the catch-all at the Worker (`postboi`), as tempboi.email's is.
+2. **SES identity for agentboi.email** in `SES_REGION`: Easy DKIM records in the zone, a
+   custom MAIL FROM (`bounce.agentboi.email`) with its MX and SPF, and DMARC at
+   `p=reject`. The app adds the identity to a team's tenant when it makes the team's
+   first agentboi mailbox, and `mint_tenant`'s heal adds it for any team that has one.
+   Until the identity exists those calls fail quietly and SES refuses sends from a
+   mailbox.
+3. **Deploy** picks up the `agentboi.email` and `www.agentboi.email` custom domains in
+   `wrangler.jsonc`, and the `llms.txt` and `sitemap.xml` renames in `inject_cron.ts`.
+   The page's abuse line is `ABUSE_ADDRESS`, shared with tempboi.
 
 ---
 
@@ -18,10 +106,8 @@ written.
 
 - **The brand is agentboi.email.** It is the third site on the Worker, fenced by hostname
   exactly as tempboi.email is, with the same mascot family and the same house style.
-  tempboi is the throwaway, agentboi is the address an agent keeps. The .email registry's
-  RDAP answered "not found" for `agentboi.email` on 6 October 2026 (and "found" for
-  `tempboi.email`, same registry), so it reads as unregistered. **Register it first**;
-  `agentboi.com` is taken.
+  tempboi is the throwaway, agentboi is the address an agent keeps. Registered on
+  7 October 2026; `agentboi.com` is taken.
 - **A mailbox is a colleague with a narrow desk, not a key with everything.** It holds the
   grant shape a limited member holds today (`scope_kind: email` over its own address,
   `can_send` from its policy, no areas), so the Sent log, the sender predicate, delivery's
@@ -167,7 +253,7 @@ curl -X POST agentboi.email -d owner=you@acme.com
 ```
 
 ```
-support-k3f9@agentboi.email
+orders-k3f9@agentboi.email
 key:    pb_…            # opens this mailbox and nothing else
 claim:  https://agentboi.email/claim/8f2k…   # also emailed to you@acme.com
 until claimed: receives anything, writes only to you@acme.com, 10 a day
@@ -446,6 +532,10 @@ Unclaimed mailboxes are free and rate-limited per IP as provisioning is
 
 ## Data model
 
+The sketch below was the plan. What shipped is `migrations/0091_mailboxes.sql`: a
+`mailboxes` table with the key hash on it, and `mailbox_messages` beside
+`inbound_messages`. The held-queue and thread-state columns are still Phase 2 and later.
+
 ```sql
 -- 008x_mailboxes.sql
 CREATE TABLE mailboxes (
@@ -514,6 +604,8 @@ download endpoint the team's `/v1/inbound` never had (served `sandbox`, as tempb
 
 ### Phase 0: the ground (days)
 
+Built, except the zone and SES steps in [Before launch](#before-launch).
+
 - Register `agentboi.email`. Zone on Cloudflare: Email Routing catch-all to the Worker, an
   SES identity in the sending region with DKIM, SPF, DMARC `p=reject`, `custom_domain`
   entries in `wrangler.jsonc` for the apex and `www`, the `llms.txt` and `sitemap.xml`
@@ -523,6 +615,9 @@ download endpoint the team's `/v1/inbound` never had (served `sandbox`, as tempb
 - Decide the two open pricing numbers below and write the page's tier data.
 
 ### Phase 1: a mailbox that receives, reads and replies (app ~2 weeks, SDK ~4 days)
+
+Built, with the changes in [Where it parted from the plan](#where-it-parted-from-the-plan).
+The list below is the original plan, kept for what is still to do.
 
 **postboi-app**
 

@@ -452,6 +452,14 @@ export interface SendOptions {
 	 * line break is kept. At most 500 characters. Ignored by every other provider.
 	 */
 	footnote?: FootnoteOption
+	/**
+	 * The received message this send answers: its `in_…` id, from an `email.received`
+	 * webhook, `/v1/inbound` or `postboi/mailbox`. The Postboi provider writes the
+	 * In-Reply-To and References headers from it, so the reply lands in the sender's
+	 * thread, and files the send in that conversation in the dashboard. A headers entry
+	 * of your own wins. Ignored by every other provider: set `headers` yourself there.
+	 */
+	in_reply_to?: string
 }
 
 /**
@@ -578,6 +586,8 @@ export interface PreparedMessage {
 	preheader?: string
 	/** Small print under the message — see {@link SendOptions.footnote}. */
 	footnote?: string
+	/** The received message this answers — see {@link SendOptions.in_reply_to}. */
+	in_reply_to?: string
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
 	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi
@@ -1378,6 +1388,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			style: options.style ?? this.defaults.style,
 			preheader: options.preheader,
 			footnote: options.footnote,
+			in_reply_to: options.in_reply_to,
 			fields,
 		}
 	}

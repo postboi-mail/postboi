@@ -10,6 +10,20 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+- **Agent mailboxes: `postboi/mailbox`.** An email address an AI agent keeps, at agentboi.email
+  or on your own receiving domain. `mailbox()` opens `POSTBOI_MAILBOX_KEY`, or makes a mailbox:
+  your team's with `POSTBOI_TOKEN`, or one of its own that receives at once and sends once a
+  person opens its `claim_url`. `watch()` and `wait()` long-poll its mail; every message carries
+  `trust` (`owner`, `thread`, `stranger` or `suspect`), `reply_text` (what they wrote, without the
+  quoted thread), `thread_id`, `code` and `link`. `reply()` answers in the thread, `send()` writes
+  a new message, `threads()` and `thread()` read conversations, `rotate()` makes a new key.
+- **`postboi mailbox`** in the CLI: `new`, `watch`, `wait`, `read`, `reply`, `send`, `threads`,
+  `key`, `ls` and `rm`, with `--trust`, `--exec`, `--json` and the inbox command's exit codes. Like
+  `postboi inbox` it needs no `POSTBOI_TOKEN`.
+- **`in_reply_to` on `mail()`** (Postboi provider): the `in_…` id of mail your team received. The
+  server writes the In-Reply-To and References headers from it and files the send in that
+  conversation. Ignored by other providers.
+
 ## 0.61.1
 
 ### Fixed

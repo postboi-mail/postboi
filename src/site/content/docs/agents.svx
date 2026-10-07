@@ -1,7 +1,7 @@
 ---
 title: Email for agents
 name: Email for agents
-description: What an AI agent can do with Postboi on its own. Set up sending with nobody signing in, give itself an inbox at tempboi.email, sign up for things and read the code, and read replies to what it sent.
+description: What an AI agent can do with Postboi on its own. Set up sending with nobody signing in, give itself an inbox at tempboi.email or a mailbox it keeps at agentboi.email, sign up for things and read the code, and answer what arrives.
 category: Getting started
 ---
 
@@ -13,6 +13,7 @@ and none of them needs a person to sign in first.
 | --------------------------------------- | -------------------------------------- | ----------------- |
 | Send email from the app it's building   | `bunx postboi init --agent`, `mail()`  | No, a claimable sandbox is made for it |
 | Sign up for something and read the code | [Tempboi](/temp-inbox)                 | No                |
+| Have an address of its own that stays   | [Agent mailboxes](/mailbox)            | No to make one; a person claims it before it sends |
 | Test a sign-up flow end to end          | `temp()` from `postboi/inbox`          | No                |
 | See what the app sent while developing  | The [dev inbox](/dev-inbox)            | No                |
 | Read replies to mail the app sent       | [Receiving](/provider#replies), `/v1/inbound` | Yes, the project's token |
@@ -64,6 +65,26 @@ The wait holds until a matching mail arrives and answers JSON with `code`, `link
 `html` and the SPF, DKIM and DMARC results. An inbox lives an hour unless asked for longer
 (24 hours at most). The whole API is at [tempboi.email/llms.txt](https://tempboi.email/llms.txt).
 
+## Keep an address, with agent mailboxes
+
+When the agent needs an address that stays (a support desk, a booking assistant, anything
+people write back to), give it an [agent mailbox](/mailbox) at agentboi.email. It reads its
+mail as JSON, every message says whether it's from your team or a stranger, and replies stay
+in the thread:
+
+```ts
+import { mailbox } from "postboi/mailbox"
+
+const box = await mailbox()
+for await (const mail of box.watch()) {
+	if (mail.trust === "suspect") continue
+	await box.reply(mail, { text: "On it." })
+}
+```
+
+With no account, `curl -X POST agentboi.email` makes one that receives at once and sends
+once a person claims it. Put its claim link in your summary for them.
+
 ## Test the flow it built
 
 The same inbox is one function in a test, so an agent that builds a sign-up flow can prove
@@ -90,6 +111,13 @@ code as an `email.received` [webhook](/webhooks):
 
 ```bash
 curl https://api.postboi.app/v1/inbound -H "Authorization: Bearer $POSTBOI_TOKEN"
+```
+
+To answer one in its thread, send with its id as `in_reply_to`, and the Postboi provider
+writes the headers that keep it there:
+
+```ts
+await mail({ to: "bob@example.com", subject: "Re: Hello", body: "<p>Thanks</p>", in_reply_to: "in_…" })
 ```
 
 ## Reading these docs
