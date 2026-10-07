@@ -939,7 +939,11 @@ describe("testing run and download", () => {
 
 		await api_command("testing", ["run", file, "--out", out])
 
-		expect(calls.find((c) => c.key === "POST /v1/testing")?.body).toEqual({ series: "partner" })
+		// The default set is sent explicitly, so a continued series can't inherit an older pick.
+		expect(calls.find((c) => c.key === "POST /v1/testing")?.body).toEqual({
+			series: "partner",
+			clients: ["gmail_web"],
+		})
 		expect(calls.find((c) => c.key === "POST /v1/testing/test_1/source")?.body).toEqual({
 			subject: "Partner news",
 			html: "<title>Partner news</title><p>hi</p>",

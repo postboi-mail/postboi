@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, extname, join } from "node:path"
 import { stdin, stdout } from "node:process"
 import { ensure_env_loaded, read_env } from "../library/env.js"
+import { html_to_text } from "../library/utils.js"
 import {
 	screenshots_settled,
 	type TestingPreview,
@@ -1464,28 +1465,39 @@ async function save_captures(
 	}
 	const groups = new Map((catalog ?? []).map((c) => [c.id, c.group ?? c.platform]))
 
-	return Promise.all(
-		all.map(async ({ run, preview }): Promise<SavedCapture> => {
-			const base: SavedCapture = {
-				run_id: run.id,
-				preview_id: preview.id,
-				client_id: id_of(preview),
-				client_name: name_of(preview),
-				status: preview.status,
-				versus_previous: versus_previous(preview),
-				error: preview.error,
-			}
-			if (preview.status !== "ready" || !preview.url) return base
-			const image = await api_file(preview.url.replace(/^https?:\/\/[^/]+/, ""))
-			const group = slug(preview.group ?? groups.get(id_of(preview)) ?? preview.platform ?? "other")
-			const name_slug = slug(name_of(preview))
-			const file = (seen.get(name_slug) ?? 0) > 1 ? slug(id_of(preview)) : name_slug
-			const path = join(out, group, `${file}.${image_ext(image.content_type)}`)
-			mkdirSync(dirname(path), { recursive: true })
-			writeFileSync(path, image.bytes)
-			return { ...base, path }
-		})
-	)
+	async function save_one({
+		run,
+		preview,
+	}: {
+		run: TestingRun
+		preview: TestingPreview
+	}): Promise<SavedCapture> {
+		const base: SavedCapture = {
+			run_id: run.id,
+			preview_id: preview.id,
+			client_id: id_of(preview),
+			client_name: name_of(preview),
+			status: preview.status,
+			versus_previous: versus_previous(preview),
+			error: preview.error,
+		}
+		if (preview.status !== "ready" || !preview.url) return base
+		const image = await api_file(preview.url.replace(/^https?:\/\/[^/]+/, ""))
+		const group = slug(preview.group ?? groups.get(id_of(preview)) ?? preview.platform ?? "other")
+		const name_slug = slug(name_of(preview))
+		const file = (seen.get(name_slug) ?? 0) > 1 ? slug(id_of(preview)) : name_slug
+		const path = join(out, group, `${file}.${image_ext(image.content_type)}`)
+		mkdirSync(dirname(path), { recursive: true })
+		writeFileSync(path, image.bytes)
+		return { ...base, path }
+	}
+
+	// A few at a time: `--all` would otherwise open a hundred image requests at once.
+	const saved: Array<SavedCapture> = []
+	for (let i = 0; i < all.length; i += 6) {
+		saved.push(...(await Promise.all(all.slice(i, i + 6).map(save_one))))
+	}
+	return saved
 }
 
 /**
@@ -1574,13 +1586,17 @@ async function testing_run(args: Array<string>): Promise<void> {
 	const series =
 		flags.series || (file === "-" ? flags.subject || "email" : basename(file, extname(file)))
 	const subject =
-		flags.subject ?? html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? series
+		flags.subject ??
+		(html_to_text(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "") || series)
 	const out = flags.out || join("screenshots", slug(series))
 
 	const clients = await api<TestingClients>("/v1/testing/clients")
 	const max = clients.max_per_test ?? 25
-	let batches: Array<Array<string> | undefined> = [undefined]
-	let estimate = clients.data.filter((c) => c.default).length
+	// No picker means the curated default, said explicitly: a continued series would
+	// otherwise keep its previous pick (after `--all`, just the last batch's clients).
+	const defaults = clients.data.filter((c) => c.default).map((c) => c.id)
+	let batches: Array<Array<string> | undefined> = [defaults.length ? defaults : undefined]
+	let estimate = defaults.length
 	if (on.has("all") || flags.clients) {
 		const ids = on.has("all")
 			? clients.data.map((c) => c.id)
@@ -1603,14 +1619,12 @@ async function testing_run(args: Array<string>): Promise<void> {
 		const skipped = estimate - left
 		say(
 			yellow(
-				`Only ${left} render${left === 1 ? "" : "s"} left: ${skipped} client${skipped === 1 ? "" : "s"} will be skipped. Top up at ${cloud_base()}/dashboard/testing`
+				`Only ${left} render${left === 1 ? "" : "s"} left: ${skipped} client${skipped === 1 ? "" : "s"} will be skipped. Top up on the dashboard's Testing page.`
 			)
 		)
 	}
 	if (estimate > CONFIRM_ABOVE && !on.has("yes") && !json_mode && stdin.isTTY && stdout.isTTY) {
-		const ok = await testing_io.confirm(
-			`Order up to ${estimate} renders (identical earlier captures are reused for free)?`
-		)
+		const ok = await testing_io.confirm(`Order up to ${estimate} renders?`)
 		if (!ok) throw new ApiCommandError("Nothing ordered.", "cancelled")
 	}
 
