@@ -171,14 +171,14 @@ The lean path, in order. At every step the goal is **deleting code**, not wrappi
 2. **A SvelteKit action (or API route) that reads FormData and sends** → `export const actions = { default: mail }` from `postboi/kit`. Hidden `_subject` / `_reply_to` inputs replace server-side subject/reply-to code. Keep nothing of the old handler unless it did non-email work.
 3. **Classic action → remote functions** (only if the project already enables them):
 
-   | From                                            | To                                                                                                 |
-   | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-   | `+page.server.ts` action                        | delete the file; `import { mail } from "postboi/remote"` in the component                          |
-   | `<form method="POST" use:enhance enctype=…>`    | `<form {...mail} enctype=…>` (drop the `use:enhance` import)                                       |
-   | `name="contact→email"`                          | `{...mail.fields.contact.email.as("email")}` (nesting replaces arrows)                             |
-   | `<input type="hidden" name="_subject" value=…>` | `{...mail.fields._subject.as("hidden", …)}`                                                        |
-   | `let { form } = $props()` result handling       | `mail.result` (`{ success: true }` / `{ success: false, error }`); pending UI → `mail.pending`     |
-   | manual honeypot input                           | keep `<Captcha />`, or rename the raw input to `_honey` (remote forms reject non-path field names) |
+   | From                                            | To                                                                                                                                |
+   | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+   | `+page.server.ts` action                        | delete the file; `import { mail } from "postboi/remote"` in the component                                                         |
+   | `<form method="POST" use:enhance enctype=…>`    | `<form {...mail} enctype=…>` (drop the `use:enhance` import)                                                                      |
+   | `name="contact→email"`                          | `{...mail.fields.contact.email.as("email")}` (nesting replaces arrows)                                                            |
+   | `<input type="hidden" name="_subject" value=…>` | `{...mail.fields._subject.as("hidden", …)}`                                                                                       |
+   | `let { form } = $props()` result handling       | `mail.result` (`{ success: true }` / `{ success: false, error }`); pending UI → `mail.pending`                                    |
+   | manual honeypot input                           | `<Captcha />`, which scopes its honeypot and captcha fields to the remote form (a remote form rejects any field it didn't create) |
 
    Add `optimizeDeps: { exclude: ["postboi/remote"] }` to `vite.config` if `postboi init` hasn't.
 
