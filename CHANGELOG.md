@@ -12,9 +12,19 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
+- `postboi testing run <file.html>` takes built HTML to real-client screenshots on disk in one command: it pastes into a test run, waits until every capture has settled, saves them to `screenshots/<series>/<group>/<client>.<ext>` with no timestamps (so a re-run overwrites and diffs), and prints each client as new, changed, unchanged or reused, the report's verdict, renders used and the dashboard link. `--series` defaults to the file name, `--clients`, `--set <name>` or `--all` (split past the per-run cap into one series), `--fresh`, `--out`, `--no-wait`, `--share`, `--json`, `--yes` (an order of more than ten renders asks first on a terminal, and one that exceeds what is left says how many clients will be skipped). Exits 1 on an error report or a failed capture.
+- `postboi testing download <id>` collects an existing run's screenshots, waiting for pending ones. `postboi testing sets` lists saved client sets, with `sets save <name> --clients a,b` and `sets delete <name>`; `postboi testing share <id> [--revoke]` makes or takes down a read-only link. `testing add` takes `--set` and `--html <file>` (paste instead of send), and `testing clients` shows platform, OS and dark mode with the renders left.
+- `hosted_test()` takes `set` and `fresh`, and the run it answers carries the server's team-scoped `url`, `series_id`, a `screenshots` summary, `renders`, `share_url` and full previews (`id`, `url`, `thumbnail_url`, client metadata, `reused`, `previous`). `wait({ screenshots: true })` waits until every capture has settled, `capture(preview)` fetches one image as a `Response` (no file system, so it runs in Workers), and `share()` makes the read-only link. `mail({ test })` takes `set` and `fresh` too. `client` and `name` stay on every preview.
+- Webhooks: the Postboi provider's `testing.received` and `testing.completed` normalize to `test_received` and `test_completed`, with the run in `event.test`; `mock_request` and `mock_event` build both.
+
 - `postboi migrate resend` moves a Resend account over in one command: domains registered with their DNS records printed, audiences as lists with contacts imported without re-confirmation, webhooks re-registered at the same URLs with Postboi's event names. `--dry-run` reads and writes nothing (with `--json`, the plan is the document); running it twice skips what is already here, and one refusal (a domain another account owns, a webhook URL Postboi won't take) goes on its own row while the rest still moves, exit 1 at the end.
 - `mail.recipients.add()` takes `status: "unsubscribed"` (per row or for the call), so an opt-out brought over from another provider lands unsubscribed and is never mailed on the way.
 - `mail.messages.get()` returns `delivered_at` and `outcomes`: the lifecycle after a send left, in the receiving server's own words (the `250` on a delivery, why SES was still trying on a `delayed` row, the `550` behind a bounce).
+
+### Fixed
+
+- `postboi testing delete` (and any account command the API answers with 204) no longer reports "Unexpected empty response from the API." after it worked.
+- The dev inbox's "Photograph in real clients" still explains a skipped client ("Out of renders") on servers that report it as a note rather than a failed capture row.
 
 ## 0.60.0
 

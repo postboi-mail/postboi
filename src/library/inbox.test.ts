@@ -776,6 +776,10 @@ describe("inbox screenshots (hosted testing API)", () => {
 			if (url.endsWith("/v1/testing/test_abc/source")) {
 				return new Response(JSON.stringify({ ok: true }), { status: 200 })
 			}
+			// An older server: no `screenshots` on the run, so the list comes from /previews.
+			if (url.endsWith("/v1/testing/test_abc")) {
+				return new Response(JSON.stringify({ id: "test_abc", status: "received" }))
+			}
 			if (url.endsWith("/v1/testing/test_abc/previews")) {
 				return new Response(
 					JSON.stringify({
@@ -812,5 +816,47 @@ describe("inbox screenshots (hosted testing API)", () => {
 		expect(image.status).toBe(200)
 		expect(image.headers.get("content-type")).toBe("image/png")
 		expect(new Uint8Array(await image.arrayBuffer())).toEqual(new Uint8Array([137, 80]))
+	})
+
+	it("turns a current server's notes back into the refusal rows the pane explains", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "tok-1")
+		vi.stubEnv("POSTBOI_API_URL", "https://hosted.test")
+		const seen = stub_hosted((url) => {
+			if (url.endsWith("/v1/testing")) {
+				return new Response(JSON.stringify({ id: "test_new" }), { status: 201 })
+			}
+			if (url.endsWith("/v1/testing/test_new/source")) {
+				return new Response(JSON.stringify({ id: "test_new", status: "received" }))
+			}
+			if (url.endsWith("/v1/testing/test_new")) {
+				return new Response(
+					JSON.stringify({
+						id: "test_new",
+						status: "received",
+						screenshots: { state: "done", notes: ["Out of renders: 3 clients skipped."] },
+						previews: [{ id: "prev_1", client_name: "Gmail (web)", status: "ready" }],
+					})
+				)
+			}
+			return new Response("nope", { status: 404 })
+		})
+		const stored = inbox.store.add(message)
+		const base = `http://127.0.0.1:${inbox.port}${INBOX_PATH}/api/messages/${stored.id}/screenshots`
+		await real_fetch(base, { method: "POST" })
+
+		const listed = await real_fetch(base)
+		const status = (await listed.json()) as {
+			previews: Array<{ client_name: string; status: string; error?: string }>
+		}
+		expect(status.previews).toEqual([
+			{ id: "prev_1", client_name: "Gmail (web)", status: "ready" },
+			{
+				id: "note_0",
+				client_name: "Screenshots",
+				status: "failed",
+				error: "Out of renders: 3 clients skipped.",
+			},
+		])
+		expect(seen.some((call) => call.url.endsWith("/previews"))).toBe(false)
 	})
 })

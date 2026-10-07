@@ -2,6 +2,7 @@ import type { WebhookAdapter, WebhookEventType, BounceDetail, AdapterModule } fr
 import type { Channel } from "../errors.js"
 import { parse_json, engagement, to_date, svix_adapter_verify } from "./shared.js"
 import { hmac_sha256, base64_encode, base64_decode } from "./crypto.js"
+import type { TestingRun } from "../inspect/hosted.js"
 
 /**
  * The Postboi provider's webhook payload. The signing scheme is deliberately
@@ -55,6 +56,8 @@ const TYPES: Record<string, WebhookEventType> = {
 	"whatsapp.delivered": "delivered",
 	"whatsapp.read": "opened",
 	"whatsapp.failed": "failed",
+	"testing.received": "test_received",
+	"testing.completed": "test_completed",
 }
 
 /**
@@ -98,6 +101,21 @@ const adapter: WebhookAdapter = {
 		const type = TYPES[payload.type]
 		if (!type) return []
 
+		// A test run is not a send: the payload's data is the run itself, whole.
+		if (type === "test_received" || type === "test_completed") {
+			const run = payload.data as unknown as TestingRun
+			return [
+				{
+					type,
+					provider: "postboi",
+					timestamp: to_date(payload.created_at),
+					subject: run?.subject,
+					test: run,
+					raw: payload,
+				},
+			]
+		}
+
 		const data = payload.data ?? {}
 		const channel = channel_of(payload.type)
 		return [
@@ -138,7 +156,8 @@ export default adapter
 export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => {
 	// Two wire types now share most normalized types, so the reverse lookup is scoped
 	// by channel; without one, email is what a sample is about.
-	const prefix = channel === "sms" || channel === "whatsapp" ? channel : "email"
+	const test = type === "test_received" || type === "test_completed"
+	const prefix = test ? "testing" : channel === "sms" || channel === "whatsapp" ? channel : "email"
 	const postboi_type =
 		Object.entries(TYPES).find(([wire, t]) => t === type && wire.startsWith(`${prefix}.`))?.[0] ??
 		`${prefix}.delivered`
@@ -168,7 +187,12 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 		data.text = "Thanks, that works for me."
 	}
 
-	const body = JSON.stringify({ type: postboi_type, created_at: now, data })
+	const body = JSON.stringify({
+		type: postboi_type,
+		created_at: now,
+		// Imported here, not at the top: the mock is test-only, the adapter ships.
+		data: test ? (await import("./mock.js")).mock_run(type === "test_completed") : data,
+	})
 	const id = "whmsg_mock"
 	const timestamp = String(Math.floor(Date.now() / 1000))
 	const key = base64_decode(secret.replace(/^whsec_/, ""))

@@ -163,8 +163,14 @@ export const HELP: Array<HelpSection> = [
 			},
 			{
 				command: "testing",
-				summary: "Email tests",
-				details: ["add [--label] [--clients] · <id> (the report) · clients · delete <id>"],
+				summary: "Email tests: a report and real-client screenshots",
+				details: [
+					"run <file.html or -> pastes it, waits for every screenshot and saves them to screenshots/<series>/<group>/<client>.png",
+					"run: --series (default: the file name) --clients a,b or --set <name> or --all (batched) --fresh --out <dir> --no-wait --share --yes; exits 1 on an error report or a failed capture",
+					"download <id> [--out dir]: wait out an existing run and save its screenshots",
+					"add [--label] [--series] [--clients or --set] [--html <file>] · <id> (the report) · clients · delete <id>",
+					"sets · sets save <name> --clients a,b · sets delete <name> · share <id> [--revoke]",
+				],
 			},
 		],
 		footer: [

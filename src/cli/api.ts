@@ -1,8 +1,14 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { basename, dirname, extname, join } from "node:path"
 import { stdin, stdout } from "node:process"
 import { ensure_env_loaded, read_env } from "../library/env.js"
+import {
+	screenshots_settled,
+	type TestingPreview,
+	type TestingRun,
+} from "../library/inspect/hosted.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
-import { bold, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
+import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
 
 /**
  * The resource commands (`postboi lists`, `postboi domains add …`) — thin wrappers over
@@ -84,6 +90,8 @@ export async function api<T>(
 			data?.code ?? `http_${response.status}`
 		)
 	}
+	// 204 is a deliberate "done, nothing to say" (the DELETEs), not a broken answer.
+	if (response.status === 204) return undefined as T
 	if (data === undefined) throw new ApiCommandError("Unexpected empty response from the API.")
 	last_response = data
 	return data
@@ -93,7 +101,7 @@ export async function api<T>(
 async function api_file(
 	path: string,
 	fetch_fn: FetchLike = fetch
-): Promise<{ filename: string | undefined; bytes: Uint8Array }> {
+): Promise<{ filename: string | undefined; content_type: string | null; bytes: Uint8Array }> {
 	const token = await postboi_token()
 	let response: Response
 	try {
@@ -119,6 +127,7 @@ async function api_file(
 	const disposition = response.headers.get("content-disposition") ?? ""
 	return {
 		filename: disposition.match(/filename="([^"]+)"/)?.[1],
+		content_type: response.headers.get("content-type"),
 		bytes: new Uint8Array(await response.arrayBuffer()),
 	}
 }
@@ -1267,71 +1276,527 @@ async function notifications(args: Array<string>): Promise<void> {
 
 // ── Testing (client previews and a report on a real send) ──────────────────
 
-interface TestRun {
-	id: string
-	status: string
-	label?: string
-	address?: string
-	from?: string
-	subject?: string
-	created_at: string
-	received_at?: string
+interface TestReport extends TestingRun {
+	source?: string
+	size?: number
 	expires_at?: string
 }
 
-interface TestReport extends TestRun {
-	source?: string
-	size?: number
-	authentication?: { spf?: string | null; dkim?: string | null; dmarc?: string | null }
-	report?: {
-		status?: string
-		findings?: Array<{ level?: string; title?: string; message?: string }>
-	} | null
-	spam?: { score?: number; rules?: Array<{ score: number; description: string }> } | null
-	previews?: Array<{ client: string; name: string; status: string; error?: string }>
+interface TestingClient {
+	id: string
+	name: string
+	group?: string
+	family?: string
+	platform?: string
+	os?: string
+	dark?: boolean
+	default?: boolean
+}
+
+interface TestingClients {
+	data: Array<TestingClient>
+	max_per_test?: number
+	renders?: { left: number | null; monthly: number | null; credits: number }
+}
+
+interface ClientSet {
+	id: string
+	name: string
+	clients: Array<string>
+	created_at: string
+}
+
+/** One capture as `testing run` and `testing download` report it, and as `--json` prints it. */
+export interface SavedCapture {
+	run_id: string
+	preview_id?: string
+	client_id: string
+	client_name: string
+	status: string
+	versus_previous: string
+	path?: string
+	error?: string
 }
 
 /**
- * Email testing: `testing add` mints an address to send a real email to; `testing <id>`
- * reads the report back — authentication, the inspect findings, a spam score and the
- * client screenshots as they render.
+ * The knobs a test turns: how often a run is polled, how long before giving up, and the
+ * question asked before a big order. Tests swap these; nothing else should.
+ */
+export const testing_io = {
+	poll_ms: 5000,
+	// ponytail: the farm renders in minutes and the server settles stalled captures
+	// within one; 15 min is the "request died" window.
+	timeout_ms: 15 * 60_000,
+	async confirm(question: string): Promise<boolean> {
+		const prompts = create_prompts()
+		try {
+			return await prompts.confirm(question, false)
+		} finally {
+			prompts.close()
+		}
+	},
+}
+
+/** Orders above this many renders ask first on a terminal: more than a default set's worth. */
+const CONFIRM_ABOVE = 10
+
+/** A path segment from a name: the same name always lands on the same file. */
+export function slug(value: string): string {
+	return (
+		value
+			.normalize("NFKD")
+			.replace(/[̀-ͯ]/g, "")
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "") || "other"
+	)
+}
+
+/** `image/jpeg` → `jpg`, `image/svg+xml` → `svg`; `png` when the server didn't say. */
+export function image_ext(content_type: string | null | undefined): string {
+	const subtype = content_type?.split(";")[0].split("/")[1]?.split("+")[0]?.trim()
+	return subtype === "jpeg" ? "jpg" : subtype || "png"
+}
+
+/** How a capture compares with the same client's capture in the previous attempt. */
+export function versus_previous(preview: TestingPreview): string {
+	if (preview.reused) return "reused"
+	// Absent: the server predates comparisons, so there is nothing to say.
+	if (preview.previous === undefined) return ""
+	if (preview.previous === null) return "new"
+	if (preview.previous.identical === true) return "unchanged"
+	return preview.previous.identical === false ? "changed" : "unknown"
+}
+
+function run_status_colour(status: string): string {
+	return status === "received" ? green(status) : status === "expired" ? red(status) : yellow(status)
+}
+
+function preview_status_colour(status: string): string {
+	return status === "ready" ? green(status) : status === "failed" ? red(status) : yellow(status)
+}
+
+/** The run's dashboard page: the server's own link (it names the team), else a guess. */
+function run_url(run: { id: string; url?: string }): string {
+	return run.url ?? `${cloud_base()}/dashboard/testing/${run.id}`
+}
+
+/**
+ * A run's previews. A current server carries them on the run, ids and image paths
+ * included; an older one only on `/previews`, so that is asked as well.
+ */
+async function previews_of(run: TestingRun): Promise<Array<TestingPreview>> {
+	if (run.screenshots) return run.previews ?? []
+	const { data } = await api<{ data: Array<TestingPreview> }>(`/v1/testing/${run.id}/previews`)
+	return data
+}
+
+/**
+ * Poll runs until every screenshot has settled, with one live progress line on a
+ * terminal and nothing otherwise. Answers each run with its previews.
+ */
+async function settle(
+	ids: Array<string>
+): Promise<Array<{ run: TestingRun; previews: Array<TestingPreview> }>> {
+	const live = stdout.isTTY && !json_mode
+	const counts = new Map<string, { ready: number; failed: number; total: number }>()
+	function progress(): void {
+		if (!live) return
+		const sum = { ready: 0, failed: 0, total: 0 }
+		for (const c of counts.values()) {
+			sum.ready += c.ready
+			sum.failed += c.failed
+			sum.total += c.total
+		}
+		const failed = sum.failed ? `, ${sum.failed} failed` : ""
+		stdout.write(
+			`\r\x1b[2K  ${dim(`rendering: ${sum.ready} of ${sum.total || "?"} ready${failed}`)}`
+		)
+	}
+	const started = Date.now()
+	try {
+		return await Promise.all(
+			ids.map(async (id) => {
+				for (;;) {
+					const run = await api<TestingRun>(`/v1/testing/${encodeURIComponent(id)}`)
+					const previews = await previews_of(run)
+					const rows = { ...run, previews }
+					counts.set(id, {
+						ready: previews.filter((p) => p.status === "ready").length,
+						failed: previews.filter((p) => p.status === "failed").length,
+						total: run.screenshots?.total ?? previews.length,
+					})
+					progress()
+					if (screenshots_settled(rows, Date.now() - started)) return { run, previews }
+					if (Date.now() - started >= testing_io.timeout_ms) {
+						const minutes = Math.round(testing_io.timeout_ms / 60_000)
+						throw new ApiCommandError(
+							`Run ${id} is still rendering after ${minutes} min. Collect it later with \`postboi testing download ${id}\`.`,
+							"timeout"
+						)
+					}
+					await new Promise((resolve) => setTimeout(resolve, testing_io.poll_ms))
+				}
+			})
+		)
+	} finally {
+		if (live) stdout.write("\r\x1b[2K")
+	}
+}
+
+/**
+ * Save every ready capture to `<out>/<group>/<client>.<ext>`. No timestamps: a re-run
+ * overwrites the same files, so git and any visual diff show what moved. Two clients
+ * with the same name (a light and a dark variant, say) fall back to their ids.
+ */
+async function save_captures(
+	settled: Array<{ run: TestingRun; previews: Array<TestingPreview> }>,
+	out: string,
+	catalog: Array<TestingClient> | undefined
+): Promise<Array<SavedCapture>> {
+	const all = settled.flatMap(({ run, previews }) => previews.map((preview) => ({ run, preview })))
+	const name_of = (p: TestingPreview) => p.client_name ?? p.name ?? p.client_id ?? p.client ?? ""
+	const id_of = (p: TestingPreview) => p.client_id ?? p.client ?? ""
+	const seen = new Map<string, number>()
+	for (const { preview } of all) {
+		const key = slug(name_of(preview))
+		seen.set(key, (seen.get(key) ?? 0) + 1)
+	}
+	const groups = new Map((catalog ?? []).map((c) => [c.id, c.group ?? c.platform]))
+
+	return Promise.all(
+		all.map(async ({ run, preview }): Promise<SavedCapture> => {
+			const base: SavedCapture = {
+				run_id: run.id,
+				preview_id: preview.id,
+				client_id: id_of(preview),
+				client_name: name_of(preview),
+				status: preview.status,
+				versus_previous: versus_previous(preview),
+				error: preview.error,
+			}
+			if (preview.status !== "ready" || !preview.url) return base
+			const image = await api_file(preview.url.replace(/^https?:\/\/[^/]+/, ""))
+			const group = slug(preview.group ?? groups.get(id_of(preview)) ?? preview.platform ?? "other")
+			const name_slug = slug(name_of(preview))
+			const file = (seen.get(name_slug) ?? 0) > 1 ? slug(id_of(preview)) : name_slug
+			const path = join(out, group, `${file}.${image_ext(image.content_type)}`)
+			mkdirSync(dirname(path), { recursive: true })
+			writeFileSync(path, image.bytes)
+			return { ...base, path }
+		})
+	)
+}
+
+/**
+ * The end of `run` and `download`: the captures, the report, where to look, and the exit
+ * code: 1 when the report is an error or a capture failed, so CI can gate on it.
+ */
+function finish(
+	series: string,
+	out: string,
+	settled: Array<{ run: TestingRun; previews: Array<TestingPreview> }>,
+	captures: Array<SavedCapture>,
+	shares: Array<string>
+): void {
+	const runs = settled.map(({ run }) => run)
+	const report = runs.find((run) => run.report)?.report
+	const used = runs.reduce((sum, run) => sum + (run.renders?.used ?? 0), 0)
+	const failed = captures.some((capture) => capture.status === "failed")
+	if (report?.status === "error" || failed) process.exitCode = 1
+
+	if (captures.length) {
+		table(
+			["CLIENT", "STATUS", "VS PREVIOUS", "FILE"],
+			captures.map((c) => [
+				c.client_name,
+				preview_status_colour(c.status),
+				c.versus_previous,
+				c.path ?? dim(c.error ?? ""),
+			])
+		)
+		say()
+	}
+	for (const note of runs.flatMap((run) => run.screenshots?.notes ?? [])) say(`  ${yellow(note)}`)
+	if (report) {
+		const n = report.findings?.length ?? 0
+		const colour = report.status === "error" ? red : report.status === "pass" ? green : yellow
+		say(`  report   ${colour(report.status)}, ${n} finding${n === 1 ? "" : "s"}`)
+	}
+	if (runs.some((run) => run.renders)) say(`  renders  ${used} used`)
+	for (const run of runs) say(`  ${dim("dashboard")} ${cyan(run_url(run))}`)
+	for (const link of shares) say(`  ${dim("share")}     ${cyan(link)}`)
+
+	last_response = {
+		series,
+		out,
+		runs,
+		captures,
+		renders: { used },
+		share_urls: shares,
+	}
+}
+
+async function share_links(ids: Array<string>): Promise<Array<string>> {
+	return Promise.all(
+		ids.map(async (id) => {
+			const answer = await api<{ share_url: string }>(
+				`/v1/testing/${encodeURIComponent(id)}/share`,
+				{ method: "POST" }
+			)
+			return answer.share_url
+		})
+	)
+}
+
+const RUN_USAGE = [
+	"Usage: postboi testing run <file.html or -> [--subject <s>] [--text <file>] [--series <name>]",
+	"         [--clients a,b | --set <name> | --all] [--fresh] [--out <dir>] [--no-wait] [--share] [--yes] [--json]",
+].join("\n")
+
+/**
+ * `testing run`: built HTML in, screenshots on disk. Orders the run (batched past the
+ * per-run cap, all in one series), pastes the HTML, waits for every capture, saves them
+ * under `--out`, and sums it up.
+ */
+async function testing_run(args: Array<string>): Promise<void> {
+	const { flags, rest, on } = take_flags(
+		args,
+		["subject", "text", "series", "clients", "set", "out"],
+		["all", "fresh", "no-wait", "share", "yes"]
+	)
+	const file = rest[0]
+	const pickers = [flags.clients, flags.set, on.has("all") || undefined].filter(Boolean)
+	if (!file || rest.length > 1 || pickers.length > 1) throw new ApiCommandError(RUN_USAGE)
+
+	const html = file === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(file, "utf8")
+	const text = flags.text ? readFileSync(flags.text, "utf8") : undefined
+	const series =
+		flags.series || (file === "-" ? flags.subject || "email" : basename(file, extname(file)))
+	const subject =
+		flags.subject ?? html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? series
+	const out = flags.out || join("screenshots", slug(series))
+
+	const clients = await api<TestingClients>("/v1/testing/clients")
+	const max = clients.max_per_test ?? 25
+	let batches: Array<Array<string> | undefined> = [undefined]
+	let estimate = clients.data.filter((c) => c.default).length
+	if (on.has("all") || flags.clients) {
+		const ids = on.has("all")
+			? clients.data.map((c) => c.id)
+			: flags.clients.split(",").map((c) => c.trim())
+		if (!ids.length) throw new ApiCommandError("No screenshot clients on this server to order.")
+		batches = Array.from({ length: Math.ceil(ids.length / max) }, (_, i) =>
+			ids.slice(i * max, (i + 1) * max)
+		)
+		estimate = ids.length
+	} else if (flags.set) {
+		// Only for the estimate: the server resolves the set itself and names the
+		// known ones when this one doesn't exist.
+		const sets = await api<{ data: Array<ClientSet> }>("/v1/testing/sets").catch(() => undefined)
+		const found = sets?.data.find((s) => s.name.toLowerCase() === flags.set.toLowerCase())
+		if (found) estimate = found.clients.length
+	}
+
+	const left = clients.renders?.left
+	if (typeof left === "number" && estimate > left) {
+		const skipped = estimate - left
+		say(
+			yellow(
+				`Only ${left} render${left === 1 ? "" : "s"} left: ${skipped} client${skipped === 1 ? "" : "s"} will be skipped. Top up at ${cloud_base()}/dashboard/testing`
+			)
+		)
+	}
+	if (estimate > CONFIRM_ABOVE && !on.has("yes") && !json_mode && stdin.isTTY && stdout.isTTY) {
+		const ok = await testing_io.confirm(
+			`Order up to ${estimate} renders (identical earlier captures are reused for free)?`
+		)
+		if (!ok) throw new ApiCommandError("Nothing ordered.", "cancelled")
+	}
+
+	async function order(ids: Array<string> | undefined): Promise<TestingRun> {
+		const run = await api<TestingRun>("/v1/testing", {
+			method: "POST",
+			body: {
+				series,
+				clients: ids,
+				set: flags.set,
+				fresh: on.has("fresh") || undefined,
+			},
+		})
+		await api(`/v1/testing/${run.id}/source`, {
+			method: "POST",
+			body: { subject, html, text },
+		})
+		say(`${green("✓")} ${bold(run.id)} ${dim(`${ids ? `${ids.length} clients` : "pasted"}`)}`)
+		return run
+	}
+	// The first batch goes alone: it starts the series entry the others then join, where
+	// starting them together would race to start one entry each.
+	const first = await order(batches[0])
+	const runs = [first, ...(await Promise.all(batches.slice(1).map(order)))]
+
+	if (on.has("no-wait")) {
+		const shares = on.has("share") ? await share_links(runs.map((r) => r.id)) : []
+		for (const run of runs) {
+			say(`  ${dim("dashboard")} ${cyan(run_url(run))}`)
+			say(`  ${dim(`postboi testing download ${run.id} collects the screenshots.`)}`)
+		}
+		for (const link of shares) say(`  ${dim("share")}     ${cyan(link)}`)
+		last_response = { series, out, runs, share_urls: shares }
+		return
+	}
+
+	const settled = await settle(runs.map((run) => run.id))
+	const captures = await save_captures(settled, out, clients.data)
+	const shares = on.has("share") ? await share_links(runs.map((r) => r.id)) : []
+	finish(series, out, settled, captures, shares)
+}
+
+/** `testing download <id>`: wait out an existing run and collect its captures. */
+async function testing_download(args: Array<string>): Promise<void> {
+	const { flags, rest } = take_flags(args, ["out"])
+	const id = rest[0]
+	if (!id || rest.length > 1) {
+		throw new ApiCommandError("Usage: postboi testing download <id> [--out <dir>]")
+	}
+	const settled = await settle([id])
+	const run = settled[0].run
+	const series = run.label ?? run.id
+	const out = flags.out || join("screenshots", slug(series))
+	// Older servers leave the group off a preview; the catalog has it.
+	const needs_catalog = settled[0].previews.some((p) => !p.group)
+	const catalog = needs_catalog
+		? (await api<TestingClients>("/v1/testing/clients").catch(() => undefined))?.data
+		: undefined
+	const captures = await save_captures(settled, out, catalog)
+	finish(series, out, settled, captures, [])
+}
+
+/** `testing sets`: the saved client sets `--set` names. */
+async function testing_sets(args: Array<string>): Promise<void> {
+	const [action, ...rest_args] = args
+	if (action === "save") {
+		const { flags, rest } = take_flags(rest_args, ["clients"])
+		const name = rest.join(" ").trim()
+		if (!name || !flags.clients) {
+			throw new ApiCommandError("Usage: postboi testing sets save <name> --clients a,b")
+		}
+		const set = await api<ClientSet>("/v1/testing/sets", {
+			method: "POST",
+			body: { name, clients: flags.clients.split(",").map((c) => c.trim()) },
+		})
+		return say(`${green("✓")} saved ${bold(set.name)} ${dim(`(${set.clients.length} clients)`)}`)
+	}
+	if (action === "delete") {
+		const ref = rest_args.join(" ").trim()
+		if (!ref) throw new ApiCommandError("Usage: postboi testing sets delete <name or id>")
+		const { data } = await api<{ data: Array<ClientSet> }>("/v1/testing/sets")
+		const set = data.find((s) => s.id === ref || s.name.toLowerCase() === ref.toLowerCase())
+		if (!set) throw new ApiCommandError(`No client set called ${ref}.`, "not_found")
+		await api(`/v1/testing/sets/${encodeURIComponent(set.id)}`, { method: "DELETE" })
+		return say(`${green("✓")} deleted ${bold(set.name)}`)
+	}
+	if (action)
+		throw new ApiCommandError(`Unknown action: testing sets ${action}. Try save or delete.`)
+
+	const { data } = await api<{ data: Array<ClientSet> }>("/v1/testing/sets")
+	if (data.length === 0) {
+		return say(dim("No client sets yet. Save one: postboi testing sets save <name> --clients a,b"))
+	}
+	table(
+		["NAME", "CLIENTS", "ID"],
+		data.map((s) => [bold(s.name), s.clients.join(", "), dim(s.id)])
+	)
+}
+
+/**
+ * Email testing: `testing run` takes built HTML to screenshots on disk; `testing add`
+ * mints an address to send a real email to; `testing <id>` reads the report back:
+ * authentication, the inspect findings, a spam score and the client screenshots.
  */
 async function testing(args: Array<string>): Promise<void> {
 	const [action, ...rest_args] = args
 
+	if (action === "run") return testing_run(rest_args)
+	if (action === "download") return testing_download(rest_args)
+	if (action === "sets") return testing_sets(rest_args)
 	if (action === "add") {
-		const { flags, rest } = take_flags(rest_args, ["label", "series", "clients"])
-		if (rest.length) {
+		const { flags, rest } = take_flags(rest_args, [
+			"label",
+			"series",
+			"clients",
+			"set",
+			"html",
+			"subject",
+		])
+		if (rest.length || (flags.clients && flags.set)) {
 			throw new ApiCommandError(
-				"Usage: postboi testing add [--label <name>] [--series <name>] [--clients a,b]"
+				"Usage: postboi testing add [--label <name>] [--series <name>] [--clients a,b or --set <name>] [--html <file> [--subject <s>]]"
 			)
 		}
-		const run = await api<TestRun>("/v1/testing", {
+		const run = await api<TestReport>("/v1/testing", {
 			method: "POST",
 			body: {
 				label: flags.label,
 				series: flags.series,
 				clients: flags.clients ? flags.clients.split(",").map((c) => c.trim()) : undefined,
+				set: flags.set,
 			},
 		})
 		say(`${green("✓")} test ${bold(run.id)}${run.label ? dim(` (${run.label})`) : ""}`)
+		if (flags.html) {
+			const html =
+				flags.html === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(flags.html, "utf8")
+			await api(`/v1/testing/${run.id}/source`, {
+				method: "POST",
+				body: { subject: flags.subject, html },
+			})
+			say(`  ${dim("pasted")} ${flags.html}`)
+			say(`  ${dim("dashboard")} ${cyan(run_url(run))}`)
+			return say(`  ${dim(`postboi testing download ${run.id} collects the screenshots.`)}`)
+		}
 		say(`  ${dim("send the email to:")} ${cyan(run.address ?? "")}`)
 		if (run.expires_at)
 			say(`  ${dim(`waiting until ${run.expires_at.slice(0, 16).replace("T", " ")}`)}`)
 		return say(`  ${dim(`postboi testing ${run.id} reads the report once it lands.`)}`)
 	}
 	if (action === "clients") {
-		const { data, max_per_test } = await api<{
-			data: Array<{ id: string; name: string; group?: string; default?: boolean }>
-			max_per_test?: number
-		}>("/v1/testing/clients")
+		const { data, max_per_test, renders } = await api<TestingClients>("/v1/testing/clients")
 		table(
-			["ID", "NAME", "GROUP", "DEFAULT"],
-			data.map((c) => [c.id, c.name, c.group ?? "", c.default ? green("yes") : ""])
+			["ID", "NAME", "GROUP", "PLATFORM", "OS", "DARK", "DEFAULT"],
+			data.map((c) => [
+				c.id,
+				c.name,
+				c.group ?? "",
+				c.platform ?? "",
+				c.os ?? "",
+				c.dark ? "dark" : "",
+				c.default ? green("yes") : "",
+			])
 		)
+		if (renders) {
+			say(`\n${dim("Renders left:")} ${renders.left === null ? "unlimited" : renders.left}`)
+		}
 		if (max_per_test)
-			say(dim(`\nUp to ${max_per_test} per test: postboi testing add --clients a,b`))
+			say(
+				dim(
+					`${renders ? "" : "\n"}Up to ${max_per_test} per test: postboi testing run <file> --clients a,b`
+				)
+			)
 		return
+	}
+	if (action === "share") {
+		const { rest, on } = take_flags(rest_args, [], ["revoke"])
+		const id = rest[0]
+		if (!id) throw new ApiCommandError("Usage: postboi testing share <id> [--revoke]")
+		const path = `/v1/testing/${encodeURIComponent(id)}/share`
+		if (on.has("revoke")) {
+			await api(path, { method: "DELETE" })
+			return say(`${green("✓")} the share link for ${bold(id)} no longer opens`)
+		}
+		const { share_url } = await api<{ share_url: string }>(path, { method: "POST" })
+		return say(`${green("✓")} anyone with this link can read ${bold(id)}: ${cyan(share_url)}`)
 	}
 	if (action === "delete") {
 		const id = rest_args[0]
@@ -1342,9 +1807,7 @@ async function testing(args: Array<string>): Promise<void> {
 	if (action) {
 		const t = await api<TestReport>(`/v1/testing/${encodeURIComponent(action)}`)
 		say(`${bold(t.label ?? t.id)} ${dim(`(${t.id})`)}`)
-		say(
-			`  status   ${t.status === "received" ? green(t.status) : t.status === "expired" ? red(t.status) : yellow(t.status)}`
-		)
+		say(`  status   ${run_status_colour(t.status)}`)
 		if (t.status === "waiting") {
 			return say(`  ${dim("send the email to:")} ${cyan(t.address ?? "")}`)
 		}
@@ -1359,21 +1822,25 @@ async function testing(args: Array<string>): Promise<void> {
 		if (t.spam) say(`  spam     score ${t.spam.score ?? "?"}`)
 		if (t.report?.findings?.length) {
 			say(`  findings ${t.report.status ?? ""}`)
-			for (const f of t.report.findings) {
-				say(`    ${f.level === "error" ? red("✗") : yellow("!")} ${f.title ?? f.message ?? ""}`)
+			for (const f of t.report.findings as Array<{
+				severity?: string
+				level?: string
+				title?: string
+				message?: string
+			}>) {
+				const level = f.severity ?? f.level
+				say(`    ${level === "error" ? red("✗") : yellow("!")} ${f.title ?? f.message ?? ""}`)
 			}
 		}
+		for (const note of t.screenshots?.notes ?? []) say(`  ${yellow(note)}`)
+		if (t.url) say(`  ${dim("dashboard")} ${cyan(t.url)}`)
 		if (t.previews?.length) {
 			say()
 			table(
 				["CLIENT", "PREVIEW", "NOTE"],
 				t.previews.map((p) => [
-					p.name,
-					p.status === "ready"
-						? green("ready")
-						: p.status === "failed"
-							? red("failed")
-							: yellow(p.status),
+					p.client_name ?? p.name ?? "",
+					preview_status_colour(p.status),
 					dim(p.error ?? ""),
 				])
 			)
@@ -1381,19 +1848,15 @@ async function testing(args: Array<string>): Promise<void> {
 		return
 	}
 
-	const { data: rows } = await api<{ data: Array<TestRun> }>("/v1/testing")
-	if (rows.length === 0) return say(dim("No tests yet. Add one: postboi testing add"))
+	const { data: rows } = await api<{ data: Array<TestReport> }>("/v1/testing")
+	if (rows.length === 0) return say(dim("No tests yet. Try: postboi testing run email.html"))
 	table(
 		["LABEL", "STATUS", "SUBJECT", "WHEN", "ID"],
 		rows.map((t) => [
 			t.label ?? "",
-			t.status === "received"
-				? green(t.status)
-				: t.status === "expired"
-					? red(t.status)
-					: yellow(t.status),
+			run_status_colour(t.status),
 			t.subject ?? "",
-			t.created_at.slice(0, 16).replace("T", " "),
+			(t.created_at ?? "").slice(0, 16).replace("T", " "),
 			dim(t.id),
 		])
 	)
