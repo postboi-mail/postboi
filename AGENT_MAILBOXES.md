@@ -75,8 +75,13 @@ written.
   allowlist. `owner` is a whole-team member's address with DMARC passing; `suspect` is
   jev's junk verdict, an SES spam fail or a DMARC fail. jev's agent-aimed rubric is still
   Phase 3.
-- **Mailboxes are bundled per plan**: 3 on Free, 25 Starter, 100 Pro, 500 Scale
-  (`MAILBOX_LIMITS`). Storage has no allowance yet beyond the existing message caps.
+- **No mailbox count on any plan.** An idle mailbox is one row; what costs anything
+  (received mail, its storage, an agent holding a long poll) grows with use. What a burst
+  of new addresses does cost is agentboi.email's name on the disposable-domain lists, so
+  Free may make 10 a day (`DAILY_MAILBOX_LIMITS`, deleted ones counted, 429
+  `mailbox_rate_limited`), a paid plan has no limit, and 50 in a day on any plan is an
+  operator alert and nothing more. Storage has no allowance yet beyond the existing
+  message caps; if one is needed it is a storage allowance, not a count.
 - **"support" is reserved** on the shared namespace, so the examples say `orders`.
 - **Not built in Phase 1**: folders, labels and read state (`mailbox_threads`), the
   Members → Agents view, Admin → Mailboxes, the claim page on agentboi.email (the existing
@@ -148,8 +153,8 @@ reaches `agentboi.email` until the first two are done.
 - **No IMAP, no SMTP, no calendar.** Workers do not accept inbound TCP, and an agent that
   wants IMAP wants a mail client, not an API. An `.ics` attachment is parsed into a
   structured `invite` instead, later.
-- **We never charge per received message, and mailboxes come bundled with the plan.** Three
-  on Free is the same door tempboi opens; the paid tiers carry what a team actually runs.
+- **We never charge per received message, and never per mailbox.** No plan counts
+  mailboxes; Free is limited to 10 new ones a day to keep farms off the shared domain.
 
 ---
 
@@ -187,7 +192,7 @@ shape, for the comparison:
 | Received mail counted as sends   | Yes                                 | Monthly message quota                 | Not seen                      | Monthly quota               | Inbound free                | **No, free and unmetered**                                |
 | Retention                        | 30 days on Free                     | Storage per plan, 24h expiry optional | 30 days                       | Storage per plan            | Yours                       | **Life of the mailbox, storage per plan**                 |
 | MCP                              | Remote only, beta                   | Remote, 37 tools, OAuth               | Full toolset                  | No                          | Email MCP server            | **Phase 4: local `postboi mcp` and hosted**               |
-| Price                            | Not announced                       | $0 / $20 / $200                       | Free for generated addresses  | Free tier, paid unpublished | 3,000 then $0.35 per 1,000  | **Bundled: 3 / 25 / 100 / 500 mailboxes by plan**         |
+| Price                            | Not announced                       | $0 / $20 / $200                       | Free for generated addresses  | Free tier, paid unpublished | 3,000 then $0.35 per 1,000  | **No per-mailbox price or count; Free makes 10 a day**    |
 
 ### What nobody does well yet, which is the opening
 
@@ -512,18 +517,23 @@ No cookie banner, no Analytics, no service worker, as on tempboi.
 
 ### Pricing
 
-| Plan    | Mailboxes | Storage | Notes                                                      |
-| ------- | --------- | ------- | ---------------------------------------------------------- |
-| Free    | 3         | 1 GB    | 100 sends a day across the team as today; `new: hold` only |
-| Starter | 25        | 10 GB   |                                                            |
-| Pro     | 100       | 50 GB   |                                                            |
-| Scale   | 500       | 200 GB  |                                                            |
+**Settled October 2026: no count.** Mailboxes are not a line item and not a plan limit.
 
-Received mail is free and never counts. Sends count as sends. Storage is R2 at about
-$0.015 a GB-month, so even Scale's allowance is cents. Over the mailbox count, the next plan;
-no per-mailbox line item, which is the "never per contact" rule applied to agents. AgentMail
-is $0 for 3, $20 for 10 and $200 for 150; our £9 tier carrying 25 is the comparison the
-pricing page makes.
+| Cost               | Grows with                             | Size                                                     |
+| ------------------ | -------------------------------------- | -------------------------------------------------------- |
+| An idle mailbox    | Nothing                                | One D1 row                                               |
+| A received message | Mail volume                            | A Worker request, a few D1 writes, the raw message in R2 |
+| Kept mail          | Storage over time                      | R2 at about $0.015 a GB-month                            |
+| An agent watching  | Hours with a long poll open            | Up to about $4 a month for one mailbox watched all day   |
+| Content checks     | Received volume, when the team opts in | jev, billed on input tokens                              |
+| Sending            | Sends                                  | Already the plan's quota                                 |
+
+None of that grows with how many mailboxes a team has, so counting them would charge for
+the wrong thing, and "never per mailbox" beats every competitor that bills per inbox. The
+one cost a count would guard is the shared domain's reputation against account farms,
+and a creation rate does that better: Free may make 10 a day, a paid plan has no limit,
+and 50 in a day on any plan alerts the operators. If storage starts to matter, a storage
+allowance per plan is the lever.
 
 Unclaimed mailboxes are free and rate-limited per IP as provisioning is
 (`PROVISION_DAILY_IP_LIMIT`), one mailbox per unclaimed account.
@@ -720,8 +730,9 @@ Nothing external blocks Phase 1 beyond the domain and the zone.
 1. **Phase 1 and 2 together or apart?** Apart ships an address sooner; together ships the
    story. Lean: together, with Phase 1's dashboard trimmed, because a claimed mailbox that
    can write to anyone on day one is the thing every competitor is criticised for.
-2. **Mailbox counts and storage per plan.** The table above is a proposal. Decide before
-   the pricing page is written.
+2. **Mailbox counts and storage per plan.** Settled: no count, a daily creation limit on
+   Free (see Pricing). A storage allowance is still open, and only if storage turns out to
+   matter.
 3. **Does a mailbox in an unclaimed account share tempboi's `temp_messages` until claimed?**
    No: it is an unclaimed _account_, so its mail is team mail from the first message and
    nothing moves on claim. Confirm `inbound_messages.account_id` on an unclaimed account
