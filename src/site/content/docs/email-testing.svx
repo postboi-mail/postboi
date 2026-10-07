@@ -140,16 +140,44 @@ analysis, as they are to every client but Outlook. The downlevel-revealed form
 ## Testing against real clients
 
 Static analysis tells you what will degrade; it can't show you the pixels. That's what
-[Postboi](https://postboi.email)'s hosted testing is for: create a test in the
-dashboard, send your email to the address it gives you (from any sender, any
-provider) and read the full report: this same analysis over the exact bytes that
-arrived, plus SPF, DKIM and DMARC verdicts from a real receiving mail server, your
-actual DNS records, a real SpamAssassin score, and real-client screenshots (Outlook
-on Windows, Gmail, Apple Mail and friends) where rendering is enabled.
+[Postboi](https://postboi.email)'s hosted testing is for, and from a project with built
+HTML it is one command:
 
-No sender handy? Paste the HTML straight into the run (or `POST` it to
-`/v1/testing/{id}/source`) and the report and screenshots run on it directly. The
-transport-dependent panels stay empty, because nothing travelled.
+```bash
+bunx postboi testing run build/welcome.html
+```
+
+It pastes the HTML into a test run, waits until every screenshot has rendered, saves
+them to `screenshots/welcome/<group>/<client>.png` and prints a summary: each client,
+whether its capture changed since the last run, the report's verdict and the run's
+dashboard page. The file names carry no timestamps, so running it again overwrites the
+same files and `git diff` (or any image diff) shows what moved. It exits 1 when the
+report is an error or a capture failed, so it can gate a release.
+
+- `--series <name>` names the dashboard entry. It defaults to the file name, so every
+  run of `welcome.html` stacks as a new attempt on one entry, next to the last one.
+- `--clients a,b` picks clients (ids from `bunx postboi testing clients`), `--set <name>`
+  uses a saved set (`bunx postboi testing sets save core --clients a,b`), and `--all`
+  orders the whole catalog, split into as many runs as it takes.
+- A client whose capture of the identical email already exists is reused instead of
+  rendered again, and isn't billed. `--fresh` renders everything anyway.
+- `--out <dir>` saves somewhere else, `--share` prints a read-only link for people
+  without an account, `--json` prints one JSON document, and `-` reads the HTML from
+  stdin.
+- `--no-wait` orders and returns; `bunx postboi testing download <id>` collects the
+  screenshots later, and is also how you resume after a timeout.
+
+Every client is one render from the account's monthly allowance. Before ordering, the
+command checks what is left and says how many clients would be skipped; an order of more
+than ten renders asks first on a terminal (`--yes` skips the question). The summary
+says how many renders the run used.
+
+The same runs take a real send too: create a test in the dashboard (or
+`bunx postboi testing add`), send your email to the address it gives you from any sender
+and any provider, and read the full report: this same analysis over the exact bytes
+that arrived, plus SPF, DKIM and DMARC verdicts from a real receiving mail server, your
+actual DNS records, a real SpamAssassin score, and the screenshots. A pasted run leaves
+those transport panels empty, because nothing travelled.
 
 ### From code
 
@@ -162,8 +190,21 @@ import { mail } from 'postboi'
 const test = await mail({ test: 'welcome', subject: 'Welcome v3', body: html })
 
 test.report?.status // "pass" | "info" | "warning" | "error"
-test.url // the run's dashboard page — screenshots develop there
+test.url // the run's dashboard page, in the team that owns it
+
+const done = await test.wait({ screenshots: true }) // until every capture has settled
+for (const preview of done.previews.filter((p) => p.status === 'ready')) {
+	const image = await done.capture(preview) // a Response: save it, upload it, diff it
+}
 ```
+
+Each preview names its client (`client_name`, `group`, `platform`, `os`, `dark`), and on
+a repeat attempt says how it compares: `reused` when an identical capture was copied
+rather than rendered, and `previous.identical` against the last attempt's image.
+`done.screenshots` sums it up (`state`, `ready`, `failed`, `notes` on any client that
+was skipped), and `done.share()` makes a read-only link. `capture()` answers a plain
+`Response`, so the same code runs in Node, Bun and a Worker; writing files is up to you
+(or to `postboi testing run`).
 
 The name is the entry. Edit the HTML, call again with the same name, and it's a new
 attempt on the same dashboard entry: the edit-and-re-run loop, from code:
@@ -175,8 +216,10 @@ await mail({ test: 'welcome', body: v2 }) // attempt №2 on it, clients carried
 
 The types keep the two kinds of send apart: `to` next to `test` is a compile error
 (a test has readers, not recipients), and `clients` (screenshot client ids from
-`GET /v1/testing/clients`) only exists on a test send. Omit `clients` and a
-continued entry keeps its previous pick; a fresh one gets the curated set. It needs
+`GET /v1/testing/clients`) only exists on a test send, as does `set`, a saved set
+by name. Omit both and a continued entry keeps its previous pick; a fresh one gets the
+curated set. `fresh: true` renders every client again even where an identical capture
+could be reused. It needs
 `POSTBOI_TOKEN` set (create a token under **Account → API tokens**), whatever
 provider your real mail uses.
 
@@ -215,3 +258,7 @@ if (process.env.HOSTED_TEST) {
 And in the [dev inbox](/dev-inbox), the same thing with no code at all: with
 `POSTBOI_TOKEN` set, every capture's Report tab grows a **Photograph in real
 clients** button that orders screenshots for exactly what your app just sent.
+
+To hear when a run is done instead of polling, the Postboi provider's webhooks carry
+`test_received` (the report is ready) and `test_completed` (every screenshot has
+settled), each with the run in `event.test`; see [Webhooks](/webhooks#test-runs-finishing).

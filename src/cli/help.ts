@@ -116,6 +116,14 @@ export const HELP: Array<HelpSection> = [
 				details: ["add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>"],
 			},
 			{
+				command: "migrate resend",
+				summary: "Move a Resend account here: domains, audiences as lists, webhooks",
+				details: [
+					"[--key <resend key>] [--only domains,lists,webhooks] [--dry-run] [--json]",
+					"Reads RESEND_API_KEY when --key is absent. Safe to run twice: what is here already is skipped",
+				],
+			},
+			{
 				command: "webhooks",
 				summary: "Webhooks",
 				details: ["add <url> · rotate <id> · deliveries <id> · delete <id>"],
@@ -155,8 +163,14 @@ export const HELP: Array<HelpSection> = [
 			},
 			{
 				command: "testing",
-				summary: "Email tests",
-				details: ["add [--label] [--clients] · <id> (the report) · clients · delete <id>"],
+				summary: "Email tests: a report and real-client screenshots",
+				details: [
+					"run <file.html or -> pastes it, waits for every screenshot and saves them to screenshots/<series>/<group>/<client>.png",
+					"run: --series (default: the file name) --clients a,b or --set <name> or --all (batched) --fresh --out <dir> --no-wait --share --yes; exits 1 on an error report or a failed capture",
+					"download <id> [--out dir]: wait out an existing run and save its screenshots",
+					"add [--label] [--series] [--clients or --set] [--html <file>] · <id> (the report) · clients · delete <id>",
+					"sets · sets save <name> --clients a,b · sets delete <name> · share <id> [--revoke]",
+				],
 			},
 		],
 		footer: [
@@ -223,19 +237,30 @@ const COLUMN = 31
 
 /** `--help`: the sections with the commands in cyan, the details dimmed. */
 /** The whole reference, or only the sections named in `only`. */
+function entry_lines(section: HelpSection, entry: HelpEntry): Array<string> {
+	const name = section.title === "Options" ? entry.command : `bunx postboi ${entry.command}`
+	const pad = " ".repeat(Math.max(1, COLUMN - name.length))
+	return [
+		`  ${section.title === "Options" ? name : cyan(name)}${pad}${entry.summary}`,
+		...(entry.details ?? []).map((line) => `  ${" ".repeat(COLUMN)}${dim(`· ${line}`)}`),
+	]
+}
+
+/** One command's entry, for `postboi <command> --help`. Undefined for a command with none. */
+export function command_help(command: string): string | undefined {
+	for (const section of HELP) {
+		const entry = section.entries.find((candidate) => candidate.command === command)
+		if (entry) return entry_lines(section, entry).join("\n")
+	}
+	return undefined
+}
+
 export function help_text(only?: Array<string>): string {
 	const out: Array<string> = []
 	for (const section of HELP) {
 		if (only && !only.includes(section.title)) continue
 		out.push(`${bold(section.title)}${section.note ? ` ${dim(`(${section.note})`)}` : ""}`)
-		for (const entry of section.entries) {
-			const name = section.title === "Options" ? entry.command : `bunx postboi ${entry.command}`
-			const pad = " ".repeat(Math.max(1, COLUMN - name.length))
-			out.push(`  ${section.title === "Options" ? name : cyan(name)}${pad}${entry.summary}`)
-			for (const line of entry.details ?? []) {
-				out.push(`  ${" ".repeat(COLUMN)}${dim(`· ${line}`)}`)
-			}
-		}
+		for (const entry of section.entries) out.push(...entry_lines(section, entry))
 		for (const line of section.footer ?? []) out.push(`  ${" ".repeat(COLUMN)}${dim(line)}`)
 		out.push("")
 	}

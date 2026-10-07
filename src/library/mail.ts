@@ -278,6 +278,8 @@ async function send_test(options: TestSendOptions): Promise<HostedTest> {
 		text: options.text,
 		subject: options.subject,
 		clients: options.clients,
+		set: options.set,
+		fresh: options.fresh,
 	})
 }
 
