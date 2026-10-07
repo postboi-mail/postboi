@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.62.0
+
 ### Breaking
 
 - `postboi/kit` needs SvelteKit 3 (`@sveltejs/kit` `^3.0.0`). SvelteKit 2 is no longer supported.
