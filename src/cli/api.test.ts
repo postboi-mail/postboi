@@ -48,6 +48,21 @@ describe("api_command", () => {
 		expect(await api_command("init", [])).toBe(false)
 		expect(await api_command("definitely-not-a-command", [])).toBe(false)
 	})
+
+	it("answers --help and -h with the command's own help, without calling the API", async () => {
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		const fetch_spy = vi.fn()
+		vi.stubGlobal("fetch", fetch_spy)
+
+		expect(await api_command("testing", ["run", "--help"])).toBe(true)
+		expect(await api_command("lists", ["-h"])).toBe(true)
+
+		expect(fetch_spy).not.toHaveBeenCalled()
+		expect(lines[0]).toContain("bunx postboi testing")
+		expect(lines[0]).toContain("run <file.html or ->")
+		expect(lines[1]).toContain("bunx postboi lists")
+	})
 })
 
 describe("send-address", () => {

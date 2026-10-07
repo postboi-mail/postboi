@@ -8,6 +8,7 @@ import {
 	type TestingPreview,
 	type TestingRun,
 } from "../library/inspect/hosted.js"
+import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
 
@@ -1918,6 +1919,12 @@ const LISTING = new Set([
 export async function api_command(command: string, args: Array<string>): Promise<boolean> {
 	const handler = COMMANDS[command]
 	if (!handler) return false
+	// Flags a command doesn't know fall through as arguments, so `--help` would be read
+	// as a file or an id. Answer it here, once, for every command.
+	if (args.includes("--help") || args.includes("-h")) {
+		console.log(command_help(command) ?? help_text())
+		return true
+	}
 	json_mode = args.includes("--json")
 	last_response = undefined
 	const rest = args.filter((arg) => arg !== "--json")
