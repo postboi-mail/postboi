@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Fixed
+
+- `--help` (or `-h`) after any account command, such as `postboi testing run --help`, prints that command's help instead of being read as a file name or an id.
+
 ## 0.61.0
 
 ### Added
