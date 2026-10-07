@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.61.0
+
 ### Added
 
 - `postboi testing run <file.html>` takes built HTML to real-client screenshots on disk in one command: it pastes into a test run, waits until every capture has settled, saves them to `screenshots/<series>/<group>/<client>.<ext>` with no timestamps (so a re-run overwrites and diffs), and prints each client as new, changed, unchanged or reused, the report's verdict, renders used and the dashboard link. `--series` defaults to the file name, `--clients`, `--set <name>` or `--all` (split past the per-run cap into one series), `--fresh`, `--out`, `--no-wait`, `--share`, `--json`, `--yes` (an order of more than ten renders asks first on a terminal, and one that exceeds what is left says how many clients will be skipped). Exits 1 on an error report or a failed capture.
