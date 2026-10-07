@@ -12,6 +12,7 @@ import { MODULES, type WebhookEvent, type WebhookEventType } from "./index.js"
 import { POLL_MODULES, type PollResult } from "./poll.js"
 import { parse_user_agent } from "./ua.js"
 import { generate_svix_secret, generate_token } from "./crypto.js"
+import type { TestingRun } from "../inspect/hosted.js"
 
 /** Providers whose mock requests are signed with the Svix `whsec_…` scheme. */
 const SVIX_PROVIDERS = new Set(["resend", "postboi", "loops"])
@@ -51,6 +52,12 @@ export function mock_event(
 		base.email = "someone@example.com"
 		base.body = { text: "Thanks, that works for me." }
 	}
+	if (type === "test_received" || type === "test_completed") {
+		// A test run, not a send: nobody received anything, the run is the point.
+		base.message_id = undefined
+		base.email = undefined
+		base.test = mock_run(type === "test_completed")
+	}
 	if (overrides.channel === "sms" || overrides.channel === "whatsapp") {
 		// A text-message event is about a number: never an address, and no subject line.
 		base.email = undefined
@@ -58,6 +65,60 @@ export function mock_event(
 		base.phone = "+15557770006"
 	}
 	return { ...base, ...overrides }
+}
+
+/** A sample run for the `testing.*` mocks: one capture in, one still pending until completed. */
+export function mock_run(completed: boolean): TestingRun {
+	const id = "test_mock"
+	const path = (preview: string) => `/v1/testing/${id}/previews/${preview}`
+	return {
+		id,
+		status: "received",
+		label: "welcome",
+		subject: "Mock subject",
+		url: `https://postboi.app/dashboard/acc_mock/testing/${id}`,
+		series_id: id,
+		report: {
+			status: "pass",
+			findings: [],
+			size: { html_bytes: 2048, gmail_clip: false },
+			links: [],
+			images: [],
+		},
+		screenshots: {
+			state: completed ? "done" : "rendering",
+			total: 2,
+			ready: completed ? 2 : 1,
+			failed: 0,
+			pending: completed ? 0 : 1,
+			notes: [],
+		},
+		renders: { used: 2 },
+		previews: [
+			{
+				id: "prev_1",
+				client_id: "gmail_web",
+				client_name: "Gmail (web)",
+				status: "ready",
+				group: "Webmail",
+				url: path("prev_1"),
+				thumbnail_url: `${path("prev_1")}?width=480`,
+				reused: false,
+				previous: null,
+			},
+			{
+				id: "prev_2",
+				client_id: "outlook2024_win",
+				client_name: "Outlook 2024 Windows",
+				status: completed ? "ready" : "pending",
+				group: "Application",
+				url: completed ? path("prev_2") : undefined,
+				reused: false,
+				previous: null,
+			},
+		],
+		created_at: new Date().toISOString(),
+	}
 }
 
 /**

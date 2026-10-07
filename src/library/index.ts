@@ -477,6 +477,10 @@ export type TestSendOptions = Omit<SendOptions, "to" | "cc" | "bcc"> & {
 	 * previous pick, or the curated default set on a fresh entry.
 	 */
 	clients?: Array<string>
+	/** A saved client set, by name, instead of `clients`. */
+	set?: string
+	/** Render every client again, even where an identical earlier capture could be reused. */
+	fresh?: boolean
 	to?: never
 	cc?: never
 	bcc?: never

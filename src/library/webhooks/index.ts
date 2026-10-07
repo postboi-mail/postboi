@@ -29,6 +29,7 @@ import { parse_json, sns_envelope, sns_subscribe_url } from "./shared.js"
 import { timing_safe_equal } from "./crypto.js"
 import { WebhookVerificationError } from "./errors.js"
 import type { EmailClient } from "./ua.js"
+import type { TestingRun } from "../inspect/hosted.js"
 
 export { parse_user_agent, type EmailClient } from "./ua.js"
 export { WebhookVerificationError, type WebhookVerificationCode } from "./errors.js"
@@ -45,6 +46,7 @@ export {
 	type PollOptions,
 } from "./poll.js"
 export { parse_dsn } from "./dsn.js"
+export type { TestingRun, TestingPreview, ScreenshotSummary } from "../inspect/hosted.js"
 import { POLL_MODULES } from "./poll.js"
 
 /** Normalized delivery-event types, common across every provider. */
@@ -67,6 +69,14 @@ export type WebhookEventType =
 	 * without inbound never emit it.
 	 */
 	| "received"
+	/**
+	 * Postboi hosted testing, not delivery: a test run's email is in and its report is
+	 * ready (`test_received`), then every screenshot has settled, once per run
+	 * (`test_completed`). The run is in `test`; `email` and `message_id` stay unset,
+	 * because nobody was sent anything. Only the Postboi provider emits these.
+	 */
+	| "test_received"
+	| "test_completed"
 
 /** Why a message bounced, normalized across providers. */
 export interface BounceDetail {
@@ -130,6 +140,12 @@ export interface WebhookEvent {
 	 * events only, on the same sends `form` is set for.
 	 */
 	fields?: Array<[string, string]>
+	/**
+	 * The test run, as `GET /v1/testing/{id}` answers it: report, `screenshots`, previews
+	 * (image paths relative to the API, same bearer token) and the dashboard `url`.
+	 * `test_received` and `test_completed` events only.
+	 */
+	test?: TestingRun
 	/** The untouched provider payload for this event — the escape hatch. */
 	raw: unknown
 }

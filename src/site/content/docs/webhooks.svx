@@ -94,6 +94,7 @@ Every provider's payload normalizes to a `WebhookEvent`:
 interface WebhookEvent {
 	type: 'sent' | 'delivered' | 'delayed' | 'bounced' | 'complained'
 	    | 'opened' | 'clicked' | 'unsubscribed' | 'failed' | 'received'
+	    | 'test_received' | 'test_completed'  // Postboi hosted testing, see below
 	provider: string      // "resend", "postmark", …
 	message_id?: string   // matches the id send() returned, where the provider allows
 	email?: string        // the recipient this event is about
@@ -109,6 +110,7 @@ interface WebhookEvent {
 	body?: { html?: string; text?: string }  // received events: the message
 	form?: { id: string; name: string }      // Postboi: the form a submission was filed under
 	fields?: Array<[string, string]>         // Postboi: the submission's fields, in order
+	test?: TestingRun                        // test_* events: the test run
 	raw: unknown          // the untouched provider payload
 }
 ```
@@ -144,6 +146,28 @@ On WhatsApp via [Meta's Cloud API](/whatsapp#delivery-receipts-and-replies) it i
 message to your number: `phone` is the person, `body.text` is what they said, and
 `message_id` is the send they replied to when they used WhatsApp's reply. Providers
 without inbound never emit it.
+
+## Test runs finishing
+
+[Hosted email tests](/email-testing#testing-against-real-clients) report back too, on
+the Postboi provider. `test_received` fires when a run's email is in and its report is
+ready; `test_completed` fires once per run, when every screenshot has settled. Neither
+is about a send, so `email` and `message_id` stay unset and the run itself is in
+`test`, exactly as `GET /v1/testing/{id}` answers it:
+
+```typescript
+export const POST = webhook(async (event) => {
+	if (event.type === 'test_completed' && event.test) {
+		const { report, screenshots, url } = event.test
+		await notify(`${report?.status}: ${screenshots?.ready} of ${screenshots?.total} captures, ${url}`)
+	}
+})
+```
+
+They are separate types rather than a `delivered` with extra fields, so a handler that
+counts deliveries never counts a test. Image paths on `test.previews` are relative to
+the API and take the same bearer token; `hosted_test` and `postboi testing download`
+fetch them for you.
 
 ## Text messages
 
@@ -301,6 +325,10 @@ const events = await receive(request, { provider: 'resend', secret })
 // WhatsApp via Meta, a person writing back to your number:
 const wa = await mock_request({ provider: 'meta', type: 'received' })
 // (await receive(wa.request, { provider: 'meta', secret: wa.secret }))[0].body.text
+
+// A hosted test run whose screenshots have all settled:
+const done = await mock_request({ provider: 'postboi', type: 'test_completed' })
+// (await receive(done.request, { provider: 'postboi', secret: done.secret }))[0].test.screenshots.state === "done"
 
 // Text-message providers put the number in `phone`:
 const sms = await mock_request({ provider: 'smsworks', type: 'failed' })

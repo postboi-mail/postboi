@@ -317,6 +317,29 @@ describe("receive — postboi", () => {
 		expect(event.body?.text).toBe("Thanks, that works for me.")
 	})
 
+	it("carries a test run whole on the testing events, with nobody as the recipient", async () => {
+		const { request, secret } = await mock_request({ provider: "postboi", type: "test_completed" })
+		const [event] = await receive(request, { provider: "postboi", secret })
+		expect(event).toMatchObject({ type: "test_completed", provider: "postboi" })
+		expect(event.email).toBeUndefined()
+		expect(event.message_id).toBeUndefined()
+		expect(event.test?.screenshots?.state).toBe("done")
+		expect(event.test?.previews?.every((p) => p.status === "ready")).toBe(true)
+
+		const received = await mock_request({ provider: "postboi", type: "test_received" })
+		const [first] = await receive(received.request, {
+			provider: "postboi",
+			secret: received.secret,
+		})
+		expect(first.type).toBe("test_received")
+		expect(first.test?.screenshots?.state).toBe("rendering")
+		expect((first.raw as { type: string }).type).toBe("testing.received")
+
+		const fake = mock_event("test_completed")
+		expect(fake.email).toBeUndefined()
+		expect(fake.test?.report?.status).toBe("pass")
+	})
+
 	it("accepts a space/comma-separated secret list — any candidate verifies", async () => {
 		const { request, secret } = await mock_request({ provider: "postboi", type: "opened" })
 		// The real secret buried among decoys, both separators in play — rotation and
