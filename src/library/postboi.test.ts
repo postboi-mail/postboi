@@ -393,6 +393,32 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(sent_json().footnote).toBe("Didn't request this? You can safely ignore this email.")
 	})
 
+	it("forwards web_version, leaving {{ postboi.web_url }} for the API to fill", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: '<a href="{{ postboi.web_url }}">View in browser</a>',
+			web_version: true,
+		})
+		expect(sent_json().web_version).toBe(true)
+		expect(sent_json().html).toContain("{{ postboi.web_url }}")
+	})
+
+	it("says when the API made no web version because nothing linked to it", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		const message = "web_version was set, but neither html nor text contains it."
+		fetch.mockResolvedValue(
+			respond({ json: { id: "1", warnings: [{ code: "web_version_unused", message }] } })
+		)
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", web_version: true })
+		expect(warn).toHaveBeenCalledWith(`postboi: ${message}`)
+		warn.mockRestore()
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))

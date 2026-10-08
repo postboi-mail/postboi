@@ -17,6 +17,7 @@ import {
 } from "./captcha.js"
 import { captcha_key } from "./register.js"
 import { ensure_env_loaded } from "./env.js"
+import { has_web_url, replace_web_url, views } from "./views.js"
 import { PostboiError, SpamError, type Channel } from "./errors.js"
 import {
 	Transport,
@@ -95,7 +96,13 @@ export {
 } from "./transport.js"
 
 // Global configuration (`postboi.config.ts`) is part of the public surface from the package root.
-export { configure, config, type PostboiConfig } from "./config.js"
+export {
+	configure,
+	config,
+	type PostboiConfig,
+	type ViewConfig,
+	type ViewProvider,
+} from "./config.js"
 // Spam protection (honeypot + Turnstile) is part of the public surface too.
 export {
 	HONEYPOT_FIELD,
@@ -117,6 +124,16 @@ export {
 	type FormParseOptions,
 	type ParsedForm,
 } from "./form_parse.js"
+// Hosted web versions of emails ("View in browser"), for whichever provider sends them.
+export {
+	views,
+	type ParamSpec,
+	type PublishOptions,
+	type SealOptions,
+	type UrlOptions,
+	type View,
+	type ViewClientOptions,
+} from "./views.js"
 // The table renderer escapes for you; these are for hand-rolled HTML bodies that
 // interpolate user input, so callers don't reinvent them (usually incompletely).
 export { escape_html, escape_lines } from "./utils.js"
@@ -231,6 +248,19 @@ export type PreheaderOption = PostboiOption<string>
 
 /** A line of small print under the message — see {@link SendOptions.footnote}. */
 export type FootnoteOption = PostboiOption<string>
+
+/** Whether Postboi hosts this send's web version: see {@link SendOptions.web_version}. */
+export type WebVersionOption = PostboiOption<boolean>
+
+/** A published view to link this send to: see {@link SendOptions.view}. */
+export interface ViewLink {
+	/** The view's slug, as published with `postboi views publish`. */
+	name: string
+	/** This reader's data, sealed onto the link. Omit for the generic page. */
+	data?: Record<string, unknown>
+	/** When the link stops carrying the data: a `Date`, or seconds from now. */
+	expires?: Date | number
+}
 
 /**
  * The variables one WhatsApp template takes, per the generated types — the placeholder
@@ -460,6 +490,21 @@ export interface SendOptions {
 	 * of your own wins. Ignored by every other provider: set `headers` yourself there.
 	 */
 	in_reply_to?: string
+	/**
+	 * Host this send's web version on Postboi and fill `{{ postboi.web_url }}` (or
+	 * `%postboi_web_url%`) in the html and text with its link, for a "View in browser"
+	 * line. The page is the message as sent, kept as long as the message is, served
+	 * sandboxed with elements marked `data-web-hide` left out. Every other provider refuses
+	 * it with a `web_version_unsupported` error: use {@link SendOptions.view} there.
+	 */
+	web_version?: WebVersionOption
+	/**
+	 * Link this send to a published view (`postboi views publish`), with any provider:
+	 * `{{ postboi.web_url }}` and `%postboi_web_url%` in the html and text become the view's
+	 * link, carrying `data` sealed for this reader. Sealed here with `POSTBOI_VIEW_KEY` when
+	 * it is set (`postboi sync` writes it), otherwise by Postboi.
+	 */
+	view?: ViewLink
 }
 
 /**
@@ -492,6 +537,9 @@ export type TestSendOptions = Omit<SendOptions, "to" | "cc" | "bcc"> & {
 	to?: never
 	cc?: never
 	bcc?: never
+	/** A test has no readers to link to a web version. */
+	web_version?: never
+	view?: never
 }
 
 /**
@@ -588,6 +636,8 @@ export interface PreparedMessage {
 	footnote?: string
 	/** The received message this answers — see {@link SendOptions.in_reply_to}. */
 	in_reply_to?: string
+	/** Host the web version and fill its link: see {@link SendOptions.web_version}. */
+	web_version?: boolean
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
 	 * `[name, value]` entries in order, minus files and the `_` specials. Only the Postboi
@@ -1333,9 +1383,26 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			})
 		}
 
-		const html = typeof options.body === "string" ? options.body : undefined
+		// Only Postboi hosts a web version: anywhere else {{ postboi.web_url }} would go out
+		// as literal text, so refuse rather than send a broken link. The mock stands in for any.
+		if (options.web_version && this.provider !== "postboi" && this.provider !== "mock") {
+			throw new PostboiError({
+				provider: this.provider,
+				code: "web_version_unsupported",
+				message: `web_version only works with the Postboi provider. With ${this.provider}, link a published view instead: view: { name: "<slug>" }.`,
+			})
+		}
+
+		let html = typeof options.body === "string" ? options.body : undefined
 		let text = options.text
 		if (text === undefined && this.#auto_text && html) text = html_to_text(html)
+		// Only mint the link when something reads it: without a view key that's a request.
+		if (options.view && (has_web_url(html) || has_web_url(text))) {
+			const { name, data, expires } = options.view
+			const url = await views.url(name, data, { expires })
+			if (html) html = replace_web_url(html, url)
+			if (text) text = replace_web_url(text, url)
+		}
 
 		// RFC 8058 one-click unsubscribe rides the custom-headers plumbing; explicit headers win.
 		let headers = options.headers
@@ -1389,6 +1456,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			preheader: options.preheader,
 			footnote: options.footnote,
 			in_reply_to: options.in_reply_to,
+			web_version: options.web_version,
 			fields,
 		}
 	}

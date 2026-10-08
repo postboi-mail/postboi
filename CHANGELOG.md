@@ -10,6 +10,13 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi views publish <file.html>` hosts an email as a sandboxed web page for its "View in browser" link, whichever provider sends it. It reads the email's Liquid and sorts each variable: static `--context` data (a `.json` file or a module's default export), public typed params (`--public week:integer`, or an enum inferred when the template indexes context by it, like `body[week]`; free text is refused), private fields that come through the sender's data feed, and the sender's own system variables (unsubscribe links, OneSignal's `subscription.*`), whose element it names for `data-web-hide`. It prints the link in the sender's merge syntax, URL-encoded (`--provider onesignal`, `braze`, `iterable`, `customerio`, `klaviyo`, `mailchimp`, `sendgrid` or `none`, guessed from the file when left out), and the OneSignal Data Feed, Braze Connected Content or Iterable Data Feed to set up, minting a feed key on first use. `--write` puts the link into the element marked `data-postboi-view-link` or the anchor reading "View in browser", and adds `data-web-hide` (asking first, `--yes` to skip). Re-publishing reuses the last version's choices, and a `views` section in `postboi.config.ts` (typed as `ViewConfig`) keeps them in the repo.
+- `postboi views` lists them, `views open <slug> [--param k=v] [--data <json>]` opens the page as a reader sees it, `views delete <slug>`, `views keys [rotate]` and `views feed-key`.
+- `views` from `postboi`: `views.publish()`, `views.url(slug, data?, { expires })` and `views.seal(slug, data)`. Reader data (a JSON object, up to 4096 bytes) is sealed with AES-GCM under `POSTBOI_VIEW_KEY` with no request (it runs in Workers too), or by Postboi when the key isn't set. `postboi sync` writes `POSTBOI_VIEW_KEY` (and `POSTBOI_VIEW_URL`) when the account has them, and refreshes them after a rotation.
+- `mail({ view: { name, data } })`, with any provider, fills `{{ postboi.web_url }}` and `%postboi_web_url%` in the html and text with the reader's link to a published view. `mail({ web_version: true })` on the Postboi provider hosts the message as sent and fills the same placeholders on the server, and says so on the console when neither part has a placeholder to fill (`web_version_unused`). Every other provider refuses `web_version` with a `web_version_unsupported` error instead of sending the placeholder as text.
+
 ## 0.63.0
 
 - **Agent mailboxes: `postboi/mailbox`.** An email address an AI agent keeps, at agentboi.email

@@ -38,6 +38,7 @@ It auto-loads on the first send (Node/Bun): `mail()`, `sms()`, or any other chan
 | `sms`, `whatsapp`, `chat`, `push` | each channel's own `provider`, `default` and `options`, same shape, one block per channel |
 | `hooks`    | lifecycle [hooks](/hooks) run around every send, on every channel                 |
 | `captcha`  | [spam protection](/spam): the publishable `key` for `<Captcha />`, honeypot name, Turnstile |
+| `views`    | per [web version](/views), by slug: the sender, `context` file, public `params` and `feed` fields `postboi views publish` uses (only the CLI reads it) |
 | `dev`      | development behaviour: the [inbox](/dev-inbox), and the [SMS](/sms#development-sends-nothing)/[WhatsApp](/whatsapp#development-sends-nothing) interception opt-outs |
 | _behaviour_ | `retries`, `retry_delay`, `timeout`, `auto_text`                                  |
 

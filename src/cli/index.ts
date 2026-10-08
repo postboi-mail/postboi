@@ -331,7 +331,14 @@ async function sync_credentials_up(
  * a local override is a decision, and sync doesn't overrule decisions.
  */
 function write_pulled_vars(vars: Record<string, string>, force = false): Array<string> {
-	const keys = Object.keys(vars).filter((key) => force || read_env(key) === undefined)
+	// The view key and host are the server's, not a choice made here: a rotation must
+	// reach the env file, so a changed value is written over the local one.
+	const keys = Object.keys(vars).filter(
+		(key) =>
+			force ||
+			read_env(key) === undefined ||
+			(key.startsWith("POSTBOI_VIEW_") && read_env(key) !== vars[key])
+	)
 	if (keys.length === 0) return []
 	const targets = detect_env_targets(readdirSync("."))
 	for (const target of targets) {
