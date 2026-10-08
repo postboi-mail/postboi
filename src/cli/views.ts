@@ -571,7 +571,10 @@ function refuse_free_text(name: string, slug: string): never {
 
 // ── Commands ────────────────────────────────────────────────────────────────
 
-/** Errors from the views API, with a 404 that has no code read as "not deployed yet". */
+/**
+ * Errors from the views API, with a 404 or 405 that has no code read as "not deployed yet":
+ * an older server answers 405 where a new route sits beside `[slug]` (POST /v1/views/assets).
+ */
 async function views_api<T>(
 	path: string,
 	init: { method?: string; body?: unknown } = {}
@@ -580,7 +583,7 @@ async function views_api<T>(
 }
 
 function not_yet(error: unknown, route: string, hint = "try again after the next deploy"): never {
-	if (error instanceof ApiCommandError && error.code === "http_404") {
+	if (error instanceof ApiCommandError && ["http_404", "http_405"].includes(error.code ?? "")) {
 		throw new ApiCommandError(
 			`This Postboi server doesn't have ${route.split("?")[0]} yet: views are still rolling out. Nothing changed; ${hint}.`,
 			"views_unavailable"
@@ -687,6 +690,13 @@ async function publish(args: Array<string>): Promise<void> {
 		throw new ApiCommandError("A slug is up to 64 of a-z, 0-9 and -.", "invalid_slug")
 	}
 	const slug = flags.slug ?? view_slug(basename(file, extname(file)))
+	// The server refuses these too, but only after the lookup below reads its route instead.
+	if (["keys", "settings", "assets"].includes(slug)) {
+		throw new ApiCommandError(
+			`A view can't be called ${slug}: a route under /v1/views owns the name. Pass --slug <another>.`,
+			"invalid_slug"
+		)
+	}
 	let html = readFileSync(file, "utf8")
 	const original = html
 	const ask = !json_output() && views_io.interactive()
@@ -1087,7 +1097,7 @@ async function open_view(args: Array<string>): Promise<void> {
 	const search = query.toString() ? `?${query}` : ""
 	const page = await api_file(`/v1/views/${encodeURIComponent(slug)}/preview${search}`).catch(
 		(error) => {
-			if (error instanceof ApiCommandError && error.code === "http_404") {
+			if (error instanceof ApiCommandError && ["http_404", "http_405"].includes(error.code ?? "")) {
 				throw new ApiCommandError(
 					`No preview for ${slug}: either it isn't published (\`postboi views\` lists them) or this server doesn't host views yet.`,
 					"views_unavailable"

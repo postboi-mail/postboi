@@ -59,6 +59,10 @@ first `<a>` inside it), else into the `<a>` whose text is "View in browser", wha
 case. Without either, the CLI says so and prints the link to paste. Nothing else in the
 file changes.
 
+```html
+<a href="#" data-postboi-view-link>Read this online</a>
+```
+
 ## Images and fonts
 
 Images and fonts the email points at on disk (`<img src="/images/hero.png">`, a webfont in
@@ -74,14 +78,12 @@ assets   4 local (1 uploaded, 3 already there)
 ```
 
 The copies are named by a hash of the file, so an unchanged image is never sent twice, and
-they don't expire (test uploads do, after 30 days, so a page never points at those). An image the HTML already loads from a test upload is copied
-across when you publish. URLs, Liquid and merge tags are left alone, a file it can't find
-is warned about and left as it is, and the file on disk keeps its own paths, `--write` or
-not. `--no-assets` publishes the HTML exactly as it is.
-
-```html
-<a href="#" data-postboi-view-link>Read this online</a>
-```
+they don't expire. Test uploads do, after 30 days, so when the HTML already loads an image
+or font from one of your test uploads, publishing copies it across and points the page at
+the copy (one that has already expired is left as it is). Other URLs, Liquid and merge tags
+are left alone, a file it can't find is warned about and left as it is, and the file on
+disk keeps its own paths, `--write` or not. `--no-assets` uploads nothing and leaves the
+local paths as they are.
 
 ## Per sender
 

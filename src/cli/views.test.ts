@@ -467,15 +467,44 @@ describe("postboi views", () => {
 		)
 	})
 
-	it("stops before publishing when the server has no views assets route yet", async () => {
+	it("stops before publishing when the server has no views assets route yet, or refuses it", async () => {
 		const { file } = workspace(`<img src="hero.png">`)
 		writeFileSync(join(file, "..", "hero.png"), "hero")
-		const { calls } = serve({ "POST /v1/views": (body: never) => view(body) })
+		// An older server routes POST /v1/views/assets to [slug], which has no POST: a bare 405.
+		const { calls } = serve({
+			"POST /v1/views/assets": new Response("POST method not allowed", { status: 405 }),
+			"POST /v1/views": (body: never) => view(body),
+		})
 		await expect(api_command("views", ["publish", file])).rejects.toMatchObject({
 			code: "views_unavailable",
 			message: expect.stringContaining("--no-assets"),
 		})
 		expect(calls.some((c) => c.key === "POST /v1/views")).toBe(false)
+
+		// The publish gate refuses the upload as it would the publish, in the server's words.
+		const refused = serve({
+			"POST /v1/views/assets": new Response(
+				JSON.stringify({
+					code: "views_not_allowed",
+					message: "Publishing a view needs a verified sending domain or a paid plan.",
+				}),
+				{ status: 403 }
+			),
+			"POST /v1/views": (body: never) => view(body),
+		})
+		await expect(api_command("views", ["publish", file])).rejects.toMatchObject({
+			code: "views_not_allowed",
+		})
+		expect(refused.calls.some((c) => c.key === "POST /v1/views")).toBe(false)
+	})
+
+	it("refuses a slug a views route owns before asking the server anything", async () => {
+		const { file } = workspace(`<p>Hi</p>`)
+		const { calls } = serve({})
+		await expect(api_command("views", ["publish", file, "--slug", "assets"])).rejects.toMatchObject(
+			{ code: "invalid_slug" }
+		)
+		expect(calls).toEqual([])
 	})
 
 	it("warns when a OneSignal email already reads another data feed", async () => {
