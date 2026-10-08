@@ -49,16 +49,16 @@ export interface View {
 
 /** How often a view was opened, as `views.stats()` answers it. */
 export interface ViewStats {
-	/** One row per UTC day (`YYYY-MM-DD`) with views. `visitors` are distinct per day. */
+	/** Every UTC day (`YYYY-MM-DD`) of the window, oldest first, zeros included. `visitors` are distinct per day. */
 	days: Array<{ day: string; views: number; visitors: number }>
-	/** The same views by the public params they were opened with, like `week=20`; `""` is none. */
+	/** The same views by the public params they were opened with, like `week=20`; `""` is none. Top 100; `visitors` add each day's. */
 	params: Array<{ params: string; views: number; visitors: number }>
 	/** Views by a reader Postboi could tell apart: a feed record, a sealed link or `u`. */
 	identified: number
 }
 
 export interface StatsOptions extends ViewClientOptions {
-	/** How far back, in days. The server's default is 30, and it keeps up to 365. */
+	/** How far back, in days: 30 by default, up to 365. Counts are kept for 180 days. */
 	days?: number
 }
 
@@ -73,7 +73,8 @@ export interface PublishOptions {
 	syntax?: "liquid" | "none"
 	/**
 	 * Read the reader param `u` (up to 200 characters) and report it on `view.viewed`. Off
-	 * by default: anyone can type any `u`, and it sits in URLs and logs.
+	 * by default, every publish (the last version's isn't kept): anyone can type any `u`,
+	 * and it sits in URLs and logs. With it on, no public param can be called `u`.
 	 */
 	reader?: boolean
 }

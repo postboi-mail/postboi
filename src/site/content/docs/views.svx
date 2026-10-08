@@ -187,7 +187,8 @@ or unknown shows the generic page rather than an error.
 
 Postboi counts every real view of a page: not a prefetch, not a `HEAD`, and not the link
 scanners mail filters send ahead of the reader. Counts are per UTC day, with visitors
-told apart by a daily hash of their address and browser (no address is stored):
+told apart by a daily hash of their address and browser (no address is stored). Counts
+are kept for 180 days:
 
 ```bash
 bunx postboi views stats welcome             # the last 30 days
@@ -229,7 +230,8 @@ interface ViewViewed {
 ```
 
 A reader is known three ways: a data feed's record (`data` is the fields your sender
-passed), a sealed link (`data` is what your code sealed), or the reader param below (`id`).
+passed; `id` is the record's own id), a sealed link (`data` is what your code sealed), or the
+reader param below (`id`).
 Views nobody can be told apart for are counted and nothing more.
 
 Check that the endpoint's events on the dashboard include `view.viewed`, then send the
@@ -242,7 +244,7 @@ import { webhook } from "postboi/kit"
 export const POST = webhook(async (event) => {
 	if (event.type !== "view_viewed" || !event.view) return
 	const { reader, slug, params, viewed_at } = event.view
-	const external_id = reader.id ?? reader.data?.user_id
+	const external_id = reader.kind === "param" ? reader.id : reader.data?.user_id
 	if (typeof external_id !== "string") return
 	await fetch("https://rest.iad-01.braze.com/users/track", {
 		method: "POST",
@@ -288,9 +290,11 @@ The page never shows `u` or fills the template from it; it only goes on `view.vi
 - **It's in the URL.** A forwarded email carries it, and so do browser history, proxies
   and server logs along the way. Use an opaque id, never an email address.
 
-Publishing again keeps it on (the server remembers), but only the flag or
-`views.<slug>.reader` in `postboi.config.ts` knows the path, so put it there to keep
-it on the link. `--reader off` turns it off. In code it's `views.publish({ ..., reader: true })`.
+Publishing again with the CLI keeps it on (it reads the last version and asks for it
+again), but only the flag or `views.<slug>.reader` in `postboi.config.ts` knows the path,
+so put it there to keep it on the link. `--reader off` turns it off. With it on, no public
+param can be called `u`. In code it's `views.publish({ ..., reader: true })` on every
+publish: a version published without it doesn't read `u`.
 
 ### Postboi's own sends
 

@@ -518,6 +518,17 @@ describe("postboi views", () => {
 		expect(text()).toContain("a claim, not proof")
 		expect(text()).not.toContain("doesn't read u yet")
 
+		// Published again, the `u=` the link now carries isn't a variable the page reads.
+		await api_command("views", [
+			"publish",
+			file,
+			"--public",
+			"day:integer",
+			"--reader",
+			"external_id",
+		])
+		expect(post().feed).toBeUndefined()
+
 		// Saved in postboi.config.ts, it needs no flag; `off` there turns it off again.
 		configure({ views: { "postpartum-uk": { reader: "user.external_id" } } })
 		try {
@@ -533,6 +544,14 @@ describe("postboi views", () => {
 		await expect(
 			api_command("views", ["publish", file, "--reader", "not a path"])
 		).rejects.toMatchObject({ code: "invalid_reader" })
+
+		// u is the reader's: a public param can't take the name, as the server refuses too.
+		const clash = workspace("<p>{{ user.tags.u }}</p>").file
+		const posts = calls.length
+		await expect(
+			api_command("views", ["publish", clash, "--public", "u:integer", "--reader", "external_id"])
+		).rejects.toMatchObject({ code: "reader_param_clash" })
+		expect(calls.slice(posts).map((c) => c.key)).not.toContain("POST /v1/views")
 	})
 
 	it("keeps the reader param on from the last version, and says when the server ignores it", async () => {
@@ -552,6 +571,30 @@ describe("postboi views", () => {
 		).toBe(true)
 		expect(text()).toContain("no path: pass --reader <path>")
 		expect(text()).toContain("doesn't read u yet")
+
+		// --write without the path would drop the `u=` the link carries, so it stops first.
+		writeFileSync(
+			file,
+			"<p>{{ user.tags.day }}</p><a href='https://x/?u={{ id }}'>View in browser</a>"
+		)
+		await expect(api_command("views", ["publish", file, "--write"])).rejects.toMatchObject({
+			code: "reader_path_needed",
+		})
+		expect(calls.filter((c) => c.key === "POST /v1/views")).toHaveLength(1)
+	})
+
+	it("stops when the last version can't be read, rather than dropping its choices", async () => {
+		const { file } = workspace("<p>{{ user.tags.day }}</p>")
+		const { calls } = serve({
+			"GET /v1/views/postpartum-uk": new Response(JSON.stringify({ code: "internal" }), {
+				status: 500,
+			}),
+			"POST /v1/views": (body: never) => view(body),
+		})
+		await expect(api_command("views", ["publish", file])).rejects.toMatchObject({
+			code: "internal",
+		})
+		expect(calls.map((c) => c.key)).toEqual(["GET /v1/views/postpartum-uk"])
 	})
 
 	it("prints a view's stats: days, params and identified", async () => {

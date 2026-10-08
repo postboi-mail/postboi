@@ -175,9 +175,6 @@ const adapter: WebhookAdapter = {
 
 export default adapter
 
-const MOCK_BROWSER =
-	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-
 /** Build a realistic signed Postboi sample request — used by `mock_request` and tests. */
 export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => {
 	// Two wire types now share most normalized types, so the reverse lookup is scoped
@@ -202,7 +199,7 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 		timestamp: now,
 	}
 	// A web version is read in a browser, and Postboi reports no address for it.
-	if (type === "viewed") data.user_agent = MOCK_BROWSER
+	if (type === "viewed") data.user_agent = (await import("./mock.js")).BROWSER
 	if (type === "opened") {
 		data.user_agent =
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"

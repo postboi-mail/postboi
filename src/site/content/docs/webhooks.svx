@@ -188,8 +188,8 @@ and the reader are in `view`:
 export const POST = webhook(async (event) => {
 	if (event.type === 'view_viewed' && event.view) {
 		const { slug, params, reader } = event.view
-		// reader.kind: 'record' | 'sealed' | 'param'; data or id says who
-		await track(reader.id ?? reader.data?.user_id, 'viewed_web_version', { slug, ...params })
+		// reader.kind: 'record' | 'sealed' | 'param'; only a param's id is the reader's
+		await track(reader.kind === 'param' ? reader.id : reader.data?.user_id, 'viewed_web_version', { slug, ...params })
 	}
 })
 ```

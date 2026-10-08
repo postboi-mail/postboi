@@ -101,9 +101,9 @@ export interface ViewViewed {
 	/** The public params that were applied, like `{ week: 20 }`. */
 	params: Record<string, string | number>
 	/**
-	 * Who it was: a feed record (`data` is the fields your sender passed), a sealed link
-	 * (`data` is what was sealed), or the opt-in reader param (`id` is its value, which
-	 * anyone could have typed, so treat it as a claim).
+	 * Who it was: a feed record (`data` is the fields your sender passed, `id` the record's
+	 * own id, not the reader's), a sealed link (`data` is what was sealed), or the opt-in
+	 * reader param (`id` is its value, which anyone could have typed, so treat it as a claim).
 	 */
 	reader: { kind: "record" | "sealed" | "param"; id?: string; data?: Record<string, unknown> }
 	/** ISO 8601. */

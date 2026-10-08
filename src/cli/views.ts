@@ -707,11 +707,18 @@ async function publish(args: Array<string>): Promise<void> {
 	const context_file = flags.context ?? saved.context
 	const context = context_file ? await read_context(context_file) : undefined
 
-	// The last version's choices: a re-publish keeps them without being told again.
-	const previous = await api<View>(`/v1/views/${slug}`).catch(() => undefined)
+	// The last version's choices: a re-publish keeps them without being told again. Only
+	// "no such view" (or no views route yet) means there are none: any other failure would
+	// quietly drop them, the reader param included, so it stops the publish.
+	const previous = await api<View>(`/v1/views/${slug}`).catch((error) => {
+		if (error instanceof ApiCommandError && ["not_found", "http_404"].includes(error.code ?? ""))
+			return undefined
+		throw error
+	})
 
-	// The reader param: a path from the flag or the config. The server keeps only whether
-	// it was on, so a re-publish without either keeps it on and links without `u`.
+	// The reader param: a path from the flag or the config. The server takes it per
+	// publish and keeps only whether the last version had it on, so with neither, this
+	// sends it on again and links without `u`.
 	const reader_choice = flags.reader ?? saved.reader
 	if (
 		reader_choice !== undefined &&
@@ -726,7 +733,12 @@ async function publish(args: Array<string>): Promise<void> {
 	const reader_path = reader_choice === "off" ? undefined : reader_choice
 	const reader = reader_choice ? reader_choice !== "off" : Boolean(previous?.reader)
 
-	const found = detect_variables(html)
+	// A link --write put in earlier carries `u=` in merge syntax; that's the link, not a
+	// variable the page reads, so it mustn't turn into a feed field on the next publish.
+	// ponytail: only the current path's `u=`; a path changed since leaves the old one in.
+	const found = detect_variables(
+		reader_path ? html.replaceAll(`u=${merge_expression(provider, reader_path)}`, "") : html
+	)
 	const readers = reader_paths(found, context)
 	const enums = infer_enums(found, context)
 
@@ -797,6 +809,26 @@ async function publish(args: Array<string>): Promise<void> {
 				)
 			}
 		}
+	}
+
+	if (reader && "u" in params) {
+		throw new ApiCommandError(
+			`With the reader param on, u carries the reader's id, so no public param can be called u. Rename it in postboi.config.ts under views.${slug}.params, or pass --reader off.`,
+			"reader_param_clash"
+		)
+	}
+	// Without the path, --write would put back a link that has lost the `u=` it carries.
+	const placed_before = on.has("write") ? find_link_target(original) : undefined
+	if (
+		reader &&
+		!reader_path &&
+		placed_before &&
+		/[?&]u=/.test(original.slice(placed_before.element.start, placed_before.element.end))
+	) {
+		throw new ApiCommandError(
+			`The link in ${file} carries u, and --write would rewrite it without: pass --reader <path> (or set views.${slug}.reader in postboi.config.ts), or --reader off.`,
+			"reader_path_needed"
+		)
 	}
 
 	// Feed fields: every other reader variable, under the name it had before.
@@ -1103,7 +1135,7 @@ async function stats(args: Array<string>): Promise<void> {
 	const slug = rest[0]
 	if (!slug || rest.length > 1) throw new ApiCommandError(STATS_USAGE)
 	const days = flags.days === undefined ? undefined : Number(flags.days)
-	if (days !== undefined && !(Number.isInteger(days) && days >= 1 && days <= 365)) {
+	if (days !== undefined && !(/^\d+$/.test(flags.days!) && days >= 1 && days <= 365)) {
 		throw new ApiCommandError(
 			`--days is a whole number from 1 to 365.\n${STATS_USAGE}`,
 			"invalid_days"
@@ -1120,7 +1152,8 @@ async function stats(args: Array<string>): Promise<void> {
 	say()
 	table(
 		["DAY", "VIEWS", "VISITORS"],
-		result.days.map((d) => [d.day, String(d.views), String(d.visitors)])
+		// The server fills in every day of the window; a day nobody viewed is noise here.
+		result.days.filter((d) => d.views > 0).map((d) => [d.day, String(d.views), String(d.visitors)])
 	)
 	say()
 	table(

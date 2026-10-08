@@ -18,7 +18,7 @@ import type { TestingRun } from "../inspect/hosted.js"
 const SVIX_PROVIDERS = new Set(["resend", "postboi", "loops"])
 
 /** A phone's browser: where a web version is read. */
-const BROWSER =
+export const BROWSER =
 	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
 /**
@@ -88,7 +88,11 @@ export function mock_view(): ViewViewed {
 		version: 3,
 		url: "https://view.postboi.app/acct/welcome",
 		params: { week: 20 },
-		reader: { kind: "record", data: { external_id: "user_123", first_name: "Ada" } },
+		reader: {
+			kind: "record",
+			id: "rec_mock_0000000000000",
+			data: { external_id: "user_123", first_name: "Ada" },
+		},
 		viewed_at: new Date().toISOString(),
 		user_agent: BROWSER,
 	}
