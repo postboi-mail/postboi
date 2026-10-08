@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.65.0
+
 ### Added
 
 - `postboi views stats <slug> [--days N] [--json]` prints a published view's views and visitors per day, the same views split by the public params they were opened with (`week=20`), and how many readers were identified. `views.stats(slug, { days })` answers the same as a typed `ViewStats`. Prefetches, `HEAD`s and link scanners aren't counted.
