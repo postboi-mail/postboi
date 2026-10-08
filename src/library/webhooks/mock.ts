@@ -8,7 +8,7 @@
  */
 import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
-import { MODULES, type WebhookEvent, type WebhookEventType } from "./index.js"
+import { MODULES, type ViewViewed, type WebhookEvent, type WebhookEventType } from "./index.js"
 import { POLL_MODULES, type PollResult } from "./poll.js"
 import { parse_user_agent } from "./ua.js"
 import { generate_svix_secret, generate_token } from "./crypto.js"
@@ -16,6 +16,10 @@ import type { TestingRun } from "../inspect/hosted.js"
 
 /** Providers whose mock requests are signed with the Svix `whsec_…` scheme. */
 const SVIX_PROVIDERS = new Set(["resend", "postboi", "loops"])
+
+/** A phone's browser: where a web version is read. */
+export const BROWSER =
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
 /**
  * A synthetic normalized event — the fastest way to unit-test handler logic.
@@ -45,6 +49,16 @@ export function mock_event(
 		)
 		base.ip = "192.0.2.1"
 	}
+	if (type === "viewed" || type === "view_viewed") {
+		base.client = parse_user_agent(BROWSER)
+	}
+	if (type === "view_viewed") {
+		// A reader on a published page, not a send: the view is the point.
+		base.message_id = undefined
+		base.email = undefined
+		base.subject = undefined
+		base.view = mock_view()
+	}
 	if (type === "clicked") base.url = "https://example.com/pricing"
 	if (type === "bounced") base.bounce = { category: "hard", detail: "mailbox unavailable" }
 	if (type === "received") {
@@ -65,6 +79,23 @@ export function mock_event(
 		base.phone = "+15557770006"
 	}
 	return { ...base, ...overrides }
+}
+
+/** A sample reader for the `view.viewed` mocks: a feed record, on week 20. */
+export function mock_view(): ViewViewed {
+	return {
+		slug: "welcome",
+		version: 3,
+		url: "https://view.postboi.app/acct/welcome",
+		params: { week: 20 },
+		reader: {
+			kind: "record",
+			id: "rec_mock_0000000000000",
+			data: { external_id: "user_123", first_name: "Ada" },
+		},
+		viewed_at: new Date().toISOString(),
+		user_agent: BROWSER,
+	}
 }
 
 /** A sample run for the `testing.*` mocks: one capture in, one still pending until completed. */

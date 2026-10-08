@@ -95,6 +95,7 @@ interface WebhookEvent {
 	type: 'sent' | 'delivered' | 'delayed' | 'bounced' | 'complained'
 	    | 'opened' | 'clicked' | 'unsubscribed' | 'failed' | 'received'
 	    | 'test_received' | 'test_completed'  // Postboi hosted testing, see below
+	    | 'viewed' | 'view_viewed'            // Postboi web versions, see below
 	provider: string      // "resend", "postmark", …
 	message_id?: string   // matches the id send() returned, where the provider allows
 	email?: string        // the recipient this event is about
@@ -111,6 +112,7 @@ interface WebhookEvent {
 	form?: { id: string; name: string }      // Postboi: the form a submission was filed under
 	fields?: Array<[string, string]>         // Postboi: the submission's fields, in order
 	test?: TestingRun                        // test_* events: the test run
+	view?: ViewViewed                        // view_viewed events: the page and its reader
 	raw: unknown          // the untouched provider payload
 }
 ```
@@ -168,6 +170,31 @@ They are separate types rather than a `delivered` with extra fields, so a handle
 counts deliveries never counts a test. Image paths on `test.previews` are relative to
 the API and take the same bearer token; `hosted_test` and `postboi testing download`
 fetch them for you.
+
+## Web versions being read
+
+Two more Postboi provider events come from [web versions](/views#seeing-who-viewed), the
+pages behind "View in browser" links. `viewed` (`email.viewed` on the wire) is someone
+opening the web version of a send made with `web_version: true`: `message_id`, the
+recipient in `email`, and the browser in `client`. It is deliberately not `opened`: a page
+in a browser says nothing about the inbox, so a handler that counts opens never counts it.
+
+`view_viewed` (`view.viewed`) is a reader Postboi could identify opening a
+[published view](/views): through a data feed's record, a sealed link or the opt-in
+reader param. It isn't about a send, so `email` and `message_id` stay unset, and the page
+and the reader are in `view`:
+
+```typescript
+export const POST = webhook(async (event) => {
+	if (event.type === 'view_viewed' && event.view) {
+		const { slug, params, reader } = event.view
+		// reader.kind: 'record' | 'sealed' | 'param'; only a param's id is the reader's
+		await track(reader.kind === 'param' ? reader.id : reader.data?.user_id, 'viewed_web_version', { slug, ...params })
+	}
+})
+```
+
+A view nobody can be told apart for sends nothing; `views.stats()` counts it.
 
 ## Text messages
 
@@ -329,6 +356,10 @@ const wa = await mock_request({ provider: 'meta', type: 'received' })
 // A hosted test run whose screenshots have all settled:
 const done = await mock_request({ provider: 'postboi', type: 'test_completed' })
 // (await receive(done.request, { provider: 'postboi', secret: done.secret }))[0].test.screenshots.state === "done"
+
+// A reader opening a published view, identified by a data feed's record:
+const view = await mock_request({ provider: 'postboi', type: 'view_viewed' })
+// (await receive(view.request, { provider: 'postboi', secret: view.secret }))[0].view.reader.kind === "record"
 
 // Text-message providers put the number in `phone`:
 const sms = await mock_request({ provider: 'smsworks', type: 'failed' })

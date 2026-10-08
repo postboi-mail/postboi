@@ -183,6 +183,128 @@ what a send loop wants, in Node, Bun, Deno or a Worker. Without it, Postboi mint
 4096 bytes: what every reader shares belongs in the view's context. A link that's expired, tampered with
 or unknown shows the generic page rather than an error.
 
+## Seeing who viewed
+
+Postboi counts every real view of a page: not a prefetch, not a `HEAD`, and not the link
+scanners mail filters send ahead of the reader. Counts are per UTC day, with visitors
+told apart by a daily hash of their address and browser (no address is stored). Counts
+are kept for 180 days:
+
+```bash
+bunx postboi views stats welcome             # the last 30 days
+bunx postboi views stats welcome --days 90 --json
+```
+
+```text
+welcome  42 views in the last 30 days, 7 identified
+
+  DAY         VIEWS  VISITORS
+  2026-10-06  12     9
+  2026-10-07  30     21
+
+  PARAMS   VIEWS  VISITORS
+  week=20  25     18
+  (none)   17     12
+```
+
+The params table splits the same views by the public params they were opened with, so a
+week-keyed email shows which weeks get read. From code, `views.stats("welcome", { days: 90 })`
+answers the same `{ days, params, identified }`.
+
+### Who it was: the `view.viewed` webhook
+
+When Postboi can tell who a reader is, it also sends a `view.viewed` webhook, which
+`receive()` and `webhook()` hand you as a `view_viewed` event with the page and the reader
+in `event.view`:
+
+```ts
+interface ViewViewed {
+	slug: string
+	version: number
+	url: string
+	params: Record<string, string | number>  // the public params that were applied
+	reader: { kind: "record" | "sealed" | "param"; id?: string; data?: Record<string, unknown> }
+	viewed_at: string
+	user_agent?: string
+}
+```
+
+A reader is known three ways: a data feed's record (`data` is the fields your sender
+passed; `id` is the record's own id), a sealed link (`data` is what your code sealed), or the
+reader param below (`id`).
+Views nobody can be told apart for are counted and nothing more.
+
+Check that the endpoint's events on the dashboard include `view.viewed`, then send the
+view back to where your audience lives. To Braze, as
+a custom event:
+
+```ts
+import { webhook } from "postboi/kit"
+
+export const POST = webhook(async (event) => {
+	if (event.type !== "view_viewed" || !event.view) return
+	const { reader, slug, params, viewed_at } = event.view
+	const external_id = reader.kind === "param" ? reader.id : reader.data?.user_id
+	if (typeof external_id !== "string") return
+	await fetch("https://rest.iad-01.braze.com/users/track", {
+		method: "POST",
+		headers: { Authorization: `Bearer ${BRAZE_API_KEY}`, "Content-Type": "application/json" },
+		body: JSON.stringify({
+			events: [{ external_id, name: "viewed_web_version", time: viewed_at, properties: { slug, ...params } }],
+		}),
+	})
+})
+```
+
+Or to OneSignal, as a tag on the user:
+
+```ts
+await fetch(`https://api.onesignal.com/apps/${ONESIGNAL_APP_ID}/users/by/external_id/${encodeURIComponent(external_id)}`, {
+	method: "PATCH",
+	headers: { Authorization: `Key ${ONESIGNAL_API_KEY}`, "Content-Type": "application/json" },
+	body: JSON.stringify({ properties: { tags: { [`viewed_${slug}`]: viewed_at } } }),
+})
+```
+
+A feed record holds the fields the email reads, so it carries the reader's id only when
+the template reads one. When it doesn't, the reader param is the short way to get it.
+
+### The reader param
+
+`--reader` names the template path of your sender's id for the reader, and the link
+carries it as `u`, in the sender's syntax:
+
+```bash
+bunx postboi views publish dist/welcome.html --provider braze --reader user_id --write
+```
+
+```text
+https://view.postboi.app/<account>/welcome?u={{${user_id} | url_param_escape}}
+```
+
+The page never shows `u` or fills the template from it; it only goes on `view.viewed` as
+`reader.id`. It's off unless you ask for it, because of what it costs:
+
+- **Anyone can change it.** Edit the URL and the webhook names someone else, so treat it
+  as a claim, never as proof of who read what. A sealed link is the one way to be sure.
+- **It's in the URL.** A forwarded email carries it, and so do browser history, proxies
+  and server logs along the way. Use an opaque id, never an email address.
+
+Publishing again with the CLI keeps it on (it reads the last version and asks for it
+again), but only the flag or `views.<slug>.reader` in `postboi.config.ts` knows the path,
+so put it there to keep it on the link. `--reader off` turns it off. With it on, no public
+param can be called `u`. In code it's `views.publish({ ..., reader: true })` on every
+publish: a version published without it doesn't read `u`.
+
+### Postboi's own sends
+
+A send with [`web_version: true`](#postboi) records each view of its page on the message
+too: "Viewed in browser" on its timeline in the dashboard, and an `email.viewed` webhook,
+which arrives as a `viewed` event with the `message_id`, the recipient in `email`, and the
+browser in `client`. It is not an open: a page in a browser says nothing about the inbox,
+so it never sets the message as opened or sends `email.opened`. An endpoint made before
+`email.viewed` existed only gets it once you subscribe it on the dashboard.
+
 ## Safety
 
 - **Sandboxed.** Every page is served with `Content-Security-Policy: sandbox`: no scripts,
@@ -229,6 +351,7 @@ export default config({
 bunx postboi views                                  # every view, its version and page
 bunx postboi views open welcome --param week=20     # the page as a reader sees it
 bunx postboi views open welcome --data '{"first_name":"Ada"}'   # through a sealed link
+bunx postboi views stats welcome --days 7          # views, visitors and params, per day
 bunx postboi views delete welcome                   # the page is gone at once
 bunx postboi views keys                             # view and feed keys
 bunx postboi views keys rotate                      # a new view key; the old one has a grace period

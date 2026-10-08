@@ -3,6 +3,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { api_command } from "./api.js"
+import { configure, reset_config } from "../library/config.js"
+import { strip_ansi } from "./prompts.js"
 import {
 	add_web_hide,
 	containing_element,
@@ -205,6 +207,31 @@ describe("links", () => {
 			  "sendgrid": "https://view.postboi.app/acct/postpartum?week={{pregnancy_week}}",
 			}
 		`)
+	})
+
+	it("adds the reader's id as u in each sender's syntax, after the params", () => {
+		const links = Object.fromEntries(
+			VIEW_PROVIDERS.map((p) => [p, view_link(p, url, params, false, "external_id")])
+		)
+		expect(links).toMatchInlineSnapshot(`
+			{
+			  "braze": "https://view.postboi.app/acct/postpartum?week={{\${pregnancy_week} | url_param_escape}}&u={{\${external_id} | url_param_escape}}",
+			  "customerio": "https://view.postboi.app/acct/postpartum?week={{ customer.pregnancy_week | url_encode }}&u={{ customer.external_id | url_encode }}",
+			  "iterable": "https://view.postboi.app/acct/postpartum?week={{#urlEncode}}{{pregnancy_week}}{{/urlEncode}}&u={{#urlEncode}}{{external_id}}{{/urlEncode}}",
+			  "klaviyo": "https://view.postboi.app/acct/postpartum?week={{ person|lookup:'pregnancy_week'|urlencode }}&u={{ person|lookup:'external_id'|urlencode }}",
+			  "mailchimp": "https://view.postboi.app/acct/postpartum?week=*|URL:PREGNANCY_WEEK|*&u=*|URL:EXTERNAL_ID|*",
+			  "none": "https://view.postboi.app/acct/postpartum",
+			  "onesignal": "https://view.postboi.app/acct/postpartum?week={{ user.tags.pregnancy_week | url_encode }}&u={{ user.tags.external_id | url_encode }}",
+			  "sendgrid": "https://view.postboi.app/acct/postpartum?week={{pregnancy_week}}&u={{external_id}}",
+			}
+		`)
+		// With a feed it rides after the feed's ?r=, and with no params it starts the query.
+		expect(view_link("onesignal", url, params, true, "external_id")).toMatchInlineSnapshot(
+			`"{{ data_feed.postboi_view.url }}&week={{ user.tags.pregnancy_week | url_encode }}&u={{ user.tags.external_id | url_encode }}"`
+		)
+		expect(view_link("braze", url, {}, false, "custom_attribute.user_id")).toMatchInlineSnapshot(
+			`"https://view.postboi.app/acct/postpartum?u={{custom_attribute.\${user_id} | url_param_escape}}"`
+		)
 	})
 
 	it("prints each feed setup with the key in its header", () => {
@@ -463,5 +490,162 @@ describe("postboi views", () => {
 		expect(text()).toContain("https://view.postboi.app/acct/welcome")
 		expect(text()).toContain("pbf_new")
 		expect(text()).toContain("postboi sync")
+	})
+
+	it("puts the reader param on the link and the publish, from the flag or the config", async () => {
+		const { file } = workspace("<p>Day {{ user.tags.day }}</p><a href='#'>View in browser</a>")
+		const { calls, text, lines } = serve({
+			"POST /v1/views": (body: never) => ({
+				...view(body),
+				reader: (body as { reader?: boolean }).reader ?? false,
+			}),
+		})
+		await api_command("views", [
+			"publish",
+			file,
+			"--public",
+			"day:integer",
+			"--reader",
+			"external_id",
+			"--write",
+		])
+		const post = () =>
+			calls.filter((c) => c.key === "POST /v1/views").at(-1)!.body as Record<string, never>
+		expect(post().reader).toBe(true)
+		expect(readFileSync(file, "utf8")).toContain(
+			'href="https://view.postboi.app/acct/postpartum-uk?day={{ user.tags.day | url_encode }}&u={{ user.tags.external_id | url_encode }}"'
+		)
+		expect(text()).toContain("a claim, not proof")
+		expect(text()).not.toContain("doesn't read u yet")
+
+		// Published again, the `u=` the link now carries isn't a variable the page reads.
+		await api_command("views", [
+			"publish",
+			file,
+			"--public",
+			"day:integer",
+			"--reader",
+			"external_id",
+		])
+		expect(post().feed).toBeUndefined()
+
+		// Saved in postboi.config.ts, it needs no flag; `off` there turns it off again.
+		configure({ views: { "postpartum-uk": { reader: "user.external_id" } } })
+		try {
+			lines.length = 0
+			await api_command("views", ["publish", file, "--public", "day:integer", "--json"])
+			expect(post().reader).toBe(true)
+			expect(JSON.parse(text()).link).toContain("&u={{ user.external_id | url_encode }}")
+		} finally {
+			reset_config()
+		}
+		await api_command("views", ["publish", file, "--public", "day:integer", "--reader", "off"])
+		expect(post().reader).toBeUndefined()
+		await expect(
+			api_command("views", ["publish", file, "--reader", "not a path"])
+		).rejects.toMatchObject({ code: "invalid_reader" })
+
+		// u is the reader's: a public param can't take the name, as the server refuses too.
+		const clash = workspace("<p>{{ user.tags.u }}</p>").file
+		const posts = calls.length
+		await expect(
+			api_command("views", ["publish", clash, "--public", "u:integer", "--reader", "external_id"])
+		).rejects.toMatchObject({ code: "reader_param_clash" })
+		expect(calls.slice(posts).map((c) => c.key)).not.toContain("POST /v1/views")
+	})
+
+	it("keeps the reader param on from the last version, and says when the server ignores it", async () => {
+		const { file } = workspace("<p>{{ user.tags.day }}</p>")
+		const { calls, text } = serve({
+			"GET /v1/views/postpartum-uk": {
+				...view({ slug: "postpartum-uk", params: {} }),
+				params: { day: { path: "user.tags.day", type: "integer" } },
+				reader: true,
+			},
+			// A server from before the reader param answers without it.
+			"POST /v1/views": (body: never) => view(body),
+		})
+		await api_command("views", ["publish", file])
+		expect(
+			(calls.find((c) => c.key === "POST /v1/views")!.body as { reader?: boolean }).reader
+		).toBe(true)
+		expect(text()).toContain("no path: pass --reader <path>")
+		expect(text()).toContain("doesn't read u yet")
+
+		// --write without the path would drop the `u=` the link carries, so it stops first.
+		writeFileSync(
+			file,
+			"<p>{{ user.tags.day }}</p><a href='https://x/?u={{ id }}'>View in browser</a>"
+		)
+		await expect(api_command("views", ["publish", file, "--write"])).rejects.toMatchObject({
+			code: "reader_path_needed",
+		})
+		expect(calls.filter((c) => c.key === "POST /v1/views")).toHaveLength(1)
+	})
+
+	it("stops when the last version can't be read, rather than dropping its choices", async () => {
+		const { file } = workspace("<p>{{ user.tags.day }}</p>")
+		const { calls } = serve({
+			"GET /v1/views/postpartum-uk": new Response(JSON.stringify({ code: "internal" }), {
+				status: 500,
+			}),
+			"POST /v1/views": (body: never) => view(body),
+		})
+		await expect(api_command("views", ["publish", file])).rejects.toMatchObject({
+			code: "internal",
+		})
+		expect(calls.map((c) => c.key)).toEqual(["GET /v1/views/postpartum-uk"])
+	})
+
+	it("prints a view's stats: days, params and identified", async () => {
+		const stats = {
+			days: [
+				{ day: "2026-10-06", views: 12, visitors: 9 },
+				{ day: "2026-10-07", views: 30, visitors: 21 },
+			],
+			params: [
+				{ params: "week=20", views: 25, visitors: 18 },
+				{ params: "", views: 17, visitors: 12 },
+			],
+			identified: 7,
+		}
+		const { calls, text, lines } = serve({ "GET /v1/views/welcome/stats": stats })
+		await api_command("views", ["stats", "welcome", "--days", "7"])
+		expect(new URL(String(vi.mocked(fetch).mock.calls[0][0])).search).toBe("?days=7")
+		expect(calls.map((c) => c.key)).toEqual(["GET /v1/views/welcome/stats"])
+		expect(strip_ansi(text())).toMatchInlineSnapshot(`
+			"welcome  42 views in the last 7 days, 7 identified
+
+			  DAY         VIEWS  VISITORS
+			  2026-10-06  12     9
+			  2026-10-07  30     21
+
+			  PARAMS   VIEWS  VISITORS
+			  week=20  25     18
+			  (none)   17     12
+
+			Visitors are counted per day, so they don't add up across days."
+		`)
+
+		lines.length = 0
+		await api_command("views", ["stats", "welcome", "--json"])
+		expect(JSON.parse(text())).toEqual(stats)
+		expect(new URL(String(vi.mocked(fetch).mock.calls[1][0])).search).toBe("")
+
+		await expect(api_command("views", ["stats", "welcome", "--days", "400"])).rejects.toMatchObject(
+			{ code: "invalid_days" }
+		)
+	})
+
+	it("says when a view has no views yet, and when the server can't count them", async () => {
+		const { text } = serve({
+			"GET /v1/views/quiet/stats": { days: [], params: [], identified: 0 },
+		})
+		await api_command("views", ["stats", "quiet"])
+		expect(text()).toContain("No views of quiet in the last 30 days.")
+		await expect(api_command("views", ["stats", "welcome"])).rejects.toMatchObject({
+			code: "views_unavailable",
+			message: expect.stringContaining("GET /v1/views/welcome/stats yet"),
+		})
 	})
 })
