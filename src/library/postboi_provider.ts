@@ -118,7 +118,15 @@ export interface SendParams {
 /** The API's ceiling on an idempotency key, header or body. */
 const MAX_IDEMPOTENCY_KEY = 256
 
-type SendResponse = { id: string; sandbox?: boolean; claim_url?: string }
+/** A note the send went through with, like `web_version_unused`; `index` in a batch. */
+type SendWarning = { code: string; message: string; index?: number }
+
+type SendResponse = {
+	id: string
+	sandbox?: boolean
+	claim_url?: string
+	warnings?: Array<SendWarning>
+}
 
 /** A message as returned by `GET /v1/messages/:id`. */
 export interface MessageDetails {
@@ -1273,12 +1281,18 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		)
 	}
 
+	/** Say what the API noted about a send that went through, e.g. a web version nothing linked to. */
+	#warn(data: { warnings?: Array<SendWarning> } | null): void {
+		for (const warning of data?.warnings ?? []) console.warn(`postboi: ${warning.message}`)
+	}
+
 	protected parse_batch_response(
 		_response: Response,
 		data: unknown,
 		recipients: Array<BatchRecipient>
 	): Array<SendResponse | PostboiError> {
 		this.#announce_sandbox(data as { sandbox?: boolean; claim_url?: string } | null)
+		this.#warn(data as { warnings?: Array<SendWarning> } | null)
 		const ids = (data as { ids?: Array<string> } | null)?.ids ?? []
 		return recipients.map((_, i) =>
 			ids[i]
@@ -1293,6 +1307,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	protected parse_response(_response: Response, data: unknown): SendResponse {
 		const result = data as SendResponse
 		this.#announce_sandbox(result)
+		this.#warn(result)
 		return result
 	}
 

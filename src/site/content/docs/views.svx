@@ -135,7 +135,9 @@ await mail({
 ```
 
 Postboi keeps the message as sent, as long as it keeps the message, and fills the link
-before it goes out. `%postboi_web_url%` works too, and so does the text part.
+before it goes out. `%postboi_web_url%` works too, and so does the text part. With neither
+in the message, nothing is hosted and the send answers a `web_version_unused` warning,
+which the SDK prints to the console.
 
 ### Any provider, from your code
 
@@ -172,9 +174,11 @@ const url = await views.url("welcome", { first_name: "Ada" }, { expires: 60 * 60
 
 A sealed link is AES-GCM under your team's view key and bound to the view's slug, so it
 can't be read, edited or moved to another view. With `POSTBOI_VIEW_KEY` in the
-environment (`bunx postboi sync` writes it) it's minted locally with no request, which is
+environment (`bunx postboi sync` writes it once your team has published a view) it's
+minted locally with no request, which is
 what a send loop wants, in Node, Bun, Deno or a Worker. Without it, Postboi mints it.
-`views.seal(slug, data)` gives you the token alone. A link that's expired, tampered with
+`views.seal(slug, data)` gives you the token alone. The data is a JSON object of up to
+4096 bytes: what every reader shares belongs in the view's context. A link that's expired, tampered with
 or unknown shows the generic page rather than an error.
 
 ## Safety

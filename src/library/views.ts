@@ -86,6 +86,8 @@ export interface UrlOptions extends SealOptions {
 }
 
 const encoder = new TextEncoder()
+/** Reader data a sealed link carries, as JSON. Postboi's seal API refuses more. */
+const SEAL_DATA_CAP = 4096
 
 /**
  * Split a view key into its id and its 32 secret bytes. The format is
@@ -130,10 +132,18 @@ function expiry_seconds(expires: Date | number | undefined): number | undefined 
 export async function seal_token(
 	key: string,
 	slug: string,
-	data: unknown,
+	data: Record<string, unknown>,
 	expires?: Date | number
 ): Promise<string> {
 	const { id, secret } = parse_view_key(key)
+	// The server's cap for its own seals: past it a token outgrows what a page will open.
+	if (encoder.encode(JSON.stringify(data)).byteLength > SEAL_DATA_CAP) {
+		throw new PostboiError({
+			provider: "postboi",
+			code: "too_large",
+			message: `A view link's data is over ${SEAL_DATA_CAP} bytes as JSON. Put what every reader shares in the view's context instead.`,
+		})
+	}
 	const crypto_key = await crypto.subtle.importKey("raw", secret, "AES-GCM", false, ["encrypt"])
 	const iv = crypto.getRandomValues(new Uint8Array(12))
 	const e = expiry_seconds(expires)
@@ -201,11 +211,13 @@ const bases = new Map<string, string>()
 async function page_url(slug: string, options: UrlOptions): Promise<string> {
 	const base = options.base ?? read_env("POSTBOI_VIEW_URL")
 	if (base) return `${base.replace(/\/$/, "")}/${encodeURIComponent(slug)}`
-	let url = bases.get(slug)
+	// Keyed by who asked too, so two accounts in one process don't share a slug's page.
+	const cache_key = `${options.api ?? ""} ${options.token ?? ""} ${slug}`
+	let url = bases.get(cache_key)
 	if (!url) {
 		const view = await call<View>(`/${encodeURIComponent(slug)}`, {}, options)
 		url = view.custom_url ?? view.url
-		bases.set(slug, url)
+		bases.set(cache_key, url)
 	}
 	return url
 }
@@ -227,7 +239,11 @@ export const views = {
 	 * A sealed token carrying `data` for the view `slug`, to put on its URL as `?s=`. Minted
 	 * locally with the view key, or by Postboi when there's no key here.
 	 */
-	async seal(slug: string, data: unknown, options: SealOptions = {}): Promise<string> {
+	async seal(
+		slug: string,
+		data: Record<string, unknown>,
+		options: SealOptions = {}
+	): Promise<string> {
 		await ensure_env_loaded()
 		const key = options.key ?? read_env("POSTBOI_VIEW_KEY")
 		if (key) return seal_token(key, slug, data, options.expires)
@@ -243,7 +259,11 @@ export const views = {
 	 * The link to a view, carrying `data` for this reader when given. Data never goes on the
 	 * URL in the clear: it is sealed (see {@link views.seal}).
 	 */
-	async url(slug: string, data?: unknown, options: UrlOptions = {}): Promise<string> {
+	async url(
+		slug: string,
+		data?: Record<string, unknown>,
+		options: UrlOptions = {}
+	): Promise<string> {
 		await ensure_env_loaded()
 		const key = options.key ?? read_env("POSTBOI_VIEW_KEY")
 		if (data !== undefined && !key) {
@@ -252,7 +272,10 @@ export const views = {
 				{ method: "POST", body: { data, expires_in: expires_in(options.expires) } },
 				options
 			)
-			return sealed.url
+			// A base set here wins over the host the server would link to.
+			return options.base || read_env("POSTBOI_VIEW_URL")
+				? `${await page_url(slug, options)}?s=${sealed.token}`
+				: sealed.url
 		}
 		const url = await page_url(slug, options)
 		if (data === undefined || !key) return url
@@ -262,6 +285,11 @@ export const views = {
 
 /** The placeholders a web-version link replaces, in Liquid-ish and percent forms. */
 const WEB_URL = /\{\{\s*postboi\.web_url\s*\}\}|%postboi_web_url%/g
+
+/** Does the body ask for its web version anywhere? */
+export function has_web_url(body: string | undefined): boolean {
+	return body !== undefined && body.search(WEB_URL) !== -1
+}
 
 /** Put `url` wherever the body asks for its web version. */
 export function replace_web_url(body: string, url: string): string {

@@ -17,7 +17,7 @@ import {
 } from "./captcha.js"
 import { captcha_key } from "./register.js"
 import { ensure_env_loaded } from "./env.js"
-import { replace_web_url, views } from "./views.js"
+import { has_web_url, replace_web_url, views } from "./views.js"
 import { PostboiError, SpamError, type Channel } from "./errors.js"
 import {
 	Transport,
@@ -249,10 +249,10 @@ export type PreheaderOption = PostboiOption<string>
 /** A line of small print under the message — see {@link SendOptions.footnote}. */
 export type FootnoteOption = PostboiOption<string>
 
-/** Whether Postboi hosts this send's web version — see {@link SendOptions.web_version}. */
+/** Whether Postboi hosts this send's web version: see {@link SendOptions.web_version}. */
 export type WebVersionOption = PostboiOption<boolean>
 
-/** A published view to link this send to — see {@link SendOptions.view}. */
+/** A published view to link this send to: see {@link SendOptions.view}. */
 export interface ViewLink {
 	/** The view's slug, as published with `postboi views publish`. */
 	name: string
@@ -636,7 +636,7 @@ export interface PreparedMessage {
 	footnote?: string
 	/** The received message this answers — see {@link SendOptions.in_reply_to}. */
 	in_reply_to?: string
-	/** Host the web version and fill its link — see {@link SendOptions.web_version}. */
+	/** Host the web version and fill its link: see {@link SendOptions.web_version}. */
 	web_version?: boolean
 	/**
 	 * The submission's fields as data, beside the table rendered from them: FormData's own
@@ -1386,7 +1386,8 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 		let html = typeof options.body === "string" ? options.body : undefined
 		let text = options.text
 		if (text === undefined && this.#auto_text && html) text = html_to_text(html)
-		if (options.view) {
+		// Only mint the link when something reads it: without a view key that's a request.
+		if (options.view && (has_web_url(html) || has_web_url(text))) {
 			const { name, data, expires } = options.view
 			const url = await views.url(name, data, { expires })
 			if (html) html = replace_web_url(html, url)

@@ -96,8 +96,11 @@ const EXPRESSION =
 const LIQUID = /\{\{-?([\s\S]*?)-?\}\}|\{%-?\s*([\s\S]*?)\s*-?%\}/g
 /** Blocks whose insides aren't Liquid. */
 const OPAQUE = /\{%-?\s*(raw|comment)\s*-?%\}[\s\S]*?\{%-?\s*end\1\s*-?%\}/g
-/** Braze's `${first_name}` and `custom_attribute.${week}`, read as plain paths. */
-const BRAZE_ATTRIBUTE = /\$\{\s*([\w.]+)\s*\}/g
+/**
+ * Braze's `${first_name}` and `custom_attribute.${week}`, read as plain paths. The same
+ * shape the server's `normalise_braze` reads, so both see the same variables.
+ */
+const BRAZE_ATTRIBUTE = /\$\{([A-Za-z0-9_]+)\}/g
 
 /** Paths an expression reads: filter names, named-argument keys and keywords aren't. */
 function scan(expression: string, found: Detected): void {
@@ -300,7 +303,9 @@ export function find_system_variables(html: string): Array<SystemVariable> {
 			})
 		}
 	}
-	return found.sort((a, b) => a.index - b.index)
+	// `{{ unsubscribe }}` is both Klaviyo's and SendGrid's: report the spot once.
+	const by_index = new Map(found.map((s) => [s.index, s] as const))
+	return [...by_index.values()].sort((a, b) => a.index - b.index)
 }
 
 /** Mark elements `data-web-hide`, leaving every other byte of the file as it was. */
@@ -373,16 +378,19 @@ export function merge_expression(provider: ViewProvider, path: string): string {
 	switch (provider) {
 		case "onesignal":
 			return `{{ ${nested ? path : `user.tags.${path}`} | url_encode }}`
-		case "braze":
-			return path.startsWith("custom_attribute.")
-				? `{{custom_attribute.\${${path.slice(17)}} | url_param_escape}}`
-				: `{{\${${path}} | url_param_escape}}`
+		case "braze": {
+			// `custom_attribute.${week}`, `event_properties.${week}`: the last name is Braze's.
+			const at = path.lastIndexOf(".")
+			return `{{${path.slice(0, at + 1)}\${${path.slice(at + 1)}} | url_param_escape}}`
+		}
 		case "iterable":
 			return `{{#urlEncode}}{{${path}}}{{/urlEncode}}`
 		case "customerio":
 			return `{{ ${nested ? path : `customer.${path}`} | url_encode }}`
 		case "klaviyo":
-			return `{{ person|lookup:'${path.replace(/^person\./, "")}'|urlencode }}`
+			return nested && !path.startsWith("person.")
+				? `{{ ${path}|urlencode }}`
+				: `{{ person|lookup:'${path.replace(/^person\./, "")}'|urlencode }}`
 		case "mailchimp":
 			return `*|URL:${path.split(".").at(-1)!.toUpperCase()}|*`
 		case "sendgrid":
@@ -516,12 +524,21 @@ export function infer_enums(found: Detected, context: unknown): Array<Inferred> 
 	return [...out.values()]
 }
 
-/** The paths only a reader can fill: not bound by the template, not system, not in context. */
+/**
+ * The paths only a reader can fill: not bound by the template, not system, not in context,
+ * and not OneSignal's `data_feed` (a feed's answer, like the link `--write` put in).
+ */
 export function reader_paths(found: Detected, context: unknown): Array<string> {
 	const roots = context && typeof context === "object" ? Object.keys(context) : []
-	return found.paths.filter(
-		(path) => !is_local(found, path) && !is_system_path(path) && !roots.includes(path.split(".")[0])
-	)
+	return found.paths.filter((path) => {
+		const root = path.split(".")[0]
+		return (
+			!is_local(found, path) &&
+			!is_system_path(path) &&
+			root !== "data_feed" &&
+			!roots.includes(root)
+		)
+	})
 }
 
 const FREE_TEXT = new Set(["text", "string", "str", "free"])
@@ -726,7 +743,8 @@ async function publish(args: Array<string>): Promise<void> {
 			}
 			if (type && FREE_TEXT.has(type)) refuse_free_text(name, slug)
 			const inferred = enums.find((e) => e.path === path)
-			const param = name_of(path) ?? inferred?.name ?? path.split(".").at(-1)!
+			let param = name_of(path) ?? inferred?.name ?? path.split(".").at(-1)!
+			if (params[param] && params[param].path !== path) param = path.replace(/\W+/g, "_")
 			let chosen = type
 			if (!chosen && name_of(path)) continue
 			if (!chosen && inferred) chosen = "enum"
@@ -794,7 +812,6 @@ async function publish(args: Array<string>): Promise<void> {
 		feed: Object.keys(fields).length ? { fields } : undefined,
 		syntax: /\{\{|\{%/.test(html) ? "liquid" : "none",
 	}
-	if (html !== original) writeFileSync(file, html)
 	const view = await views_api<View>("/v1/views", { method: "POST", body })
 	const url = view.custom_url ?? view.url
 	const has_feed = Object.keys(fields).length > 0
@@ -808,11 +825,10 @@ async function publish(args: Array<string>): Promise<void> {
 		setup = feed_setup(provider, cloud_base(), slug, fields, key.key)
 	}
 
-	let placed: LinkTarget | undefined
-	if (on.has("write")) {
-		placed = find_link_target(html)
-		if (placed) writeFileSync(file, set_href(html, placed.element, link))
-	}
+	// Written once the publish went through, so a refused publish leaves the file alone.
+	const placed = on.has("write") ? find_link_target(html) : undefined
+	const written = placed ? set_href(html, placed.element, link) : html
+	if (written !== original) writeFileSync(file, written)
 
 	respond({
 		view,
@@ -973,9 +989,15 @@ async function open_view(args: Array<string>): Promise<void> {
 		try {
 			data = JSON.parse(flags.data)
 		} catch {
-			throw new ApiCommandError('--data takes JSON, like \'{"first_name":"Ada"}\'.', "invalid_data")
+			// Refused below with the same words.
 		}
-		const url = await views_sdk.url(slug, data).catch(from_sdk)
+		if (!data || typeof data !== "object" || Array.isArray(data)) {
+			throw new ApiCommandError(
+				'--data takes a JSON object, like \'{"first_name":"Ada"}\'.',
+				"invalid_data"
+			)
+		}
+		const url = await views_sdk.url(slug, data as Record<string, unknown>).catch(from_sdk)
 		respond({ url })
 		say(cyan(url))
 		if (!json_output()) open_browser(url)

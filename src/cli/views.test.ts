@@ -182,6 +182,11 @@ describe("links", () => {
 		).toMatchInlineSnapshot(
 			`"https://view.postboi.app/acct/postpartum?week={{custom_attribute.\${week} | url_param_escape}}"`
 		)
+		expect(
+			view_link("braze", url, { week: { path: "event_properties.week", type: "date" } }, false)
+		).toMatchInlineSnapshot(
+			`"https://view.postboi.app/acct/postpartum?week={{event_properties.\${week} | url_param_escape}}"`
+		)
 	})
 
 	it("starts from the feed's answer where the sender can fetch one", () => {

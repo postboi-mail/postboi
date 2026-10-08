@@ -47,10 +47,14 @@ describe("view tokens", () => {
 	it("carries an expiry in unix seconds, from seconds or a Date", async () => {
 		const now = Date.parse("2026-10-08T12:00:00Z")
 		vi.useFakeTimers({ now })
-		const later = await open_token(await seal_token(KEY, "w", 1, 60), "w", now)
-		expect(later).toEqual({ d: 1, e: now / 1000 + 60 })
-		const dated = await seal_token(KEY, "w", 1, new Date(now + 1000))
+		const later = await open_token(await seal_token(KEY, "w", { a: 1 }, 60), "w", now)
+		expect(later).toEqual({ d: { a: 1 }, e: now / 1000 + 60 })
+		const dated = await seal_token(KEY, "w", { a: 1 }, new Date(now + 1000))
 		expect(await open_token(dated, "w", now + 2000)).toBeUndefined()
+	})
+
+	it("refuses data over the server's 4096-byte cap", async () => {
+		await expect(seal_token(KEY, "w", { a: "x".repeat(4096) })).rejects.toThrow(/4096 bytes/)
 	})
 
 	it("refuses a key that isn't one, and seals with the first of two", async () => {
