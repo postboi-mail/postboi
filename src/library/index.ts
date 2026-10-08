@@ -494,8 +494,8 @@ export interface SendOptions {
 	 * Host this send's web version on Postboi and fill `{{ postboi.web_url }}` (or
 	 * `%postboi_web_url%`) in the html and text with its link, for a "View in browser"
 	 * line. The page is the message as sent, kept as long as the message is, served
-	 * sandboxed with elements marked `data-web-hide` left out. Ignored by every other
-	 * provider: use {@link SendOptions.view} there.
+	 * sandboxed with elements marked `data-web-hide` left out. Every other provider refuses
+	 * it with a `web_version_unsupported` error: use {@link SendOptions.view} there.
 	 */
 	web_version?: WebVersionOption
 	/**
@@ -1380,6 +1380,16 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			throw new PostboiError({
 				provider: this.provider,
 				message: `No sender address provided (from or default.from)${missing_config_hint()}`,
+			})
+		}
+
+		// Only Postboi hosts a web version: anywhere else {{ postboi.web_url }} would go out
+		// as literal text, so refuse rather than send a broken link. The mock stands in for any.
+		if (options.web_version && this.provider !== "postboi" && this.provider !== "mock") {
+			throw new PostboiError({
+				provider: this.provider,
+				code: "web_version_unsupported",
+				message: `web_version only works with the Postboi provider. With ${this.provider}, link a published view instead: view: { name: "<slug>" }.`,
 			})
 		}
 

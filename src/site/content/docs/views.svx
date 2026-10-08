@@ -137,7 +137,9 @@ await mail({
 Postboi keeps the message as sent, as long as it keeps the message, and fills the link
 before it goes out. `%postboi_web_url%` works too, and so does the text part. With neither
 in the message, nothing is hosted and the send answers a `web_version_unused` warning,
-which the SDK prints to the console.
+which the SDK prints to the console. Only Postboi can host a web version: any other
+provider refuses `web_version` with a `web_version_unsupported` error rather than send the
+placeholder as text. Link a published view there instead, below.
 
 ### Any provider, from your code
 
