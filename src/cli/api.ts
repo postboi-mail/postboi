@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, extname, join } from "node:path"
 import { stdin, stdout } from "node:process"
+import { load_config } from "../library/config.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 import { html_to_text } from "../library/utils.js"
 import {
@@ -8,6 +9,7 @@ import {
 	type TestingPreview,
 	type TestingRun,
 } from "../library/inspect/hosted.js"
+import { upload_assets } from "./assets.js"
 import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
@@ -71,21 +73,29 @@ export async function postboi_token(): Promise<string> {
 	return token
 }
 
+/** A JSON request, or raw bytes as they are when `body` is a Uint8Array (a file upload). */
 export async function api<T>(
 	path: string,
 	init: { method?: string; body?: unknown } = {},
 	fetch_fn: FetchLike = fetch
 ): Promise<T> {
 	const token = await postboi_token()
+	const raw = init.body instanceof Uint8Array
 	let response: Response
 	try {
 		response = await fetch_fn(`${cloud_base()}${path}`, {
 			method: init.method ?? "GET",
 			headers: {
 				Authorization: `Bearer ${token}`,
-				...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+				...(init.body !== undefined
+					? { "Content-Type": raw ? "application/octet-stream" : "application/json" }
+					: {}),
 			},
-			body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+			body: raw
+				? (init.body as Uint8Array<ArrayBuffer>)
+				: init.body !== undefined
+					? JSON.stringify(init.body)
+					: undefined,
 		})
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
@@ -1575,8 +1585,18 @@ async function share_links(ids: Array<string>): Promise<Array<string>> {
 
 const RUN_USAGE = [
 	"Usage: postboi testing run <file.html or -> [--subject <s>] [--text <file>] [--series <name>]",
-	"         [--clients a,b | --set <name> | --all] [--fresh] [--out <dir>] [--no-wait] [--share] [--yes] [--json]",
+	"         [--clients a,b | --set <name> | --all] [--fresh] [--out <dir>] [--no-wait] [--share] [--no-assets] [--yes] [--json]",
 ].join("\n")
+
+/**
+ * The HTML pointed at uploaded copies of its local images and fonts, unless `--no-assets`.
+ * The server reuses a capture of identical HTML, and an edited image changes its URL, so
+ * an edited image is a fresh render.
+ */
+async function with_assets(html: string, file: string, skip: boolean): Promise<string> {
+	if (skip) return html
+	return upload_assets(html, file, (await load_config()).testing?.assets)
+}
 
 /**
  * `testing run`: built HTML in, screenshots on disk. Orders the run (batched past the
@@ -1587,13 +1607,17 @@ async function testing_run(args: Array<string>): Promise<void> {
 	const { flags, rest, on } = take_flags(
 		args,
 		["subject", "text", "series", "clients", "set", "out"],
-		["all", "fresh", "no-wait", "share", "yes"]
+		["all", "fresh", "no-wait", "share", "yes", "no-assets"]
 	)
 	const file = rest[0]
 	const pickers = [flags.clients, flags.set, on.has("all") || undefined].filter(Boolean)
 	if (!file || rest.length > 1 || pickers.length > 1) throw new ApiCommandError(RUN_USAGE)
 
-	const html = file === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(file, "utf8")
+	const html = await with_assets(
+		file === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(file, "utf8"),
+		file,
+		on.has("no-assets")
+	)
 	const text = flags.text ? readFileSync(flags.text, "utf8") : undefined
 	const series =
 		flags.series || (file === "-" ? flags.subject || "email" : basename(file, extname(file)))
@@ -1748,19 +1772,24 @@ async function testing(args: Array<string>): Promise<void> {
 	if (action === "download") return testing_download(rest_args)
 	if (action === "sets") return testing_sets(rest_args)
 	if (action === "add") {
-		const { flags, rest } = take_flags(rest_args, [
-			"label",
-			"series",
-			"clients",
-			"set",
-			"html",
-			"subject",
-		])
+		const { flags, rest, on } = take_flags(
+			rest_args,
+			["label", "series", "clients", "set", "html", "subject"],
+			["no-assets"]
+		)
 		if (rest.length || (flags.clients && flags.set)) {
 			throw new ApiCommandError(
-				"Usage: postboi testing add [--label <name>] [--series <name>] [--clients a,b or --set <name>] [--html <file> [--subject <s>]]"
+				"Usage: postboi testing add [--label <name>] [--series <name>] [--clients a,b or --set <name>] [--html <file> [--subject <s>] [--no-assets]]"
 			)
 		}
+		// Before the test exists, so a failed upload doesn't leave an empty one behind.
+		const html =
+			flags.html &&
+			(await with_assets(
+				flags.html === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(flags.html, "utf8"),
+				flags.html,
+				on.has("no-assets")
+			))
 		const run = await api<TestReport>("/v1/testing", {
 			method: "POST",
 			body: {
@@ -1772,8 +1801,6 @@ async function testing(args: Array<string>): Promise<void> {
 		})
 		say(`${green("✓")} test ${bold(run.id)}${run.label ? dim(` (${run.label})`) : ""}`)
 		if (flags.html) {
-			const html =
-				flags.html === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(flags.html, "utf8")
 			await api(`/v1/testing/${run.id}/source`, {
 				method: "POST",
 				body: { subject: flags.subject, html },

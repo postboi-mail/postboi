@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { stdin, stdout } from "node:process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -854,7 +855,8 @@ describe("testing run and download", () => {
 			vi.fn(async (input: string, init?: RequestInit) => {
 				const url = new URL(input)
 				const key = `${init?.method ?? "GET"} ${url.pathname}`
-				calls.push({ key, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+				const body = init?.body
+				calls.push({ key, body: typeof body === "string" ? JSON.parse(body) : body })
 				const route = routes[key]
 				if (route === undefined)
 					return new Response(JSON.stringify({ message: key }), { status: 404 })
@@ -975,6 +977,82 @@ describe("testing run and download", () => {
 		expect(text).toContain("https://api.test/dashboard/acc_1/testing/test_1")
 		expect(process.exitCode).toBe(1)
 		expect(dir).toBeTruthy()
+	})
+
+	it("uploads local assets once, warns about missing ones, and pastes the rewritten HTML", async () => {
+		const { dir, out } = workspace()
+		writeFileSync(join(dir, "package.json"), "{}")
+		mkdirSync(join(dir, "images"))
+		mkdirSync(join(dir, "public"))
+		writeFileSync(join(dir, "images", "hero.png"), "hero")
+		writeFileSync(join(dir, "public", "logo.png"), "logo")
+		const file = join(dir, "public", "email.html")
+		const html = [
+			`<img src="/images/hero.png"><img src="logo.png" srcset="logo.png 1x, /images/hero.png 2x">`,
+			`<!--[if mso]><v:fill src="/images/hero.png" /><![endif]-->`,
+			`<img src="gone.png"><img src="gone.png"><img src="https://cdn.test/a.png"><img src="{{ img }}">`,
+		].join("")
+		writeFileSync(file, html)
+		const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32)
+		const url = (s: string) => `https://assets.test/testing/acc_1/${hash(s)}.png`
+		const { calls, lines } = serve({
+			"POST /v1/testing/assets": (init: RequestInit) => ({
+				assets: JSON.parse(String(init.body)).assets.map((a: { hash: string; ext: string }) => ({
+					...a,
+					url: `https://assets.test/testing/acc_1/${a.hash}.${a.ext}`,
+					exists: a.hash === hash("logo"),
+				})),
+			}),
+			[`PUT /v1/testing/assets/${hash("hero")}.png`]: () =>
+				new Response(JSON.stringify({ url: url("hero") }), { status: 201 }),
+			"GET /v1/testing/clients": { data: [], max_per_test: 25 },
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+		})
+
+		await api_command("testing", ["run", file, "--out", out, "--no-wait"])
+
+		expect(calls.find((c) => c.key === "POST /v1/testing/assets")?.body).toEqual({
+			assets: [
+				{ hash: hash("hero"), ext: "png", size: 4 },
+				{ hash: hash("logo"), ext: "png", size: 4 },
+			],
+		})
+		const puts = calls.filter((c) => c.key.startsWith("PUT "))
+		expect(puts).toHaveLength(1)
+		expect(new TextDecoder().decode(puts[0].body as Uint8Array)).toBe("hero")
+		const pasted = calls.find((c) => c.key === "POST /v1/testing/test_1/source")?.body as {
+			html: string
+		}
+		expect(pasted.html).toBe(
+			html.replaceAll("/images/hero.png", url("hero")).replaceAll(`"logo.png`, `"${url("logo")}`)
+		)
+		const text = lines.join("\n")
+		expect(text).toContain("assets   2 local (1 uploaded, 1 already there)")
+		expect(text.match(/gone\.png: no such file/g)).toHaveLength(1)
+	})
+
+	it("--no-assets pastes the HTML as it is, and no local references means no line", async () => {
+		const { dir, file, out } = workspace()
+		writeFileSync(join(dir, "a.png"), "a")
+		writeFileSync(file, `<img src="a.png">`)
+		const routes = {
+			"GET /v1/testing/clients": { data: [], max_per_test: 25 },
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+		}
+		const { calls } = serve(routes)
+		await api_command("testing", ["run", file, "--out", out, "--no-wait", "--no-assets"])
+		expect(calls.some((c) => c.key.includes("/assets"))).toBe(false)
+		expect(calls.find((c) => c.key.endsWith("/source"))?.body).toMatchObject({
+			html: `<img src="a.png">`,
+		})
+
+		writeFileSync(file, `<img src="https://cdn.test/a.png">`)
+		const second = serve(routes)
+		await api_command("testing", ["run", file, "--out", out, "--no-wait"])
+		expect(second.calls.some((c) => c.key.includes("/assets"))).toBe(false)
+		expect(second.lines.join("\n")).not.toContain("assets")
 	})
 
 	it("--all splits past the per-run cap into batches of one series, first batch alone", async () => {
