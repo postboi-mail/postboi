@@ -1,0 +1,361 @@
+---
+title: Web versions
+name: Web versions
+description: Host an email as a sandboxed web page for its "View in browser" link, personalised for each reader, whichever provider sends the email.
+category: Guides
+---
+
+A "View in browser" link needs a page to point at. Postboi hosts it: publish the email's
+HTML once and you get a page for it, personalised for each reader if you want, linked
+from emails sent by OneSignal, Braze, Iterable, Customer.io, Klaviyo, Mailchimp, SendGrid
+or Postboi itself.
+
+```bash
+bunx postboi views publish dist/welcome.html --write
+```
+
+That one command:
+
+- reads the email's Liquid and sorts every variable it uses (see [the four kinds](#what-each-variable-becomes)),
+- uploads it as a new version of the view `welcome` (the file name, slugified, or `--slug`),
+- prints the link in your sender's own merge syntax, URL-encoded, and the data feed setup
+  when it needs one,
+- with `--write`, puts that link in the file and marks unsubscribe links `data-web-hide`.
+
+The page lives at `https://view.postboi.app/<account>/welcome`, or on
+[your own domain](#on-your-own-domain). Publishing again keeps every earlier version and
+serves the newest. Publishing needs a verified sending domain or a paid plan.
+
+## What each variable becomes
+
+**Context.** Static data the template reads, like content keyed by week. Pass it with
+`--context data.json`, or a module whose default export is the object
+(`--context data/locals.build.js`). Anything whose first segment is a context key is filled
+from it, for every reader.
+
+**Public params.** Values safe to put on a URL: `?week=20`. Each one is typed, `integer`,
+`date` (YYYY-MM-DD) or `enum` (a fixed list), and anything else on the URL is ignored. When
+the template picks from context by a variable, like
+`dynamic_content.pregnancy_body[week]`, the CLI makes that variable an enum of the
+context's keys without being asked. Name others with `--public week:integer,start:date`.
+Free text is refused: anyone can edit a URL, and the page would print whatever they typed.
+
+**Private data.** Everything else, like a first name. It reaches the page through your
+sender's data feed or a sealed link, never in the clear (see [three ways](#private-data-three-ways)).
+Without either, the page shows the generic version: the template with those fields empty.
+
+**System variables.** Your sender's own per-reader values: unsubscribe links, OneSignal's
+`subscription.*` and `message.id`, Braze's `${…unsubscribe…}`, Customer.io's
+`unsubscribe_url`, Klaviyo's `unsubscribe_link`, Mailchimp's `*|UNSUB|*`. Postboi never
+fills them, so a forwarded page can't unsubscribe the person it was forwarded to. The CLI
+names the element that holds each one; `--write` adds `data-web-hide` to it (asking first
+on a terminal, `--yes` to skip asking), which leaves it out of the web page.
+
+## Where the link goes
+
+With `--write` the link goes into the element marked `data-postboi-view-link` (or the
+first `<a>` inside it), else into the `<a>` whose text is "View in browser", whatever its
+case. Without either, the CLI says so and prints the link to paste. Nothing else in the
+file changes.
+
+```html
+<a href="#" data-postboi-view-link>Read this online</a>
+```
+
+## Per sender
+
+Say who sends with `--provider`. Left out, the CLI guesses from the merge syntax in the
+file, then the `provider` in `postboi.config.ts`.
+
+The link for a public `week` param, in each sender's syntax:
+
+```text
+OneSignal     ?week={{ user.tags.week | url_encode }}
+Braze         ?week={{custom_attribute.${week} | url_param_escape}}
+Iterable      ?week={{#urlEncode}}{{week}}{{/urlEncode}}
+Customer.io   ?week={{ customer.week | url_encode }}
+Klaviyo       ?week={{ person|lookup:'week'|urlencode }}
+Mailchimp     ?week=*|URL:WEEK|*
+SendGrid      ?week={{week}}
+```
+
+Private fields need a sender that can call Postboi as it sends: OneSignal, Braze and
+Iterable can. With the others, the page shows the generic version for those fields, or
+your code can send [sealed links](#private-data-three-ways).
+
+### OneSignal Data Feeds
+
+When the email has private fields, the CLI prints the Data Feed to create in OneSignal
+(Messages, Data Feeds): alias `postboi_view`, method GET, a URL that carries each field in
+OneSignal's Liquid, and an `Authorization: Bearer pbf_…` header. The first publish that
+needs one mints a **feed key** for it, shown once. A feed key can only mint view links for
+your team; it can't send mail or read anything.
+
+At send time OneSignal calls the feed for each recipient, Postboi keeps their fields
+(encrypted, for 90 days by default) under a short random id, and answers with the
+reader's URL. The link in the email reads it:
+
+```liquid
+<a href="{{ data_feed.postboi_view.url }}&week={{ user.tags.week | url_encode }}">View in browser</a>
+```
+
+Two things OneSignal decides that are worth knowing. A template takes one data feed, so an
+email that already reads another (`data_feed.ad`, say) can't add this one: make its fields
+public, or have that feed's backend call Postboi and pass the `url` along. And OneSignal
+skips a recipient whose feed call fails, so the feed is on the send path. If that's not a
+trade you want, public params need no call at all.
+
+### Braze Connected Content
+
+The CLI prints one tag to put at the top of the email body. Braze calls Postboi as it
+renders each message and saves the answer:
+
+```liquid
+{% connected_content https://postboi.app/v1/views/welcome/link :method post :headers {"Authorization": "Bearer pbf_…"} :body first_name={{${first_name}}} :content_type application/json :save postboi_view %}
+<a href="{{ postboi_view.url }}">View in browser</a>
+```
+
+### Iterable Data Feeds
+
+The same shape as OneSignal: a data feed in Iterable (Content, Data Feeds) with the URL
+and header the CLI prints, turned on in the template, and `[[url]]` as the link.
+
+### Postboi
+
+Sending through Postboi there's nothing to publish. Put `{{ postboi.web_url }}` where the
+link goes and ask for a web version on the send:
+
+```ts
+await mail({
+	to: "ada@example.com",
+	subject: "Your week 20 update",
+	body: '<a href="{{ postboi.web_url }}">View in browser</a> …',
+	web_version: true,
+})
+```
+
+Postboi keeps the message as sent, as long as it keeps the message, and fills the link
+before it goes out. `%postboi_web_url%` works too, and so does the text part. With neither
+in the message, nothing is hosted and the send answers a `web_version_unused` warning,
+which the SDK prints to the console. Only Postboi can host a web version: any other
+provider refuses `web_version` with a `web_version_unsupported` error rather than send the
+placeholder as text. Link a published view there instead, below.
+
+### Any provider, from your code
+
+With a published view, `mail({ view })` mints the reader's link and fills
+`{{ postboi.web_url }}` (or `%postboi_web_url%`) in the html and text before sending,
+whichever provider sends it:
+
+```ts
+await mail({
+	to: "ada@example.com",
+	subject: "Welcome",
+	body: html,
+	view: { name: "welcome", data: { first_name: "Ada" } },
+})
+```
+
+## Private data, three ways
+
+| Way          | How reader data gets there                         | Code to write          | Senders                          |
+| ------------ | -------------------------------------------------- | ---------------------- | -------------------------------- |
+| Public params | typed values on the URL, in the clear             | none                   | all of them                      |
+| Data feed    | your sender calls Postboi at send time            | none                   | OneSignal, Braze, Iterable       |
+| Sealed link  | your code seals it onto the URL as `?s=`          | `views.url()`          | anything your code sends through |
+
+Use public params for things that are fine to see and edit: a week, a date, a plan.
+Use a data feed when your sender can fetch and you don't want to write code. Use sealed
+links when your own code sends the email.
+
+```ts
+import { views } from "postboi"
+
+const url = await views.url("welcome", { first_name: "Ada" }, { expires: 60 * 60 * 24 * 30 })
+```
+
+A sealed link is AES-GCM under your team's view key and bound to the view's slug, so it
+can't be read, edited or moved to another view. With `POSTBOI_VIEW_KEY` in the
+environment (`bunx postboi sync` writes it once your team has published a view) it's
+minted locally with no request, which is
+what a send loop wants, in Node, Bun, Deno or a Worker. Without it, Postboi mints it.
+`views.seal(slug, data)` gives you the token alone. The data is a JSON object of up to
+4096 bytes: what every reader shares belongs in the view's context. A link that's expired, tampered with
+or unknown shows the generic page rather than an error.
+
+## Seeing who viewed
+
+Postboi counts every real view of a page: not a prefetch, not a `HEAD`, and not the link
+scanners mail filters send ahead of the reader. Counts are per UTC day, with visitors
+told apart by a daily hash of their address and browser (no address is stored). Counts
+are kept for 180 days:
+
+```bash
+bunx postboi views stats welcome             # the last 30 days
+bunx postboi views stats welcome --days 90 --json
+```
+
+```text
+welcome  42 views in the last 30 days, 7 identified
+
+  DAY         VIEWS  VISITORS
+  2026-10-06  12     9
+  2026-10-07  30     21
+
+  PARAMS   VIEWS  VISITORS
+  week=20  25     18
+  (none)   17     12
+```
+
+The params table splits the same views by the public params they were opened with, so a
+week-keyed email shows which weeks get read. From code, `views.stats("welcome", { days: 90 })`
+answers the same `{ days, params, identified }`.
+
+### Who it was: the `view.viewed` webhook
+
+When Postboi can tell who a reader is, it also sends a `view.viewed` webhook, which
+`receive()` and `webhook()` hand you as a `view_viewed` event with the page and the reader
+in `event.view`:
+
+```ts
+interface ViewViewed {
+	slug: string
+	version: number
+	url: string
+	params: Record<string, string | number>  // the public params that were applied
+	reader: { kind: "record" | "sealed" | "param"; id?: string; data?: Record<string, unknown> }
+	viewed_at: string
+	user_agent?: string
+}
+```
+
+A reader is known three ways: a data feed's record (`data` is the fields your sender
+passed; `id` is the record's own id), a sealed link (`data` is what your code sealed), or the
+reader param below (`id`).
+Views nobody can be told apart for are counted and nothing more.
+
+Check that the endpoint's events on the dashboard include `view.viewed`, then send the
+view back to where your audience lives. To Braze, as
+a custom event:
+
+```ts
+import { webhook } from "postboi/kit"
+
+export const POST = webhook(async (event) => {
+	if (event.type !== "view_viewed" || !event.view) return
+	const { reader, slug, params, viewed_at } = event.view
+	const external_id = reader.kind === "param" ? reader.id : reader.data?.user_id
+	if (typeof external_id !== "string") return
+	await fetch("https://rest.iad-01.braze.com/users/track", {
+		method: "POST",
+		headers: { Authorization: `Bearer ${BRAZE_API_KEY}`, "Content-Type": "application/json" },
+		body: JSON.stringify({
+			events: [{ external_id, name: "viewed_web_version", time: viewed_at, properties: { slug, ...params } }],
+		}),
+	})
+})
+```
+
+Or to OneSignal, as a tag on the user:
+
+```ts
+await fetch(`https://api.onesignal.com/apps/${ONESIGNAL_APP_ID}/users/by/external_id/${encodeURIComponent(external_id)}`, {
+	method: "PATCH",
+	headers: { Authorization: `Key ${ONESIGNAL_API_KEY}`, "Content-Type": "application/json" },
+	body: JSON.stringify({ properties: { tags: { [`viewed_${slug}`]: viewed_at } } }),
+})
+```
+
+A feed record holds the fields the email reads, so it carries the reader's id only when
+the template reads one. When it doesn't, the reader param is the short way to get it.
+
+### The reader param
+
+`--reader` names the template path of your sender's id for the reader, and the link
+carries it as `u`, in the sender's syntax:
+
+```bash
+bunx postboi views publish dist/welcome.html --provider braze --reader user_id --write
+```
+
+```text
+https://view.postboi.app/<account>/welcome?u={{${user_id} | url_param_escape}}
+```
+
+The page never shows `u` or fills the template from it; it only goes on `view.viewed` as
+`reader.id`. It's off unless you ask for it, because of what it costs:
+
+- **Anyone can change it.** Edit the URL and the webhook names someone else, so treat it
+  as a claim, never as proof of who read what. A sealed link is the one way to be sure.
+- **It's in the URL.** A forwarded email carries it, and so do browser history, proxies
+  and server logs along the way. Use an opaque id, never an email address.
+
+Publishing again with the CLI keeps it on (it reads the last version and asks for it
+again), but only the flag or `views.<slug>.reader` in `postboi.config.ts` knows the path,
+so put it there to keep it on the link. `--reader off` turns it off. With it on, no public
+param can be called `u`. In code it's `views.publish({ ..., reader: true })` on every
+publish: a version published without it doesn't read `u`.
+
+### Postboi's own sends
+
+A send with [`web_version: true`](#postboi) records each view of its page on the message
+too: "Viewed in browser" on its timeline in the dashboard, and an `email.viewed` webhook,
+which arrives as a `viewed` event with the `message_id`, the recipient in `email`, and the
+browser in `client`. It is not an open: a page in a browser says nothing about the inbox,
+so it never sets the message as opened or sends `email.opened`. An endpoint made before
+`email.viewed` existed only gets it once you subscribe it on the dashboard.
+
+## Safety
+
+- **Sandboxed.** Every page is served with `Content-Security-Policy: sandbox`: no scripts,
+  no forms, no frames. Images, styles and fonts load over https.
+- **Not indexed, not referred.** `X-Robots-Tag: noindex` and `Referrer-Policy: no-referrer`.
+  A page with reader data isn't cached.
+- **Typed params.** Only declared params are read, each checked against its type. Free
+  text never is.
+- **`data-web-hide`.** Anything marked with it is left out of the web page. Use it for
+  unsubscribe links, preference centres and anything else that acts for the reader.
+- **System variables stay empty.** A sender's own per-reader variables are never filled
+  from params or feeds.
+
+## On your own domain
+
+Turn on `view.<your domain>` for a verified domain on the dashboard's Domains page, the
+same way as hosted forms, and pages answer at `https://view.example.com/welcome`. The CLI
+prints links on it from then on, and `views.url()` uses it once `POSTBOI_VIEW_URL` is
+`https://view.example.com` (`postboi sync` writes it).
+
+## Saving the choices
+
+Re-publishing reuses the last version's params and feed fields, so the flags are only
+needed once. To keep them in the repo, add a `views` section to `postboi.config.ts`; it
+wins over the last version, and flags win over it:
+
+```ts
+import { config } from "postboi"
+
+export default config({
+	views: {
+		"postpartum-uk": {
+			provider: "onesignal",
+			context: "data/locals.build.js",
+			params: { week: { path: "user.tags.pregnancy_week", type: "integer", min: 1, max: 42 } },
+		},
+	},
+})
+```
+
+## The rest of the CLI
+
+```bash
+bunx postboi views                                  # every view, its version and page
+bunx postboi views open welcome --param week=20     # the page as a reader sees it
+bunx postboi views open welcome --data '{"first_name":"Ada"}'   # through a sealed link
+bunx postboi views stats welcome --days 7          # views, visitors and params, per day
+bunx postboi views delete welcome                   # the page is gone at once
+bunx postboi views keys                             # view and feed keys
+bunx postboi views keys rotate                      # a new view key; the old one has a grace period
+bunx postboi views feed-key                         # another feed key, shown once
+```
+
+Every one takes `--json`.
