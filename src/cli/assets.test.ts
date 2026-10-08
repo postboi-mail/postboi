@@ -43,6 +43,27 @@ describe("map_refs", () => {
 		)
 	})
 
+	it("splits srcset like a browser: commas inside a URL stay, descriptors are kept", () => {
+		const html = `<img srcset="data:image/png;base64,AAAA 1x, https://cdn.test/w_10,h_10/a.png 2x,b.png 3x , c.png">`
+		expect(refs(html)).toEqual([
+			"data:image/png;base64,AAAA",
+			"https://cdn.test/w_10,h_10/a.png",
+			"b.png",
+			"c.png",
+		])
+		const out = map_refs(html, (ref) =>
+			ref.endsWith(".png") && !ref.startsWith("http") ? "U" : undefined
+		)
+		expect(out).toBe(
+			`<img srcset="data:image/png;base64,AAAA 1x, https://cdn.test/w_10,h_10/a.png 2x,U 3x , U">`
+		)
+	})
+
+	it("reads url() with spaces and either quote", () => {
+		expect(refs(`<p style="background: url( 'a b.png' )">`)).toEqual(["a b.png"])
+		expect(refs(`<style>.x { background: URL(  b.png  ) }</style>`)).toEqual(["b.png"])
+	})
+
 	it("reads VML inside mso conditional comments", () => {
 		const html = `<!--[if mso]><v:rect><v:fill type="frame" src="img/vml.png" /></v:rect><![endif]-->`
 		expect(refs(html)).toEqual(["img/vml.png"])
@@ -114,6 +135,26 @@ describe("resolve_asset", () => {
 		expect(resolve_asset("/images/x.png", { ...where, cwd: outer })).toBe(
 			join(outer, "images/x.png")
 		)
+	})
+
+	it("decodes entities, percent-escapes (%40 too) and backslashes before looking", () => {
+		const root = tree({ "package.json": "{}", "img/a b@2x.png": "a", "img/c&d.png": "c" })
+		const where = { dir: root, cwd: root }
+		const file = join(root, "img/a b@2x.png")
+		expect(resolve_asset("img/a%20b%402x.png", where)).toBe(file)
+		expect(resolve_asset("img/a b@2x.png", where)).toBe(file)
+		expect(resolve_asset("img\\a b@2x.png", where)).toBe(file)
+		expect(resolve_asset("img/c&amp;d.png", where)).toBe(join(root, "img/c&d.png"))
+	})
+
+	it("never climbs out of the project with ..", () => {
+		const outer = tree({ "secret.png": "s", "app/package.json": "{}", "app/out/e.html": "" })
+		const where = { dir: join(outer, "app/out"), cwd: join(outer, "app") }
+		expect(resolve_asset("../../secret.png", where)).toBeUndefined()
+		expect(resolve_asset("/../../secret.png", where)).toBeUndefined()
+		writeFileSync(join(outer, "app/ok.png"), "ok")
+		expect(resolve_asset("../ok.png", where)).toBe(join(outer, "app/ok.png"))
+		expect(resolve_asset("/../ok.png", where)).toBe(join(outer, "app/ok.png"))
 	})
 
 	it("uses only testing.assets for root-relative paths when it's set", () => {

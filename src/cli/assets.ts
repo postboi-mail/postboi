@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { readFileSync, statSync } from "node:fs"
-import { dirname, extname, join, resolve } from "node:path"
+import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path"
 import { api, say } from "./api.js"
 import { yellow } from "./prompts.js"
 
@@ -34,6 +34,9 @@ const MAX_BYTES = 10 * 1024 * 1024
 const ATTR = /((?<![\w-])(?:src|background)\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'`>]+))/gi
 const SRCSET = /((?<![\w-])srcset\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi
 const URL_FN = /(url\(\s*)(&quot;|&#39;|["']|)(.*?)\2(\s*\))/gi
+// One srcset candidate, as the HTML spec splits them: the URL runs to whitespace (so a comma
+// inside it, as in a data: URI or `w_100,h_100`, stays put), then descriptors up to a comma.
+const CANDIDATE = /([\s,]*)(\S*[^\s,])(\s[^,]*|,*)/g
 
 /**
  * Every reference in `html`, each passed to `map`: what it answers replaces the reference,
@@ -49,11 +52,11 @@ export function map_refs(html: string, map: (ref: string) => string | undefined)
 		})
 		.replace(SRCSET, (_, pre: string, dq?: string, sq?: string) => {
 			const quote = dq !== undefined ? '"' : "'"
-			const candidates = (dq ?? sq ?? "").split(",").map((candidate) => {
-				const [, lead, ref, rest] = candidate.match(/^(\s*)(\S*)([\s\S]*)$/) ?? []
-				return ref ? `${lead}${one(ref)}${rest}` : candidate
-			})
-			return `${pre}${quote}${candidates.join(",")}${quote}`
+			const value = (dq ?? sq ?? "").replace(
+				CANDIDATE,
+				(_, lead: string, ref: string, rest: string) => `${lead}${one(ref)}${rest}`
+			)
+			return `${pre}${quote}${value}${quote}`
 		})
 		.replace(
 			URL_FN,
@@ -82,28 +85,44 @@ function is_there(path: string, any = false): boolean {
 	return any ? stat !== undefined : stat?.isFile() === true
 }
 
+/** `&amp;`, `&quot;`, `&apos;` and numeric references: what an attribute's value means. */
+function decode_entities(text: string): string {
+	const named: Record<string, string> = { amp: "&", quot: '"', apos: "'" }
+	return text.replace(/&(amp|quot|apos|#\d{1,6}|#x[\da-f]{1,5});/gi, (_, ref: string) =>
+		ref[0] === "#"
+			? String.fromCodePoint(
+					Number(ref[1].toLowerCase() === "x" ? `0${ref.slice(1)}` : ref.slice(1))
+				)
+			: named[ref.toLowerCase()]
+	)
+}
+
 /**
  * The file a reference names. Tried in order, first hit wins: the HTML's directory, each
  * parent up to the project root, then the cwd. A root-relative path (`/x`) is taken as
- * relative to each of them, or only to `assets` when the config sets it.
+ * relative to each of them, or only to `assets` when the config sets it. `..` never leaves
+ * the project root (or the HTML's directory outside a project) or the cwd.
  */
 export function resolve_asset(
 	ref: string,
 	where: { dir: string; cwd: string; assets?: string }
 ): string | undefined {
-	let path = ref.split(/[?#]/)[0]
+	// Entities decoded as in an attribute, `\` read as `/` like a browser does, then
+	// percent-escapes (decodeURIComponent, so `%40` in `a%402x.png` is an `@` too).
+	let path = decode_entities(ref).replaceAll("\\", "/").split(/[?#]/)[0]
 	try {
-		path = decodeURI(path)
+		path = decodeURIComponent(path)
 	} catch {
 		// A stray % is a file name like any other.
 	}
 	const rooted = path.startsWith("/")
+	const top = project_root(where.dir)
+	const fences = [top ?? resolve(where.dir), resolve(where.cwd)]
 	let roots: Array<string>
 	if (rooted && where.assets) {
 		roots = [where.assets]
 	} else {
 		roots = [resolve(where.dir)]
-		const top = project_root(where.dir)
 		if (top) {
 			for (let at = roots[0]; at !== top && dirname(at) !== at;) {
 				at = dirname(at)
@@ -113,8 +132,13 @@ export function resolve_asset(
 		roots.push(resolve(where.cwd))
 	}
 	for (const root of roots) {
-		const file = join(root, rooted ? `.${path}` : path)
-		if (is_there(file)) return file
+		// A root-relative `..` stops at the root, like a browser's; a relative one is fenced.
+		const file = rooted ? join(root, join("/", path)) : resolve(root, path)
+		const inside = (fence: string) => {
+			const to = relative(fence, file)
+			return !/^\.\.(?:[\\/]|$)/.test(to) && !isAbsolute(to)
+		}
+		if ((rooted || fences.some(inside)) && is_there(file)) return file
 	}
 	return undefined
 }
@@ -143,7 +167,9 @@ export async function upload_assets(html: string, file: string, assets?: string)
 	const by_key = new Map<string, Asset>()
 	for (const ref of refs) {
 		const path = resolve_asset(ref, where)
-		const ext = extname(ref.split(/[?#]/)[0]).slice(1).toLowerCase()
+		const ext = extname(path ?? "")
+			.slice(1)
+			.toLowerCase()
 		const skip = !path
 			? "no such file"
 			: !ASSET_EXTS.has(ext)
