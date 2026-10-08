@@ -100,6 +100,11 @@ export interface SendParams {
 	footnote?: string
 	/** A received message's id (`in_…`) this answers: the server writes the threading headers. */
 	in_reply_to?: string
+	/**
+	 * Store the message as a hosted web version and fill `{{ postboi.web_url }}` and
+	 * `%postboi_web_url%` in `html` and `text` with its link before sending.
+	 */
+	web_version?: boolean
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -1209,6 +1214,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			preheader: message.preheader,
 			footnote: message.footnote,
 			in_reply_to: message.in_reply_to,
+			web_version: message.web_version,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}

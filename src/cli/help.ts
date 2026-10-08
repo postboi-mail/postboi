@@ -172,6 +172,16 @@ export const HELP: Array<HelpSection> = [
 					"sets · sets save <name> --clients a,b · sets delete <name> · share <id> [--revoke]",
 				],
 			},
+			{
+				command: "views",
+				summary: "Web versions of emails, for a View in browser link whoever sends them",
+				details: [
+					"publish <file.html> [--slug <s>] [--context <file.json or .js>] [--provider onesignal, braze, iterable, customerio, klaviyo, mailchimp, sendgrid or none]",
+					"publish: --public <var[:integer, date or enum]>,… or --public all makes reader variables URL params; the rest come through the sender's data feed",
+					"publish: prints the link in the sender's merge syntax and the feed setup; --write puts the link in the file and data-web-hide on unsubscribe links (--yes skips asking)",
+					"open <slug> [--data <json>] [--param key=value] · delete <slug> · keys [rotate] · feed-key",
+				],
+			},
 		],
 		footer: [
 			"A bare noun lists; `list` says the same. Add --json to any of",

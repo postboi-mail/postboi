@@ -11,6 +11,7 @@ import {
 import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
+import { views } from "./views.js"
 
 /**
  * The resource commands (`postboi lists`, `postboi domains add …`) — thin wrappers over
@@ -41,8 +42,18 @@ let json_mode = false
 let last_response: unknown
 
 /** Print a line for a person; silent under `--json`, where stdout is the document. */
-function say(line = ""): void {
+export function say(line = ""): void {
 	if (!json_mode) console.log(line)
+}
+
+/** What `--json` prints for a command whose answer isn't one API response. */
+export function respond(value: unknown): void {
+	last_response = value
+}
+
+/** Is this command answering in `--json`? Prompts never run then. */
+export function json_output(): boolean {
+	return json_mode
 }
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
@@ -100,7 +111,7 @@ export async function api<T>(
 }
 
 /** A GET whose answer is a file rather than JSON: the bytes and the name the server gave them. */
-async function api_file(
+export async function api_file(
 	path: string,
 	fetch_fn: FetchLike = fetch
 ): Promise<{ filename: string | undefined; content_type: string | null; bytes: Uint8Array }> {
@@ -1895,6 +1906,7 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	forms,
 	notifications,
 	testing,
+	views,
 }
 
 /**
@@ -1913,6 +1925,7 @@ const LISTING = new Set([
 	"exports",
 	"forms",
 	"testing",
+	"views",
 ])
 
 /** Handle a resource command; false when `command` isn't one (main falls through to help). */

@@ -64,6 +64,12 @@ export const productParts: ProductPart[] = [
 			"Point a plain HTML `<form>` at an endpoint and submissions arrive as email, with no backend.",
 	},
 	{
+		name: "Web versions",
+		slug: "views",
+		summary:
+			'An email\'s HTML hosted as a sandboxed page for its "View in browser" link, personalised per reader, whichever provider sends it: OneSignal, Braze, Iterable, Postboi or your own code.',
+	},
+	{
 		name: "Relay",
 		slug: "provider",
 		summary:

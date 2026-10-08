@@ -393,6 +393,19 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(sent_json().footnote).toBe("Didn't request this? You can safely ignore this email.")
 	})
 
+	it("forwards web_version, leaving {{ postboi.web_url }} for the API to fill", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({
+			to: "to@test.com",
+			body: '<a href="{{ postboi.web_url }}">View in browser</a>',
+			web_version: true,
+		})
+		expect(sent_json().web_version).toBe(true)
+		expect(sent_json().html).toContain("{{ postboi.web_url }}")
+	})
+
 	it("string bodies carry no captcha fields", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
