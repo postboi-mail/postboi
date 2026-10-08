@@ -158,7 +158,7 @@ export interface PostboiConfig {
 	testing?: {
 		/**
 		 * The one directory root-relative asset paths (`/images/hero.png`) resolve against,
-		 * relative to the project root. Rarely needed: without it the CLI tries the HTML
+		 * relative to the project root, for `testing run` and `views publish`. Rarely needed: without it the CLI tries the HTML
 		 * file's directory, each parent up to the project root, then the cwd.
 		 */
 		assets?: string

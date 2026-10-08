@@ -17,7 +17,8 @@ bunx postboi views publish dist/welcome.html --write
 That one command:
 
 - reads the email's Liquid and sorts every variable it uses (see [the four kinds](#what-each-variable-becomes)),
-- uploads it as a new version of the view `welcome` (the file name, slugified, or `--slug`),
+- uploads the [images and fonts](#images-and-fonts) it points at on disk, and the HTML as a
+  new version of the view `welcome` (the file name, slugified, or `--slug`),
 - prints the link in your sender's own merge syntax, URL-encoded, and the data feed setup
   when it needs one,
 - with `--write`, puts that link in the file and marks unsubscribe links `data-web-hide`.
@@ -57,6 +58,26 @@ With `--write` the link goes into the element marked `data-postboi-view-link` (o
 first `<a>` inside it), else into the `<a>` whose text is "View in browser", whatever its
 case. Without either, the CLI says so and prints the link to paste. Nothing else in the
 file changes.
+
+## Images and fonts
+
+Images and fonts the email points at on disk (`<img src="/images/hero.png">`, a webfont in
+`@font-face`, a VML background for Outlook) are uploaded with the HTML, and the page points
+at the copies. It's the same lookup as
+[`testing run`](/email-testing#local-images-and-fonts): `src`, `srcset`, `background`,
+`url(...)` and VML, each path looked up next to the HTML, then in each folder above it up to
+the project root, then in the current directory, with `testing.assets` in
+`postboi.config.ts` to pin the folder for `/…` paths. It prints one line when it did:
+
+```
+assets   4 local (1 uploaded, 3 already there)
+```
+
+The copies are named by a hash of the file, so an unchanged image is never sent twice, and
+they don't expire (test uploads do, after 30 days, so a page never points at those). An image the HTML already loads from a test upload is copied
+across when you publish. URLs, Liquid and merge tags are left alone, a file it can't find
+is warned about and left as it is, and the file on disk keeps its own paths, `--write` or
+not. `--no-assets` publishes the HTML exactly as it is.
 
 ```html
 <a href="#" data-postboi-view-link>Read this online</a>

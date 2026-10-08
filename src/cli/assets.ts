@@ -5,9 +5,10 @@ import { api, say } from "./api.js"
 import { yellow } from "./prompts.js"
 
 /**
- * Local assets for `postboi testing run`: find the images, fonts and VML fills an email
- * points at on disk, upload each one content-addressed (an edited file gets a new URL, an
- * unchanged one is never sent twice) and point the HTML at the uploads.
+ * Local assets for `postboi testing run` and `postboi views publish`: find the images, fonts
+ * and VML fills an email points at on disk, upload each one content-addressed (an edited file
+ * gets a new URL, an unchanged one is never sent twice) and point the HTML at the uploads.
+ * Tests upload to `/v1/testing/assets` (kept 30 days), views to `/v1/views/assets` (kept).
  */
 
 /** What the server stores, by extension. */
@@ -151,11 +152,16 @@ interface Asset {
 }
 
 /**
- * Upload the local assets `html` references and answer it pointing at them. `file` is
- * the HTML's path (`-` for stdin, resolved from the cwd); `assets` is `testing.assets`
- * from postboi.config. A missing file is warned about once and left as it is.
+ * Upload the local assets `html` references to `endpoint` and answer it pointing at them.
+ * `file` is the HTML's path (`-` for stdin, resolved from the cwd); `assets` is
+ * `testing.assets` from postboi.config. A missing file is warned about once and left as it is.
  */
-export async function upload_assets(html: string, file: string, assets?: string): Promise<string> {
+export async function upload_assets(
+	html: string,
+	file: string,
+	assets?: string,
+	endpoint: "/v1/testing/assets" | "/v1/views/assets" = "/v1/testing/assets"
+): Promise<string> {
 	const refs = new Set<string>()
 	map_refs(html, (ref) => void (is_local(ref) && refs.add(ref)))
 	if (!refs.size) return html
@@ -196,13 +202,10 @@ export async function upload_assets(html: string, file: string, assets?: string)
 	const missing: Array<Asset> = []
 	for (let i = 0; i < assets_list.length; i += 200) {
 		const batch = assets_list.slice(i, i + 200)
-		const answer = await api<{ assets: Array<{ url: string; exists: boolean }> }>(
-			"/v1/testing/assets",
-			{
-				method: "POST",
-				body: { assets: batch.map((a) => ({ hash: a.hash, ext: a.ext, size: a.bytes.length })) },
-			}
-		)
+		const answer = await api<{ assets: Array<{ url: string; exists: boolean }> }>(endpoint, {
+			method: "POST",
+			body: { assets: batch.map((a) => ({ hash: a.hash, ext: a.ext, size: a.bytes.length })) },
+		})
 		batch.forEach((asset, n) => {
 			asset.url = answer.assets[n].url
 			if (!answer.assets[n].exists) missing.push(asset)
@@ -212,7 +215,7 @@ export async function upload_assets(html: string, file: string, assets?: string)
 	for (let i = 0; i < missing.length; i += 4) {
 		await Promise.all(
 			missing.slice(i, i + 4).map(async (asset) => {
-				const stored = await api<{ url: string }>(`/v1/testing/assets/${asset.hash}.${asset.ext}`, {
+				const stored = await api<{ url: string }>(`${endpoint}/${asset.hash}.${asset.ext}`, {
 					method: "PUT",
 					body: asset.bytes,
 				})
