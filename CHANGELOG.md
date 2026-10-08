@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.63.0
+
 - **Agent mailboxes: `postboi/mailbox`.** An email address an AI agent keeps, at agentboi.email
   or on your own receiving domain. `mailbox()` opens `POSTBOI_MAILBOX_KEY`, or makes a mailbox:
   your team's with `POSTBOI_TOKEN`, or one of its own that receives at once and sends once a
