@@ -66,6 +66,23 @@ tempboi.email, no account or POSTBOI_TOKEN needed
 
 The inbox made or used last is the default; POSTBOI_INBOX_TOKEN overrides it (the token alone finds its inbox), POSTBOI_INBOX_URL moves the host.
 
+## Agent mailboxes
+
+agentboi.email; no POSTBOI_TOKEN needed to make one
+
+| Command                        | What it does                                                                                                                                                                                                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bunx postboi mailbox new`     | Make an address your agent keeps, and print it: `[--address <name>] [--name <label>] [--domain <yours>] [--json] [--env]` · `With POSTBOI_TOKEN it is your team's; without, it sends once you open its claim link` · `--env prints export POSTBOI_MAILBOX_KEY=… for eval` |
+| `bunx postboi mailbox watch`   | Print mail as it arrives, one line each, with who is talking: `[address] --all --json (NDJSON) --trust <owner, thread, stranger or suspect> --tag --from --subject` · `--exec <cmd>: run per mail with ID THREAD TRUST FROM SUBJECT REPLY_TEXT CODE LINK set`             |
+| `bunx postboi mailbox wait`    | Wait for one mail, then exit: `[address] --from --subject --tag --trust (/regex/ works) --timeout <sec> --new` · `--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout`                                                                      |
+| `bunx postboi mailbox read`    | One mail in full: what they wrote, minus the quoted thread: `[id or latest] [address] --html --raw --json`                                                                                                                                                                |
+| `bunx postboi mailbox reply`   | Answer a mail in its thread: `<id> [address] --text "…" (or --html) --cc a,b --bcc c --subject "…"`                                                                                                                                                                       |
+| `bunx postboi mailbox send`    | A new message from the mailbox: `[address] --to a@b.com,c@d.com --subject "…" --text "…"`                                                                                                                                                                                 |
+| `bunx postboi mailbox threads` | Its conversations, newest activity first                                                                                                                                                                                                                                  |
+| `bunx postboi mailbox ls`      | Mailboxes on this machine: `key [address]: a new key, the old one stops · rm [address]`                                                                                                                                                                                   |
+
+The mailbox made or used last is the default; POSTBOI_MAILBOX_KEY overrides it (the key alone finds its mailbox), POSTBOI_MAILBOX_URL moves the host.
+
 ## For agents
 
 `bunx postboi init --agent` provisions a claimable sandbox account with no prompts and no

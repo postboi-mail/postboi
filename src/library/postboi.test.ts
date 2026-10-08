@@ -367,6 +367,17 @@ describe("the Postboi provider (zero-config)", () => {
 		expect(sent_json().preheader).toBe("Your order is on its way")
 	})
 
+	it("forwards in_reply_to, so the server can thread the reply", async () => {
+		vi.stubEnv("POSTBOI_TOKEN", "t")
+		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>" })
+		expect(sent_json().in_reply_to).toBeUndefined()
+
+		await new Postboi().send({ to: "to@test.com", body: "<p>x</p>", in_reply_to: "in_abc123" })
+		expect(sent_json().in_reply_to).toBe("in_abc123")
+	})
+
 	it("forwards a footnote, which needs no shell either", async () => {
 		vi.stubEnv("POSTBOI_TOKEN", "t")
 		fetch.mockResolvedValue(respond({ json: { id: "1" } }))
