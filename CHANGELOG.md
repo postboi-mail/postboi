@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi views publish` uploads the local images and fonts the email points at, the same way `testing run` does (same lookup, `testing.assets` and warnings), and publishes the HTML pointing at the copies. View assets don't expire, unlike test assets, which last 30 days; the file on disk keeps its own paths, even with `--write`. `--no-assets` uploads nothing and leaves the local paths as they are.
+
 ## 0.66.0
 
 ### Added

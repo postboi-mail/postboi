@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { api_command } from "./api.js"
@@ -316,7 +317,12 @@ describe("postboi views", () => {
 			vi.fn(async (input: string, init?: RequestInit) => {
 				const url = new URL(input)
 				const key = `${init?.method ?? "GET"} ${url.pathname}`
-				const body = init?.body ? JSON.parse(String(init.body)) : undefined
+				const body =
+					init?.body instanceof Uint8Array
+						? new TextDecoder().decode(init.body)
+						: init?.body
+							? JSON.parse(String(init.body))
+							: undefined
 				calls.push({ key, body })
 				const route = routes[key]
 				// A bare 404, like a server with no such route.
@@ -390,6 +396,115 @@ describe("postboi views", () => {
 		expect(text()).toContain("Alias    postboi_view")
 		expect(text()).toContain("Authorization: Bearer <your feed key, pbf_…>")
 		expect(text()).toContain("Feed keys aren't on this Postboi server yet")
+		// Nothing local to upload: no assets call and no assets line.
+		expect(calls.some((c) => c.key.includes("/assets"))).toBe(false)
+		expect(text()).not.toContain("assets ")
+	})
+
+	it("uploads local images and fonts to the views assets and publishes the HTML pointing at them", async () => {
+		const html = [
+			`<style>@font-face { src: url("fonts/brand.woff2") }</style>`,
+			`<img src="images/hero.png"><img src="images/logo.png"><img src="gone.png">`,
+			`<img src="https://cdn.test/a.png"><img src="{{ user.tags.photo }}">`,
+		].join("")
+		const { file } = workspace(html)
+		const dir = join(file, "..")
+		mkdirSync(join(dir, "images"))
+		mkdirSync(join(dir, "fonts"))
+		writeFileSync(join(dir, "images", "hero.png"), "hero")
+		writeFileSync(join(dir, "images", "logo.png"), "logo")
+		writeFileSync(join(dir, "fonts", "brand.woff2"), "font")
+		const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32)
+		const url = (s: string, ext = "png") => `https://assets.test/views/acc_1/${hash(s)}.${ext}`
+		const { calls, text } = serve({
+			"POST /v1/views/assets": (body: { assets: Array<{ hash: string; ext: string }> }) => ({
+				assets: body.assets.map((a) => ({
+					...a,
+					url: `https://assets.test/views/acc_1/${a.hash}.${a.ext}`,
+					exists: a.hash === hash("logo"),
+				})),
+			}),
+			[`PUT /v1/views/assets/${hash("hero")}.png`]: { url: url("hero") },
+			[`PUT /v1/views/assets/${hash("font")}.woff2`]: { url: url("font", "woff2") },
+			"POST /v1/views": (body: never) => view(body),
+		})
+
+		await api_command("views", ["publish", file])
+
+		const keys = calls.map((c) => c.key)
+		expect(keys.indexOf("POST /v1/views/assets")).toBeLessThan(keys.indexOf("POST /v1/views"))
+		expect(keys.some((k) => k.startsWith("POST /v1/testing"))).toBe(false)
+		expect(calls.find((c) => c.key === "POST /v1/views/assets")?.body).toEqual({
+			assets: [
+				{ hash: hash("hero"), ext: "png", size: 4 },
+				{ hash: hash("logo"), ext: "png", size: 4 },
+				{ hash: hash("font"), ext: "woff2", size: 4 },
+			],
+		})
+		expect(
+			calls
+				.filter((c) => c.key.startsWith("PUT "))
+				.map((c) => c.body)
+				.sort()
+		).toEqual(["font", "hero"])
+		const post = calls.find((c) => c.key === "POST /v1/views")!.body as { html: string }
+		expect(post.html).toBe(
+			html
+				.replace("fonts/brand.woff2", url("font", "woff2"))
+				.replace("images/hero.png", url("hero"))
+				.replace("images/logo.png", url("logo"))
+		)
+		expect(readFileSync(file, "utf8")).toBe(html)
+		expect(text()).toContain("gone.png: no such file, left as it is")
+		expect(text()).toContain("assets   3 local (2 uploaded, 1 already there)")
+
+		// --no-assets publishes it as it is, without asking the assets route.
+		calls.length = 0
+		await api_command("views", ["publish", file, "--no-assets"])
+		expect(calls.some((c) => c.key.includes("/assets"))).toBe(false)
+		expect((calls.find((c) => c.key === "POST /v1/views")!.body as { html: string }).html).toBe(
+			html
+		)
+	})
+
+	it("stops before publishing when the server has no views assets route yet, or refuses it", async () => {
+		const { file } = workspace(`<img src="hero.png">`)
+		writeFileSync(join(file, "..", "hero.png"), "hero")
+		// An older server routes POST /v1/views/assets to [slug], which has no POST: a bare 405.
+		const { calls } = serve({
+			"POST /v1/views/assets": new Response("POST method not allowed", { status: 405 }),
+			"POST /v1/views": (body: never) => view(body),
+		})
+		await expect(api_command("views", ["publish", file])).rejects.toMatchObject({
+			code: "views_unavailable",
+			message: expect.stringContaining("--no-assets"),
+		})
+		expect(calls.some((c) => c.key === "POST /v1/views")).toBe(false)
+
+		// The publish gate refuses the upload as it would the publish, in the server's words.
+		const refused = serve({
+			"POST /v1/views/assets": new Response(
+				JSON.stringify({
+					code: "views_not_allowed",
+					message: "Publishing a view needs a verified sending domain or a paid plan.",
+				}),
+				{ status: 403 }
+			),
+			"POST /v1/views": (body: never) => view(body),
+		})
+		await expect(api_command("views", ["publish", file])).rejects.toMatchObject({
+			code: "views_not_allowed",
+		})
+		expect(refused.calls.some((c) => c.key === "POST /v1/views")).toBe(false)
+	})
+
+	it("refuses a slug a views route owns before asking the server anything", async () => {
+		const { file } = workspace(`<p>Hi</p>`)
+		const { calls } = serve({})
+		await expect(api_command("views", ["publish", file, "--slug", "assets"])).rejects.toMatchObject(
+			{ code: "invalid_slug" }
+		)
+		expect(calls).toEqual([])
 	})
 
 	it("warns when a OneSignal email already reads another data feed", async () => {

@@ -19,6 +19,7 @@ import {
 	table,
 	take_flags,
 } from "./api.js"
+import { upload_assets } from "./assets.js"
 import { cloud_base, open_browser } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, yellow } from "./prompts.js"
 
@@ -570,22 +571,25 @@ function refuse_free_text(name: string, slug: string): never {
 
 // ── Commands ────────────────────────────────────────────────────────────────
 
-/** Errors from the views API, with a 404 that has no code read as "not deployed yet". */
+/**
+ * Errors from the views API, with a 404 or 405 that has no code read as "not deployed yet":
+ * an older server answers 405 where a new route sits beside `[slug]` (POST /v1/views/assets).
+ */
 async function views_api<T>(
 	path: string,
 	init: { method?: string; body?: unknown } = {}
 ): Promise<T> {
-	try {
-		return await api<T>(path, init)
-	} catch (error) {
-		if (error instanceof ApiCommandError && error.code === "http_404") {
-			throw new ApiCommandError(
-				`This Postboi server doesn't have ${init.method ?? "GET"} ${path.split("?")[0]} yet: views are still rolling out. Nothing changed; try again after the next deploy.`,
-				"views_unavailable"
-			)
-		}
-		throw error
+	return api<T>(path, init).catch((error) => not_yet(error, `${init.method ?? "GET"} ${path}`))
+}
+
+function not_yet(error: unknown, route: string, hint = "try again after the next deploy"): never {
+	if (error instanceof ApiCommandError && ["http_404", "http_405"].includes(error.code ?? "")) {
+		throw new ApiCommandError(
+			`This Postboi server doesn't have ${route.split("?")[0]} yet: views are still rolling out. Nothing changed; ${hint}.`,
+			"views_unavailable"
+		)
 	}
+	throw error
 }
 
 /** The same refusal from the SDK's PostboiError, so `views open --data` reads like the rest. */
@@ -665,7 +669,7 @@ export const views_io = {
 
 const PUBLISH_USAGE = [
 	"Usage: postboi views publish <file.html> [--slug <slug>] [--provider <sender>] [--context <file.json or .js>]",
-	"         [--public <var[:integer, date or enum]>,… or --public all] [--reader <path> or off] [--write] [--yes] [--json]",
+	"         [--public <var[:integer, date or enum]>,… or --public all] [--reader <path> or off] [--write] [--yes] [--no-assets] [--json]",
 	`         senders: ${VIEW_PROVIDERS.join(", ")}`,
 ].join("\n")
 
@@ -678,7 +682,7 @@ async function publish(args: Array<string>): Promise<void> {
 	const { flags, rest, on } = take_flags(
 		args,
 		["slug", "provider", "public", "context", "reader"],
-		["write", "yes"]
+		["write", "yes", "no-assets"]
 	)
 	const file = rest[0]
 	if (!file || rest.length > 1) throw new ApiCommandError(PUBLISH_USAGE)
@@ -686,6 +690,13 @@ async function publish(args: Array<string>): Promise<void> {
 		throw new ApiCommandError("A slug is up to 64 of a-z, 0-9 and -.", "invalid_slug")
 	}
 	const slug = flags.slug ?? view_slug(basename(file, extname(file)))
+	// The server refuses these too, but only after the lookup below reads its route instead.
+	if (["keys", "settings", "assets"].includes(slug)) {
+		throw new ApiCommandError(
+			`A view can't be called ${slug}: a route under /v1/views owns the name. Pass --slug <another>.`,
+			"invalid_slug"
+		)
+	}
 	let html = readFileSync(file, "utf8")
 	const original = html
 	const ask = !json_output() && views_io.interactive()
@@ -858,9 +869,20 @@ async function publish(args: Array<string>): Promise<void> {
 	const hidden = (element: Element | undefined) =>
 		Boolean(element && (element.hidden || hide.some((e) => e.start === element.start)))
 
+	// Local images and fonts go up first, kept as long as the view: the page points at the
+	// copies, and the file on disk keeps its own paths.
+	const page = on.has("no-assets")
+		? html
+		: await upload_assets(html, file, config.testing?.assets, "/v1/views/assets").catch((error) =>
+				not_yet(
+					error,
+					"POST /v1/views/assets",
+					"publish with --no-assets, or try after the next deploy"
+				)
+			)
 	const body = {
 		slug,
-		html,
+		html: page,
 		context,
 		params,
 		feed: Object.keys(fields).length ? { fields } : undefined,
@@ -1075,7 +1097,7 @@ async function open_view(args: Array<string>): Promise<void> {
 	const search = query.toString() ? `?${query}` : ""
 	const page = await api_file(`/v1/views/${encodeURIComponent(slug)}/preview${search}`).catch(
 		(error) => {
-			if (error instanceof ApiCommandError && error.code === "http_404") {
+			if (error instanceof ApiCommandError && ["http_404", "http_405"].includes(error.code ?? "")) {
 				throw new ApiCommandError(
 					`No preview for ${slug}: either it isn't published (\`postboi views\` lists them) or this server doesn't host views yet.`,
 					"views_unavailable"
