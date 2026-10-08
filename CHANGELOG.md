@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.64.0
+
 ### Added
 
 - `postboi views publish <file.html>` hosts an email as a sandboxed web page for its "View in browser" link, whichever provider sends it. It reads the email's Liquid and sorts each variable: static `--context` data (a `.json` file or a module's default export), public typed params (`--public week:integer`, or an enum inferred when the template indexes context by it, like `body[week]`; free text is refused), private fields that come through the sender's data feed, and the sender's own system variables (unsubscribe links, OneSignal's `subscription.*`), whose element it names for `data-web-hide`. It prints the link in the sender's merge syntax, URL-encoded (`--provider onesignal`, `braze`, `iterable`, `customerio`, `klaviyo`, `mailchimp`, `sendgrid` or `none`, guessed from the file when left out), and the OneSignal Data Feed, Braze Connected Content or Iterable Data Feed to set up, minting a feed key on first use. `--write` puts the link into the element marked `data-postboi-view-link` or the anchor reading "View in browser", and adds `data-web-hide` (asking first, `--yes` to skip). Re-publishing reuses the last version's choices, and a `views` section in `postboi.config.ts` (typed as `ViewConfig`) keeps them in the repo.
