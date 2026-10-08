@@ -179,6 +179,43 @@ that arrived, plus SPF, DKIM and DMARC verdicts from a real receiving mail serve
 actual DNS records, a real SpamAssassin score, and the screenshots. A pasted run leaves
 those transport panels empty, because nothing travelled.
 
+### Local images and fonts
+
+Built HTML often points at files on disk (`<img src="/images/hero.png">`, a webfont in
+`@font-face`, a VML background for Outlook) that no screenshot client can reach. You don't
+have to deploy them or set anything up: `testing run` (and `testing add --html`) finds every local
+reference in `src`, `srcset`, `background`, `url(...)` in styles and VML inside
+`<!--[if mso]>` comments, uploads the files to Postboi and points the HTML at the copies
+before it orders the run. It prints one line when it did:
+
+```
+assets   12 local (3 uploaded, 9 already there)
+```
+
+Uploads are named by a hash of the file, so an unchanged image is never sent twice and an
+edited one gets a new URL, which makes it a fresh render rather than a reused capture.
+URLs (`https://`, `//`, `data:`, `cid:`) and anything with Liquid or merge tags in it
+(`{{ hero }}`, `*|IMAGE|*`) are left alone, and so is a file it can't find, with a warning.
+PNG, JPEG, GIF, WebP, AVIF, SVG and ICO images and WOFF, WOFF2, TTF and OTF fonts are
+uploaded, up to 10 MB each.
+
+It works from wherever the HTML sits, with no config. Each path is looked up next to the HTML file
+first (where build tools copy static files), then in each folder above it up to the project
+root (the nearest one with a `package.json` or `.git`), then in the current directory, and
+the first match wins. So `/images/hero.png` in `public/welcome.html` finds
+`images/hero.png` at the top of the repo. HTML from stdin (`-`) starts from the current
+directory. `--no-assets` sends the HTML exactly as it is.
+
+If a root-relative path ever resolves to the wrong file, `testing.assets` in
+`postboi.config.ts` names the one folder `/…` paths come from, relative to the project
+root:
+
+```ts
+import { config } from 'postboi'
+
+export default config({ testing: { assets: 'static' } })
+```
+
 ### From code
 
 Name a test instead of addressing a person, and `mail()` sends it to the proving

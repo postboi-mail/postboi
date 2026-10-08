@@ -154,6 +154,15 @@ export interface PostboiConfig {
 	 * Only the CLI reads this; sending never does.
 	 */
 	views?: Record<string, ViewConfig>
+	/** `postboi testing run` settings. Only the CLI reads this; sending never does. */
+	testing?: {
+		/**
+		 * The one directory root-relative asset paths (`/images/hero.png`) resolve against,
+		 * relative to the project root. Rarely needed: without it the CLI tries the HTML
+		 * file's directory, each parent up to the project root, then the cwd.
+		 */
+		assets?: string
+	}
 	/** Spam-protection settings applied to every FormData send (honeypot + Turnstile). */
 	captcha?: CaptchaOptions
 	/** Development-only behaviour. Ignored outside `NODE_ENV=development`. */

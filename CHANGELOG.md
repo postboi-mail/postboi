@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi testing run` and `testing add --html` upload the local images and fonts an email points at (`src`, `srcset`, `background`, `url(...)` in styles, VML inside `<!--[if mso]>` comments) and point the HTML at the copies before ordering the run, so an edited image can be tested without deploying it. Files are named by their hash: an unchanged one is never uploaded twice, and an edited one gets a new URL and so a fresh render. Paths resolve next to the HTML, then in each folder above it up to the project root, then in the cwd; `testing.assets` in `postboi.config.ts` pins the folder for root-relative paths if that ever picks the wrong file. URLs, Liquid and merge tags are left alone, a missing file is warned about and left as it is, and `--no-assets` sends the HTML untouched.
+
 ## 0.65.0
 
 ### Added
