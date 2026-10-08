@@ -60,6 +60,12 @@ export interface ViewConfig {
 	params?: Record<string, ParamSpec>
 	/** Feed fields by name, each with the template path it fills. */
 	feed?: Record<string, string>
+	/**
+	 * The sender's own id for the reader, as a template path (`user.external_id`): the link
+	 * carries it as `u`, and `view.viewed` reports it. Anyone can edit it, so it's opt-in.
+	 * `"off"` turns it off.
+	 */
+	reader?: string
 }
 
 /** Everything you can configure globally via `postboi.config.ts` or {@link configure}. */

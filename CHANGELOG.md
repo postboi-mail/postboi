@@ -10,6 +10,12 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi views stats <slug> [--days N] [--json]` prints a published view's views and visitors per day, the same views split by the public params they were opened with (`week=20`), and how many readers were identified. `views.stats(slug, { days })` answers the same as a typed `ViewStats`. Prefetches, `HEAD`s and link scanners aren't counted.
+- `postboi views publish --reader <template path>` turns on the reader param: the link carries your sender's id for the reader as `u`, in its merge syntax and URL-encoded, and the `view.viewed` webhook reports it. It is off by default because anyone can edit it and it shows up in URLs and logs. The server remembers it's on; the path lives in the flag or `views.<slug>.reader` in `postboi.config.ts`, and `--reader off` turns it off. `views.publish({ reader: true })` in the SDK.
+- Webhooks: the Postboi provider's `email.viewed` (the web version of a `web_version: true` send was opened) normalizes to `viewed`, with `message_id`, `email` and the browser in `client`. It is never `opened`. `view.viewed` (a reader Postboi could identify opened a published view) normalizes to `view_viewed`, with the page, the applied params and the reader in `event.view` (typed `ViewViewed`). `mock_request` and `mock_event` build both. `WebhookEventType` gains both members, so an exhaustive `switch` over it needs two more cases.
+
 ## 0.64.0
 
 ### Added

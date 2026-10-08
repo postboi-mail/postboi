@@ -1,4 +1,10 @@
-import type { WebhookAdapter, WebhookEventType, BounceDetail, AdapterModule } from "./index.js"
+import type {
+	WebhookAdapter,
+	WebhookEventType,
+	BounceDetail,
+	AdapterModule,
+	ViewViewed,
+} from "./index.js"
 import type { Channel } from "../errors.js"
 import { parse_json, engagement, to_date, svix_adapter_verify } from "./shared.js"
 import { hmac_sha256, base64_encode, base64_decode } from "./crypto.js"
@@ -49,6 +55,7 @@ const TYPES: Record<string, WebhookEventType> = {
 	"email.clicked": "clicked",
 	"email.failed": "failed",
 	"email.received": "received",
+	"email.viewed": "viewed",
 	"sms.sent": "sent",
 	"sms.delivered": "delivered",
 	"sms.failed": "failed",
@@ -58,6 +65,7 @@ const TYPES: Record<string, WebhookEventType> = {
 	"whatsapp.failed": "failed",
 	"testing.received": "test_received",
 	"testing.completed": "test_completed",
+	"view.viewed": "view_viewed",
 }
 
 /**
@@ -116,6 +124,21 @@ const adapter: WebhookAdapter = {
 			]
 		}
 
+		// A published view's reader, not a send: the payload's data is the view, whole.
+		if (type === "view_viewed") {
+			const view = payload.data as unknown as ViewViewed
+			return [
+				{
+					type,
+					provider: "postboi",
+					timestamp: to_date(view?.viewed_at ?? payload.created_at),
+					view,
+					...engagement(view?.user_agent, undefined),
+					raw: payload,
+				},
+			]
+		}
+
 		const data = payload.data ?? {}
 		const channel = channel_of(payload.type)
 		return [
@@ -152,12 +175,21 @@ const adapter: WebhookAdapter = {
 
 export default adapter
 
+const MOCK_BROWSER =
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
 /** Build a realistic signed Postboi sample request — used by `mock_request` and tests. */
 export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => {
 	// Two wire types now share most normalized types, so the reverse lookup is scoped
 	// by channel; without one, email is what a sample is about.
 	const test = type === "test_received" || type === "test_completed"
-	const prefix = test ? "testing" : channel === "sms" || channel === "whatsapp" ? channel : "email"
+	const prefix = test
+		? "testing"
+		: type === "view_viewed"
+			? "view"
+			: channel === "sms" || channel === "whatsapp"
+				? channel
+				: "email"
 	const postboi_type =
 		Object.entries(TYPES).find(([wire, t]) => t === type && wire.startsWith(`${prefix}.`))?.[0] ??
 		`${prefix}.delivered`
@@ -169,6 +201,8 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 		subject: "Mock subject",
 		timestamp: now,
 	}
+	// A web version is read in a browser, and Postboi reports no address for it.
+	if (type === "viewed") data.user_agent = MOCK_BROWSER
 	if (type === "opened") {
 		data.user_agent =
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
@@ -191,7 +225,11 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 		type: postboi_type,
 		created_at: now,
 		// Imported here, not at the top: the mock is test-only, the adapter ships.
-		data: test ? (await import("./mock.js")).mock_run(type === "test_completed") : data,
+		data: test
+			? (await import("./mock.js")).mock_run(type === "test_completed")
+			: prefix === "view"
+				? (await import("./mock.js")).mock_view()
+				: data,
 	})
 	const id = "whmsg_mock"
 	const timestamp = String(Math.floor(Date.now() / 1000))

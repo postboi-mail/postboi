@@ -127,6 +127,65 @@ describe("views.url", () => {
 	})
 })
 
+describe("views.stats and views.publish", () => {
+	function api(answers: Record<string, unknown>) {
+		const calls: Array<{ url: string; body?: unknown }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubEnv("POSTBOI_API_URL", "https://api.test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string, init?: RequestInit) => {
+				calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+				const answer = answers[`${init?.method ?? "GET"} ${new URL(url).pathname}`]
+				return answer === undefined
+					? new Response("Not found", { status: 404 })
+					: new Response(JSON.stringify(answer))
+			})
+		)
+		return calls
+	}
+
+	it("asks for a view's stats over the days given", async () => {
+		const stats = {
+			days: [{ day: "2026-10-07", views: 3, visitors: 2 }],
+			params: [{ params: "week=20", views: 3, visitors: 2 }],
+			identified: 1,
+		}
+		const calls = api({ "GET /v1/views/welcome/stats": stats })
+		expect(await views.stats("welcome", { days: 7 })).toEqual(stats)
+		await views.stats("welcome")
+		expect(calls.map((c) => c.url)).toEqual([
+			"https://api.test/v1/views/welcome/stats?days=7",
+			"https://api.test/v1/views/welcome/stats",
+		])
+	})
+
+	it("says the server can't count views yet on a bare 404, and passes a missing view's code on", async () => {
+		api({})
+		await expect(views.stats("welcome")).rejects.toMatchObject({
+			code: "views_unavailable",
+			message: expect.stringContaining("doesn't count views yet"),
+		})
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(
+				async () =>
+					new Response(JSON.stringify({ code: "not_found", message: "No view welcome." }), {
+						status: 404,
+					})
+			)
+		)
+		await expect(views.stats("welcome")).rejects.toMatchObject({ code: "not_found" })
+	})
+
+	it("publishes with the reader param on", async () => {
+		const calls = api({ "POST /v1/views": { slug: "welcome", reader: true } })
+		const view = await views.publish({ slug: "welcome", html: "<p>Hi</p>", reader: true })
+		expect(view.reader).toBe(true)
+		expect(calls[0].body).toEqual({ slug: "welcome", html: "<p>Hi</p>", reader: true })
+	})
+})
+
 describe("mail({ view })", () => {
 	it("fills {{ postboi.web_url }} and %postboi_web_url% in html and text before sending", async () => {
 		vi.stubEnv("POSTBOI_VIEW_KEY", KEY)

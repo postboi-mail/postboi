@@ -40,9 +40,26 @@ export interface View {
 	/** Which fields a feed call may carry, and the template path each one fills. */
 	feed?: { fields: Record<string, string> }
 	syntax: "liquid" | "none"
+	/** Whether the page reads the opt-in reader param, `u`. */
+	reader?: boolean
 	created_at: string
 	updated_at: string
 	disabled?: boolean
+}
+
+/** How often a view was opened, as `views.stats()` answers it. */
+export interface ViewStats {
+	/** One row per UTC day (`YYYY-MM-DD`) with views. `visitors` are distinct per day. */
+	days: Array<{ day: string; views: number; visitors: number }>
+	/** The same views by the public params they were opened with, like `week=20`; `""` is none. */
+	params: Array<{ params: string; views: number; visitors: number }>
+	/** Views by a reader Postboi could tell apart: a feed record, a sealed link or `u`. */
+	identified: number
+}
+
+export interface StatsOptions extends ViewClientOptions {
+	/** How far back, in days. The server's default is 30, and it keeps up to 365. */
+	days?: number
 }
 
 export interface PublishOptions {
@@ -54,6 +71,11 @@ export interface PublishOptions {
 	params?: Record<string, ParamSpec>
 	feed?: { fields: Record<string, string> }
 	syntax?: "liquid" | "none"
+	/**
+	 * Read the reader param `u` (up to 200 characters) and report it on `view.viewed`. Off
+	 * by default: anyone can type any `u`, and it sits in URLs and logs.
+	 */
+	reader?: boolean
 }
 
 /** Where the views API is and who is asking. Every field defaults from the environment. */
@@ -162,7 +184,7 @@ export async function seal_token(
  */
 async function call<T>(
 	path: string,
-	init: { method?: string; body?: unknown },
+	init: { method?: string; body?: unknown; missing?: string },
 	options: ViewClientOptions
 ): Promise<T> {
 	await ensure_env_loaded()
@@ -197,7 +219,8 @@ async function call<T>(
 			status: response.status,
 			code: missing ? "views_unavailable" : (data?.code ?? `http_${response.status}`),
 			message: missing
-				? "This Postboi server doesn't host views yet. Try again after the next deploy."
+				? (init.missing ?? "This Postboi server doesn't host views yet.") +
+					" Try again after the next deploy."
 				: (data?.message ?? `The views API answered ${response.status}.`),
 			raw: data,
 		})
@@ -233,6 +256,16 @@ export const views = {
 	publish(options: PublishOptions & ViewClientOptions): Promise<View> {
 		const { token, api, fetch, ...body } = options
 		return call<View>("", { method: "POST", body }, { token, api, fetch })
+	},
+
+	/** Views and visitors per day, by public params, and how many were identified. */
+	stats(slug: string, options: StatsOptions = {}): Promise<ViewStats> {
+		const { days, ...client } = options
+		return call<ViewStats>(
+			`/${encodeURIComponent(slug)}/stats${days === undefined ? "" : `?days=${days}`}`,
+			{ missing: "This Postboi server doesn't count views yet." },
+			client
+		)
 	},
 
 	/**

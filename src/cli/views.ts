@@ -7,7 +7,7 @@ import { load_config } from "../library/config.js"
 import type { ViewConfig, ViewProvider } from "../library/config.js"
 import { PostboiError } from "../library/errors.js"
 import { tokenize } from "../library/inspect/html.js"
-import { views as views_sdk, type ParamSpec, type View } from "../library/views.js"
+import { views as views_sdk, type ParamSpec, type View, type ViewStats } from "../library/views.js"
 import {
 	api,
 	api_file,
@@ -413,17 +413,20 @@ export function supports_feed(provider: ViewProvider): boolean {
 
 /**
  * The link to put in the email. With feed fields on a sender that can fetch, it starts
- * from the URL the feed answered (which already carries `?r=`); public params ride after.
+ * from the URL the feed answered (which already carries `?r=`); public params ride after,
+ * then the reader's id as `u` when `reader` names its template path.
  */
 export function view_link(
 	provider: ViewProvider,
 	url: string,
 	params: Record<string, ParamSpec>,
-	feed: boolean
+	feed: boolean,
+	reader?: string
 ): string {
 	const query = Object.entries(params).map(
 		([name, spec]) => `${encodeURIComponent(name)}=${merge_expression(provider, spec.path)}`
 	)
+	if (reader) query.push(`u=${merge_expression(provider, reader)}`)
 	const base = feed && supports_feed(provider) ? FEED_RESULT[provider]! : url
 	if (provider === "none" || query.length === 0) return base
 	return `${base}${base === url ? "?" : "&"}${query.join("&")}`
@@ -543,6 +546,9 @@ export function reader_paths(found: Detected, context: unknown): Array<string> {
 
 const FREE_TEXT = new Set(["text", "string", "str", "free"])
 
+/** A dotted template path, `user.external_id`, as `--reader` takes it. */
+const TEMPLATE_PATH = /^[A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*)*$/
+
 /** `week:integer`, `week:enum`, `user.tags.week` → the variable and its type, if given. */
 export function parse_public(value: string): Array<{ name: string; type?: string }> {
 	return value
@@ -659,7 +665,7 @@ export const views_io = {
 
 const PUBLISH_USAGE = [
 	"Usage: postboi views publish <file.html> [--slug <slug>] [--provider <sender>] [--context <file.json or .js>]",
-	"         [--public <var[:integer, date or enum]>,… or --public all] [--write] [--yes] [--json]",
+	"         [--public <var[:integer, date or enum]>,… or --public all] [--reader <path> or off] [--write] [--yes] [--json]",
 	`         senders: ${VIEW_PROVIDERS.join(", ")}`,
 ].join("\n")
 
@@ -671,7 +677,7 @@ function view_slug(value: string): string {
 async function publish(args: Array<string>): Promise<void> {
 	const { flags, rest, on } = take_flags(
 		args,
-		["slug", "provider", "public", "context"],
+		["slug", "provider", "public", "context", "reader"],
 		["write", "yes"]
 	)
 	const file = rest[0]
@@ -703,6 +709,22 @@ async function publish(args: Array<string>): Promise<void> {
 
 	// The last version's choices: a re-publish keeps them without being told again.
 	const previous = await api<View>(`/v1/views/${slug}`).catch(() => undefined)
+
+	// The reader param: a path from the flag or the config. The server keeps only whether
+	// it was on, so a re-publish without either keeps it on and links without `u`.
+	const reader_choice = flags.reader ?? saved.reader
+	if (
+		reader_choice !== undefined &&
+		reader_choice !== "off" &&
+		!TEMPLATE_PATH.test(reader_choice)
+	) {
+		throw new ApiCommandError(
+			`--reader takes the template path of your sender's id for the reader, like user.external_id, or off.`,
+			"invalid_reader"
+		)
+	}
+	const reader_path = reader_choice === "off" ? undefined : reader_choice
+	const reader = reader_choice ? reader_choice !== "off" : Boolean(previous?.reader)
 
 	const found = detect_variables(html)
 	const readers = reader_paths(found, context)
@@ -811,11 +833,13 @@ async function publish(args: Array<string>): Promise<void> {
 		params,
 		feed: Object.keys(fields).length ? { fields } : undefined,
 		syntax: /\{\{|\{%/.test(html) ? "liquid" : "none",
+		// Left out rather than false, so a server from before the reader param takes it.
+		reader: reader || undefined,
 	}
 	const view = await views_api<View>("/v1/views", { method: "POST", body })
 	const url = view.custom_url ?? view.url
 	const has_feed = Object.keys(fields).length > 0
-	const link = view_link(provider, url, params, has_feed)
+	const link = view_link(provider, url, params, has_feed, reader ? reader_path : undefined)
 
 	let setup: Array<string> | undefined
 	let key_note: string | undefined
@@ -836,6 +860,7 @@ async function publish(args: Array<string>): Promise<void> {
 		link,
 		params,
 		feed: fields,
+		reader: reader ? (reader_path ?? true) : undefined,
 		context: context ? Object.keys(context) : [],
 		system: system.map((s) => ({
 			provider: s.provider,
@@ -859,6 +884,18 @@ async function publish(args: Array<string>): Promise<void> {
 	}
 	for (const [field, path] of Object.entries(fields)) {
 		say(`  ${dim("feed")}     ${bold(field)} → ${path}`)
+	}
+	if (reader) {
+		say(
+			`  ${dim("reader")}   ${bold("u")} → ${reader_path ?? dim("no path: pass --reader <path> to put it on the link")} ${dim("(anyone can edit it: a claim, not proof)")}`
+		)
+		if (view.reader === undefined) {
+			say(
+				yellow(
+					"  ! This Postboi server doesn't read u yet, so views report no reader until it does."
+				)
+			)
+		}
 	}
 	if (!flags.public && Object.keys(fields).length) {
 		say(dim(`  (make one public with --public ${Object.keys(fields)[0]}:integer, :date or :enum)`))
@@ -895,10 +932,10 @@ async function publish(args: Array<string>): Promise<void> {
 	say()
 	say(`${bold(`Link for ${PROVIDER_NAME[provider]}`)}`)
 	say(`  ${link}`)
-	if (provider === "none" && Object.keys(params).length) {
+	if (provider === "none" && (Object.keys(params).length || reader)) {
 		say(
 			dim(
-				`  personalise it with ${Object.keys(params)
+				`  personalise it with ${[...Object.keys(params), ...(reader ? ["u"] : [])]
 					.map((name) => `?${name}=…`)
 					.join(" ")} in your sender's merge syntax (--provider names one)`
 			)
@@ -1059,6 +1096,41 @@ async function keys(args: Array<string>): Promise<void> {
 	)
 }
 
+const STATS_USAGE = "Usage: postboi views stats <slug> [--days <1 to 365>] [--json]"
+
+async function stats(args: Array<string>): Promise<void> {
+	const { flags, rest } = take_flags(args, ["days"])
+	const slug = rest[0]
+	if (!slug || rest.length > 1) throw new ApiCommandError(STATS_USAGE)
+	const days = flags.days === undefined ? undefined : Number(flags.days)
+	if (days !== undefined && !(Number.isInteger(days) && days >= 1 && days <= 365)) {
+		throw new ApiCommandError(
+			`--days is a whole number from 1 to 365.\n${STATS_USAGE}`,
+			"invalid_days"
+		)
+	}
+	const query = days === undefined ? "" : `?days=${days}`
+	const result = await views_api<ViewStats>(`/v1/views/${encodeURIComponent(slug)}/stats${query}`)
+	const total = result.days.reduce((sum, d) => sum + d.views, 0)
+	const span = `the last ${days ?? 30} day${days === 1 ? "" : "s"}`
+	if (total === 0) return say(dim(`No views of ${slug} in ${span}.`))
+	say(
+		`${bold(slug)}  ${total} view${total === 1 ? "" : "s"} in ${span}, ${result.identified} identified`
+	)
+	say()
+	table(
+		["DAY", "VIEWS", "VISITORS"],
+		result.days.map((d) => [d.day, String(d.views), String(d.visitors)])
+	)
+	say()
+	table(
+		["PARAMS", "VIEWS", "VISITORS"],
+		result.params.map((p) => [p.params || dim("(none)"), String(p.views), String(p.visitors)])
+	)
+	say()
+	say(dim("Visitors are counted per day, so they don't add up across days."))
+}
+
 /**
  * `postboi views`: list, publish, open, delete, and the keys behind sealed links and feeds.
  * A function declaration on purpose: api.ts imports this while this imports api.ts.
@@ -1068,6 +1140,7 @@ export async function views(args: Array<string>): Promise<void> {
 	if (action === "publish") return publish(rest)
 	if (action === "open") return open_view(rest)
 	if (action === "keys") return keys(rest)
+	if (action === "stats") return stats(rest)
 	if (action === "feed-key") {
 		const key = await views_api<{ id: string; key: string }>("/v1/views/keys", {
 			method: "POST",
@@ -1085,7 +1158,7 @@ export async function views(args: Array<string>): Promise<void> {
 	}
 	if (action) {
 		throw new ApiCommandError(
-			`Unknown action: views ${action}. Try publish, open, delete, keys or feed-key.`
+			`Unknown action: views ${action}. Try publish, open, stats, delete, keys or feed-key.`
 		)
 	}
 	const { data } = await views_api<{ data: Array<View> }>("/v1/views")

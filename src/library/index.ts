@@ -130,9 +130,11 @@ export {
 	type ParamSpec,
 	type PublishOptions,
 	type SealOptions,
+	type StatsOptions,
 	type UrlOptions,
 	type View,
 	type ViewClientOptions,
+	type ViewStats,
 } from "./views.js"
 // The table renderer escapes for you; these are for hand-rolled HTML bodies that
 // interpolate user input, so callers don't reinvent them (usually incompletely).
