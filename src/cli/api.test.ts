@@ -1,9 +1,21 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { createHash } from "node:crypto"
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import {
+	chmodSync,
+	lstatSync,
+	mkdirSync,
+	mkdtempSync,
+	openSync,
+	readFileSync,
+	readdirSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs"
 import { stdin, stdout } from "node:process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { strip_ansi } from "./prompts.js"
 import {
 	table,
 	api_command,
@@ -1279,5 +1291,259 @@ describe("testing run and download", () => {
 		expect(lines.join("\n")).toContain("https://api.test/share/testing/tok")
 		await api_command("testing", ["share", "test_1", "--revoke"])
 		expect(calls.some((c) => c.key === "DELETE /v1/testing/test_1/share")).toBe(true)
+	})
+})
+
+describe("assets", () => {
+	const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32)
+	const url = (s: string) => `https://mail-view.acme.test/assets/${hash(s)}.png`
+
+	/** `/v1/assets` answering like the server: `logo` is already there, the rest are new. */
+	function serve(extra: Record<string, Response> = {}) {
+		const calls: Array<{ key: string; body?: unknown }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubEnv("POSTBOI_API_URL", "https://api.test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: string, init?: RequestInit) => {
+				const key = `${init?.method ?? "GET"} ${new URL(input).pathname}`
+				const body = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body
+				calls.push({ key, body })
+				if (extra[key]) return extra[key]
+				if (key === "POST /v1/assets") {
+					const assets = (body as { assets: Array<{ hash: string; ext: string }> }).assets
+					return Response.json({
+						assets: assets.map((a) => ({
+							url: `https://mail-view.acme.test/assets/${a.hash}.${a.ext}`,
+							exists: a.hash === hash("logo"),
+						})),
+					})
+				}
+				if (key.startsWith("PUT /v1/assets/")) {
+					return Response.json({ url: `https://mail-view.acme.test${key.slice(7)}` })
+				}
+				if (key === "POST /v1/send") return Response.json({ id: "msg_1" })
+				return new Response("Not found", { status: 404 })
+			})
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		return { calls, lines }
+	}
+
+	function project() {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-hosted-"))
+		writeFileSync(join(dir, "package.json"), "{}")
+		mkdirSync(join(dir, "images"))
+		mkdirSync(join(dir, "dist"))
+		writeFileSync(join(dir, "images", "logo.png"), "logo")
+		writeFileSync(join(dir, "images", "hero.png"), "hero")
+		return dir
+	}
+
+	it("uploads what every file shares once and rewrites each file in place", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const b = join(dir, "dist", "b.html")
+		const plain = join(dir, "dist", "plain.html")
+		writeFileSync(a, `<img src="/images/logo.png"><img src="/images/hero.png">`)
+		writeFileSync(b, `<img src="../images/logo.png" srcset="/images/hero.png 2x">`)
+		writeFileSync(plain, `<img src="https://cdn.test/x.png">`)
+		const { calls, lines } = serve()
+
+		await api_command("assets", [a, b, plain])
+
+		const posts = calls.filter((c) => c.key === "POST /v1/assets")
+		expect(posts).toHaveLength(1)
+		expect(posts[0].body).toEqual({
+			assets: [
+				{ hash: hash("logo"), ext: "png", size: 4 },
+				{ hash: hash("hero"), ext: "png", size: 4 },
+			],
+		})
+		expect(calls.filter((c) => c.key.startsWith("PUT "))).toEqual([
+			{ key: `PUT /v1/assets/${hash("hero")}.png`, body: expect.any(Uint8Array) },
+		])
+		expect(readFileSync(a, "utf8")).toBe(`<img src="${url("logo")}"><img src="${url("hero")}">`)
+		expect(readFileSync(b, "utf8")).toBe(`<img src="${url("logo")}" srcset="${url("hero")} 2x">`)
+		expect(readFileSync(plain, "utf8")).toBe(`<img src="https://cdn.test/x.png">`)
+		expect(lines).toEqual(["assets   2 local (1 uploaded, 1 already there) in 3 files"])
+	})
+
+	it("- reads stdin and writes the HTML to stdout, the summary to stderr", async () => {
+		const dir = project()
+		const input = join(dir, "in.html")
+		writeFileSync(input, `<img src="images/logo.png"><img src="gone.png">`)
+		const { lines } = serve()
+		const errors: Array<string> = []
+		vi.spyOn(console, "error").mockImplementation((line: string) => void errors.push(line))
+		const written: Array<string> = []
+		vi.spyOn(stdout, "write").mockImplementation(((chunk: string) => {
+			written.push(chunk)
+			return true
+		}) as never)
+		const fd = stdin.fd
+		const cwd = vi.spyOn(process, "cwd").mockReturnValue(dir)
+		Object.defineProperty(stdin, "fd", { value: openSync(input, "r"), configurable: true })
+		try {
+			await api_command("assets", ["-", "--json"])
+		} finally {
+			Object.defineProperty(stdin, "fd", { value: fd, configurable: true })
+			cwd.mockRestore()
+		}
+		expect(written).toEqual([`<img src="${url("logo")}"><img src="gone.png">`])
+		expect(lines).toEqual([])
+		expect(errors.map(strip_ansi)).toEqual([
+			"! gone.png: no such file, left as it is",
+			"assets   1 local (0 uploaded, 1 already there) in 1 file",
+		])
+	})
+
+	it("says why hosting was refused, and changes no file", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/logo.png">`
+		writeFileSync(file, html)
+		serve({
+			"POST /v1/assets": Response.json(
+				{ code: "views_not_allowed", message: "Publishing a view needs a verified domain." },
+				{ status: 403 }
+			),
+		})
+		await expect(api_command("assets", [file])).rejects.toMatchObject({
+			code: "views_not_allowed",
+			message: expect.stringContaining("verified sending domain or a paid plan"),
+		})
+		serve({ "POST /v1/assets": new Response("POST method not allowed", { status: 405 }) })
+		await expect(api_command("assets", [file])).rejects.toMatchObject({
+			code: "assets_unavailable",
+		})
+		expect(readFileSync(file, "utf8")).toBe(html)
+		await expect(api_command("assets", [])).rejects.toThrow(/Usage: postboi assets/)
+	})
+
+	it("send --file hosts the local files first, and --no-assets sends the HTML as it is", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/hero.png">`
+		writeFileSync(file, html)
+		const send = ["--to", "a@b.co", "--subject", "s", "--file", file]
+		const { calls, lines } = serve()
+
+		await api_command("send", send)
+		const sent = (n: number) => calls.filter((c) => c.key === "POST /v1/send")[n].body
+		expect(sent(0)).toMatchObject({ html: `<img src="${url("hero")}">` })
+		expect(lines[0]).toBe("assets   1 local (1 uploaded, 0 already there)")
+		expect(readFileSync(file, "utf8")).toBe(html)
+
+		const before = calls.length
+		await api_command("send", [...send, "--no-assets"])
+		expect(calls.slice(before).map((c) => c.key)).toEqual(["POST /v1/send"])
+		expect(sent(1)).toMatchObject({ html })
+	})
+
+	it("lists send --file hosts the local files first", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/hero.png">`
+		writeFileSync(file, html)
+		const send = ["send", "news", "--subject", "s", "--file", file]
+		const { calls, lines } = serve({
+			"POST /v1/lists/news/send": Response.json({ ids: ["msg_1"], recipients: 3 }),
+		})
+
+		await api_command("lists", send)
+		const sent = (n: number) => calls.filter((c) => c.key === "POST /v1/lists/news/send")[n].body
+		expect(sent(0)).toMatchObject({ html: `<img src="${url("hero")}">` })
+		expect(lines[0]).toBe("assets   1 local (1 uploaded, 0 already there)")
+		expect(readFileSync(file, "utf8")).toBe(html)
+	})
+
+	it("lists send --no-assets sends the file untouched", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/hero.png">`
+		writeFileSync(file, html)
+		const { calls } = serve({
+			"POST /v1/lists/news/send": Response.json({ ids: ["msg_1"], recipients: 3 }),
+		})
+		await api_command("lists", ["send", "news", "--subject", "s", "--file", file, "--no-assets"])
+		expect(calls.map((c) => c.key)).toEqual(["POST /v1/lists/news/send"])
+		expect(calls[0].body).toMatchObject({ html })
+	})
+
+	it("counts a file named twice, or by a symlink, once, and keeps the symlink and mode", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const link = join(dir, "dist", "link.html")
+		writeFileSync(a, `<img src="../images/logo.png">\r\n`)
+		chmodSync(a, 0o640)
+		symlinkSync(a, link)
+		const { calls, lines } = serve()
+
+		await api_command("assets", [a, a, link])
+
+		expect(calls.filter((c) => c.key === "POST /v1/assets")).toHaveLength(1)
+		expect(lines).toEqual(["assets   1 local (0 uploaded, 1 already there) in 1 file"])
+		expect(readFileSync(a, "utf8")).toBe(`<img src="${url("logo")}">\r\n`)
+		expect(lstatSync(link).isSymbolicLink()).toBe(true)
+		expect(statSync(a).mode & 0o777).toBe(0o640)
+		expect(readdirSync(join(dir, "dist")).sort()).toEqual(["a.html", "link.html"])
+	})
+
+	it("keeps a BOM and CRLF, and names the file in a warning when there are several", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const b = join(dir, "dist", "b.html")
+		writeFileSync(a, `\uFEFF<p>café</p>\r\n<img src="/images/hero.png">\r\n`)
+		writeFileSync(b, `<img src="gone.png">`)
+		const { lines } = serve()
+
+		await api_command("assets", [a, b])
+
+		expect(readFileSync(a, "utf8")).toBe(`\uFEFF<p>café</p>\r\n<img src="${url("hero")}">\r\n`)
+		expect(lines.map(strip_ansi)).toEqual([
+			`! ${b}: gone.png: no such file, left as it is`,
+			"assets   1 local (1 uploaded, 0 already there) in 2 files",
+		])
+	})
+
+	it("stops before uploading on a file it can't read or rewrite, or that isn't UTF-8", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const html = `<img src="/images/logo.png">`
+		writeFileSync(a, html)
+		const latin1 = join(dir, "dist", "latin1.html")
+		writeFileSync(latin1, Buffer.from(`<p>caf\xe9</p><img src="/images/logo.png">`, "latin1"))
+		const { calls } = serve()
+
+		await expect(api_command("assets", [a, join(dir, "dist", "*.htm")])).rejects.toMatchObject({
+			code: "file_unreadable",
+		})
+		await expect(api_command("assets", [a, latin1])).rejects.toMatchObject({ code: "not_utf8" })
+		chmodSync(a, 0o444)
+		await expect(api_command("assets", [a])).rejects.toMatchObject({ code: "file_unreadable" })
+		expect(calls).toEqual([])
+		expect(readFileSync(a, "utf8")).toBe(html)
+	})
+
+	it("changes no file when one of the new copies can't be written", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		mkdirSync(join(dir, "locked"))
+		const b = join(dir, "locked", "b.html")
+		const html = `<img src="/images/logo.png">`
+		writeFileSync(a, html)
+		writeFileSync(b, html)
+		chmodSync(join(dir, "locked"), 0o555)
+		serve()
+		try {
+			await expect(api_command("assets", [a, b])).rejects.toThrow()
+		} finally {
+			chmodSync(join(dir, "locked"), 0o755)
+		}
+		expect(readFileSync(a, "utf8")).toBe(html)
+		expect(readFileSync(b, "utf8")).toBe(html)
+		expect(readdirSync(join(dir, "dist"))).toEqual(["a.html"])
 	})
 })

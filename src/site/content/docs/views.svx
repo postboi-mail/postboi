@@ -343,10 +343,12 @@ so it never sets the message as opened or sends `email.opened`. An endpoint made
 
 ## On your own domain
 
-Turn on `view.<your domain>` for a verified domain on the dashboard's Domains page, the
-same way as hosted forms, and pages answer at `https://view.example.com/welcome`. The CLI
-prints links on it from then on, and `views.url()` uses it once `POSTBOI_VIEW_URL` is
-`https://view.example.com` (`postboi sync` writes it).
+Turn on `mail-view.<your domain>` for a verified domain on the dashboard's Domains page,
+the same way as hosted forms, and pages answer at `https://mail-view.example.com/welcome`.
+The CLI prints links on it from then on, and `views.url()` uses it once `POSTBOI_VIEW_URL`
+is `https://mail-view.example.com` (`postboi sync` writes it). The page's images and fonts
+are served from it too, as are the files [`postboi assets`](/hosting) hosts, so turning it
+off breaks them in mail already sent.
 
 ## Saving the choices
 
