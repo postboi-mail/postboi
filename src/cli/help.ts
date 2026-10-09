@@ -86,6 +86,15 @@ export const HELP: Array<HelpSection> = [
 				summary: "One email, now",
 				details: [
 					"--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]",
+					"--file uploads the local images and fonts the HTML points at, as `assets` does; --no-assets sends it as it is",
+				],
+			},
+			{
+				command: "assets",
+				summary: "Host the images and fonts built email HTML points at, for good",
+				details: [
+					"<file.html…> uploads the local files they point at (src, srcset, url(), VML) and rewrites each file in place to the hosted URLs",
+					"- reads stdin and writes the HTML to stdout. Shared files go up once per run; URLs are on mail-view.<your domain> when it's on",
 				],
 			},
 			{

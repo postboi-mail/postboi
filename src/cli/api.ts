@@ -9,7 +9,7 @@ import {
 	type TestingPreview,
 	type TestingRun,
 } from "../library/inspect/hosted.js"
-import { upload_assets } from "./assets.js"
+import { upload_all, upload_assets } from "./assets.js"
 import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
@@ -723,7 +723,7 @@ export function parse_email_list(value: string): Array<{ email: string; name?: s
 
 const SEND_USAGE = [
 	"Usage: postboi send --to <emails> --subject <s> (--text <t> | --html <h> | --file <path>|-)",
-	"         [--from <a>] [--reply-to <a>] [--cc <emails>] [--bcc <emails>] [--at <ISO time>] [--tag a,b]",
+	"         [--from <a>] [--reply-to <a>] [--cc <emails>] [--bcc <emails>] [--at <ISO time>] [--tag a,b] [--no-assets]",
 ].join("\n")
 
 /** A body from `--file`: HTML when it looks like it, text otherwise. `-` reads stdin. */
@@ -739,25 +739,27 @@ function body_from_file(path: string): { html?: string; text?: string } {
  * `messages <id>` reads back.
  */
 async function send(args: Array<string>): Promise<void> {
-	const { flags, rest } = take_flags(args, [
-		"to",
-		"subject",
-		"text",
-		"html",
-		"file",
-		"from",
-		"reply-to",
-		"cc",
-		"bcc",
-		"at",
-		"tag",
-	])
+	const { flags, rest, on } = take_flags(
+		args,
+		["to", "subject", "text", "html", "file", "from", "reply-to", "cc", "bcc", "at", "tag"],
+		["no-assets"]
+	)
 	const body = flags.file ? body_from_file(flags.file) : { html: flags.html, text: flags.text }
 	if (rest.length || !flags.to || !flags.subject || (!body.html && !body.text)) {
 		throw new ApiCommandError(SEND_USAGE)
 	}
 	const to = parse_email_list(flags.to)
 	if (!to.length) throw new ApiCommandError("--to needs at least one email address.")
+	// A file's local images and fonts go to the kept store first: mail that's sent stays sent.
+	if (flags.file && body.html && !on.has("no-assets")) {
+		const hosted = await host_assets(
+			[{ html: body.html, file: flags.file }],
+			say,
+			"Nothing was sent; --no-assets sends the HTML as it is."
+		)
+		body.html = hosted.html[0]
+		if (hosted.local) say(hosted.line.replace(/ in 1 file$/, ""))
+	}
 	const one = (value: string | undefined) => (value ? parse_email_list(value)[0] : undefined)
 	const result = await api<{
 		id: string
@@ -788,6 +790,72 @@ async function send(args: Array<string>): Promise<void> {
 		say(`  ${yellow("sandbox")}: logged, nothing is delivered`)
 	}
 	say(`  ${dim(`postboi messages ${result.id} shows its delivery status.`)}`)
+}
+
+// ── Hosted assets ──────────────────────────────────────────────────────────
+
+/**
+ * Upload the local images and fonts `docs` point at to the kept store (`/v1/assets`), with
+ * its refusals in words: the views gate, and a server from before the route. `hint` ends
+ * them, saying what happened instead. Answers the rewritten HTML, the counts and the summary.
+ */
+async function host_assets(
+	docs: Array<{ html: string; file: string }>,
+	log: (line: string) => void,
+	hint: string
+): Promise<{ html: Array<string>; local: number; uploaded: number; line: string }> {
+	const done = await upload_all(
+		docs,
+		(await load_config()).testing?.assets,
+		"/v1/assets",
+		log
+	).catch((error) => {
+		if (error instanceof ApiCommandError && error.code === "views_not_allowed") {
+			throw new ApiCommandError(
+				`Hosting images and fonts needs a verified sending domain or a paid plan. ${hint}`,
+				error.code
+			)
+		}
+		if (error instanceof ApiCommandError && ["http_404", "http_405"].includes(error.code ?? "")) {
+			throw new ApiCommandError(
+				`This Postboi server doesn't host images and fonts yet (POST /v1/assets); try again after the next deploy. ${hint}`,
+				"assets_unavailable"
+			)
+		}
+		throw error
+	})
+	const { local, uploaded } = done
+	const files = `${docs.length} ${docs.length === 1 ? "file" : "files"}`
+	const line = `assets   ${local} local (${uploaded} uploaded, ${local - uploaded} already there) in ${files}`
+	return { ...done, line }
+}
+
+const ASSETS_USAGE = "Usage: postboi assets <file.html…> (or - to read stdin and write stdout)"
+
+/**
+ * `assets`: built HTML in, the same files pointing at hosted copies of their local images and
+ * fonts out, rewritten in place. One upload for the whole run, so a logo every file shares
+ * goes up once. `-` reads stdin and writes stdout, and then the summary goes to stderr.
+ */
+async function assets_command(args: Array<string>): Promise<void> {
+	const piped = args.includes("-")
+	if (!args.length || args.some((arg) => arg.startsWith("--")) || (piped && args.length > 1)) {
+		throw new ApiCommandError(ASSETS_USAGE)
+	}
+	const docs = args.map((file) => ({
+		file,
+		html: readFileSync(file === "-" ? stdin.fd : file, "utf8"),
+	}))
+	const log = piped ? (line: string) => console.error(line) : say
+	const done = await host_assets(docs, log, "No file was changed.")
+	if (piped) {
+		stdout.write(done.html[0])
+	} else {
+		docs.forEach((doc, n) => done.html[n] !== doc.html && writeFileSync(doc.file, done.html[n]))
+	}
+	log(done.line)
+	// Under --json the summary, unless stdout is the HTML.
+	respond(piped ? undefined : { local: done.local, uploaded: done.uploaded, files: docs.length })
 }
 
 // ── Messages & suppressions ────────────────────────────────────────────────
@@ -1920,6 +1988,7 @@ async function testing(args: Array<string>): Promise<void> {
 const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	whoami: () => whoami(),
 	send,
+	assets: assets_command,
 	"send-address": send_address,
 	lists,
 	recipients,

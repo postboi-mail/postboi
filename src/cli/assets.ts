@@ -5,10 +5,11 @@ import { api, say } from "./api.js"
 import { yellow } from "./prompts.js"
 
 /**
- * Local assets for `postboi testing run` and `postboi views publish`: find the images, fonts
+ * Local assets for `postboi testing run`, `views publish`, `assets` and `send --file`: find the images, fonts
  * and VML fills an email points at on disk, upload each one content-addressed (an edited file
  * gets a new URL, an unchanged one is never sent twice) and point the HTML at the uploads.
- * Tests upload to `/v1/testing/assets` (kept 30 days), views to `/v1/views/assets` (kept).
+ * Tests upload to `/v1/testing/assets` (kept 30 days), views to `/v1/views/assets` (kept), and
+ * `postboi assets` and `send --file` to `/v1/assets` (the same kept store, for mail that's sent).
  */
 
 /** What the server stores, by extension. */
@@ -151,6 +152,9 @@ interface Asset {
 	url?: string
 }
 
+/** Where the copies go: tests (kept 30 days), views and hosted files (both kept). */
+export type AssetEndpoint = "/v1/testing/assets" | "/v1/views/assets" | "/v1/assets"
+
 /**
  * Upload the local assets `html` references to `endpoint` and answer it pointing at them.
  * `file` is the HTML's path (`-` for stdin, resolved from the cwd); `assets` is
@@ -160,43 +164,71 @@ export async function upload_assets(
 	html: string,
 	file: string,
 	assets?: string,
-	endpoint: "/v1/testing/assets" | "/v1/views/assets" = "/v1/testing/assets"
+	endpoint: AssetEndpoint = "/v1/testing/assets"
 ): Promise<string> {
-	const refs = new Set<string>()
-	map_refs(html, (ref) => void (is_local(ref) && refs.add(ref)))
-	if (!refs.size) return html
+	const {
+		html: [page],
+		local,
+		uploaded,
+	} = await upload_all([{ html, file }], assets, endpoint)
+	if (local)
+		say(`assets   ${local} local (${uploaded} uploaded, ${local - uploaded} already there)`)
+	return page
+}
 
+/**
+ * `upload_assets` for many files at once: every file is read first, so an image they share is
+ * hashed once, asked about in the same POST and PUT at most once. Answers each HTML rewritten,
+ * in order, and the counts for the summary line. `log` takes the warnings (stderr when stdout
+ * is the HTML).
+ */
+export async function upload_all(
+	docs: Array<{ html: string; file: string }>,
+	assets: string | undefined,
+	endpoint: AssetEndpoint,
+	log: (line: string) => void = say
+): Promise<{ html: Array<string>; local: number; uploaded: number }> {
 	const cwd = process.cwd()
-	const dir = file === "-" ? cwd : dirname(resolve(file))
-	const where = { dir, cwd, assets: assets && resolve(project_root(cwd) ?? cwd, assets) }
-	const by_ref = new Map<string, Asset>()
+	const root = assets && resolve(project_root(cwd) ?? cwd, assets)
 	const by_key = new Map<string, Asset>()
-	for (const ref of refs) {
-		const path = resolve_asset(ref, where)
-		const ext = extname(path ?? "")
-			.slice(1)
-			.toLowerCase()
-		const skip = !path
-			? "no such file"
-			: !ASSET_EXTS.has(ext)
-				? `.${ext || "(none)"} files aren't uploaded`
-				: undefined
-		if (skip || !path) {
-			say(`${yellow("!")} ${ref}: ${skip}, left as it is`)
-			continue
+	const warned = new Set<string>()
+	const by_doc = docs.map(({ html, file }) => {
+		const by_ref = new Map<string, Asset>()
+		const refs = new Set<string>()
+		map_refs(html, (ref) => void (is_local(ref) && refs.add(ref)))
+		const where = { dir: file === "-" ? cwd : dirname(resolve(file)), cwd, assets: root }
+		const warn = (line: string) => {
+			if (!warned.has(line)) log(line)
+			warned.add(line)
 		}
-		const bytes = new Uint8Array(readFileSync(path))
-		if (bytes.length === 0 || bytes.length > MAX_BYTES) {
-			say(`${yellow("!")} ${ref}: ${bytes.length ? "over 10 MB" : "empty"}, left as it is`)
-			continue
+		for (const ref of refs) {
+			const path = resolve_asset(ref, where)
+			const ext = extname(path ?? "")
+				.slice(1)
+				.toLowerCase()
+			const skip = !path
+				? "no such file"
+				: !ASSET_EXTS.has(ext)
+					? `.${ext || "(none)"} files aren't uploaded`
+					: undefined
+			if (skip || !path) {
+				warn(`${yellow("!")} ${ref}: ${skip}, left as it is`)
+				continue
+			}
+			const bytes = new Uint8Array(readFileSync(path))
+			if (bytes.length === 0 || bytes.length > MAX_BYTES) {
+				warn(`${yellow("!")} ${ref}: ${bytes.length ? "over 10 MB" : "empty"}, left as it is`)
+				continue
+			}
+			const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 32)
+			const key = `${hash}.${ext}`
+			const asset = by_key.get(key) ?? { hash, ext, bytes }
+			by_key.set(key, asset)
+			by_ref.set(ref, asset)
 		}
-		const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 32)
-		const key = `${hash}.${ext}`
-		const asset = by_key.get(key) ?? { hash, ext, bytes }
-		by_key.set(key, asset)
-		by_ref.set(ref, asset)
-	}
-	if (!by_key.size) return html
+		return by_ref
+	})
+	if (!by_key.size) return { html: docs.map((doc) => doc.html), local: 0, uploaded: 0 }
 
 	const assets_list = [...by_key.values()]
 	const missing: Array<Asset> = []
@@ -224,7 +256,9 @@ export async function upload_assets(
 		)
 	}
 
-	const n = assets_list.length
-	say(`assets   ${n} local (${missing.length} uploaded, ${n - missing.length} already there)`)
-	return map_refs(html, (ref) => by_ref.get(ref)?.url)
+	return {
+		html: docs.map((doc, n) => map_refs(doc.html, (ref) => by_doc[n].get(ref)?.url)),
+		local: assets_list.length,
+		uploaded: missing.length,
+	}
 }

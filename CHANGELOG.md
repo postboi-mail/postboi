@@ -10,6 +10,11 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi assets <file.html…>` hosts the local images and fonts built email HTML points at, for good, and rewrites each file in place to the hosted URLs, so the HTML can go out through any provider (`maizzle build && postboi assets dist/*.html`). It finds and resolves them the same way as `testing run`; one run hashes every file once, so an image the files share is uploaded once, and prints one line: `assets   <n> local (<u> uploaded, <e> already there) in <f> files`. `-` reads stdin and writes the HTML to stdout, with the summary on stderr. The copies share the store web versions use and are served from the team's `mail-view.<domain>` when it's on. Hosting needs a verified sending domain or a paid plan (`views_not_allowed`); a server without the route answers `assets_unavailable`.
+- `postboi send --file <x.html>` uploads the file's local images and fonts the same way before sending and sends the HTML pointing at the copies; the file on disk keeps its paths. `--no-assets` sends it as it is.
+
 ## 0.67.0
 
 ### Added

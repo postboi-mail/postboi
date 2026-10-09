@@ -1,0 +1,78 @@
+---
+title: Hosting images and fonts
+name: Hosting images and fonts
+description: Upload the images and fonts built email HTML points at on disk to Postboi, kept for good, and rewrite the HTML to the hosted copies, whichever provider sends it.
+category: Guides
+---
+
+An email loads its images and fonts from wherever its HTML says, for as long as it sits in
+someone's inbox, so they need a public home that never moves. Postboi hosts them. One
+command uploads the files your built HTML points at on disk and rewrites the HTML to the
+hosted copies, whichever provider sends the email:
+
+```bash
+bunx postboi assets dist/*.html
+```
+
+```
+assets   14 local (2 uploaded, 12 already there) in 6 files
+```
+
+## What it does
+
+For each file, `assets` finds every local reference (`src`, `srcset`, `background`,
+`url(...)` in styles and VML inside `<!--[if mso]>` comments), uploads the files and
+rewrites the file in place to point at the copies. It's the same lookup as
+[`testing run`](/email-testing#local-images-and-fonts): each path is looked up next to the
+HTML, then in each folder above it up to the project root, then in the current directory,
+with `testing.assets` in `postboi.config.ts` to pin the folder for `/…` paths. URLs,
+Liquid and merge tags are left alone, and a file it can't find is warned about and left as
+it is. PNG, JPEG, GIF, WebP, AVIF, SVG and ICO images and WOFF, WOFF2, TTF and OTF fonts
+are uploaded, up to 10 MB each.
+
+The copies are named by a hash of the file. An unchanged image is never sent twice, and an
+edited one gets a new URL, so mail that already went out keeps showing the old one. One
+run uploads once for all its files, so a logo in every email goes up once. The copies
+don't expire (test uploads do, after 30 days), and they share a store with
+[web versions](/views), so an image both use is kept once.
+
+`-` reads the HTML from stdin and writes the rewritten HTML to stdout, with the summary and
+any warnings on stderr:
+
+```bash
+bunx postboi assets - < email.html > email.hosted.html
+```
+
+Hosting needs a verified sending domain or a paid plan, the same as publishing a web
+version; without one the command stops with `views_not_allowed` and changes no file.
+
+## In a build script
+
+Run it on the built output rather than the source, so your templates keep their local
+paths and still preview locally:
+
+```json
+{
+	"scripts": {
+		"build": "maizzle build && postboi assets dist/*.html"
+	}
+}
+```
+
+## Sending a file
+
+`postboi send --file email.html` does the same before it sends: the local images and fonts
+go up to the same store and the message goes out pointing at them. The file on disk keeps
+its own paths. `--no-assets` sends the HTML as it is. `testing run` uploads to the test
+store instead, which expires after 30 days.
+
+## On your own domain
+
+Once your team's view host is on (`mail-view.<your domain>`, see
+[web versions](/views#on-your-own-domain)), the URLs are on it, like
+`https://mail-view.example.com/assets/3f2a….png`, so images and fonts load from your own
+domain. Without one they are on Postboi's: `https://postboi.app/views/assets/<team>/3f2a….png`.
+Mail sent earlier keeps the URLs it was sent with, and both keep working.
+
+Turning the view host off breaks the images and fonts in every email already sent with
+URLs on it, so once mail has gone out that way, leave it on.
