@@ -44,7 +44,9 @@ bunx postboi assets - < email.html > email.hosted.html
 ```
 
 Hosting needs a verified sending domain or a paid plan, the same as publishing a web
-version; without one the command stops with `views_not_allowed` and changes no file.
+version; without one the command stops with `views_not_allowed` and changes no file. A
+file it can't read or write, or one that isn't UTF-8, stops it the same way before anything
+is uploaded.
 
 ## In a build script
 
@@ -61,9 +63,10 @@ paths and still preview locally:
 
 ## Sending a file
 
-`postboi send --file email.html` does the same before it sends: the local images and fonts
-go up to the same store and the message goes out pointing at them. The file on disk keeps
-its own paths. `--no-assets` sends the HTML as it is. `testing run` uploads to the test
+`postboi send --file email.html` and `postboi lists send <list> --file email.html` do the
+same before they send: the local images and fonts go up to the same store and the message
+goes out pointing at them. The file on disk keeps its own paths. `--no-assets` sends the
+HTML as it is. `testing run` uploads to the test
 store instead, which expires after 30 days.
 
 ## On your own domain

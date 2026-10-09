@@ -1,4 +1,15 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import {
+	accessSync,
+	chmodSync,
+	constants,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs"
 import { basename, dirname, extname, join } from "node:path"
 import { stdin, stdout } from "node:process"
 import { load_config } from "../library/config.js"
@@ -9,7 +20,7 @@ import {
 	type TestingPreview,
 	type TestingRun,
 } from "../library/inspect/hosted.js"
-import { upload_all, upload_assets } from "./assets.js"
+import { asset_summary, upload_all, upload_assets } from "./assets.js"
 import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
@@ -248,22 +259,23 @@ async function lists(args: Array<string>): Promise<void> {
 		return say(`${green("✓")} deleted ${bold(ref)} ${dim(`(${gone.id})`)}`)
 	}
 	if (action === "send") {
-		const { flags, rest: words } = take_flags(rest, [
-			"subject",
-			"text",
-			"html",
-			"file",
-			"from",
-			"reply-to",
-			"at",
-		])
+		const {
+			flags,
+			rest: words,
+			on,
+		} = take_flags(
+			rest,
+			["subject", "text", "html", "file", "from", "reply-to", "at"],
+			["no-assets"]
+		)
 		const ref = words.join(" ").trim()
 		const body = flags.file ? body_from_file(flags.file) : { html: flags.html, text: flags.text }
 		if (!ref || !flags.subject || (!body.html && !body.text)) {
 			throw new ApiCommandError(
-				"Usage: postboi lists send <list> --subject <s> (--text <t> | --html <h> | --file <path>|-) [--from <a>] [--reply-to <a>] [--at <ISO time>]"
+				"Usage: postboi lists send <list> --subject <s> (--text <t> | --html <h> | --file <path>|-) [--from <a>] [--reply-to <a>] [--at <ISO time>] [--no-assets]"
 			)
 		}
+		await host_file_assets(body, flags.file, on)
 		const one = (value: string | undefined) => (value ? parse_email_list(value)[0] : undefined)
 		const result = await api<{ ids: Array<string>; recipients: number; scheduled_at?: string }>(
 			`/v1/lists/${encodeURIComponent(ref)}/send`,
@@ -750,16 +762,7 @@ async function send(args: Array<string>): Promise<void> {
 	}
 	const to = parse_email_list(flags.to)
 	if (!to.length) throw new ApiCommandError("--to needs at least one email address.")
-	// A file's local images and fonts go to the kept store first: mail that's sent stays sent.
-	if (flags.file && body.html && !on.has("no-assets")) {
-		const hosted = await host_assets(
-			[{ html: body.html, file: flags.file }],
-			say,
-			"Nothing was sent; --no-assets sends the HTML as it is."
-		)
-		body.html = hosted.html[0]
-		if (hosted.local) say(hosted.line.replace(/ in 1 file$/, ""))
-	}
+	await host_file_assets(body, flags.file, on)
 	const one = (value: string | undefined) => (value ? parse_email_list(value)[0] : undefined)
 	const result = await api<{
 		id: string
@@ -797,19 +800,15 @@ async function send(args: Array<string>): Promise<void> {
 /**
  * Upload the local images and fonts `docs` point at to the kept store (`/v1/assets`), with
  * its refusals in words: the views gate, and a server from before the route. `hint` ends
- * them, saying what happened instead. Answers the rewritten HTML, the counts and the summary.
+ * them, saying what happened instead.
  */
 async function host_assets(
 	docs: Array<{ html: string; file: string }>,
 	log: (line: string) => void,
 	hint: string
-): Promise<{ html: Array<string>; local: number; uploaded: number; line: string }> {
-	const done = await upload_all(
-		docs,
-		(await load_config()).testing?.assets,
-		"/v1/assets",
-		log
-	).catch((error) => {
+): Promise<{ html: Array<string>; local: number; uploaded: number }> {
+	const assets = (await load_config()).testing?.assets
+	return upload_all(docs, assets, "/v1/assets", log).catch((error) => {
 		if (error instanceof ApiCommandError && error.code === "views_not_allowed") {
 			throw new ApiCommandError(
 				`Hosting images and fonts needs a verified sending domain or a paid plan. ${hint}`,
@@ -824,13 +823,74 @@ async function host_assets(
 		}
 		throw error
 	})
-	const { local, uploaded } = done
-	const files = `${docs.length} ${docs.length === 1 ? "file" : "files"}`
-	const line = `assets   ${local} local (${uploaded} uploaded, ${local - uploaded} already there) in ${files}`
-	return { ...done, line }
+}
+
+/**
+ * `send --file` and `lists send --file`: the file's local images and fonts go to the kept
+ * store first, since mail that's sent stays sent, and `body` points at them. The file on disk
+ * keeps its paths; `--no-assets` sends it as it is.
+ */
+async function host_file_assets(
+	body: { html?: string },
+	file: string | undefined,
+	on: Set<string>
+): Promise<void> {
+	if (!file || !body.html || on.has("no-assets")) return
+	const hint = "Nothing was sent; --no-assets sends the HTML as it is."
+	const done = await host_assets([{ html: body.html, file }], say, hint)
+	body.html = done.html[0]
+	if (done.local) say(asset_summary(done.local, done.uploaded))
 }
 
 const ASSETS_USAGE = "Usage: postboi assets <file.html…> (or - to read stdin and write stdout)"
+
+/**
+ * A file `assets` may rewrite: UTF-8 text (a byte that isn't would be lost on the way back)
+ * that it may write, read before anything is uploaded so a bad one changes nothing.
+ */
+function read_html(file: string): string {
+	let bytes: Buffer
+	try {
+		if (file !== "-") accessSync(file, constants.R_OK | constants.W_OK)
+		bytes = readFileSync(file === "-" ? stdin.fd : file)
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code ?? String(error)
+		// A shell pattern that matched nothing arrives as it is.
+		const why = code === "ENOENT" ? "no such file" : code
+		throw new ApiCommandError(
+			`Can't rewrite ${file} (${why}). No file was changed.`,
+			"file_unreadable"
+		)
+	}
+	const html = bytes.toString("utf8")
+	if (!Buffer.from(html, "utf8").equals(bytes)) {
+		throw new ApiCommandError(`${file} isn't UTF-8 text. No file was changed.`, "not_utf8")
+	}
+	return html
+}
+
+/**
+ * Replace each file whole or not at all: every new copy is written beside its file first and
+ * only then moved over it, so a failure part way leaves every file as it was. The move lands
+ * on the real path, so a symlink stays a symlink, and keeps the file's mode.
+ */
+// ponytail: a hard-linked file comes out as its own copy; write in place if that ever matters.
+function replace_all(files: Array<{ file: string; html: string }>): void {
+	const moves = files.map(({ file }) => {
+		const real = realpathSync(file)
+		return { real, temp: join(dirname(real), `.${basename(real)}.${process.pid}.postboi`) }
+	})
+	try {
+		files.forEach(({ html }, n) => {
+			writeFileSync(moves[n].temp, html)
+			chmodSync(moves[n].temp, statSync(moves[n].real).mode & 0o7777)
+		})
+	} catch (error) {
+		for (const { temp } of moves) rmSync(temp, { force: true })
+		throw error
+	}
+	for (const { real, temp } of moves) renameSync(temp, real)
+}
 
 /**
  * `assets`: built HTML in, the same files pointing at hosted copies of their local images and
@@ -842,18 +902,24 @@ async function assets_command(args: Array<string>): Promise<void> {
 	if (!args.length || args.some((arg) => arg.startsWith("--")) || (piped && args.length > 1)) {
 		throw new ApiCommandError(ASSETS_USAGE)
 	}
-	const docs = args.map((file) => ({
-		file,
-		html: readFileSync(file === "-" ? stdin.fd : file, "utf8"),
-	}))
+	// A file named twice (or by a symlink and its target) is one file.
+	const seen = new Set<string>()
+	const docs = args
+		.map((file) => ({ file, html: read_html(file) }))
+		.filter(({ file }) => {
+			const real = file === "-" ? file : realpathSync(file)
+			return !seen.has(real) && seen.add(real)
+		})
 	const log = piped ? (line: string) => console.error(line) : say
 	const done = await host_assets(docs, log, "No file was changed.")
 	if (piped) {
 		stdout.write(done.html[0])
 	} else {
-		docs.forEach((doc, n) => done.html[n] !== doc.html && writeFileSync(doc.file, done.html[n]))
+		replace_all(
+			docs.flatMap((doc, n) => (done.html[n] === doc.html ? [] : [{ ...doc, html: done.html[n] }]))
+		)
 	}
-	log(done.line)
+	log(asset_summary(done.local, done.uploaded, docs.length))
 	// Under --json the summary, unless stdout is the HTML.
 	respond(piped ? undefined : { local: done.local, uploaded: done.uploaded, files: docs.length })
 }

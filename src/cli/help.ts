@@ -86,7 +86,7 @@ export const HELP: Array<HelpSection> = [
 				summary: "One email, now",
 				details: [
 					"--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]",
-					"--file uploads the local images and fonts the HTML points at, as `assets` does; --no-assets sends it as it is",
+					"--file uploads the local images and fonts the HTML points at, as assets does; --no-assets sends it as it is",
 				],
 			},
 			{
@@ -107,6 +107,7 @@ export const HELP: Array<HelpSection> = [
 				summary: "Lists",
 				details: [
 					"add <name> · send <list> --subject <s> --text, --html or --file <body> · delete <ref>",
+					"send --file uploads the local images and fonts the HTML points at, as assets does; --no-assets sends it as it is",
 				],
 			},
 			{
