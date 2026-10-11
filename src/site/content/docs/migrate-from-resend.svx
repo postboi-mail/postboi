@@ -1,0 +1,263 @@
+---
+title: Moving from Resend
+name: Moving from Resend
+description: Move a Resend app to Postboi in steps, keeping Resend as the provider for as long as you like. Field mapping, webhooks, domains, and what doesn't carry over.
+category: Getting started
+---
+
+You can move in three steps, and each one ships on its own. Stop after any of them.
+
+1. **Swap the SDK, keep Resend.** Replace `resend.emails.send()` with `mail()` and set the
+   provider to `resend`. Your mail still goes out through your Resend account, on your
+   Resend plan, from your Resend domain. Nothing about delivery changes.
+2. **Move sending to Postboi.** Add your domain to Postboi, then change one line of config.
+   Your `mail()` calls stay the same.
+3. **Retire Resend.** Point your webhooks at Postboi, move your lists, and take Resend's
+   DNS records down once nothing sends through it.
+
+If you're starting fresh rather than moving, [Quick start](/quick-start) is quicker.
+
+## 1. Swap the SDK, keep Resend
+
+Install Postboi and tell it to use Resend. `bunx postboi init` asks which provider you
+send with: pick **bring your own provider**, then **Resend**, and it asks for your Resend
+API key and writes the config. By hand it's one file:
+
+```typescript
+// postboi.config.ts
+import { config } from 'postboi'
+
+export default config({
+	provider: 'resend',
+	default: { from: 'Acme <hello@acme.com>' },
+})
+```
+
+`RESEND_API_KEY` stays in your environment, where it already is.
+
+Then change the sends. Before:
+
+```typescript
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+const { data, error } = await resend.emails.send(
+	{
+		from: 'Acme <hello@acme.com>',
+		to: ['ada@example.com'],
+		subject: 'Your receipt',
+		html: '<p>Thanks for your order.</p>',
+		replyTo: 'support@acme.com',
+		tags: [{ name: 'kind', value: 'receipt' }],
+	},
+	{ idempotencyKey: 'receipt/order-42' }
+)
+if (error) throw new Error(error.message)
+```
+
+After:
+
+```typescript
+import { mail } from 'postboi'
+
+const { id } = await mail({
+	to: 'ada@example.com',
+	subject: 'Your receipt',
+	body: '<p>Thanks for your order.</p>',
+	reply_to: 'support@acme.com',
+	tags: ['receipt'],
+	idempotency_key: 'receipt/order-42',
+})
+```
+
+`from` comes from the config default, and the plain-text part is written from `body` for
+you, as Resend does from `html`.
+
+**Errors throw.** Resend's Node SDK hands back `{ data, error }` and never throws. `mail()`
+returns `{ id }` on success and throws a [`PostboiError`](/errors) on failure, with the
+provider's own error name in `code`. If you checked `error` after every send, that becomes a
+`try`/`catch`, or nothing at all where a failed send should fail the request anyway.
+
+### Field by field
+
+| Resend (Node SDK)                        | `mail()`                                   | Notes |
+| ---------------------------------------- | ------------------------------------------ | ----- |
+| `from`                                   | `from`                                     | Or set it once as `default.from` in the config |
+| `to`, `cc`, `bcc`                        | `to`, `cc`, `bcc`                          | A string or an array, as before |
+| `replyTo`                                | `reply_to`                                 | |
+| `subject`                                | `subject`                                  | |
+| `html`                                   | `body`                                     | |
+| `text`                                   | `text`                                     | Written from `body` when you leave it out |
+| `react`                                  | `body: render(<Email />)`                  | See [React Email](#react-email) below |
+| `headers`                                | `headers`                                  | |
+| `attachments: [{ filename, content }]`   | `attachments: [new File([content], filename)]` | Standard `File` objects |
+| `tags: [{ name, value }]`                | `tags: ['value']`                          | Plain strings, using only the letters, numbers, `_` and `-` Resend allows |
+| `scheduledAt`                            | `scheduled_at`                             | A `Date`, an ISO 8601 string or `{ days: 1 }`, not `'in 1 hour'` |
+| `{ idempotencyKey }` (second argument)   | `idempotency_key`                          | In the message itself |
+| `resend.emails.cancel(id)`               | `cancel(id)`                               | `import { cancel } from 'postboi'` |
+| `resend.batch.send([...])`               | `mail([...])`                              | One result per message, never throws. See [bulk sending](/bulk) |
+| `template: { id, variables }`            | No equivalent                              | Resend-hosted templates live in Resend. Render to HTML in your code instead |
+| `topicId`                                | No equivalent                              | Postboi's [lists](/provider#lists--broadcasts) handle opt-in |
+| `attachments[].contentId` (inline `cid:` images) | Not carried over                   | Link images by URL instead |
+
+A batch where everyone gets the same email with a few values swapped is shorter than
+Resend's, and on Resend it still goes out as one request to its batch endpoint:
+
+```typescript
+await mail({
+	to: ['ada@example.com', 'linus@example.com'],
+	subject: 'Hey {name}',
+	body: '<p>Hi {name}</p>',
+	data: {
+		'ada@example.com': { name: 'Ada' },
+		'linus@example.com': { name: 'Linus' },
+	},
+})
+```
+
+### React Email
+
+Resend takes a React element in `react`. Postboi takes HTML, so render it first with
+React Email's own [`render()`](https://react.email/docs/utilities/render). The template
+doesn't change:
+
+```tsx
+import { render } from '@react-email/render'
+import { mail } from 'postboi'
+import Welcome from './emails/welcome'
+
+await mail({
+	to: user.email,
+	subject: 'Welcome to Acme',
+	body: render(<Welcome name={user.name} />),
+})
+```
+
+`body` takes the promise `render()` returns, so there's no need to await it.
+
+## 2. Move sending to Postboi
+
+Once your app sends through `mail()`, moving off Resend is configuration.
+
+**Add your domain to Postboi.** Run `bunx postboi domains add acme.com`, or add it in the
+dashboard, and publish the three DKIM CNAME records it shows you. They sit beside Resend's
+records rather than replacing them: Resend signs with `resend._domainkey` and uses a `send.`
+subdomain for bounces, while Postboi uses its own DKIM names and a `bounce.` subdomain. Both
+can be live at once, so nothing you send through Resend is affected while you check the
+domain. Your DMARC record stays as it is.
+
+**Switch the provider.** Run `bunx postboi init` and pick **Postboi** to get a
+`POSTBOI_TOKEN`, then change the one line:
+
+```typescript
+// postboi.config.ts
+export default config({
+	provider: 'postboi',
+	default: { from: 'Acme <hello@acme.com>' },
+})
+```
+
+That's the whole change to your app. Every send above works as it did, and you now get
+[delivery status](/provider#delivery-status) per message, `mail.messages.get(id)`, a
+message log and timeline in the dashboard, and `postboi sync`'s types, which reject a
+`from` address your account can't send from at build time.
+
+Two things to know first:
+
+- **Limits are per plan.** The free plan sends 3,000 a month and 100 a day, the same as
+  Resend's free plan. Above that you need a paid plan before you switch production over.
+  See [limits](/provider#limits).
+- **A new domain earns its reputation.** Mailbox providers judge a sending domain partly by
+  its history. If you send in volume, move one kind of mail first (receipts, say) and the
+  rest a few days later, rather than everything in one go.
+
+Want to move gradually? Switch the provider per environment with `POSTBOI_PROVIDER`
+([per-environment config](/manual-setup#per-environment-config)), or construct the two
+providers side by side and pick per send while you compare:
+
+```typescript
+import Postboi from 'postboi/postboi'
+import Resend from 'postboi/resend'
+
+const postboi = new Postboi({ default: { from: 'hello@acme.com' } })
+const resend = new Resend({ api_key: process.env.RESEND_API_KEY, default: { from: 'hello@acme.com' } })
+
+const provider = kind === 'receipt' ? postboi : resend
+await provider.send({ to, subject, body })
+```
+
+**Or keep Resend doing the delivery.** With your Resend key synced to Postboi, the
+dashboard's **Send via** setting sends through your Resend account while Postboi keeps the
+log, suppressions and timeline. Your code is the same as step 2. See
+[relay](/provider#relay-send-via-your-own-provider) for what that does and doesn't report back.
+
+## 3. Retire Resend
+
+### Webhooks
+
+[`postboi/webhooks`](/webhooks) reads Resend's webhooks and Postboi's into one event shape,
+so you can rewrite your handler once and point either provider at it:
+
+```typescript
+import { webhook } from 'postboi/webhooks'
+
+export const POST = webhook(async (event) => {
+	if (event.type === 'bounced' && event.bounce?.category === 'hard') {
+		await mark_undeliverable(event.email)
+	}
+})
+```
+
+While Resend is your provider, it verifies the signature with `RESEND_WEBHOOK_SECRET`, the
+`whsec_…` from Resend's dashboard. Once you've switched, add the same URL as a webhook in
+the Postboi dashboard and set `POSTBOI_WEBHOOK_SECRET` from there. The handler doesn't
+change.
+
+| Resend event             | `event.type` |
+| ------------------------ | ------------ |
+| `email.sent`             | `sent`       |
+| `email.delivered`        | `delivered`  |
+| `email.delivery_delayed` | `delayed`    |
+| `email.bounced`          | `bounced`    |
+| `email.complained`       | `complained` |
+| `email.opened`           | `opened`     |
+| `email.clicked`          | `clicked`    |
+| `email.failed`           | `failed`     |
+
+Resend's `email.scheduled`, `email.suppressed` and `email.received`, and its `contact.*`,
+`domain.*` and `topic.*` events, aren't read. On Postboi, a reply arrives as a `received`
+event (see [replies](/provider#replies)).
+
+### Lists and contacts
+
+Resend's audiences and contacts don't move automatically. Export them from Resend as CSV
+and import the file into a list in the Postboi dashboard, where it goes through the same
+double opt-in and suppression checks as every other way onto a list. Broadcasts on Postboi
+are ordinary sends on your plan, with no separate charge per contact. See
+[lists and broadcasts](/provider#lists--broadcasts).
+
+### Suppressions
+
+Addresses Resend has suppressed for hard bounces or complaints should stay suppressed. Add
+them before your first send from Postboi with
+[`mail.suppressions.add()`](/provider#suppressions).
+
+### DNS
+
+When nothing has sent through Resend for a while, remove Resend's `resend._domainkey` record
+and its `send.` subdomain records. Leave Postboi's DKIM records and your DMARC record alone.
+
+## What carries over and what doesn't
+
+**Moves with your code:** recipients, subject, HTML and text, attachments, headers, tags,
+scheduling and cancelling, idempotency keys, batches, and webhook handling. All of it is
+the same `mail()` call on either provider.
+
+**Stays in Resend:** hosted templates and their variables, topics, inline `cid:` images,
+and Resend's audiences and broadcasts, which you export and re-create.
+
+**Postboi doesn't have yet:** SDKs in languages other than TypeScript (anything else talks
+to the [REST API](/rest-api)), an SMTP relay for sending into Postboi, and dedicated IPs.
+If you depend on one of those, keep Resend as your provider and use step 1 alone. The
+[comparison](/compare) has the rest.

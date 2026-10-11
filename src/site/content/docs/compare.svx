@@ -85,7 +85,8 @@ Postboi too, since `body` takes any HTML) or its longer history in production.
 
 Already using Resend? You can keep it. [`postboi/resend`](/providers) sends through your
 Resend account using Postboi's API, and if you move to the Postboi provider later, you change
-`provider: "resend"` to `provider: "postboi"` and that's it.
+`provider: "resend"` to `provider: "postboi"` and that's it. [Moving from Resend](/migrate-from-resend) goes
+through it step by step, with every field mapped.
 
 ## Postboi vs SendGrid, Postmark, Mailgun or SES
 
