@@ -1,7 +1,21 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { mkdtempSync, readFileSync } from "node:fs"
+import { createHash } from "node:crypto"
+import {
+	chmodSync,
+	lstatSync,
+	mkdirSync,
+	mkdtempSync,
+	openSync,
+	readFileSync,
+	readdirSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs"
+import { stdin, stdout } from "node:process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { strip_ansi } from "./prompts.js"
 import {
 	table,
 	api_command,
@@ -11,6 +25,10 @@ import {
 	error_json,
 	ApiCommandError,
 	parse_email_list,
+	slug,
+	image_ext,
+	versus_previous,
+	testing_io,
 } from "./api.js"
 
 afterEach(() => {
@@ -42,6 +60,21 @@ describe("api_command", () => {
 	it("returns false for commands it doesn't own", async () => {
 		expect(await api_command("init", [])).toBe(false)
 		expect(await api_command("definitely-not-a-command", [])).toBe(false)
+	})
+
+	it("answers --help and -h with the command's own help, without calling the API", async () => {
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		const fetch_spy = vi.fn()
+		vi.stubGlobal("fetch", fetch_spy)
+
+		expect(await api_command("testing", ["run", "--help"])).toBe(true)
+		expect(await api_command("lists", ["-h"])).toBe(true)
+
+		expect(fetch_spy).not.toHaveBeenCalled()
+		expect(lines[0]).toContain("bunx postboi testing")
+		expect(lines[0]).toContain("run <file.html or ->")
+		expect(lines[1]).toContain("bunx postboi lists")
 	})
 })
 
@@ -819,5 +852,698 @@ describe("the nouns the API had and the CLI didn't", () => {
 		expect(calls[0].init?.method).toBe("POST")
 		expect(lines.join("\n")).toContain("whsec_new")
 		expect(lines.join("\n")).toContain("postboi sync")
+	})
+})
+
+describe("testing run and download", () => {
+	type Route = (init: RequestInit | undefined, url: URL) => unknown
+	/** Answers by `METHOD /path`; a function route sees the request, a Response goes back as-is. */
+	function serve(routes: Record<string, unknown>) {
+		const calls: Array<{ key: string; body?: unknown }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubEnv("POSTBOI_API_URL", "https://api.test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: string, init?: RequestInit) => {
+				const url = new URL(input)
+				const key = `${init?.method ?? "GET"} ${url.pathname}`
+				const body = init?.body
+				calls.push({ key, body: typeof body === "string" ? JSON.parse(body) : body })
+				const route = routes[key]
+				if (route === undefined)
+					return new Response(JSON.stringify({ message: key }), { status: 404 })
+				const answer = typeof route === "function" ? (route as Route)(init, url) : route
+				return answer instanceof Response ? answer : new Response(JSON.stringify(answer))
+			})
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		return { calls, lines }
+	}
+
+	const png = () =>
+		new Response(new Uint8Array([137, 80]), { headers: { "content-type": "image/png" } })
+	const summary = { state: "done", total: 2, ready: 1, failed: 1, pending: 0, notes: [] }
+
+	function workspace() {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-testing-"))
+		const file = join(dir, "partner.html")
+		writeFileSync(file, "<title>Partner news</title><p>hi</p>")
+		return { dir, file, out: join(dir, "shots") }
+	}
+
+	afterEach(() => {
+		process.exitCode = undefined
+		testing_io.poll_ms = 5000
+		testing_io.timeout_ms = 15 * 60_000
+	})
+
+	it("helpers: slugs, extensions and the comparison column", () => {
+		expect(slug("Outlook 2024 (Windows) Dark")).toBe("outlook-2024-windows-dark")
+		expect(slug("Gmail ✉ Ünïcode")).toBe("gmail-unicode")
+		expect(slug("")).toBe("other")
+		expect(image_ext("image/jpeg")).toBe("jpg")
+		expect(image_ext("image/svg+xml; charset=utf-8")).toBe("svg")
+		expect(image_ext(null)).toBe("png")
+		expect(versus_previous({ status: "ready" })).toBe("")
+		expect(versus_previous({ status: "ready", previous: null })).toBe("new")
+		expect(versus_previous({ status: "ready", reused: true, previous: null })).toBe("reused")
+		const previous = { run_id: "r", preview_id: "p", url: "/x", created_at: "" }
+		expect(versus_previous({ status: "ready", previous: { ...previous, identical: true } })).toBe(
+			"unchanged"
+		)
+		expect(versus_previous({ status: "ready", previous: { ...previous, identical: false } })).toBe(
+			"changed"
+		)
+	})
+
+	it("pastes, waits, saves each capture to a stable path and exits 1 on a failed capture", async () => {
+		const { dir, file, out } = workspace()
+		let polls = 0
+		testing_io.poll_ms = 0
+		const { calls, lines } = serve({
+			"GET /v1/testing/clients": {
+				data: [{ id: "gmail_web", name: "Gmail (web)", group: "Webmail", default: true }],
+				max_per_test: 25,
+				renders: { left: 50, monthly: 50, credits: 0 },
+			},
+			"POST /v1/testing": { id: "test_1", url: "https://api.test/dashboard/acc_1/testing/test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+			"GET /v1/testing/test_1": () =>
+				++polls === 1
+					? {
+							id: "test_1",
+							status: "received",
+							screenshots: { ...summary, state: "rendering" },
+							previews: [],
+						}
+					: {
+							id: "test_1",
+							status: "received",
+							url: "https://api.test/dashboard/acc_1/testing/test_1",
+							report: { status: "warning", findings: [{ id: "x" }] },
+							screenshots: summary,
+							renders: { used: 1 },
+							previews: [
+								{
+									id: "prev_1",
+									client_id: "gmail_web",
+									client_name: "Gmail (web)",
+									group: "Webmail",
+									status: "ready",
+									url: "/v1/testing/test_1/previews/prev_1",
+									previous: null,
+								},
+								{
+									id: "prev_2",
+									client_id: "yahoo",
+									client_name: "Yahoo",
+									status: "failed",
+									error: "farm said no",
+								},
+							],
+						},
+			"GET /v1/testing/test_1/previews/prev_1": png,
+		})
+
+		await api_command("testing", ["run", file, "--out", out])
+
+		// The default set is sent explicitly, so a continued series can't inherit an older pick.
+		expect(calls.find((c) => c.key === "POST /v1/testing")?.body).toEqual({
+			series: "partner",
+			clients: ["gmail_web"],
+		})
+		expect(calls.find((c) => c.key === "POST /v1/testing/test_1/source")?.body).toEqual({
+			subject: "Partner news",
+			html: "<title>Partner news</title><p>hi</p>",
+		})
+		// No /previews call: the run carries them.
+		expect(calls.some((c) => c.key.endsWith("/previews"))).toBe(false)
+		const saved = join(out, "webmail", "gmail-web.png")
+		expect([...readFileSync(saved)]).toEqual([137, 80])
+		const text = lines.join("\n")
+		expect(text).toContain("new")
+		expect(text).toContain("farm said no")
+		expect(text).toContain("warning, 1 finding")
+		expect(text).toContain("1 used")
+		expect(text).toContain("https://api.test/dashboard/acc_1/testing/test_1")
+		expect(process.exitCode).toBe(1)
+		expect(dir).toBeTruthy()
+	})
+
+	it("uploads local assets once, warns about missing ones, and pastes the rewritten HTML", async () => {
+		const { dir, out } = workspace()
+		writeFileSync(join(dir, "package.json"), "{}")
+		mkdirSync(join(dir, "images"))
+		mkdirSync(join(dir, "public"))
+		writeFileSync(join(dir, "images", "hero.png"), "hero")
+		writeFileSync(join(dir, "public", "logo.png"), "logo")
+		const file = join(dir, "public", "email.html")
+		const html = [
+			`<img src="/images/hero.png"><img src="logo.png" srcset="logo.png 1x, /images/hero.png 2x">`,
+			`<!--[if mso]><v:fill src="/images/hero.png" /><![endif]-->`,
+			`<img src="gone.png"><img src="gone.png"><img src="https://cdn.test/a.png"><img src="{{ img }}">`,
+		].join("")
+		writeFileSync(file, html)
+		const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32)
+		const url = (s: string) => `https://assets.test/testing/acc_1/${hash(s)}.png`
+		const { calls, lines } = serve({
+			"POST /v1/testing/assets": (init: RequestInit) => ({
+				assets: JSON.parse(String(init.body)).assets.map((a: { hash: string; ext: string }) => ({
+					...a,
+					url: `https://assets.test/testing/acc_1/${a.hash}.${a.ext}`,
+					exists: a.hash === hash("logo"),
+				})),
+			}),
+			[`PUT /v1/testing/assets/${hash("hero")}.png`]: () =>
+				new Response(JSON.stringify({ url: url("hero") }), { status: 201 }),
+			"GET /v1/testing/clients": { data: [], max_per_test: 25 },
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+		})
+
+		await api_command("testing", ["run", file, "--out", out, "--no-wait"])
+
+		expect(calls.find((c) => c.key === "POST /v1/testing/assets")?.body).toEqual({
+			assets: [
+				{ hash: hash("hero"), ext: "png", size: 4 },
+				{ hash: hash("logo"), ext: "png", size: 4 },
+			],
+		})
+		const puts = calls.filter((c) => c.key.startsWith("PUT "))
+		expect(puts).toHaveLength(1)
+		expect(new TextDecoder().decode(puts[0].body as Uint8Array)).toBe("hero")
+		const pasted = calls.find((c) => c.key === "POST /v1/testing/test_1/source")?.body as {
+			html: string
+		}
+		expect(pasted.html).toBe(
+			html.replaceAll("/images/hero.png", url("hero")).replaceAll(`"logo.png`, `"${url("logo")}`)
+		)
+		const text = lines.join("\n")
+		expect(text).toContain("assets   2 local (1 uploaded, 1 already there)")
+		expect(text.match(/gone\.png: no such file/g)).toHaveLength(1)
+	})
+
+	it("--no-assets pastes the HTML as it is, and no local references means no line", async () => {
+		const { dir, file, out } = workspace()
+		writeFileSync(join(dir, "a.png"), "a")
+		writeFileSync(file, `<img src="a.png">`)
+		const routes = {
+			"GET /v1/testing/clients": { data: [], max_per_test: 25 },
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+		}
+		const { calls } = serve(routes)
+		await api_command("testing", ["run", file, "--out", out, "--no-wait", "--no-assets"])
+		expect(calls.some((c) => c.key.includes("/assets"))).toBe(false)
+		expect(calls.find((c) => c.key.endsWith("/source"))?.body).toMatchObject({
+			html: `<img src="a.png">`,
+		})
+
+		writeFileSync(file, `<img src="https://cdn.test/a.png">`)
+		const second = serve(routes)
+		await api_command("testing", ["run", file, "--out", out, "--no-wait"])
+		expect(second.calls.some((c) => c.key.includes("/assets"))).toBe(false)
+		expect(second.lines.join("\n")).not.toContain("assets")
+	})
+
+	it("--all splits past the per-run cap into batches of one series, first batch alone", async () => {
+		const { file, out } = workspace()
+		const data = Array.from({ length: 30 }, (_, i) => ({ id: `c${i}`, name: `Client ${i}` }))
+		let next = 0
+		const created: Array<string> = []
+		const { calls, lines } = serve({
+			"GET /v1/testing/clients": {
+				data,
+				max_per_test: 25,
+				renders: { left: 100, monthly: 100, credits: 0 },
+			},
+			"POST /v1/testing": () => {
+				const id = `test_${++next}`
+				created.push(id)
+				return { id }
+			},
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+			"POST /v1/testing/test_2/source": { id: "test_2", status: "received" },
+			"GET /v1/testing/test_1": {
+				id: "test_1",
+				status: "received",
+				report: { status: "pass", findings: [] },
+				screenshots: { ...summary, failed: 0 },
+				previews: [],
+			},
+			"GET /v1/testing/test_2": {
+				id: "test_2",
+				status: "received",
+				screenshots: { ...summary, failed: 0 },
+				previews: [],
+			},
+		})
+
+		await api_command("testing", [
+			"run",
+			file,
+			"--all",
+			"--series",
+			"Partner v2",
+			"--out",
+			out,
+			"--json",
+		])
+
+		const creates = calls
+			.filter((c) => c.key === "POST /v1/testing")
+			.map((c) => c.body as { series: string; clients: Array<string> })
+		expect(creates.map((b) => b.clients.length)).toEqual([25, 5])
+		expect(creates.every((b) => b.series === "Partner v2")).toBe(true)
+		expect(created).toEqual(["test_1", "test_2"])
+		// --json: one document and nothing else.
+		expect(lines).toHaveLength(1)
+		const doc = JSON.parse(lines[0])
+		expect(doc.series).toBe("Partner v2")
+		expect(doc.runs.map((r: { id: string }) => r.id)).toEqual(["test_1", "test_2"])
+		expect(process.exitCode).toBeUndefined()
+	})
+
+	it("falls back to /previews and a settled row list on a server without the summary", async () => {
+		const { file, out } = workspace()
+		testing_io.poll_ms = 0
+		let listings = 0
+		const { lines } = serve({
+			"GET /v1/testing/clients": {
+				data: [{ id: "gmail_web", name: "Gmail (web)", group: "Webmail" }],
+				max_per_test: 25,
+			},
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+			"GET /v1/testing/test_1": {
+				id: "test_1",
+				status: "received",
+				report: { status: "pass", findings: [] },
+			},
+			// Empty right after the paste, then pending, then ready: none of these is "done" early.
+			"GET /v1/testing/test_1/previews": () => {
+				listings++
+				if (listings === 1) return { data: [] }
+				const status = listings === 2 ? "pending" : "ready"
+				return {
+					data: [
+						{
+							id: "prev_1",
+							client_id: "gmail_web",
+							client_name: "Gmail (web)",
+							status,
+							url: status === "ready" ? "/v1/testing/test_1/previews/prev_1" : undefined,
+						},
+					],
+				}
+			},
+			"GET /v1/testing/test_1/previews/prev_1": png,
+		})
+
+		await api_command("testing", ["run", file, "--out", out])
+
+		expect(listings).toBe(3)
+		// The group came from the catalog, since the old preview row has none.
+		expect([...readFileSync(join(out, "webmail", "gmail-web.png"))]).toEqual([137, 80])
+		// No comparison data from this server, so no claim about it.
+		expect(lines.join("\n")).not.toContain("new")
+		expect(lines.join("\n")).toContain("https://api.test/dashboard/testing/test_1")
+		expect(process.exitCode).toBeUndefined()
+	})
+
+	it("exits 1 on an error report, and the timeout names the command that resumes", async () => {
+		const { file, out } = workspace()
+		serve({
+			"GET /v1/testing/clients": { data: [], max_per_test: 25 },
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+			"GET /v1/testing/test_1": {
+				id: "test_1",
+				status: "received",
+				report: { status: "error", findings: [{}] },
+				screenshots: { state: "disabled", total: 0, ready: 0, failed: 0, pending: 0, notes: [] },
+			},
+		})
+		await api_command("testing", ["run", file, "--out", out])
+		expect(process.exitCode).toBe(1)
+
+		process.exitCode = undefined
+		testing_io.timeout_ms = 0
+		serve({
+			"GET /v1/testing/test_9": {
+				id: "test_9",
+				status: "received",
+				screenshots: { ...summary, state: "rendering" },
+				previews: [],
+			},
+		})
+		await expect(api_command("testing", ["download", "test_9"])).rejects.toThrow(
+			/postboi testing download test_9/
+		)
+	})
+
+	it("asks before a big order on a terminal, and --yes skips the question", async () => {
+		const { file, out } = workspace()
+		const data = Array.from({ length: 12 }, (_, i) => ({ id: `c${i}`, name: `Client ${i}` }))
+		const routes = {
+			"GET /v1/testing/clients": {
+				data,
+				max_per_test: 25,
+				renders: { left: 5, monthly: 5, credits: 0 },
+			},
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+		}
+		const tty = [stdin.isTTY, stdout.isTTY]
+		stdin.isTTY = true
+		stdout.isTTY = true
+		try {
+			const confirm = vi.fn(async () => false)
+			testing_io.confirm = confirm
+			const { calls, lines } = serve(routes)
+			await expect(api_command("testing", ["run", file, "--all", "--out", out])).rejects.toThrow(
+				/Nothing ordered/
+			)
+			expect(confirm).toHaveBeenCalledOnce()
+			expect(calls.some((c) => c.key === "POST /v1/testing")).toBe(false)
+			expect(lines.join("\n")).toContain("7 clients will be skipped")
+
+			confirm.mockClear()
+			const second = serve(routes)
+			await api_command("testing", ["run", file, "--all", "--out", out, "--no-wait", "--yes"])
+			expect(confirm).not.toHaveBeenCalled()
+			expect(second.calls.some((c) => c.key === "POST /v1/testing")).toBe(true)
+			expect(second.lines.join("\n")).toContain("postboi testing download test_1")
+		} finally {
+			;[stdin.isTTY, stdout.isTTY] = tty
+		}
+	})
+
+	it("download collects an existing run into a folder named after it", async () => {
+		const { dir } = workspace()
+		const out = join(dir, "collected")
+		const { calls } = serve({
+			"GET /v1/testing/test_5": {
+				id: "test_5",
+				status: "received",
+				label: "partner",
+				screenshots: { ...summary, failed: 0, total: 1 },
+				previews: [
+					{
+						id: "p1",
+						client_id: "a",
+						client_name: "Apple Mail",
+						group: "Application",
+						status: "ready",
+						url: "/v1/testing/test_5/previews/p1",
+					},
+				],
+			},
+			"GET /v1/testing/test_5/previews/p1": () =>
+				new Response("<svg/>", { headers: { "content-type": "image/svg+xml" } }),
+		})
+		await api_command("testing", ["download", "test_5", "--out", out])
+		expect(readFileSync(join(out, "application", "apple-mail.svg"), "utf8")).toBe("<svg/>")
+		// Every preview had a group, so the catalog wasn't needed.
+		expect(calls.some((c) => c.key === "GET /v1/testing/clients")).toBe(false)
+	})
+
+	it("sets list, save and delete by name; share and revoke", async () => {
+		const set = { id: "set_1", name: "Core", clients: ["a", "b"], created_at: "" }
+		const { calls, lines } = serve({
+			"GET /v1/testing/sets": { data: [set] },
+			"POST /v1/testing/sets": set,
+			"DELETE /v1/testing/sets/set_1": () => new Response(null, { status: 204 }),
+			"POST /v1/testing/test_1/share": { share_url: "https://api.test/share/testing/tok" },
+			"DELETE /v1/testing/test_1/share": () => new Response(null, { status: 204 }),
+		})
+		await api_command("testing", ["sets"])
+		expect(lines.join("\n")).toContain("Core")
+		await api_command("testing", ["sets", "save", "Core", "--clients", "a, b"])
+		expect(calls.find((c) => c.key === "POST /v1/testing/sets")?.body).toEqual({
+			name: "Core",
+			clients: ["a", "b"],
+		})
+		await api_command("testing", ["sets", "delete", "core"])
+		expect(calls.some((c) => c.key === "DELETE /v1/testing/sets/set_1")).toBe(true)
+		await api_command("testing", ["share", "test_1"])
+		expect(lines.join("\n")).toContain("https://api.test/share/testing/tok")
+		await api_command("testing", ["share", "test_1", "--revoke"])
+		expect(calls.some((c) => c.key === "DELETE /v1/testing/test_1/share")).toBe(true)
+	})
+})
+
+describe("assets", () => {
+	const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32)
+	const url = (s: string) => `https://mail-view.acme.test/assets/${hash(s)}.png`
+
+	/** `/v1/assets` answering like the server: `logo` is already there, the rest are new. */
+	function serve(extra: Record<string, Response> = {}) {
+		const calls: Array<{ key: string; body?: unknown }> = []
+		vi.stubEnv("POSTBOI_TOKEN", "pb_test")
+		vi.stubEnv("POSTBOI_API_URL", "https://api.test")
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: string, init?: RequestInit) => {
+				const key = `${init?.method ?? "GET"} ${new URL(input).pathname}`
+				const body = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body
+				calls.push({ key, body })
+				if (extra[key]) return extra[key]
+				if (key === "POST /v1/assets") {
+					const assets = (body as { assets: Array<{ hash: string; ext: string }> }).assets
+					return Response.json({
+						assets: assets.map((a) => ({
+							url: `https://mail-view.acme.test/assets/${a.hash}.${a.ext}`,
+							exists: a.hash === hash("logo"),
+						})),
+					})
+				}
+				if (key.startsWith("PUT /v1/assets/")) {
+					return Response.json({ url: `https://mail-view.acme.test${key.slice(7)}` })
+				}
+				if (key === "POST /v1/send") return Response.json({ id: "msg_1" })
+				return new Response("Not found", { status: 404 })
+			})
+		)
+		const lines: Array<string> = []
+		vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+		return { calls, lines }
+	}
+
+	function project() {
+		const dir = mkdtempSync(join(tmpdir(), "postboi-hosted-"))
+		writeFileSync(join(dir, "package.json"), "{}")
+		mkdirSync(join(dir, "images"))
+		mkdirSync(join(dir, "dist"))
+		writeFileSync(join(dir, "images", "logo.png"), "logo")
+		writeFileSync(join(dir, "images", "hero.png"), "hero")
+		return dir
+	}
+
+	it("uploads what every file shares once and rewrites each file in place", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const b = join(dir, "dist", "b.html")
+		const plain = join(dir, "dist", "plain.html")
+		writeFileSync(a, `<img src="/images/logo.png"><img src="/images/hero.png">`)
+		writeFileSync(b, `<img src="../images/logo.png" srcset="/images/hero.png 2x">`)
+		writeFileSync(plain, `<img src="https://cdn.test/x.png">`)
+		const { calls, lines } = serve()
+
+		await api_command("assets", [a, b, plain])
+
+		const posts = calls.filter((c) => c.key === "POST /v1/assets")
+		expect(posts).toHaveLength(1)
+		expect(posts[0].body).toEqual({
+			assets: [
+				{ hash: hash("logo"), ext: "png", size: 4 },
+				{ hash: hash("hero"), ext: "png", size: 4 },
+			],
+		})
+		expect(calls.filter((c) => c.key.startsWith("PUT "))).toEqual([
+			{ key: `PUT /v1/assets/${hash("hero")}.png`, body: expect.any(Uint8Array) },
+		])
+		expect(readFileSync(a, "utf8")).toBe(`<img src="${url("logo")}"><img src="${url("hero")}">`)
+		expect(readFileSync(b, "utf8")).toBe(`<img src="${url("logo")}" srcset="${url("hero")} 2x">`)
+		expect(readFileSync(plain, "utf8")).toBe(`<img src="https://cdn.test/x.png">`)
+		expect(lines).toEqual(["assets   2 local (1 uploaded, 1 already there) in 3 files"])
+	})
+
+	it("- reads stdin and writes the HTML to stdout, the summary to stderr", async () => {
+		const dir = project()
+		const input = join(dir, "in.html")
+		writeFileSync(input, `<img src="images/logo.png"><img src="gone.png">`)
+		const { lines } = serve()
+		const errors: Array<string> = []
+		vi.spyOn(console, "error").mockImplementation((line: string) => void errors.push(line))
+		const written: Array<string> = []
+		vi.spyOn(stdout, "write").mockImplementation(((chunk: string) => {
+			written.push(chunk)
+			return true
+		}) as never)
+		const fd = stdin.fd
+		const cwd = vi.spyOn(process, "cwd").mockReturnValue(dir)
+		Object.defineProperty(stdin, "fd", { value: openSync(input, "r"), configurable: true })
+		try {
+			await api_command("assets", ["-", "--json"])
+		} finally {
+			Object.defineProperty(stdin, "fd", { value: fd, configurable: true })
+			cwd.mockRestore()
+		}
+		expect(written).toEqual([`<img src="${url("logo")}"><img src="gone.png">`])
+		expect(lines).toEqual([])
+		expect(errors.map(strip_ansi)).toEqual([
+			"! gone.png: no such file, left as it is",
+			"assets   1 local (0 uploaded, 1 already there) in 1 file",
+		])
+	})
+
+	it("says why hosting was refused, and changes no file", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/logo.png">`
+		writeFileSync(file, html)
+		serve({
+			"POST /v1/assets": Response.json(
+				{ code: "views_not_allowed", message: "Publishing a view needs a verified domain." },
+				{ status: 403 }
+			),
+		})
+		await expect(api_command("assets", [file])).rejects.toMatchObject({
+			code: "views_not_allowed",
+			message: expect.stringContaining("verified sending domain or a paid plan"),
+		})
+		serve({ "POST /v1/assets": new Response("POST method not allowed", { status: 405 }) })
+		await expect(api_command("assets", [file])).rejects.toMatchObject({
+			code: "assets_unavailable",
+		})
+		expect(readFileSync(file, "utf8")).toBe(html)
+		await expect(api_command("assets", [])).rejects.toThrow(/Usage: postboi assets/)
+	})
+
+	it("send --file hosts the local files first, and --no-assets sends the HTML as it is", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/hero.png">`
+		writeFileSync(file, html)
+		const send = ["--to", "a@b.co", "--subject", "s", "--file", file]
+		const { calls, lines } = serve()
+
+		await api_command("send", send)
+		const sent = (n: number) => calls.filter((c) => c.key === "POST /v1/send")[n].body
+		expect(sent(0)).toMatchObject({ html: `<img src="${url("hero")}">` })
+		expect(lines[0]).toBe("assets   1 local (1 uploaded, 0 already there)")
+		expect(readFileSync(file, "utf8")).toBe(html)
+
+		const before = calls.length
+		await api_command("send", [...send, "--no-assets"])
+		expect(calls.slice(before).map((c) => c.key)).toEqual(["POST /v1/send"])
+		expect(sent(1)).toMatchObject({ html })
+	})
+
+	it("lists send --file hosts the local files first", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/hero.png">`
+		writeFileSync(file, html)
+		const send = ["send", "news", "--subject", "s", "--file", file]
+		const { calls, lines } = serve({
+			"POST /v1/lists/news/send": Response.json({ ids: ["msg_1"], recipients: 3 }),
+		})
+
+		await api_command("lists", send)
+		const sent = (n: number) => calls.filter((c) => c.key === "POST /v1/lists/news/send")[n].body
+		expect(sent(0)).toMatchObject({ html: `<img src="${url("hero")}">` })
+		expect(lines[0]).toBe("assets   1 local (1 uploaded, 0 already there)")
+		expect(readFileSync(file, "utf8")).toBe(html)
+	})
+
+	it("lists send --no-assets sends the file untouched", async () => {
+		const dir = project()
+		const file = join(dir, "dist", "a.html")
+		const html = `<img src="/images/hero.png">`
+		writeFileSync(file, html)
+		const { calls } = serve({
+			"POST /v1/lists/news/send": Response.json({ ids: ["msg_1"], recipients: 3 }),
+		})
+		await api_command("lists", ["send", "news", "--subject", "s", "--file", file, "--no-assets"])
+		expect(calls.map((c) => c.key)).toEqual(["POST /v1/lists/news/send"])
+		expect(calls[0].body).toMatchObject({ html })
+	})
+
+	it("counts a file named twice, or by a symlink, once, and keeps the symlink and mode", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const link = join(dir, "dist", "link.html")
+		writeFileSync(a, `<img src="../images/logo.png">\r\n`)
+		chmodSync(a, 0o640)
+		symlinkSync(a, link)
+		const { calls, lines } = serve()
+
+		await api_command("assets", [a, a, link])
+
+		expect(calls.filter((c) => c.key === "POST /v1/assets")).toHaveLength(1)
+		expect(lines).toEqual(["assets   1 local (0 uploaded, 1 already there) in 1 file"])
+		expect(readFileSync(a, "utf8")).toBe(`<img src="${url("logo")}">\r\n`)
+		expect(lstatSync(link).isSymbolicLink()).toBe(true)
+		expect(statSync(a).mode & 0o777).toBe(0o640)
+		expect(readdirSync(join(dir, "dist")).sort()).toEqual(["a.html", "link.html"])
+	})
+
+	it("keeps a BOM and CRLF, and names the file in a warning when there are several", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const b = join(dir, "dist", "b.html")
+		writeFileSync(a, `\uFEFF<p>café</p>\r\n<img src="/images/hero.png">\r\n`)
+		writeFileSync(b, `<img src="gone.png">`)
+		const { lines } = serve()
+
+		await api_command("assets", [a, b])
+
+		expect(readFileSync(a, "utf8")).toBe(`\uFEFF<p>café</p>\r\n<img src="${url("hero")}">\r\n`)
+		expect(lines.map(strip_ansi)).toEqual([
+			`! ${b}: gone.png: no such file, left as it is`,
+			"assets   1 local (1 uploaded, 0 already there) in 2 files",
+		])
+	})
+
+	it("stops before uploading on a file it can't read or rewrite, or that isn't UTF-8", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		const html = `<img src="/images/logo.png">`
+		writeFileSync(a, html)
+		const latin1 = join(dir, "dist", "latin1.html")
+		writeFileSync(latin1, Buffer.from(`<p>caf\xe9</p><img src="/images/logo.png">`, "latin1"))
+		const { calls } = serve()
+
+		await expect(api_command("assets", [a, join(dir, "dist", "*.htm")])).rejects.toMatchObject({
+			code: "file_unreadable",
+		})
+		await expect(api_command("assets", [a, latin1])).rejects.toMatchObject({ code: "not_utf8" })
+		chmodSync(a, 0o444)
+		await expect(api_command("assets", [a])).rejects.toMatchObject({ code: "file_unreadable" })
+		expect(calls).toEqual([])
+		expect(readFileSync(a, "utf8")).toBe(html)
+	})
+
+	it("changes no file when one of the new copies can't be written", async () => {
+		const dir = project()
+		const a = join(dir, "dist", "a.html")
+		mkdirSync(join(dir, "locked"))
+		const b = join(dir, "locked", "b.html")
+		const html = `<img src="/images/logo.png">`
+		writeFileSync(a, html)
+		writeFileSync(b, html)
+		chmodSync(join(dir, "locked"), 0o555)
+		serve()
+		try {
+			await expect(api_command("assets", [a, b])).rejects.toThrow()
+		} finally {
+			chmodSync(join(dir, "locked"), 0o755)
+		}
+		expect(readFileSync(a, "utf8")).toBe(html)
+		expect(readFileSync(b, "utf8")).toBe(html)
+		expect(readdirSync(join(dir, "dist"))).toEqual(["a.html"])
 	})
 })

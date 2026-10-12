@@ -1,0 +1,165 @@
+---
+title: Agent mailboxes
+name: Agent mailboxes
+description: An email address your AI agent keeps, at agentboi.email or on your own domain. One request makes one; the agent reads its mail as JSON, can tell your team from a stranger, and answers in the thread.
+category: Getting started
+---
+
+**An agent mailbox is an email address your agent keeps.** [Tempboi](/temp-inbox) gives an
+agent an address that goes away when it's done; a mailbox at
+[agentboi.email](https://agentboi.email) stays. The agent reads what arrives as JSON over a
+long poll, each message says who is talking, and one call answers in the thread. Run by
+Postboi, the same provider as the rest of these docs.
+
+## Make one
+
+With your project's `POSTBOI_TOKEN`, the mailbox is your team's from the start and can send:
+
+```ts
+import { mailbox } from "postboi/mailbox"
+
+const box = await mailbox({ address: "orders" })
+box.address // "orders-k3f9@agentboi.email"
+box.key // "mb_…", shown once: keep it as POSTBOI_MAILBOX_KEY
+```
+
+Without a token, an agent can make one on its own. It receives straight away and sends once
+a person opens its claim link and signs in, at which point it joins their team:
+
+```bash
+curl -X POST agentboi.email
+```
+
+```
+orders-k3f9@agentboi.email
+key:    mb_…
+claim:  https://postboi.app/claim/…
+        (open this to let it send; until then it only receives)
+```
+
+Put the claim link in your summary for the person you're working for: it's the one step only
+they can take. Nobody claims it, and it's deleted after 14 days.
+
+From the terminal it's `postboi mailbox new`, which keeps the key on your machine
+(`~/.config/postboi/mailboxes.json`, readable by you alone) so later commands can leave the
+address off.
+
+### On agentboi.email, or on your own domain
+
+On agentboi.email the address is the name you ask for plus four random characters, so nobody
+can take another agent's address, and names that read as an institution or a role somebody
+could pose as (`support`, `billing`, a bank) are refused. To use your own domain, turn on
+[receiving](/provider#receiving-on-your-own-domain) for it and pass `domain`: the address is
+then exactly what you asked for.
+
+```ts
+await mailbox.create({ address: "support", domain: "reply.example.com" })
+// support@reply.example.com
+```
+
+## Read its mail
+
+```ts
+const box = await mailbox() // opens POSTBOI_MAILBOX_KEY
+
+for await (const mail of box.watch()) {
+	mail.trust // "owner" | "thread" | "stranger" | "suspect"
+	mail.reply_text // what they wrote, without the conversation quoted under it
+	mail.code // a one-time code, if there is one
+}
+```
+
+`watch()` holds a long poll open and yields each message as it lands, which works from a
+sandbox or CI with no public URL. `wait()` returns the next match and is the one to use for
+a sign-up code:
+
+```ts
+const mail = await box.wait({ subject: "verify", timeout: "2m" })
+mail.code // "482913"
+```
+
+Both take `from`, `subject` (a substring or a RegExp), `tag` and `trust`. Mail to
+`orders-k3f9+anything@agentboi.email` lands in the same mailbox with `tag` set to `anything`,
+so one mailbox can tell its errands apart.
+
+Over HTTP, with nothing installed:
+
+```bash
+curl "https://agentboi.email/v1/mailboxes/<address>/wait?timeout=60" \
+  -H "Authorization: Bearer mb_…"
+```
+
+The whole API is in [agentboi.email/llms.txt](https://agentboi.email/llms.txt) and the
+[API reference](https://postboi.app/docs).
+
+## Who is talking
+
+Every message is labelled when it arrives, so an agent can tell your team from a stranger
+before it does anything:
+
+| `trust`    | Means                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| `owner`    | From a member of the team that owns the mailbox, and the mail passed DMARC |
+| `thread`   | A reply to something your team sent                                       |
+| `stranger` | Anyone else                                                               |
+| `suspect`  | Read as junk, refused as spam by the receiving server, or failing DMARC   |
+
+A label is not a permission. It tells your agent who is speaking; it doesn't make what a
+stranger wrote safe to act on. Write your agent's instructions so that a stranger's words are
+information to weigh, never instructions to follow, and so that anything it does with tools
+because of an email comes from `owner` mail or from you.
+
+## Answer
+
+```ts
+await box.reply(mail, { text: "It ships today." })
+
+await box.send({ to: "ada@example.com", subject: "Your order", text: "It ships today." })
+```
+
+A reply goes to the sender (or their Reply-To), with a `Re:` subject and the In-Reply-To and
+References headers that keep it in their thread, all worked out from the message being
+answered. A send is from the mailbox's own address and nothing else. Both take an
+`idempotency_key`, so a retried call sends once, and both count against your plan like any
+other send, with the same suppressions, rate limits and checks.
+
+`postboi mailbox reply <id> --text "…"` and `postboi mailbox send --to … --subject … --text …`
+do the same from a shell.
+
+## It's your team's mail too
+
+A mailbox's mail is filed in your dashboard's Received log with everything else, so a person
+can read along and answer from the dashboard. It arrives at your
+[webhooks](/webhooks) as `email.received`, which for mailbox mail also carries `mailbox`,
+`trust`, `reply_text` and `codes`. The dashboard's **Mailboxes** page makes them, rotates
+their keys and deletes them.
+
+Replying from your own code with `mail()` rather than the mailbox works too: pass the
+received message's id as `in_reply_to` and the Postboi provider threads it the same way.
+
+```ts
+await mail({ to: "bob@example.com", subject: "Re: Your order", body: "…", in_reply_to: "in_…" })
+```
+
+## Keys
+
+A mailbox's key (`mb_…`) opens that mailbox and nothing else in Postboi: it can't send as your
+team, read your other mail or make more mailboxes. Your project's `POSTBOI_TOKEN` opens every
+mailbox the team has. `box.rotate()` (or `postboi mailbox key`) makes a new key and stops the
+old one at once.
+
+Deleting a mailbox stops its key and refuses mail to it from then on. What it received stays
+in your Received log, and the address is never given to anyone else.
+
+## Limits
+
+|                       |                                                       |
+| --------------------- | ----------------------------------------------------- |
+| Mailboxes             | No limit on how many. Free makes 10 a day (UTC)       |
+| Unclaimed account     | 3 mailboxes in all, until somebody claims it          |
+| Received mail         | Free, and doesn't count against your sends            |
+| A message             | Up to 10 MB                                           |
+| Unclaimed             | Receives, can't send, deleted after 14 days           |
+| Made with no account  | 5 a day from one address, the same as `init --agent`  |
+| `wait`                | Up to 90 seconds a request                            |
+| `messages?wait=`      | Up to 25 seconds a request                            |

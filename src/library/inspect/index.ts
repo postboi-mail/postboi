@@ -37,7 +37,14 @@ import type {
 } from "./types.js"
 
 export { hosted_test } from "./hosted.js"
-export type { HostedTest, HostedTestOptions } from "./hosted.js"
+export type {
+	HostedTest,
+	HostedTestOptions,
+	HostedPreview,
+	ScreenshotSummary,
+	TestingPreview,
+	TestingRun,
+} from "./hosted.js"
 export { GMAIL_CLIP_BYTES, MESSAGE_SIZE_LIMIT } from "./checks.js"
 export { COMPAT_CLIENTS, COMPAT_FEATURES } from "./caniemail_data.js"
 export type { Support, CompatClient, CompatFeature } from "./caniemail_data.js"

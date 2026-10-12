@@ -8,13 +8,18 @@
  */
 import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
-import { MODULES, type WebhookEvent, type WebhookEventType } from "./index.js"
+import { MODULES, type ViewViewed, type WebhookEvent, type WebhookEventType } from "./index.js"
 import { POLL_MODULES, type PollResult } from "./poll.js"
 import { parse_user_agent } from "./ua.js"
 import { generate_svix_secret, generate_token } from "./crypto.js"
+import type { TestingRun } from "../inspect/hosted.js"
 
 /** Providers whose mock requests are signed with the Svix `whsec_…` scheme. */
 const SVIX_PROVIDERS = new Set(["resend", "postboi", "loops"])
+
+/** A phone's browser: where a web version is read. */
+export const BROWSER =
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
 /**
  * A synthetic normalized event — the fastest way to unit-test handler logic.
@@ -44,12 +49,28 @@ export function mock_event(
 		)
 		base.ip = "192.0.2.1"
 	}
+	if (type === "viewed" || type === "view_viewed") {
+		base.client = parse_user_agent(BROWSER)
+	}
+	if (type === "view_viewed") {
+		// A reader on a published page, not a send: the view is the point.
+		base.message_id = undefined
+		base.email = undefined
+		base.subject = undefined
+		base.view = mock_view()
+	}
 	if (type === "clicked") base.url = "https://example.com/pricing"
 	if (type === "bounced") base.bounce = { category: "hard", detail: "mailbox unavailable" }
 	if (type === "received") {
 		// Inbound: `email` is whoever wrote to you, and the body is the point of it.
 		base.email = "someone@example.com"
 		base.body = { text: "Thanks, that works for me." }
+	}
+	if (type === "test_received" || type === "test_completed") {
+		// A test run, not a send: nobody received anything, the run is the point.
+		base.message_id = undefined
+		base.email = undefined
+		base.test = mock_run(type === "test_completed")
 	}
 	if (overrides.channel === "sms" || overrides.channel === "whatsapp") {
 		// A text-message event is about a number: never an address, and no subject line.
@@ -58,6 +79,77 @@ export function mock_event(
 		base.phone = "+15557770006"
 	}
 	return { ...base, ...overrides }
+}
+
+/** A sample reader for the `view.viewed` mocks: a feed record, on week 20. */
+export function mock_view(): ViewViewed {
+	return {
+		slug: "welcome",
+		version: 3,
+		url: "https://view.postboi.app/acct/welcome",
+		params: { week: 20 },
+		reader: {
+			kind: "record",
+			id: "rec_mock_0000000000000",
+			data: { external_id: "user_123", first_name: "Ada" },
+		},
+		viewed_at: new Date().toISOString(),
+		user_agent: BROWSER,
+	}
+}
+
+/** A sample run for the `testing.*` mocks: one capture in, one still pending until completed. */
+export function mock_run(completed: boolean): TestingRun {
+	const id = "test_mock"
+	const path = (preview: string) => `/v1/testing/${id}/previews/${preview}`
+	return {
+		id,
+		status: "received",
+		label: "welcome",
+		subject: "Mock subject",
+		url: `https://postboi.app/dashboard/acc_mock/testing/${id}`,
+		series_id: id,
+		report: {
+			status: "pass",
+			findings: [],
+			size: { html_bytes: 2048, gmail_clip: false },
+			links: [],
+			images: [],
+		},
+		screenshots: {
+			state: completed ? "done" : "rendering",
+			total: 2,
+			ready: completed ? 2 : 1,
+			failed: 0,
+			pending: completed ? 0 : 1,
+			notes: [],
+		},
+		renders: { used: 2 },
+		previews: [
+			{
+				id: "prev_1",
+				client_id: "gmail_web",
+				client_name: "Gmail (web)",
+				status: "ready",
+				group: "Webmail",
+				url: path("prev_1"),
+				thumbnail_url: `${path("prev_1")}?width=480`,
+				reused: false,
+				previous: null,
+			},
+			{
+				id: "prev_2",
+				client_id: "outlook2024_win",
+				client_name: "Outlook 2024 Windows",
+				status: completed ? "ready" : "pending",
+				group: "Application",
+				url: completed ? path("prev_2") : undefined,
+				reused: false,
+				previous: null,
+			},
+		],
+		created_at: new Date().toISOString(),
+	}
 }
 
 /**

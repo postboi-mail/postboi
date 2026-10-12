@@ -10,6 +10,92 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.68.0
+
+### Added
+
+- `postboi assets <file.html…>` hosts the local images and fonts built email HTML points at, for good, and rewrites each file in place to the hosted URLs, so the HTML can go out through any provider (`maizzle build && postboi assets dist/*.html`). It finds and resolves them the same way as `testing run`; one run hashes every file once, so an image the files share is uploaded once, and prints one line: `assets   <n> local (<u> uploaded, <e> already there) in <f> files`. `-` reads stdin and writes the HTML to stdout, with the summary on stderr. The copies share the store web versions use and are served from the team's `mail-view.<domain>` when it's on. Hosting needs a verified sending domain or a paid plan (`views_not_allowed`); against a server that doesn't have the route yet the CLI says `assets_unavailable`. A file it can't rewrite (`file_unreadable`) or that isn't UTF-8 (`not_utf8`) stops the run before anything is uploaded, and the files are only replaced once every new copy is written, so a failure leaves them all as they were.
+- `postboi send --file <x.html>` and `postboi lists send <list> --file <x.html>` upload the file's local images and fonts the same way before sending and send the HTML pointing at the copies; the file on disk keeps its paths. `--no-assets` sends it as it is.
+
+## 0.67.0
+
+### Added
+
+- `postboi views publish` uploads the local images and fonts the email points at, the same way `testing run` does (same lookup, `testing.assets` and warnings), and publishes the HTML pointing at the copies. View assets don't expire, unlike test assets, which last 30 days; the file on disk keeps its own paths, even with `--write`. `--no-assets` uploads nothing and leaves the local paths as they are.
+
+## 0.66.0
+
+### Added
+
+- `postboi testing run` and `testing add --html` upload the local images and fonts an email points at (`src`, `srcset`, `background`, `url(...)` in styles, VML inside `<!--[if mso]>` comments) and point the HTML at the copies before ordering the run, so an edited image can be tested without deploying it. Files are named by their hash: an unchanged one is never uploaded twice, and an edited one gets a new URL and so a fresh render. Paths resolve next to the HTML, then in each folder above it up to the project root, then in the cwd; `testing.assets` in `postboi.config.ts` pins the folder for root-relative paths if that ever picks the wrong file. URLs, Liquid and merge tags are left alone, a missing file is warned about and left as it is, and `--no-assets` sends the HTML untouched.
+
+## 0.65.0
+
+### Added
+
+- `postboi views stats <slug> [--days N] [--json]` prints a published view's views and visitors per day, the same views split by the public params they were opened with (`week=20`), and how many readers were identified. `views.stats(slug, { days })` answers the same as a typed `ViewStats`. Prefetches, `HEAD`s and link scanners aren't counted.
+- `postboi views publish --reader <template path>` turns on the reader param: the link carries your sender's id for the reader as `u`, in its merge syntax and URL-encoded, and the `view.viewed` webhook reports it. It is off by default because anyone can edit it and it shows up in URLs and logs. A re-publish keeps it on by reading the last version; the path lives in the flag or `views.<slug>.reader` in `postboi.config.ts`, and `--reader off` turns it off. With it on, a public param can't be called `u`. `views.publish({ reader: true })` in the SDK, on every publish that should read `u`.
+- Webhooks: the Postboi provider's `email.viewed` (the web version of a `web_version: true` send was opened) normalizes to `viewed`, with `message_id`, `email` and the browser in `client`. It is never `opened`. `view.viewed` (a reader Postboi could identify opened a published view) normalizes to `view_viewed`, with the page, the applied params and the reader in `event.view` (typed `ViewViewed`). `mock_request` and `mock_event` build both. `WebhookEventType` gains both members, so an exhaustive `switch` over it needs two more cases.
+
+## 0.64.0
+
+### Added
+
+- `postboi views publish <file.html>` hosts an email as a sandboxed web page for its "View in browser" link, whichever provider sends it. It reads the email's Liquid and sorts each variable: static `--context` data (a `.json` file or a module's default export), public typed params (`--public week:integer`, or an enum inferred when the template indexes context by it, like `body[week]`; free text is refused), private fields that come through the sender's data feed, and the sender's own system variables (unsubscribe links, OneSignal's `subscription.*`), whose element it names for `data-web-hide`. It prints the link in the sender's merge syntax, URL-encoded (`--provider onesignal`, `braze`, `iterable`, `customerio`, `klaviyo`, `mailchimp`, `sendgrid` or `none`, guessed from the file when left out), and the OneSignal Data Feed, Braze Connected Content or Iterable Data Feed to set up, minting a feed key on first use. `--write` puts the link into the element marked `data-postboi-view-link` or the anchor reading "View in browser", and adds `data-web-hide` (asking first, `--yes` to skip). Re-publishing reuses the last version's choices, and a `views` section in `postboi.config.ts` (typed as `ViewConfig`) keeps them in the repo.
+- `postboi views` lists them, `views open <slug> [--param k=v] [--data <json>]` opens the page as a reader sees it, `views delete <slug>`, `views keys [rotate]` and `views feed-key`.
+- `views` from `postboi`: `views.publish()`, `views.url(slug, data?, { expires })` and `views.seal(slug, data)`. Reader data (a JSON object, up to 4096 bytes) is sealed with AES-GCM under `POSTBOI_VIEW_KEY` with no request (it runs in Workers too), or by Postboi when the key isn't set. `postboi sync` writes `POSTBOI_VIEW_KEY` (and `POSTBOI_VIEW_URL`) when the account has them, and refreshes them after a rotation.
+- `mail({ view: { name, data } })`, with any provider, fills `{{ postboi.web_url }}` and `%postboi_web_url%` in the html and text with the reader's link to a published view. `mail({ web_version: true })` on the Postboi provider hosts the message as sent and fills the same placeholders on the server, and says so on the console when neither part has a placeholder to fill (`web_version_unused`). Every other provider refuses `web_version` with a `web_version_unsupported` error instead of sending the placeholder as text.
+
+## 0.63.0
+
+- **Agent mailboxes: `postboi/mailbox`.** An email address an AI agent keeps, at agentboi.email
+  or on your own receiving domain. `mailbox()` opens `POSTBOI_MAILBOX_KEY`, or makes a mailbox:
+  your team's with `POSTBOI_TOKEN`, or one of its own that receives at once and sends once a
+  person opens its `claim_url`. `watch()` and `wait()` long-poll its mail; every message carries
+  `trust` (`owner`, `thread`, `stranger` or `suspect`), `reply_text` (what they wrote, without the
+  quoted thread), `thread_id`, `code` and `link`. `reply()` answers in the thread, `send()` writes
+  a new message, `threads()` and `thread()` read conversations, `rotate()` makes a new key.
+- **`postboi mailbox`** in the CLI: `new`, `watch`, `wait`, `read`, `reply`, `send`, `threads`,
+  `key`, `ls` and `rm`, with `--trust`, `--exec`, `--json` and the inbox command's exit codes. Like
+  `postboi inbox` it needs no `POSTBOI_TOKEN`.
+- **`in_reply_to` on `mail()`** (Postboi provider): the `in_…` id of mail your team received. The
+  server writes the In-Reply-To and References headers from it and files the send in that
+  conversation. Ignored by other providers.
+
+## 0.62.0
+
+### Breaking
+
+- `postboi/kit` needs SvelteKit 3 (`@sveltejs/kit` `^3.0.0`). SvelteKit 2 is no longer supported.
+
+### Fixed
+
+- `<Captcha />` works inside a SvelteKit 3 remote form. SvelteKit 3 scopes every remote form field name to its form and rejects any field that isn't, so the honeypot and the Turnstile token made each submission fail with `form_field_unbound`. The component now gives both the form's scope, including the token input Turnstile adds later. Field names of a `.for(key)` instance are scoped to the base form, which it follows too.
+
+## 0.61.1
+
+### Fixed
+
+- `--help` (or `-h`) after any account command, such as `postboi testing run --help`, prints that command's help instead of being read as a file name or an id.
+
+## 0.61.0
+
+### Added
+
+- `postboi testing run <file.html>` takes built HTML to real-client screenshots on disk in one command: it pastes into a test run, waits until every capture has settled, saves them to `screenshots/<series>/<group>/<client>.<ext>` with no timestamps (so a re-run overwrites and diffs), and prints each client as new, changed, unchanged or reused, the report's verdict, renders used and the dashboard link. `--series` defaults to the file name, `--clients`, `--set <name>` or `--all` (split past the per-run cap into one series), `--fresh`, `--out`, `--no-wait`, `--share`, `--json`, `--yes` (an order of more than ten renders asks first on a terminal, and one that exceeds what is left says how many clients will be skipped). Exits 1 on an error report or a failed capture.
+- `postboi testing download <id>` collects an existing run's screenshots, waiting for pending ones. `postboi testing sets` lists saved client sets, with `sets save <name> --clients a,b` and `sets delete <name>`; `postboi testing share <id> [--revoke]` makes or takes down a read-only link. `testing add` takes `--set` and `--html <file>` (paste instead of send), and `testing clients` shows platform, OS and dark mode with the renders left.
+- `hosted_test()` takes `set` and `fresh`, and the run it answers carries the server's team-scoped `url`, `series_id`, a `screenshots` summary, `renders`, `share_url` and full previews (`id`, `url`, `thumbnail_url`, client metadata, `reused`, `previous`). `wait({ screenshots: true })` waits until every capture has settled, `capture(preview)` fetches one image as a `Response` (no file system, so it runs in Workers), and `share()` makes the read-only link. `mail({ test })` takes `set` and `fresh` too. `client` and `name` stay on every preview.
+- Webhooks: the Postboi provider's `testing.received` and `testing.completed` normalize to `test_received` and `test_completed`, with the run in `event.test`; `mock_request` and `mock_event` build both. `WebhookEventType` gains both members, so an exhaustive `switch` over it needs two more cases.
+
+- `postboi migrate resend` moves a Resend account over in one command: domains registered with their DNS records printed, audiences as lists with contacts imported without re-confirmation, webhooks re-registered at the same URLs with Postboi's event names. `--dry-run` reads and writes nothing (with `--json`, the plan is the document); running it twice skips what is already here, and one refusal (a domain another account owns, a webhook URL Postboi won't take) goes on its own row while the rest still moves, exit 1 at the end.
+- `mail.recipients.add()` takes `status: "unsubscribed"` (per row or for the call), so an opt-out brought over from another provider lands unsubscribed and is never mailed on the way.
+- `mail.messages.get()` returns `delivered_at` and `outcomes`: the lifecycle after a send left, in the receiving server's own words (the `250` on a delivery, why SES was still trying on a `delayed` row, the `550` behind a bounce).
+
+### Fixed
+
+- `postboi testing delete` (and any account command the API answers with 204) no longer reports "Unexpected empty response from the API." after it worked.
+- The dev inbox's "Photograph in real clients" still explains a skipped client ("Out of renders") on servers that report it as a note rather than a failed capture row.
+
 ## 0.60.0
 
 ### Added

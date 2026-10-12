@@ -1,5 +1,5 @@
 import { ensure_env_loaded, read_env } from "./env.js"
-import { HONEYPOT_FIELD } from "./form.js"
+import { HONEYPOT_FIELD, TURNSTILE_REMOTE_FIELD } from "./form.js"
 
 /**
  * Invisible spam protection for FormData bodies. Two independent layers, both checked in
@@ -28,12 +28,8 @@ export { HONEYPOT_FIELD }
 /** The hidden input the Turnstile widget injects into its form. */
 export const TURNSTILE_FIELD = "cf-turnstile-response"
 
-/**
- * Path-legal alias for the Turnstile token. The managed-captcha loader uses it (via
- * Turnstile's `response-field-name`) on SvelteKit remote forms, where the default
- * name's dashes are rejected by the form data parser.
- */
-export const TURNSTILE_REMOTE_FIELD = "_captcha"
+/** Path-legal alias for the Turnstile token on SvelteKit remote forms; see `form.ts`. */
+export { TURNSTILE_REMOTE_FIELD }
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 

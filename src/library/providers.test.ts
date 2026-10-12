@@ -105,6 +105,19 @@ afterEach(() => {
 describe("Resend", () => {
 	const mail = () => new Resend({ api_key: "re_key", default: { from: "from@test.com" } })
 
+	it("refuses web_version, which only Postboi can host, before anything is sent", async () => {
+		const send = mail().send({
+			to: "to@test.com",
+			subject: "Hi",
+			body: '<a href="{{ postboi.web_url }}">View in browser</a>',
+			// Typed away for every provider but Postboi; plain JS still gets here.
+			web_version: true as never,
+		})
+		await expect(send).rejects.toMatchObject({ code: "web_version_unsupported" })
+		await expect(send).rejects.toBeInstanceOf(PostboiError)
+		expect(fetch).not.toHaveBeenCalled()
+	})
+
 	it("maps a send to the Resend API", async () => {
 		fetch.mockResolvedValue(respond({ json: { id: "abc" } }))
 		const result = await mail().send({

@@ -110,10 +110,12 @@ import { offer_skill, refresh_skill, skill_command } from "./skill.js"
 import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
 import { api_command, ApiCommandError, error_json } from "./api.js"
 import { inbox_command } from "./inbox.js"
+import { mailbox_command } from "./mailbox.js"
 import { CONFIG_FILES, doctor, imports_config } from "./doctor.js"
 import { help_text } from "./help.js"
 import { dev_command } from "./dev.js"
 import { inspect_command } from "./inspect.js"
+import { migrate_command } from "./migrate.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 
 type Prompts = ReturnType<typeof create_prompts>
@@ -329,7 +331,14 @@ async function sync_credentials_up(
  * a local override is a decision, and sync doesn't overrule decisions.
  */
 function write_pulled_vars(vars: Record<string, string>, force = false): Array<string> {
-	const keys = Object.keys(vars).filter((key) => force || read_env(key) === undefined)
+	// The view key and host are the server's, not a choice made here: a rotation must
+	// reach the env file, so a changed value is written over the local one.
+	const keys = Object.keys(vars).filter(
+		(key) =>
+			force ||
+			read_env(key) === undefined ||
+			(key.startsWith("POSTBOI_VIEW_") && read_env(key) !== vars[key])
+	)
 	if (keys.length === 0) return []
 	const targets = detect_env_targets(readdirSync("."))
 	for (const target of targets) {
@@ -2162,9 +2171,15 @@ async function main(): Promise<void> {
 	if (command === "env") return env_command(argv.slice(3))
 	if (command === "dev") return dev_command(argv.slice(3))
 	if (command === "inspect") return inspect_command(argv.slice(3))
+	if (command === "migrate") return migrate_command(argv.slice(3))
 	// Before the account commands: a temp inbox needs no POSTBOI_TOKEN.
 	if (command === "inbox") {
 		process.exitCode = await inbox_command(argv.slice(3))
+		return
+	}
+	// Likewise a mailbox: without a token it is one of its own, waiting to be claimed.
+	if (command === "mailbox") {
+		process.exitCode = await mailbox_command(argv.slice(3))
 		return
 	}
 	if (command && (await api_command(command, argv.slice(3)))) return

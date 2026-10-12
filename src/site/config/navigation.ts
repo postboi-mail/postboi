@@ -49,6 +49,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "compare", name: "Postboi compared" },
 					{ slug: "migrate-from-resend", name: "Moving from Resend" },
 					{ slug: "agents", name: "Email for agents" },
+					{ slug: "mailbox", name: "Agent mailboxes" },
 					{ slug: "manual-setup", name: "Manual setup" },
 				],
 			},
@@ -96,6 +97,8 @@ export const contentSections: ContentSectionConfig[] = [
 				items: [
 					{ slug: "formdata", name: "FormData" },
 					{ slug: "forms", name: "Hosted forms" },
+					{ slug: "views", name: "Web versions" },
+					{ slug: "hosting", name: "Hosting images and fonts" },
 					{ slug: "deliverability", name: "Deliverability" },
 					{ slug: "spam", name: "Spam protection" },
 					{ slug: "templates", name: "Email templates" },

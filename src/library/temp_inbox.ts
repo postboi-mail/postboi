@@ -1,5 +1,16 @@
 import { ensure_env_loaded, read_env } from "./env.js"
 import { PostboiError } from "./errors.js"
+import {
+	aborted,
+	duration_ms,
+	GRACE_MS,
+	matches,
+	POLL_SECONDS,
+	sleep,
+	WAIT_SECONDS,
+	with_deadline,
+	type Match,
+} from "./long_poll.js"
 
 /**
  * `postboi/inbox`: throwaway inboxes at tempboi.email, for tests and agents that need to
@@ -14,21 +25,13 @@ import { PostboiError } from "./errors.js"
 /** Where anonymous inboxes live. `POSTBOI_INBOX_URL` or `base` points elsewhere. */
 export const TEMP_INBOX_URL = "https://tempboi.email"
 
-/** How long one long-poll holds, in seconds. The server's own ceiling is 25. */
-const POLL_SECONDS = 25
-/** The server's ceiling on one `/wait`, in seconds. */
-const WAIT_SECONDS = 90
-/** Slack on top of a long-poll's own hold before we call the request lost. */
-const GRACE_MS = 15_000
-
 /**
  * A duration: a number of **milliseconds**, like `setTimeout`, or a string the server
  * would read (`"90s"`, `"15m"`, `"2h"`, `"1d"`, `"500ms"`).
  */
 export type Duration = number | string
 
-/** Text to match: a case-insensitive substring, or a RegExp tested here in the client. */
-export type Match = string | RegExp
+export { duration_ms, type Match }
 
 /** Failure talking to tempboi.email. `code` is the server's (`not_found`, `invalid_token`, …). */
 export class InboxError extends PostboiError {
@@ -100,19 +103,6 @@ interface WirePage {
 }
 
 // ---------------------------------------------------------------------------------------
-
-/** `"15m"` → 900000. Numbers are already milliseconds. */
-export function duration_ms(value: Duration): number {
-	if (typeof value === "number") {
-		if (!Number.isFinite(value) || value < 0) throw new TypeError(`Invalid duration: ${value}`)
-		return value
-	}
-	const match = /^\s*(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?\s*$/i.exec(value)
-	if (!match) throw new TypeError(`Invalid duration: "${value}" (try "90s", "15m", "2h" or "1d")`)
-	const unit = (match[2] ?? "s").toLowerCase()
-	const scale = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit] ?? 1000
-	return Math.round(Number(match[1]) * scale)
-}
 
 /** A mail as the caller sees it. */
 export class Mail {
@@ -283,13 +273,6 @@ function base_url(base: string | undefined): string {
 	return (base ?? read_env("POSTBOI_INBOX_URL") ?? TEMP_INBOX_URL).replace(/\/+$/, "")
 }
 
-function matches(value: string | null, match: Match | undefined): boolean {
-	if (match === undefined) return true
-	if (typeof match === "string") return (value ?? "").toLowerCase().includes(match.toLowerCase())
-	match.lastIndex = 0
-	return match.test(value ?? "")
-}
-
 /** Does a mail pass a filter? `from` is tested against the address and the name. */
 export function filter_mail(
 	mail: { tag: string | null; from: string; name: string | null; subject: string | null },
@@ -310,22 +293,6 @@ function server_filter(filter: MailFilter): Record<string, string> {
 	if (typeof filter.from === "string") out.from = filter.from
 	if (typeof filter.subject === "string") out.subject = filter.subject
 	return out
-}
-
-function aborted(signal: AbortSignal | undefined): boolean {
-	return signal?.aborted ?? false
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-	return new Promise((resolve) => {
-		const timer = setTimeout(done, ms)
-		signal?.addEventListener("abort", done, { once: true })
-		function done() {
-			clearTimeout(timer)
-			signal?.removeEventListener("abort", done)
-			resolve()
-		}
-	})
 }
 
 /**
@@ -589,12 +556,6 @@ function timed_out(options: WaitOptions, cursor: number): InboxTimeoutError {
 	].filter(Boolean)
 	const what = parts.length ? ` matching ${parts.join(", ")}` : ""
 	return new InboxTimeoutError(`No mail${what} arrived in time`, cursor)
-}
-
-/** The caller's signal, plus a ceiling so a long-poll a proxy swallowed can't hang forever. */
-function with_deadline(signal: AbortSignal | undefined, ms: number): AbortSignal {
-	const timeout = AbortSignal.timeout(ms)
-	return signal ? AbortSignal.any([signal, timeout]) : timeout
 }
 
 async function failure(response: Response): Promise<InboxError> {

@@ -34,6 +34,12 @@ export const productParts: ProductPart[] = [
 			"Throwaway inboxes at tempboi.email for tests and AI agents. `curl -X POST tempboi.email` makes one with no account, and waiting on it returns the sign-up code and link already pulled out.",
 	},
 	{
+		name: "Agent mailboxes",
+		slug: "mailbox",
+		summary:
+			"Email addresses an AI agent keeps, at agentboi.email or on your own domain. The agent reads its mail as JSON over a long poll, each message says whether it's from your team or a stranger, and one call answers in the thread.",
+	},
+	{
 		name: "Deliverability",
 		slug: "deliverability",
 		summary:
@@ -58,6 +64,12 @@ export const productParts: ProductPart[] = [
 			"Point a plain HTML `<form>` at an endpoint and submissions arrive as email, with no backend.",
 	},
 	{
+		name: "Web versions",
+		slug: "views",
+		summary:
+			'An email\'s HTML hosted as a sandboxed page for its "View in browser" link, personalised per reader, whichever provider sends it: OneSignal, Braze, Iterable, Postboi or your own code.',
+	},
+	{
 		name: "Relay",
 		slug: "provider",
 		summary:
@@ -73,6 +85,6 @@ export const productParts: ProductPart[] = [
 		name: "For agents",
 		slug: "agents",
 		summary:
-			"An agent can set up sending with nobody signing in, sign up for things with a Tempboi address, and read the replies.",
+			"An agent can set up sending with nobody signing in, sign up for things with a Tempboi address, keep a mailbox of its own at agentboi.email, and answer what arrives.",
 	},
 ]

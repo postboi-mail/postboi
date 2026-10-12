@@ -98,6 +98,13 @@ export interface SendParams {
 	preheader?: string
 	/** Small print under the frame (or at the end of `html` without the shell), escaped. */
 	footnote?: string
+	/** A received message's id (`in_…`) this answers: the server writes the threading headers. */
+	in_reply_to?: string
+	/**
+	 * Store the message as a hosted web version and fill `{{ postboi.web_url }}` and
+	 * `%postboi_web_url%` in `html` and `text` with its link before sending.
+	 */
+	web_version?: boolean
 	/** Relay this send through the named provider using the account's synced credentials. */
 	send_via?: string
 	/**
@@ -111,7 +118,15 @@ export interface SendParams {
 /** The API's ceiling on an idempotency key, header or body. */
 const MAX_IDEMPOTENCY_KEY = 256
 
-type SendResponse = { id: string; sandbox?: boolean; claim_url?: string }
+/** A note the send went through with, like `web_version_unused`; `index` in a batch. */
+type SendWarning = { code: string; message: string; index?: number }
+
+type SendResponse = {
+	id: string
+	sandbox?: boolean
+	claim_url?: string
+	warnings?: Array<SendWarning>
+}
 
 /** A message as returned by `GET /v1/messages/:id`. */
 export interface MessageDetails {
@@ -124,8 +139,20 @@ export interface MessageDetails {
 	html?: string
 	text?: string
 	scheduled_at?: string
+	/** When the receiving server took it, on SES's own clock. Absent until it has. */
+	delivered_at?: string
 	opened_at?: string
 	open_count: number
+	/**
+	 * What happened after it left, oldest first, in the receiving server's own words:
+	 * `delivered` with the 250 that took it, `delayed` with why SES is still trying, or
+	 * `bounced` with the 550. `detail` is absent when the event carried no words.
+	 */
+	outcomes?: Array<{
+		type: "delivered" | "delayed" | "bounced" | "complained" | "rejected" | "failed"
+		at: string
+		detail?: string
+	}>
 	/** The form this submission was filed under, when it was one. */
 	form?: { id: string; name: string }
 	/** A submission's fields as `[name, value]` pairs, in submission order. */
@@ -786,8 +813,12 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			list: string,
 			recipients: ListRecipientInput | Array<ListRecipientInput>,
 			options: {
-				/** Starting status for these recipients — overrides the list's default. */
-				status?: "subscribed" | "pending"
+				/**
+				 * Starting status for these recipients — overrides the list's default.
+				 * `"subscribed"` for people who already confirmed elsewhere (no confirmation is
+				 * sent), `"unsubscribed"` for their opt-outs, kept on the list and never mailed.
+				 */
+				status?: MembershipStatus
 			} = {}
 		): Promise<{
 			added: number
@@ -1190,6 +1221,8 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			style: message.style,
 			preheader: message.preheader,
 			footnote: message.footnote,
+			in_reply_to: message.in_reply_to,
+			web_version: message.web_version,
 			fields: message.fields,
 			send_via: this.#send_via,
 		}
@@ -1248,12 +1281,18 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		)
 	}
 
+	/** Say what the API noted about a send that went through, e.g. a web version nothing linked to. */
+	#warn(data: { warnings?: Array<SendWarning> } | null): void {
+		for (const warning of data?.warnings ?? []) console.warn(`postboi: ${warning.message}`)
+	}
+
 	protected parse_batch_response(
 		_response: Response,
 		data: unknown,
 		recipients: Array<BatchRecipient>
 	): Array<SendResponse | PostboiError> {
 		this.#announce_sandbox(data as { sandbox?: boolean; claim_url?: string } | null)
+		this.#warn(data as { warnings?: Array<SendWarning> } | null)
 		const ids = (data as { ids?: Array<string> } | null)?.ids ?? []
 		return recipients.map((_, i) =>
 			ids[i]
@@ -1268,6 +1307,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	protected parse_response(_response: Response, data: unknown): SendResponse {
 		const result = data as SendResponse
 		this.#announce_sandbox(result)
+		this.#warn(result)
 		return result
 	}
 

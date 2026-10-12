@@ -33,6 +33,40 @@ import type { SmsDefaults } from "./sms/types.js"
 import type { ChatDefaults } from "./chat/types.js"
 import type { PushDefaults } from "./push/types.js"
 import type { WhatsappDefaults } from "./whatsapp/types.js"
+import type { ParamSpec } from "./views.js"
+
+/** The senders `postboi views publish` writes a link for, in their own merge syntax. */
+export type ViewProvider =
+	| "onesignal"
+	| "braze"
+	| "iterable"
+	| "customerio"
+	| "klaviyo"
+	| "mailchimp"
+	| "sendgrid"
+	| "none"
+
+/**
+ * One view's publishing choices, so `postboi views publish` makes them the same way every
+ * time without flags. The server keeps the last version's choices too; these win over it,
+ * and flags win over these.
+ */
+export interface ViewConfig {
+	/** Who sends the emails that link here, for the link's merge syntax. */
+	provider?: ViewProvider
+	/** Static data the template reads: a `.json` file, or a module whose default export is it. */
+	context?: string
+	/** Public, typed query params by name. Never free text: send that through a feed. */
+	params?: Record<string, ParamSpec>
+	/** Feed fields by name, each with the template path it fills. */
+	feed?: Record<string, string>
+	/**
+	 * The sender's own id for the reader, as a template path (`user.external_id`): the link
+	 * carries it as `u`, and `view.viewed` reports it. Anyone can edit it, so it's opt-in.
+	 * `"off"` turns it off.
+	 */
+	reader?: string
+}
 
 /** Everything you can configure globally via `postboi.config.ts` or {@link configure}. */
 export interface PostboiConfig {
@@ -114,6 +148,21 @@ export interface PostboiConfig {
 		default?: PushDefaults
 		/** Non-secret constructor options. Private keys are secrets — keep them in env. */
 		options?: Record<string, string>
+	}
+	/**
+	 * Hosted web versions, by slug: the choices `postboi views publish` makes for each one.
+	 * Only the CLI reads this; sending never does.
+	 */
+	views?: Record<string, ViewConfig>
+	/** `postboi testing run` settings. Only the CLI reads this; sending never does. */
+	testing?: {
+		/**
+		 * The one directory root-relative asset paths (`/images/hero.png`) resolve against,
+		 * relative to the project root, for `testing run` and `views publish`. Rarely needed:
+		 * without it the CLI tries the HTML file's directory, each parent up to the project
+		 * root, then the cwd.
+		 */
+		assets?: string
 	}
 	/** Spam-protection settings applied to every FormData send (honeypot + Turnstile). */
 	captcha?: CaptchaOptions

@@ -317,6 +317,67 @@ describe("receive — postboi", () => {
 		expect(event.body?.text).toBe("Thanks, that works for me.")
 	})
 
+	it("carries a test run whole on the testing events, with nobody as the recipient", async () => {
+		const { request, secret } = await mock_request({ provider: "postboi", type: "test_completed" })
+		const [event] = await receive(request, { provider: "postboi", secret })
+		expect(event).toMatchObject({ type: "test_completed", provider: "postboi" })
+		expect(event.email).toBeUndefined()
+		expect(event.message_id).toBeUndefined()
+		expect(event.test?.screenshots?.state).toBe("done")
+		expect(event.test?.previews?.every((p) => p.status === "ready")).toBe(true)
+
+		const received = await mock_request({ provider: "postboi", type: "test_received" })
+		const [first] = await receive(received.request, {
+			provider: "postboi",
+			secret: received.secret,
+		})
+		expect(first.type).toBe("test_received")
+		expect(first.test?.screenshots?.state).toBe("rendering")
+		expect((first.raw as { type: string }).type).toBe("testing.received")
+
+		const fake = mock_event("test_completed")
+		expect(fake.email).toBeUndefined()
+		expect(fake.test?.report?.status).toBe("pass")
+	})
+
+	it("reads a web version being viewed as viewed, never as an open", async () => {
+		const { request, secret } = await mock_request({ provider: "postboi", type: "viewed" })
+		const [event] = await receive(request, { provider: "postboi", secret })
+		expect(event).toMatchObject({
+			type: "viewed",
+			message_id: "mock-message-id",
+			email: "recipient@example.com",
+			subject: "Mock subject",
+		})
+		expect((event.raw as { type: string }).type).toBe("email.viewed")
+		expect(event.client).toMatchObject({ name: "Safari", os: "iOS", device: "mobile" })
+		expect(event.timestamp).toBeInstanceOf(Date)
+		expect(mock_event("viewed").client?.device).toBe("mobile")
+	})
+
+	it("carries a published view's reader on view.viewed, with nobody as the recipient", async () => {
+		const { request, secret } = await mock_request({ provider: "postboi", type: "view_viewed" })
+		const [event] = await receive(request, { provider: "postboi", secret })
+		expect(event.type).toBe("view_viewed")
+		expect((event.raw as { type: string }).type).toBe("view.viewed")
+		expect(event.email).toBeUndefined()
+		expect(event.message_id).toBeUndefined()
+		expect(event.view).toMatchObject({
+			slug: "welcome",
+			version: 3,
+			params: { week: 20 },
+			reader: { kind: "record", data: { external_id: "user_123" } },
+		})
+		expect(event.timestamp?.toISOString()).toBe(event.view?.viewed_at)
+		expect(event.client?.os).toBe("iOS")
+
+		const fake = mock_event("view_viewed", {
+			view: { ...mock_event("view_viewed").view!, reader: { kind: "param", id: "user_9" } },
+		})
+		expect(fake.email).toBeUndefined()
+		expect(fake.view?.reader).toEqual({ kind: "param", id: "user_9" })
+	})
+
 	it("accepts a space/comma-separated secret list — any candidate verifies", async () => {
 		const { request, secret } = await mock_request({ provider: "postboi", type: "opened" })
 		// The real secret buried among decoys, both separators in play — rotation and

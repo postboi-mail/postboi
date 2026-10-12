@@ -534,8 +534,13 @@ You can also look a message up from code with the id `mail()` returned:
 
 ```ts
 const message = await mail.messages.get(id)
-// { id, status: 'sent', to, subject, opened_at, open_count, … }
+// { id, status: 'delivered', to, subject, delivered_at, opened_at, open_count, outcomes, … }
 ```
+
+`outcomes` is what happened after it left, in the receiving server's own words: the
+`250` that took it, a `delayed` row with why SES was still trying (a full mailbox, a
+server not answering), or the `550` behind a bounce. The dashboard draws the same rows
+on the message's timeline, so "why didn't this arrive" has an answer in both places.
 
 And a scheduled message can be moved (until it sends). `mail.messages.reschedule`
 takes the same formats as `scheduled_at`:

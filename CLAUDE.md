@@ -35,6 +35,12 @@ ships to the Chrome Web Store when its `manifest.json` version rises on `main`
 notifications, and a `notify()` that fans out across them. Read it before starting any
 channel work; it carries the `ProviderBase` split that everything else depends on.
 
+**[AGENT_MAILBOXES.md](AGENT_MAILBOXES.md)** is the plan for agentboi.email: an email
+address an agent owns, beside tempboi.email's throwaway ones. It covers the mailbox API,
+`postboi/mailbox`, the `postboi mailbox` and `postboi mcp` commands, the held queue and the
+trust labels, with the competitor research behind each decision. Read it before touching
+`postboi/inbox`, the inbox CLI, receiving, or anything MCP.
+
 ## Conventions
 
 - Code style: snake_case, no semicolons. Run `bun run check` and `bun run lint`.

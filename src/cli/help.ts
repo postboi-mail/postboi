@@ -86,6 +86,15 @@ export const HELP: Array<HelpSection> = [
 				summary: "One email, now",
 				details: [
 					"--to <emails> --subject <s> --text <t>, --html <h> or --file <body> [--at <ISO>]",
+					"--file uploads the local images and fonts the HTML points at, as assets does; --no-assets sends it as it is",
+				],
+			},
+			{
+				command: "assets",
+				summary: "Host the images and fonts built email HTML points at, for good",
+				details: [
+					"<file.html…> uploads the local files they point at (src, srcset, url(), VML) and rewrites each file in place to the hosted URLs",
+					"- reads stdin and writes the HTML to stdout. Shared files go up once per run; URLs are on mail-view.<your domain> when it's on",
 				],
 			},
 			{
@@ -98,6 +107,7 @@ export const HELP: Array<HelpSection> = [
 				summary: "Lists",
 				details: [
 					"add <name> · send <list> --subject <s> --text, --html or --file <body> · delete <ref>",
+					"send --file uploads the local images and fonts the HTML points at, as assets does; --no-assets sends it as it is",
 				],
 			},
 			{
@@ -114,6 +124,14 @@ export const HELP: Array<HelpSection> = [
 				command: "domains",
 				summary: "Sending domains",
 				details: ["add <domain> · check <ref> · inbound <domain> [--off] · delete <ref>"],
+			},
+			{
+				command: "migrate resend",
+				summary: "Move a Resend account here: domains, audiences as lists, webhooks",
+				details: [
+					"[--key <resend key>] [--only domains,lists,webhooks] [--dry-run] [--json]",
+					"Reads RESEND_API_KEY when --key is absent. Safe to run twice: what is here already is skipped",
+				],
 			},
 			{
 				command: "webhooks",
@@ -155,8 +173,28 @@ export const HELP: Array<HelpSection> = [
 			},
 			{
 				command: "testing",
-				summary: "Email tests",
-				details: ["add [--label] [--clients] · <id> (the report) · clients · delete <id>"],
+				summary: "Email tests: a report and real-client screenshots",
+				details: [
+					"run <file.html or -> pastes it, waits for every screenshot and saves them to screenshots/<series>/<group>/<client>.png",
+					"run: --series (default: the file name) --clients a,b or --set <name> or --all (batched) --fresh --out <dir> --no-wait --share --yes; exits 1 on an error report or a failed capture",
+					"run and add --html upload the local images and fonts the HTML points at (src, srcset, url(), VML) and point it at the copies; --no-assets sends it as it is",
+					"download <id> [--out dir]: wait out an existing run and save its screenshots",
+					"add [--label] [--series] [--clients or --set] [--html <file>] · <id> (the report) · clients · delete <id>",
+					"sets · sets save <name> --clients a,b · sets delete <name> · share <id> [--revoke]",
+				],
+			},
+			{
+				command: "views",
+				summary: "Web versions of emails, for a View in browser link whoever sends them",
+				details: [
+					"publish <file.html> [--slug <s>] [--context <file.json or .js>] [--provider onesignal, braze, iterable, customerio, klaviyo, mailchimp, sendgrid or none]",
+					"publish: --public <var[:integer, date or enum]>,… or --public all makes reader variables URL params; the rest come through the sender's data feed",
+					"publish: prints the link in the sender's merge syntax and the feed setup; --write puts the link in the file and data-web-hide on unsubscribe links (--yes skips asking)",
+					"publish: --reader <template path> puts the reader's id on the link as u, for view.viewed webhooks (opt-in: anyone can edit it; off turns it off)",
+					"publish: uploads the local images and fonts the HTML points at (kept, unlike test uploads) and publishes it pointing at the copies (the file keeps its paths); --no-assets leaves the local paths as they are",
+					"stats <slug> [--days 30]: views and visitors per day, by public params, and how many were identified",
+					"open <slug> [--data <json>] [--param key=value] · delete <slug> · keys [rotate] · feed-key",
+				],
 			},
 		],
 		footer: [
@@ -211,6 +249,62 @@ export const HELP: Array<HelpSection> = [
 		],
 	},
 	{
+		title: "Agent mailboxes",
+		note: "agentboi.email; no POSTBOI_TOKEN needed to make one",
+		entries: [
+			{
+				command: "mailbox new",
+				summary: "Make an address your agent keeps, and print it",
+				details: [
+					"[--address <name>] [--name <label>] [--domain <yours>] [--json] [--env]",
+					"With POSTBOI_TOKEN it is your team's; without, it sends once you open its claim link",
+					"--env prints export POSTBOI_MAILBOX_KEY=… for eval",
+				],
+			},
+			{
+				command: "mailbox watch",
+				summary: "Print mail as it arrives, one line each, with who is talking",
+				details: [
+					"[address] --all --json (NDJSON) --trust <owner, thread, stranger or suspect> --tag --from --subject",
+					"--exec <cmd>: run per mail with ID THREAD TRUST FROM SUBJECT REPLY_TEXT CODE LINK set",
+				],
+			},
+			{
+				command: "mailbox wait",
+				summary: "Wait for one mail, then exit",
+				details: [
+					"[address] --from --subject --tag --trust (/regex/ works) --timeout <sec> --new",
+					"--code or --link prints only that (exit 3 if absent) · --json · exit 2 on timeout",
+				],
+			},
+			{
+				command: "mailbox read",
+				summary: "One mail in full: what they wrote, minus the quoted thread",
+				details: ["[id or latest] [address] --html --raw --json"],
+			},
+			{
+				command: "mailbox reply",
+				summary: "Answer a mail in its thread",
+				details: ['<id> [address] --text "…" (or --html) --cc a,b --bcc c --subject "…"'],
+			},
+			{
+				command: "mailbox send",
+				summary: "A new message from the mailbox",
+				details: ['[address] --to a@b.com,c@d.com --subject "…" --text "…"'],
+			},
+			{ command: "mailbox threads", summary: "Its conversations, newest activity first" },
+			{
+				command: "mailbox ls",
+				summary: "Mailboxes on this machine",
+				details: ["key [address]: a new key, the old one stops · rm [address]"],
+			},
+		],
+		footer: [
+			"The mailbox made or used last is the default; POSTBOI_MAILBOX_KEY overrides",
+			"it (the key alone finds its mailbox), POSTBOI_MAILBOX_URL moves the host.",
+		],
+	},
+	{
 		title: "Options",
 		entries: [
 			{ command: "-h, --help", summary: "Show this help" },
@@ -223,19 +317,30 @@ const COLUMN = 31
 
 /** `--help`: the sections with the commands in cyan, the details dimmed. */
 /** The whole reference, or only the sections named in `only`. */
+function entry_lines(section: HelpSection, entry: HelpEntry): Array<string> {
+	const name = section.title === "Options" ? entry.command : `bunx postboi ${entry.command}`
+	const pad = " ".repeat(Math.max(1, COLUMN - name.length))
+	return [
+		`  ${section.title === "Options" ? name : cyan(name)}${pad}${entry.summary}`,
+		...(entry.details ?? []).map((line) => `  ${" ".repeat(COLUMN)}${dim(`· ${line}`)}`),
+	]
+}
+
+/** One command's entry, for `postboi <command> --help`. Undefined for a command with none. */
+export function command_help(command: string): string | undefined {
+	for (const section of HELP) {
+		const entry = section.entries.find((candidate) => candidate.command === command)
+		if (entry) return entry_lines(section, entry).join("\n")
+	}
+	return undefined
+}
+
 export function help_text(only?: Array<string>): string {
 	const out: Array<string> = []
 	for (const section of HELP) {
 		if (only && !only.includes(section.title)) continue
 		out.push(`${bold(section.title)}${section.note ? ` ${dim(`(${section.note})`)}` : ""}`)
-		for (const entry of section.entries) {
-			const name = section.title === "Options" ? entry.command : `bunx postboi ${entry.command}`
-			const pad = " ".repeat(Math.max(1, COLUMN - name.length))
-			out.push(`  ${section.title === "Options" ? name : cyan(name)}${pad}${entry.summary}`)
-			for (const line of entry.details ?? []) {
-				out.push(`  ${" ".repeat(COLUMN)}${dim(`· ${line}`)}`)
-			}
-		}
+		for (const entry of section.entries) out.push(...entry_lines(section, entry))
 		for (const line of section.footer ?? []) out.push(`  ${" ".repeat(COLUMN)}${dim(line)}`)
 		out.push("")
 	}

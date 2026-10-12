@@ -64,6 +64,7 @@ The other channels and the provider switch are extras on top of that.
 | Hosted form endpoints (no backend)               | ✅                                             | ❌                             |
 | Local dev inbox, no code changes                 | ✅ `/__postboi`                                | ❌                             |
 | Throwaway inboxes for tests and agents           | ✅ [Tempboi](/temp-inbox), no account          | Test addresses that simulate delivery and bounces |
+| Mailboxes an AI agent keeps                      | ✅ [agentboi.email](/mailbox), no account to make one | Inboxes, in private beta in October 2026 |
 | An agent can set it up without you signing in    | ✅ `postboi init --agent`                      | Needs an account and API key first |
 | Free tier                                        | 3,000 a month, 100 a day                       | 3,000 a month, 100 a day       |
 | First paid plan                                  | £9 for 40,000 a month                          | $20 for 50,000 a month         |
@@ -85,8 +86,9 @@ Postboi too, since `body` takes any HTML) or its longer history in production.
 
 Already using Resend? You can keep it. [`postboi/resend`](/providers) sends through your
 Resend account using Postboi's API, and if you move to the Postboi provider later, you change
-`provider: "resend"` to `provider: "postboi"` and that's it. [Moving from Resend](/migrate-from-resend) goes
-through it step by step, with every field mapped.
+`provider: "resend"` to `provider: "postboi"` and that's it. `bunx postboi migrate resend`
+brings your domains, audiences and webhooks across first ([the CLI page](/cli) has the flags),
+and [Moving from Resend](/migrate-from-resend) goes through the rest step by step.
 
 ## Postboi vs SendGrid, Postmark, Mailgun or SES
 

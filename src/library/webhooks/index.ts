@@ -29,6 +29,7 @@ import { parse_json, sns_envelope, sns_subscribe_url } from "./shared.js"
 import { timing_safe_equal } from "./crypto.js"
 import { WebhookVerificationError } from "./errors.js"
 import type { EmailClient } from "./ua.js"
+import type { TestingRun } from "../inspect/hosted.js"
 
 export { parse_user_agent, type EmailClient } from "./ua.js"
 export { WebhookVerificationError, type WebhookVerificationCode } from "./errors.js"
@@ -45,6 +46,7 @@ export {
 	type PollOptions,
 } from "./poll.js"
 export { parse_dsn } from "./dsn.js"
+export type { TestingRun, TestingPreview, ScreenshotSummary } from "../inspect/hosted.js"
 import { POLL_MODULES } from "./poll.js"
 
 /** Normalized delivery-event types, common across every provider. */
@@ -67,6 +69,47 @@ export type WebhookEventType =
 	 * without inbound never emit it.
 	 */
 	| "received"
+	/**
+	 * Postboi hosted testing, not delivery: a test run's email is in and its report is
+	 * ready (`test_received`), then every screenshot has settled, once per run
+	 * (`test_completed`). The run is in `test`; `email` and `message_id` stay unset,
+	 * because nobody was sent anything. Only the Postboi provider emits these.
+	 */
+	| "test_received"
+	| "test_completed"
+	/**
+	 * Someone opened the web version of a Postboi send (`mail({ web_version: true })`).
+	 * Not an open: a page in a browser says nothing about the inbox, so it never counts
+	 * as `opened`. `client` comes from the browser's user-agent. Postboi provider only.
+	 */
+	| "viewed"
+	/**
+	 * A reader Postboi could identify opened a published view (`postboi views publish`),
+	 * through a feed record, a sealed link or the opt-in reader param. Not about a send:
+	 * the page and the reader are in `view`, and `email` and `message_id` stay unset.
+	 * Unidentified views are only counted (`views.stats()`). Postboi provider only.
+	 */
+	| "view_viewed"
+
+/** A published view's page opened by a reader Postboi could identify (`view_viewed`). */
+export interface ViewViewed {
+	slug: string
+	/** The version that was served. */
+	version: number
+	/** The page's address, without the reader's query. */
+	url: string
+	/** The public params that were applied, like `{ week: 20 }`. */
+	params: Record<string, string | number>
+	/**
+	 * Who it was: a feed record (`data` is the fields your sender passed, `id` the record's
+	 * own id, not the reader's), a sealed link (`data` is what was sealed), or the opt-in
+	 * reader param (`id` is its value, which anyone could have typed, so treat it as a claim).
+	 */
+	reader: { kind: "record" | "sealed" | "param"; id?: string; data?: Record<string, unknown> }
+	/** ISO 8601. */
+	viewed_at: string
+	user_agent?: string
+}
 
 /** Why a message bounced, normalized across providers. */
 export interface BounceDetail {
@@ -130,6 +173,14 @@ export interface WebhookEvent {
 	 * events only, on the same sends `form` is set for.
 	 */
 	fields?: Array<[string, string]>
+	/**
+	 * The test run, as `GET /v1/testing/{id}` answers it: report, `screenshots`, previews
+	 * (image paths relative to the API, same bearer token) and the dashboard `url`.
+	 * `test_received` and `test_completed` events only.
+	 */
+	test?: TestingRun
+	/** The view and its reader, as Postboi sent them. `view_viewed` events only. */
+	view?: ViewViewed
 	/** The untouched provider payload for this event — the escape hatch. */
 	raw: unknown
 }

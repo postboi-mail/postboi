@@ -128,8 +128,8 @@ no `+page.server.ts`, no action, no endpoint. The component *is* the app:
 Two lines of setup, since the feature is experimental:
 
 ```js
-// svelte.config.js — or inline in the sveltekit() vite plugin
-kit: { experimental: { remoteFunctions: true } }
+// vite.config.ts
+sveltekit({ experimental: { remoteFunctions: true } })
 ```
 
 ```ts
@@ -157,8 +157,10 @@ Worth knowing:
   behaviour uses the form's own method: `<form {...mail.enhance(async (form) => { await
   form.submit(); … })}>`. Without JavaScript the form still posts and renders the result,
   exactly like a native action.
-- **Spam protection carries over.** `<Captcha />` renders the honeypot under a
-  remote-safe name, and the managed captcha detects remote forms automatically. A tripped
+- **Spam protection carries over.** A remote form only accepts fields scoped to it, so
+  `<Captcha />` gives the honeypot and the captcha token the form's scoped names once the
+  page's JavaScript runs, and the managed captcha detects remote forms automatically. That
+  makes a form with `<Captcha />` need JavaScript, as the captcha does anyway. A tripped
   honeypot still reports `{ success: true }` to the bot.
 - **A failed send doesn't throw.** `mail.result` becomes `{ success: false, error }`, with
   the reason in `error`, so handle it in the markup (the `{:else if mail.result}` branch

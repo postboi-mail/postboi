@@ -15,9 +15,11 @@
 		<button>Send</button>
 	</form>
 	```
+
+	It works the same inside a SvelteKit remote form (`<form {...contact}>`).
 -->
 <script lang="ts">
-	import { HONEYPOT_FIELD, activate_captcha, honeypot_style } from "./form.js"
+	import { HONEYPOT_FIELD, activate_captcha, honeypot_style, scope_captcha_fields } from "./form.js"
 
 	interface Props {
 		/** Publishable key (`pk_…`) override. Defaults to the key baked by `bunx postboi sync`. */
@@ -32,6 +34,8 @@
 	let marker = $state<HTMLElement>()
 
 	$effect(() => activate_captcha(marker, pk, origin))
+	// Remote forms reject a field without their scope, and the token's input arrives later.
+	$effect(() => scope_captcha_fields(marker))
 </script>
 
 {#if honeypot}

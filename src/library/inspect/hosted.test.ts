@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { hosted_test } from "./hosted.js"
+import { hosted_test, screenshots_settled } from "./hosted.js"
 
 type Recorded = { path: string; method: string; headers: Record<string, string>; body?: unknown }
 
@@ -137,5 +137,119 @@ describe("hosted_test", () => {
 		await expect(
 			hosted_test({ html: "<p>hi</p>", token: "tok", api: "https://api.test", fetch: fetcher })
 		).rejects.toThrow(/\/v1\/testing answered 402/)
+	})
+
+	it("takes a current server's paste answer whole, with set, fresh and the team's url", async () => {
+		const run = {
+			id: "run_1",
+			status: "received",
+			url: "https://api.test/dashboard/acc_1/testing/run_1",
+			series_id: "run_0",
+			screenshots: { state: "rendering", total: 1, ready: 0, failed: 0, pending: 1, notes: [] },
+			previews: [{ id: "prev_1", client_id: "gmail", client_name: "Gmail", status: "pending" }],
+		}
+		const { calls, fetcher } = stub_api([{ ...CREATED, renders: { left: 40 } }, run])
+		const test = await hosted_test({
+			html: "<p>hi</p>",
+			set: "Core",
+			fresh: true,
+			token: "tok",
+			api: "https://api.test",
+			fetch: fetcher,
+		})
+		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+			"POST /v1/testing",
+			"POST /v1/testing/run_1/source",
+		])
+		expect(calls[0].body).toEqual({ set: "Core", fresh: true })
+		expect(test.url).toBe("https://api.test/dashboard/acc_1/testing/run_1")
+		expect(test.series_id).toBe("run_0")
+		expect(test.renders).toEqual({ left: 40, used: undefined })
+		// Both naming schemes, whichever the server sent.
+		expect(test.previews[0]).toMatchObject({ client: "gmail", name: "Gmail", client_id: "gmail" })
+	})
+
+	it("wait({ screenshots: true }) polls past the email until every capture has settled", async () => {
+		const summary = (pending: number) => ({
+			state: pending ? "rendering" : "done",
+			total: 1,
+			ready: 1 - pending,
+			failed: 0,
+			pending,
+			notes: [],
+		})
+		const { calls, fetcher } = stub_api([
+			CREATED,
+			{ id: "run_1", status: "received", screenshots: summary(1), previews: [] },
+			{
+				id: "run_1",
+				status: "received",
+				screenshots: summary(0),
+				previews: [
+					{
+						id: "prev_1",
+						client_id: "gmail",
+						client_name: "Gmail",
+						status: "ready",
+						url: "/v1/testing/run_1/previews/prev_1",
+					},
+				],
+			},
+			new Response(new Uint8Array([137, 80]), { headers: { "content-type": "image/png" } }),
+			{ share_url: "https://api.test/share/testing/tok_1" },
+		])
+		const test = await hosted_test({ token: "tok", api: "https://api.test", fetch: fetcher })
+		const done = await test.wait({ screenshots: true, poll_ms: 1 })
+		expect(done.screenshots?.state).toBe("done")
+		expect(done.previews[0].url).toBe("https://api.test/v1/testing/run_1/previews/prev_1")
+
+		const image = await done.capture(done.previews[0], { width: 480 })
+		expect(image.headers.get("content-type")).toBe("image/png")
+		expect(calls[3].path).toBe("/v1/testing/run_1/previews/prev_1")
+		expect(calls[3].headers.authorization).toBe("Bearer tok")
+
+		expect(await done.share()).toBe("https://api.test/share/testing/tok_1")
+		expect(calls[4].method).toBe("POST")
+		expect(calls[4].path).toBe("/v1/testing/run_1/share")
+	})
+
+	it("capture() refuses a preview that has nothing to fetch yet", async () => {
+		const { fetcher } = stub_api([CREATED])
+		const test = await hosted_test({ token: "tok", api: "https://api.test", fetch: fetcher })
+		await expect(test.capture({ client_name: "Gmail", status: "pending" })).rejects.toThrow(
+			/Gmail has no capture yet/
+		)
+	})
+})
+
+describe("screenshots_settled", () => {
+	const received = { id: "run_1", status: "received" as const }
+
+	it("trusts a current server's summary", () => {
+		const summary = { total: 1, ready: 0, failed: 0, pending: 1, notes: [] }
+		expect(
+			screenshots_settled({ ...received, screenshots: { ...summary, state: "rendering" } }, 0)
+		).toBe(false)
+		expect(
+			screenshots_settled({ ...received, screenshots: { ...summary, state: "submitting" } }, 0)
+		).toBe(false)
+		expect(
+			screenshots_settled({ ...received, screenshots: { ...summary, state: "done" } }, 0)
+		).toBe(true)
+		expect(
+			screenshots_settled({ ...received, screenshots: { ...summary, state: "disabled" } }, 0)
+		).toBe(true)
+	})
+
+	it("on an older server, waits for rows, then for none pending, with a grace for no rows", () => {
+		expect(screenshots_settled({ id: "run_1", status: "waiting" }, 999_999)).toBe(false)
+		expect(screenshots_settled(received, 0)).toBe(false)
+		expect(screenshots_settled(received, 120_000)).toBe(true)
+		expect(screenshots_settled({ ...received, previews: [{ status: "pending" }] }, 999_999)).toBe(
+			false
+		)
+		expect(
+			screenshots_settled({ ...received, previews: [{ status: "ready" }, { status: "failed" }] }, 0)
+		).toBe(true)
 	})
 })

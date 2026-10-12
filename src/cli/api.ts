@@ -1,8 +1,30 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import {
+	accessSync,
+	chmodSync,
+	constants,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs"
+import { basename, dirname, extname, join } from "node:path"
 import { stdin, stdout } from "node:process"
+import { load_config } from "../library/config.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
+import { html_to_text } from "../library/utils.js"
+import {
+	screenshots_settled,
+	type TestingPreview,
+	type TestingRun,
+} from "../library/inspect/hosted.js"
+import { asset_summary, upload_all, upload_assets } from "./assets.js"
+import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
-import { bold, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
+import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
+import { views } from "./views.js"
 
 /**
  * The resource commands (`postboi lists`, `postboi domains add …`) — thin wrappers over
@@ -33,17 +55,24 @@ let json_mode = false
 let last_response: unknown
 
 /** Print a line for a person; silent under `--json`, where stdout is the document. */
-function say(line = ""): void {
+export function say(line = ""): void {
 	if (!json_mode) console.log(line)
+}
+
+/** What `--json` prints for a command whose answer isn't one API response. */
+export function respond(value: unknown): void {
+	last_response = value
+}
+
+/** Is this command answering in `--json`? Prompts never run then. */
+export function json_output(): boolean {
+	return json_mode
 }
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
-export async function api<T>(
-	path: string,
-	init: { method?: string; body?: unknown } = {},
-	fetch_fn: FetchLike = fetch
-): Promise<T> {
+/** The token every account command sends, or the `no_token` refusal main() prints. */
+export async function postboi_token(): Promise<string> {
 	await ensure_env_loaded()
 	const token = read_env("POSTBOI_TOKEN")
 	if (!token) {
@@ -52,15 +81,32 @@ export async function api<T>(
 			"no_token"
 		)
 	}
+	return token
+}
+
+/** A JSON request, or raw bytes as they are when `body` is a Uint8Array (a file upload). */
+export async function api<T>(
+	path: string,
+	init: { method?: string; body?: unknown } = {},
+	fetch_fn: FetchLike = fetch
+): Promise<T> {
+	const token = await postboi_token()
+	const raw = init.body instanceof Uint8Array
 	let response: Response
 	try {
 		response = await fetch_fn(`${cloud_base()}${path}`, {
 			method: init.method ?? "GET",
 			headers: {
 				Authorization: `Bearer ${token}`,
-				...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+				...(init.body !== undefined
+					? { "Content-Type": raw ? "application/octet-stream" : "application/json" }
+					: {}),
 			},
-			body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+			body: raw
+				? (init.body as Uint8Array<ArrayBuffer>)
+				: init.body !== undefined
+					? JSON.stringify(init.body)
+					: undefined,
 		})
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : String(error)
@@ -78,24 +124,19 @@ export async function api<T>(
 			data?.code ?? `http_${response.status}`
 		)
 	}
+	// 204 is a deliberate "done, nothing to say" (the DELETEs), not a broken answer.
+	if (response.status === 204) return undefined as T
 	if (data === undefined) throw new ApiCommandError("Unexpected empty response from the API.")
 	last_response = data
 	return data
 }
 
 /** A GET whose answer is a file rather than JSON: the bytes and the name the server gave them. */
-async function api_file(
+export async function api_file(
 	path: string,
 	fetch_fn: FetchLike = fetch
-): Promise<{ filename: string | undefined; bytes: Uint8Array }> {
-	await ensure_env_loaded()
-	const token = read_env("POSTBOI_TOKEN")
-	if (!token) {
-		throw new ApiCommandError(
-			"No POSTBOI_TOKEN found. Run `postboi init` to sign in first.",
-			"no_token"
-		)
-	}
+): Promise<{ filename: string | undefined; content_type: string | null; bytes: Uint8Array }> {
+	const token = await postboi_token()
 	let response: Response
 	try {
 		response = await fetch_fn(`${cloud_base()}${path}`, {
@@ -120,6 +161,7 @@ async function api_file(
 	const disposition = response.headers.get("content-disposition") ?? ""
 	return {
 		filename: disposition.match(/filename="([^"]+)"/)?.[1],
+		content_type: response.headers.get("content-type"),
 		bytes: new Uint8Array(await response.arrayBuffer()),
 	}
 }
@@ -217,22 +259,23 @@ async function lists(args: Array<string>): Promise<void> {
 		return say(`${green("✓")} deleted ${bold(ref)} ${dim(`(${gone.id})`)}`)
 	}
 	if (action === "send") {
-		const { flags, rest: words } = take_flags(rest, [
-			"subject",
-			"text",
-			"html",
-			"file",
-			"from",
-			"reply-to",
-			"at",
-		])
+		const {
+			flags,
+			rest: words,
+			on,
+		} = take_flags(
+			rest,
+			["subject", "text", "html", "file", "from", "reply-to", "at"],
+			["no-assets"]
+		)
 		const ref = words.join(" ").trim()
 		const body = flags.file ? body_from_file(flags.file) : { html: flags.html, text: flags.text }
 		if (!ref || !flags.subject || (!body.html && !body.text)) {
 			throw new ApiCommandError(
-				"Usage: postboi lists send <list> --subject <s> (--text <t> | --html <h> | --file <path>|-) [--from <a>] [--reply-to <a>] [--at <ISO time>]"
+				"Usage: postboi lists send <list> --subject <s> (--text <t> | --html <h> | --file <path>|-) [--from <a>] [--reply-to <a>] [--at <ISO time>] [--no-assets]"
 			)
 		}
+		await host_file_assets(body, flags.file, on)
 		const one = (value: string | undefined) => (value ? parse_email_list(value)[0] : undefined)
 		const result = await api<{ ids: Array<string>; recipients: number; scheduled_at?: string }>(
 			`/v1/lists/${encodeURIComponent(ref)}/send`,
@@ -320,7 +363,7 @@ async function recipients(args: Array<string>): Promise<void> {
 // ── Contacts ─────────────────────────────────────────────────────────────────
 
 /** Pull `--name value` / `--data value` flags out of an arg list, returning the rest. */
-function take_flags(
+export function take_flags(
 	args: Array<string>,
 	names: Array<string>,
 	switches: Array<string> = []
@@ -423,7 +466,7 @@ async function contacts(args: Array<string>): Promise<void> {
 
 // ── Domains ────────────────────────────────────────────────────────────────
 
-interface DomainDetail {
+export interface DomainDetail {
 	id: string
 	domain: string
 	status: string
@@ -432,7 +475,7 @@ interface DomainDetail {
 }
 
 /** The records table + registrar shortcut a pending domain needs. */
-function print_domain_setup(detail: DomainDetail): void {
+export function print_domain_setup(detail: DomainDetail): void {
 	if (detail.status === "verified") {
 		return say(`${green("✓")} ${bold(detail.domain)} is verified`)
 	}
@@ -692,7 +735,7 @@ export function parse_email_list(value: string): Array<{ email: string; name?: s
 
 const SEND_USAGE = [
 	"Usage: postboi send --to <emails> --subject <s> (--text <t> | --html <h> | --file <path>|-)",
-	"         [--from <a>] [--reply-to <a>] [--cc <emails>] [--bcc <emails>] [--at <ISO time>] [--tag a,b]",
+	"         [--from <a>] [--reply-to <a>] [--cc <emails>] [--bcc <emails>] [--at <ISO time>] [--tag a,b] [--no-assets]",
 ].join("\n")
 
 /** A body from `--file`: HTML when it looks like it, text otherwise. `-` reads stdin. */
@@ -708,25 +751,18 @@ function body_from_file(path: string): { html?: string; text?: string } {
  * `messages <id>` reads back.
  */
 async function send(args: Array<string>): Promise<void> {
-	const { flags, rest } = take_flags(args, [
-		"to",
-		"subject",
-		"text",
-		"html",
-		"file",
-		"from",
-		"reply-to",
-		"cc",
-		"bcc",
-		"at",
-		"tag",
-	])
+	const { flags, rest, on } = take_flags(
+		args,
+		["to", "subject", "text", "html", "file", "from", "reply-to", "cc", "bcc", "at", "tag"],
+		["no-assets"]
+	)
 	const body = flags.file ? body_from_file(flags.file) : { html: flags.html, text: flags.text }
 	if (rest.length || !flags.to || !flags.subject || (!body.html && !body.text)) {
 		throw new ApiCommandError(SEND_USAGE)
 	}
 	const to = parse_email_list(flags.to)
 	if (!to.length) throw new ApiCommandError("--to needs at least one email address.")
+	await host_file_assets(body, flags.file, on)
 	const one = (value: string | undefined) => (value ? parse_email_list(value)[0] : undefined)
 	const result = await api<{
 		id: string
@@ -757,6 +793,135 @@ async function send(args: Array<string>): Promise<void> {
 		say(`  ${yellow("sandbox")}: logged, nothing is delivered`)
 	}
 	say(`  ${dim(`postboi messages ${result.id} shows its delivery status.`)}`)
+}
+
+// ── Hosted assets ──────────────────────────────────────────────────────────
+
+/**
+ * Upload the local images and fonts `docs` point at to the kept store (`/v1/assets`), with
+ * its refusals in words: the views gate, and a server from before the route. `hint` ends
+ * them, saying what happened instead.
+ */
+async function host_assets(
+	docs: Array<{ html: string; file: string }>,
+	log: (line: string) => void,
+	hint: string
+): Promise<{ html: Array<string>; local: number; uploaded: number }> {
+	const assets = (await load_config()).testing?.assets
+	return upload_all(docs, assets, "/v1/assets", log).catch((error) => {
+		if (error instanceof ApiCommandError && error.code === "views_not_allowed") {
+			throw new ApiCommandError(
+				`Hosting images and fonts needs a verified sending domain or a paid plan. ${hint}`,
+				error.code
+			)
+		}
+		if (error instanceof ApiCommandError && ["http_404", "http_405"].includes(error.code ?? "")) {
+			throw new ApiCommandError(
+				`This Postboi server doesn't host images and fonts yet (POST /v1/assets); try again after the next deploy. ${hint}`,
+				"assets_unavailable"
+			)
+		}
+		throw error
+	})
+}
+
+/**
+ * `send --file` and `lists send --file`: the file's local images and fonts go to the kept
+ * store first, since mail that's sent stays sent, and `body` points at them. The file on disk
+ * keeps its paths; `--no-assets` sends it as it is.
+ */
+async function host_file_assets(
+	body: { html?: string },
+	file: string | undefined,
+	on: Set<string>
+): Promise<void> {
+	if (!file || !body.html || on.has("no-assets")) return
+	const hint = "Nothing was sent; --no-assets sends the HTML as it is."
+	const done = await host_assets([{ html: body.html, file }], say, hint)
+	body.html = done.html[0]
+	if (done.local) say(asset_summary(done.local, done.uploaded))
+}
+
+const ASSETS_USAGE = "Usage: postboi assets <file.html…> (or - to read stdin and write stdout)"
+
+/**
+ * A file `assets` may rewrite: UTF-8 text (a byte that isn't would be lost on the way back)
+ * that it may write, read before anything is uploaded so a bad one changes nothing.
+ */
+function read_html(file: string): string {
+	let bytes: Buffer
+	try {
+		if (file !== "-") accessSync(file, constants.R_OK | constants.W_OK)
+		bytes = readFileSync(file === "-" ? stdin.fd : file)
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code ?? String(error)
+		// A shell pattern that matched nothing arrives as it is.
+		const why = code === "ENOENT" ? "no such file" : code
+		throw new ApiCommandError(
+			`Can't rewrite ${file} (${why}). No file was changed.`,
+			"file_unreadable"
+		)
+	}
+	const html = bytes.toString("utf8")
+	if (!Buffer.from(html, "utf8").equals(bytes)) {
+		throw new ApiCommandError(`${file} isn't UTF-8 text. No file was changed.`, "not_utf8")
+	}
+	return html
+}
+
+/**
+ * Replace each file whole or not at all: every new copy is written beside its file first and
+ * only then moved over it, so a failure part way leaves every file as it was. The move lands
+ * on the real path, so a symlink stays a symlink, and keeps the file's mode.
+ */
+// ponytail: a hard-linked file comes out as its own copy; write in place if that ever matters.
+function replace_all(files: Array<{ file: string; html: string }>): void {
+	const moves = files.map(({ file }) => {
+		const real = realpathSync(file)
+		return { real, temp: join(dirname(real), `.${basename(real)}.${process.pid}.postboi`) }
+	})
+	try {
+		files.forEach(({ html }, n) => {
+			writeFileSync(moves[n].temp, html)
+			chmodSync(moves[n].temp, statSync(moves[n].real).mode & 0o7777)
+		})
+	} catch (error) {
+		for (const { temp } of moves) rmSync(temp, { force: true })
+		throw error
+	}
+	for (const { real, temp } of moves) renameSync(temp, real)
+}
+
+/**
+ * `assets`: built HTML in, the same files pointing at hosted copies of their local images and
+ * fonts out, rewritten in place. One upload for the whole run, so a logo every file shares
+ * goes up once. `-` reads stdin and writes stdout, and then the summary goes to stderr.
+ */
+async function assets_command(args: Array<string>): Promise<void> {
+	const piped = args.includes("-")
+	if (!args.length || args.some((arg) => arg.startsWith("--")) || (piped && args.length > 1)) {
+		throw new ApiCommandError(ASSETS_USAGE)
+	}
+	// A file named twice (or by a symlink and its target) is one file.
+	const seen = new Set<string>()
+	const docs = args
+		.map((file) => ({ file, html: read_html(file) }))
+		.filter(({ file }) => {
+			const real = file === "-" ? file : realpathSync(file)
+			return !seen.has(real) && seen.add(real)
+		})
+	const log = piped ? (line: string) => console.error(line) : say
+	const done = await host_assets(docs, log, "No file was changed.")
+	if (piped) {
+		stdout.write(done.html[0])
+	} else {
+		replace_all(
+			docs.flatMap((doc, n) => (done.html[n] === doc.html ? [] : [{ ...doc, html: done.html[n] }]))
+		)
+	}
+	log(asset_summary(done.local, done.uploaded, docs.length))
+	// Under --json the summary, unless stdout is the HTML.
+	respond(piped ? undefined : { local: done.local, uploaded: done.uploaded, files: docs.length })
 }
 
 // ── Messages & suppressions ────────────────────────────────────────────────
@@ -1268,71 +1433,557 @@ async function notifications(args: Array<string>): Promise<void> {
 
 // ── Testing (client previews and a report on a real send) ──────────────────
 
-interface TestRun {
-	id: string
-	status: string
-	label?: string
-	address?: string
-	from?: string
-	subject?: string
-	created_at: string
-	received_at?: string
+interface TestReport extends TestingRun {
+	source?: string
+	size?: number
 	expires_at?: string
 }
 
-interface TestReport extends TestRun {
-	source?: string
-	size?: number
-	authentication?: { spf?: string | null; dkim?: string | null; dmarc?: string | null }
-	report?: {
-		status?: string
-		findings?: Array<{ level?: string; title?: string; message?: string }>
-	} | null
-	spam?: { score?: number; rules?: Array<{ score: number; description: string }> } | null
-	previews?: Array<{ client: string; name: string; status: string; error?: string }>
+interface TestingClient {
+	id: string
+	name: string
+	group?: string
+	family?: string
+	platform?: string
+	os?: string
+	dark?: boolean
+	default?: boolean
+}
+
+interface TestingClients {
+	data: Array<TestingClient>
+	max_per_test?: number
+	renders?: { left: number | null; monthly: number | null; credits: number }
+}
+
+interface ClientSet {
+	id: string
+	name: string
+	clients: Array<string>
+	created_at: string
+}
+
+/** One capture as `testing run` and `testing download` report it, and as `--json` prints it. */
+export interface SavedCapture {
+	run_id: string
+	preview_id?: string
+	client_id: string
+	client_name: string
+	status: string
+	versus_previous: string
+	path?: string
+	error?: string
 }
 
 /**
- * Email testing: `testing add` mints an address to send a real email to; `testing <id>`
- * reads the report back — authentication, the inspect findings, a spam score and the
- * client screenshots as they render.
+ * The knobs a test turns: how often a run is polled, how long before giving up, and the
+ * question asked before a big order. Tests swap these; nothing else should.
+ */
+export const testing_io = {
+	poll_ms: 5000,
+	// ponytail: the farm renders in minutes and the server settles stalled captures
+	// within one; 15 min is the "request died" window.
+	timeout_ms: 15 * 60_000,
+	async confirm(question: string): Promise<boolean> {
+		const prompts = create_prompts()
+		try {
+			return await prompts.confirm(question, false)
+		} finally {
+			prompts.close()
+		}
+	},
+}
+
+/** Orders above this many renders ask first on a terminal: more than a default set's worth. */
+const CONFIRM_ABOVE = 10
+
+/** A path segment from a name: the same name always lands on the same file. */
+export function slug(value: string): string {
+	return (
+		value
+			.normalize("NFKD")
+			.replace(/[̀-ͯ]/g, "")
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "") || "other"
+	)
+}
+
+/** `image/jpeg` → `jpg`, `image/svg+xml` → `svg`; `png` when the server didn't say. */
+export function image_ext(content_type: string | null | undefined): string {
+	const subtype = content_type?.split(";")[0].split("/")[1]?.split("+")[0]?.trim()
+	return subtype === "jpeg" ? "jpg" : subtype || "png"
+}
+
+/** How a capture compares with the same client's capture in the previous attempt. */
+export function versus_previous(preview: TestingPreview): string {
+	if (preview.reused) return "reused"
+	// Absent: the server predates comparisons, so there is nothing to say.
+	if (preview.previous === undefined) return ""
+	if (preview.previous === null) return "new"
+	if (preview.previous.identical === true) return "unchanged"
+	return preview.previous.identical === false ? "changed" : "unknown"
+}
+
+function run_status_colour(status: string): string {
+	return status === "received" ? green(status) : status === "expired" ? red(status) : yellow(status)
+}
+
+function preview_status_colour(status: string): string {
+	return status === "ready" ? green(status) : status === "failed" ? red(status) : yellow(status)
+}
+
+/** The run's dashboard page: the server's own link (it names the team), else a guess. */
+function run_url(run: { id: string; url?: string }): string {
+	return run.url ?? `${cloud_base()}/dashboard/testing/${run.id}`
+}
+
+/**
+ * A run's previews. A current server carries them on the run, ids and image paths
+ * included; an older one only on `/previews`, so that is asked as well.
+ */
+async function previews_of(run: TestingRun): Promise<Array<TestingPreview>> {
+	if (run.screenshots) return run.previews ?? []
+	const { data } = await api<{ data: Array<TestingPreview> }>(`/v1/testing/${run.id}/previews`)
+	return data
+}
+
+/**
+ * Poll runs until every screenshot has settled, with one live progress line on a
+ * terminal and nothing otherwise. Answers each run with its previews.
+ */
+async function settle(
+	ids: Array<string>
+): Promise<Array<{ run: TestingRun; previews: Array<TestingPreview> }>> {
+	const live = stdout.isTTY && !json_mode
+	const counts = new Map<string, { ready: number; failed: number; total: number }>()
+	function progress(): void {
+		if (!live) return
+		const sum = { ready: 0, failed: 0, total: 0 }
+		for (const c of counts.values()) {
+			sum.ready += c.ready
+			sum.failed += c.failed
+			sum.total += c.total
+		}
+		const failed = sum.failed ? `, ${sum.failed} failed` : ""
+		stdout.write(
+			`\r\x1b[2K  ${dim(`rendering: ${sum.ready} of ${sum.total || "?"} ready${failed}`)}`
+		)
+	}
+	const started = Date.now()
+	try {
+		return await Promise.all(
+			ids.map(async (id) => {
+				for (;;) {
+					const run = await api<TestingRun>(`/v1/testing/${encodeURIComponent(id)}`)
+					const previews = await previews_of(run)
+					const rows = { ...run, previews }
+					counts.set(id, {
+						ready: previews.filter((p) => p.status === "ready").length,
+						failed: previews.filter((p) => p.status === "failed").length,
+						total: run.screenshots?.total ?? previews.length,
+					})
+					progress()
+					if (screenshots_settled(rows, Date.now() - started)) return { run, previews }
+					if (Date.now() - started >= testing_io.timeout_ms) {
+						const minutes = Math.round(testing_io.timeout_ms / 60_000)
+						throw new ApiCommandError(
+							`Run ${id} is still rendering after ${minutes} min. Collect it later with \`postboi testing download ${id}\`.`,
+							"timeout"
+						)
+					}
+					await new Promise((resolve) => setTimeout(resolve, testing_io.poll_ms))
+				}
+			})
+		)
+	} finally {
+		if (live) stdout.write("\r\x1b[2K")
+	}
+}
+
+/**
+ * Save every ready capture to `<out>/<group>/<client>.<ext>`. No timestamps: a re-run
+ * overwrites the same files, so git and any visual diff show what moved. Two clients
+ * with the same name (a light and a dark variant, say) fall back to their ids.
+ */
+async function save_captures(
+	settled: Array<{ run: TestingRun; previews: Array<TestingPreview> }>,
+	out: string,
+	catalog: Array<TestingClient> | undefined
+): Promise<Array<SavedCapture>> {
+	const all = settled.flatMap(({ run, previews }) => previews.map((preview) => ({ run, preview })))
+	const name_of = (p: TestingPreview) => p.client_name ?? p.name ?? p.client_id ?? p.client ?? ""
+	const id_of = (p: TestingPreview) => p.client_id ?? p.client ?? ""
+	const seen = new Map<string, number>()
+	for (const { preview } of all) {
+		const key = slug(name_of(preview))
+		seen.set(key, (seen.get(key) ?? 0) + 1)
+	}
+	const groups = new Map((catalog ?? []).map((c) => [c.id, c.group ?? c.platform]))
+
+	async function save_one({
+		run,
+		preview,
+	}: {
+		run: TestingRun
+		preview: TestingPreview
+	}): Promise<SavedCapture> {
+		const base: SavedCapture = {
+			run_id: run.id,
+			preview_id: preview.id,
+			client_id: id_of(preview),
+			client_name: name_of(preview),
+			status: preview.status,
+			versus_previous: versus_previous(preview),
+			error: preview.error,
+		}
+		if (preview.status !== "ready" || !preview.url) return base
+		const image = await api_file(preview.url.replace(/^https?:\/\/[^/]+/, ""))
+		const group = slug(preview.group ?? groups.get(id_of(preview)) ?? preview.platform ?? "other")
+		const name_slug = slug(name_of(preview))
+		const file = (seen.get(name_slug) ?? 0) > 1 ? slug(id_of(preview)) : name_slug
+		const path = join(out, group, `${file}.${image_ext(image.content_type)}`)
+		mkdirSync(dirname(path), { recursive: true })
+		writeFileSync(path, image.bytes)
+		return { ...base, path }
+	}
+
+	// A few at a time: `--all` would otherwise open a hundred image requests at once.
+	const saved: Array<SavedCapture> = []
+	for (let i = 0; i < all.length; i += 6) {
+		saved.push(...(await Promise.all(all.slice(i, i + 6).map(save_one))))
+	}
+	return saved
+}
+
+/**
+ * The end of `run` and `download`: the captures, the report, where to look, and the exit
+ * code: 1 when the report is an error or a capture failed, so CI can gate on it.
+ */
+function finish(
+	series: string,
+	out: string,
+	settled: Array<{ run: TestingRun; previews: Array<TestingPreview> }>,
+	captures: Array<SavedCapture>,
+	shares: Array<string>
+): void {
+	const runs = settled.map(({ run }) => run)
+	const report = runs.find((run) => run.report)?.report
+	const used = runs.reduce((sum, run) => sum + (run.renders?.used ?? 0), 0)
+	const failed = captures.some((capture) => capture.status === "failed")
+	if (report?.status === "error" || failed) process.exitCode = 1
+
+	if (captures.length) {
+		table(
+			["CLIENT", "STATUS", "VS PREVIOUS", "FILE"],
+			captures.map((c) => [
+				c.client_name,
+				preview_status_colour(c.status),
+				c.versus_previous,
+				c.path ?? dim(c.error ?? ""),
+			])
+		)
+		say()
+	}
+	for (const note of runs.flatMap((run) => run.screenshots?.notes ?? [])) say(`  ${yellow(note)}`)
+	if (report) {
+		const n = report.findings?.length ?? 0
+		const colour = report.status === "error" ? red : report.status === "pass" ? green : yellow
+		say(`  report   ${colour(report.status)}, ${n} finding${n === 1 ? "" : "s"}`)
+	}
+	if (runs.some((run) => run.renders)) say(`  renders  ${used} used`)
+	for (const run of runs) say(`  ${dim("dashboard")} ${cyan(run_url(run))}`)
+	for (const link of shares) say(`  ${dim("share")}     ${cyan(link)}`)
+
+	last_response = {
+		series,
+		out,
+		runs,
+		captures,
+		renders: { used },
+		share_urls: shares,
+	}
+}
+
+async function share_links(ids: Array<string>): Promise<Array<string>> {
+	return Promise.all(
+		ids.map(async (id) => {
+			const answer = await api<{ share_url: string }>(
+				`/v1/testing/${encodeURIComponent(id)}/share`,
+				{ method: "POST" }
+			)
+			return answer.share_url
+		})
+	)
+}
+
+const RUN_USAGE = [
+	"Usage: postboi testing run <file.html or -> [--subject <s>] [--text <file>] [--series <name>]",
+	"         [--clients a,b | --set <name> | --all] [--fresh] [--out <dir>] [--no-wait] [--share] [--no-assets] [--yes] [--json]",
+].join("\n")
+
+/**
+ * The HTML pointed at uploaded copies of its local images and fonts, unless `--no-assets`.
+ * The server reuses a capture of identical HTML, and an edited image changes its URL, so
+ * an edited image is a fresh render.
+ */
+async function with_assets(html: string, file: string, skip: boolean): Promise<string> {
+	if (skip) return html
+	return upload_assets(html, file, (await load_config()).testing?.assets)
+}
+
+/**
+ * `testing run`: built HTML in, screenshots on disk. Orders the run (batched past the
+ * per-run cap, all in one series), pastes the HTML, waits for every capture, saves them
+ * under `--out`, and sums it up.
+ */
+async function testing_run(args: Array<string>): Promise<void> {
+	const { flags, rest, on } = take_flags(
+		args,
+		["subject", "text", "series", "clients", "set", "out"],
+		["all", "fresh", "no-wait", "share", "yes", "no-assets"]
+	)
+	const file = rest[0]
+	const pickers = [flags.clients, flags.set, on.has("all") || undefined].filter(Boolean)
+	if (!file || rest.length > 1 || pickers.length > 1) throw new ApiCommandError(RUN_USAGE)
+
+	const html = await with_assets(
+		file === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(file, "utf8"),
+		file,
+		on.has("no-assets")
+	)
+	const text = flags.text ? readFileSync(flags.text, "utf8") : undefined
+	const series =
+		flags.series || (file === "-" ? flags.subject || "email" : basename(file, extname(file)))
+	const subject =
+		flags.subject ??
+		(html_to_text(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "") || series)
+	const out = flags.out || join("screenshots", slug(series))
+
+	const clients = await api<TestingClients>("/v1/testing/clients")
+	const max = clients.max_per_test ?? 25
+	// No picker means the curated default, said explicitly: a continued series would
+	// otherwise keep its previous pick (after `--all`, just the last batch's clients).
+	const defaults = clients.data.filter((c) => c.default).map((c) => c.id)
+	let batches: Array<Array<string> | undefined> = [defaults.length ? defaults : undefined]
+	let estimate = defaults.length
+	if (on.has("all") || flags.clients) {
+		const ids = on.has("all")
+			? clients.data.map((c) => c.id)
+			: flags.clients.split(",").map((c) => c.trim())
+		if (!ids.length) throw new ApiCommandError("No screenshot clients on this server to order.")
+		batches = Array.from({ length: Math.ceil(ids.length / max) }, (_, i) =>
+			ids.slice(i * max, (i + 1) * max)
+		)
+		estimate = ids.length
+	} else if (flags.set) {
+		// Only for the estimate: the server resolves the set itself and names the
+		// known ones when this one doesn't exist.
+		const sets = await api<{ data: Array<ClientSet> }>("/v1/testing/sets").catch(() => undefined)
+		const found = sets?.data.find((s) => s.name.toLowerCase() === flags.set.toLowerCase())
+		if (found) estimate = found.clients.length
+	}
+
+	const left = clients.renders?.left
+	if (typeof left === "number" && estimate > left) {
+		const skipped = estimate - left
+		say(
+			yellow(
+				`Only ${left} render${left === 1 ? "" : "s"} left: ${skipped} client${skipped === 1 ? "" : "s"} will be skipped. Top up on the dashboard's Testing page.`
+			)
+		)
+	}
+	if (estimate > CONFIRM_ABOVE && !on.has("yes") && !json_mode && stdin.isTTY && stdout.isTTY) {
+		const ok = await testing_io.confirm(`Order up to ${estimate} renders?`)
+		if (!ok) throw new ApiCommandError("Nothing ordered.", "cancelled")
+	}
+
+	async function order(ids: Array<string> | undefined): Promise<TestingRun> {
+		const run = await api<TestingRun>("/v1/testing", {
+			method: "POST",
+			body: {
+				series,
+				clients: ids,
+				set: flags.set,
+				fresh: on.has("fresh") || undefined,
+			},
+		})
+		await api(`/v1/testing/${run.id}/source`, {
+			method: "POST",
+			body: { subject, html, text },
+		})
+		say(`${green("✓")} ${bold(run.id)} ${dim(`${ids ? `${ids.length} clients` : "pasted"}`)}`)
+		return run
+	}
+	// The first batch goes alone: it starts the series entry the others then join, where
+	// starting them together would race to start one entry each.
+	const first = await order(batches[0])
+	const runs = [first, ...(await Promise.all(batches.slice(1).map(order)))]
+
+	if (on.has("no-wait")) {
+		const shares = on.has("share") ? await share_links(runs.map((r) => r.id)) : []
+		for (const run of runs) {
+			say(`  ${dim("dashboard")} ${cyan(run_url(run))}`)
+			say(`  ${dim(`postboi testing download ${run.id} collects the screenshots.`)}`)
+		}
+		for (const link of shares) say(`  ${dim("share")}     ${cyan(link)}`)
+		last_response = { series, out, runs, share_urls: shares }
+		return
+	}
+
+	const settled = await settle(runs.map((run) => run.id))
+	const captures = await save_captures(settled, out, clients.data)
+	const shares = on.has("share") ? await share_links(runs.map((r) => r.id)) : []
+	finish(series, out, settled, captures, shares)
+}
+
+/** `testing download <id>`: wait out an existing run and collect its captures. */
+async function testing_download(args: Array<string>): Promise<void> {
+	const { flags, rest } = take_flags(args, ["out"])
+	const id = rest[0]
+	if (!id || rest.length > 1) {
+		throw new ApiCommandError("Usage: postboi testing download <id> [--out <dir>]")
+	}
+	const settled = await settle([id])
+	const run = settled[0].run
+	const series = run.label ?? run.id
+	const out = flags.out || join("screenshots", slug(series))
+	// Older servers leave the group off a preview; the catalog has it.
+	const needs_catalog = settled[0].previews.some((p) => !p.group)
+	const catalog = needs_catalog
+		? (await api<TestingClients>("/v1/testing/clients").catch(() => undefined))?.data
+		: undefined
+	const captures = await save_captures(settled, out, catalog)
+	finish(series, out, settled, captures, [])
+}
+
+/** `testing sets`: the saved client sets `--set` names. */
+async function testing_sets(args: Array<string>): Promise<void> {
+	const [action, ...rest_args] = args
+	if (action === "save") {
+		const { flags, rest } = take_flags(rest_args, ["clients"])
+		const name = rest.join(" ").trim()
+		if (!name || !flags.clients) {
+			throw new ApiCommandError("Usage: postboi testing sets save <name> --clients a,b")
+		}
+		const set = await api<ClientSet>("/v1/testing/sets", {
+			method: "POST",
+			body: { name, clients: flags.clients.split(",").map((c) => c.trim()) },
+		})
+		return say(`${green("✓")} saved ${bold(set.name)} ${dim(`(${set.clients.length} clients)`)}`)
+	}
+	if (action === "delete") {
+		const ref = rest_args.join(" ").trim()
+		if (!ref) throw new ApiCommandError("Usage: postboi testing sets delete <name or id>")
+		const { data } = await api<{ data: Array<ClientSet> }>("/v1/testing/sets")
+		const set = data.find((s) => s.id === ref || s.name.toLowerCase() === ref.toLowerCase())
+		if (!set) throw new ApiCommandError(`No client set called ${ref}.`, "not_found")
+		await api(`/v1/testing/sets/${encodeURIComponent(set.id)}`, { method: "DELETE" })
+		return say(`${green("✓")} deleted ${bold(set.name)}`)
+	}
+	if (action)
+		throw new ApiCommandError(`Unknown action: testing sets ${action}. Try save or delete.`)
+
+	const { data } = await api<{ data: Array<ClientSet> }>("/v1/testing/sets")
+	if (data.length === 0) {
+		return say(dim("No client sets yet. Save one: postboi testing sets save <name> --clients a,b"))
+	}
+	table(
+		["NAME", "CLIENTS", "ID"],
+		data.map((s) => [bold(s.name), s.clients.join(", "), dim(s.id)])
+	)
+}
+
+/**
+ * Email testing: `testing run` takes built HTML to screenshots on disk; `testing add`
+ * mints an address to send a real email to; `testing <id>` reads the report back:
+ * authentication, the inspect findings, a spam score and the client screenshots.
  */
 async function testing(args: Array<string>): Promise<void> {
 	const [action, ...rest_args] = args
 
+	if (action === "run") return testing_run(rest_args)
+	if (action === "download") return testing_download(rest_args)
+	if (action === "sets") return testing_sets(rest_args)
 	if (action === "add") {
-		const { flags, rest } = take_flags(rest_args, ["label", "series", "clients"])
-		if (rest.length) {
+		const { flags, rest, on } = take_flags(
+			rest_args,
+			["label", "series", "clients", "set", "html", "subject"],
+			["no-assets"]
+		)
+		if (rest.length || (flags.clients && flags.set)) {
 			throw new ApiCommandError(
-				"Usage: postboi testing add [--label <name>] [--series <name>] [--clients a,b]"
+				"Usage: postboi testing add [--label <name>] [--series <name>] [--clients a,b or --set <name>] [--html <file> [--subject <s>] [--no-assets]]"
 			)
 		}
-		const run = await api<TestRun>("/v1/testing", {
+		// Before the test exists, so a failed upload doesn't leave an empty one behind.
+		const html =
+			flags.html &&
+			(await with_assets(
+				flags.html === "-" ? readFileSync(stdin.fd, "utf8") : readFileSync(flags.html, "utf8"),
+				flags.html,
+				on.has("no-assets")
+			))
+		const run = await api<TestReport>("/v1/testing", {
 			method: "POST",
 			body: {
 				label: flags.label,
 				series: flags.series,
 				clients: flags.clients ? flags.clients.split(",").map((c) => c.trim()) : undefined,
+				set: flags.set,
 			},
 		})
 		say(`${green("✓")} test ${bold(run.id)}${run.label ? dim(` (${run.label})`) : ""}`)
+		if (flags.html) {
+			await api(`/v1/testing/${run.id}/source`, {
+				method: "POST",
+				body: { subject: flags.subject, html },
+			})
+			say(`  ${dim("pasted")} ${flags.html}`)
+			say(`  ${dim("dashboard")} ${cyan(run_url(run))}`)
+			return say(`  ${dim(`postboi testing download ${run.id} collects the screenshots.`)}`)
+		}
 		say(`  ${dim("send the email to:")} ${cyan(run.address ?? "")}`)
 		if (run.expires_at)
 			say(`  ${dim(`waiting until ${run.expires_at.slice(0, 16).replace("T", " ")}`)}`)
 		return say(`  ${dim(`postboi testing ${run.id} reads the report once it lands.`)}`)
 	}
 	if (action === "clients") {
-		const { data, max_per_test } = await api<{
-			data: Array<{ id: string; name: string; group?: string; default?: boolean }>
-			max_per_test?: number
-		}>("/v1/testing/clients")
+		const { data, max_per_test, renders } = await api<TestingClients>("/v1/testing/clients")
 		table(
-			["ID", "NAME", "GROUP", "DEFAULT"],
-			data.map((c) => [c.id, c.name, c.group ?? "", c.default ? green("yes") : ""])
+			["ID", "NAME", "GROUP", "PLATFORM", "OS", "DARK", "DEFAULT"],
+			data.map((c) => [
+				c.id,
+				c.name,
+				c.group ?? "",
+				c.platform ?? "",
+				c.os ?? "",
+				c.dark ? "dark" : "",
+				c.default ? green("yes") : "",
+			])
 		)
+		if (renders) {
+			say(`\n${dim("Renders left:")} ${renders.left === null ? "unlimited" : renders.left}`)
+		}
 		if (max_per_test)
-			say(dim(`\nUp to ${max_per_test} per test: postboi testing add --clients a,b`))
+			say(
+				dim(
+					`${renders ? "" : "\n"}Up to ${max_per_test} per test: postboi testing run <file> --clients a,b`
+				)
+			)
 		return
+	}
+	if (action === "share") {
+		const { rest, on } = take_flags(rest_args, [], ["revoke"])
+		const id = rest[0]
+		if (!id) throw new ApiCommandError("Usage: postboi testing share <id> [--revoke]")
+		const path = `/v1/testing/${encodeURIComponent(id)}/share`
+		if (on.has("revoke")) {
+			await api(path, { method: "DELETE" })
+			return say(`${green("✓")} the share link for ${bold(id)} no longer opens`)
+		}
+		const { share_url } = await api<{ share_url: string }>(path, { method: "POST" })
+		return say(`${green("✓")} anyone with this link can read ${bold(id)}: ${cyan(share_url)}`)
 	}
 	if (action === "delete") {
 		const id = rest_args[0]
@@ -1343,9 +1994,7 @@ async function testing(args: Array<string>): Promise<void> {
 	if (action) {
 		const t = await api<TestReport>(`/v1/testing/${encodeURIComponent(action)}`)
 		say(`${bold(t.label ?? t.id)} ${dim(`(${t.id})`)}`)
-		say(
-			`  status   ${t.status === "received" ? green(t.status) : t.status === "expired" ? red(t.status) : yellow(t.status)}`
-		)
+		say(`  status   ${run_status_colour(t.status)}`)
 		if (t.status === "waiting") {
 			return say(`  ${dim("send the email to:")} ${cyan(t.address ?? "")}`)
 		}
@@ -1360,21 +2009,25 @@ async function testing(args: Array<string>): Promise<void> {
 		if (t.spam) say(`  spam     score ${t.spam.score ?? "?"}`)
 		if (t.report?.findings?.length) {
 			say(`  findings ${t.report.status ?? ""}`)
-			for (const f of t.report.findings) {
-				say(`    ${f.level === "error" ? red("✗") : yellow("!")} ${f.title ?? f.message ?? ""}`)
+			for (const f of t.report.findings as Array<{
+				severity?: string
+				level?: string
+				title?: string
+				message?: string
+			}>) {
+				const level = f.severity ?? f.level
+				say(`    ${level === "error" ? red("✗") : yellow("!")} ${f.title ?? f.message ?? ""}`)
 			}
 		}
+		for (const note of t.screenshots?.notes ?? []) say(`  ${yellow(note)}`)
+		if (t.url) say(`  ${dim("dashboard")} ${cyan(t.url)}`)
 		if (t.previews?.length) {
 			say()
 			table(
 				["CLIENT", "PREVIEW", "NOTE"],
 				t.previews.map((p) => [
-					p.name,
-					p.status === "ready"
-						? green("ready")
-						: p.status === "failed"
-							? red("failed")
-							: yellow(p.status),
+					p.client_name ?? p.name ?? "",
+					preview_status_colour(p.status),
 					dim(p.error ?? ""),
 				])
 			)
@@ -1382,19 +2035,15 @@ async function testing(args: Array<string>): Promise<void> {
 		return
 	}
 
-	const { data: rows } = await api<{ data: Array<TestRun> }>("/v1/testing")
-	if (rows.length === 0) return say(dim("No tests yet. Add one: postboi testing add"))
+	const { data: rows } = await api<{ data: Array<TestReport> }>("/v1/testing")
+	if (rows.length === 0) return say(dim("No tests yet. Try: postboi testing run email.html"))
 	table(
 		["LABEL", "STATUS", "SUBJECT", "WHEN", "ID"],
 		rows.map((t) => [
 			t.label ?? "",
-			t.status === "received"
-				? green(t.status)
-				: t.status === "expired"
-					? red(t.status)
-					: yellow(t.status),
+			run_status_colour(t.status),
 			t.subject ?? "",
-			t.created_at.slice(0, 16).replace("T", " "),
+			(t.created_at ?? "").slice(0, 16).replace("T", " "),
 			dim(t.id),
 		])
 	)
@@ -1405,6 +2054,7 @@ async function testing(args: Array<string>): Promise<void> {
 const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	whoami: () => whoami(),
 	send,
+	assets: assets_command,
 	"send-address": send_address,
 	lists,
 	recipients,
@@ -1418,6 +2068,7 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	forms,
 	notifications,
 	testing,
+	views,
 }
 
 /**
@@ -1436,12 +2087,19 @@ const LISTING = new Set([
 	"exports",
 	"forms",
 	"testing",
+	"views",
 ])
 
 /** Handle a resource command; false when `command` isn't one (main falls through to help). */
 export async function api_command(command: string, args: Array<string>): Promise<boolean> {
 	const handler = COMMANDS[command]
 	if (!handler) return false
+	// Flags a command doesn't know fall through as arguments, so `--help` would be read
+	// as a file or an id. Answer it here, once, for every command.
+	if (args.includes("--help") || args.includes("-h")) {
+		console.log(command_help(command) ?? help_text())
+		return true
+	}
 	json_mode = args.includes("--json")
 	last_response = undefined
 	const rest = args.filter((arg) => arg !== "--json")

@@ -18,6 +18,48 @@ export const CAPTCHA_ORIGIN = "https://postboi.app"
  */
 export const HONEYPOT_FIELD = "_honey"
 
+/**
+ * Path-legal alias for the Turnstile token. The managed-captcha loader uses it (via
+ * Turnstile's `response-field-name`) on SvelteKit remote forms, where the default
+ * name's dashes are rejected by the form data parser. Here for the same reason as
+ * {@link HONEYPOT_FIELD}.
+ */
+export const TURNSTILE_REMOTE_FIELD = "_captcha"
+
+/**
+ * The suffix a SvelteKit remote form puts on every field name (`email/<hash>/<name>`), from
+ * its `?/remote=<hash>/<name>` action, or `""` for any other form. A `.for(key)` instance
+ * adds `/<key>` to the action but not to the field names, so only the first two parts count.
+ * SvelteKit rejects a remote form field without the suffix (`form_field_unbound`), so the
+ * honeypot and the captcha token carry it too.
+ */
+export function remote_scope(action: string | null | undefined): string {
+	const id = action?.match(/[?&]\/remote=([^&#]+)/)?.[1]
+	return id ? `/${decodeURIComponent(id).split("/").slice(0, 2).join("/")}` : ""
+}
+
+/**
+ * Give the honeypot and the captcha token the remote form's scope, now and whenever the
+ * Turnstile widget adds its input later. Returns the cleanup for an effect.
+ */
+export function scope_captcha_fields(marker: Element | null | undefined): (() => void) | undefined {
+	const form = marker?.closest("form")
+	if (!form || typeof MutationObserver === "undefined") return
+	const scope = remote_scope(form.getAttribute("action"))
+	if (!scope) return
+	const apply = () => {
+		for (const name of [HONEYPOT_FIELD, TURNSTILE_REMOTE_FIELD]) {
+			for (const input of form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`)) {
+				input.name = name + scope
+			}
+		}
+	}
+	apply()
+	const observer = new MutationObserver(apply)
+	observer.observe(form, { childList: true, subtree: true })
+	return () => observer.disconnect()
+}
+
 /** Inline styling that hides the honeypot from humans without `display: none` (which smarter bots detect). */
 export const honeypot_style = "position:absolute;left:-9999px;height:0;width:0;opacity:0"
 

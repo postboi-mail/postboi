@@ -563,18 +563,43 @@ export function inbox_middleware(
 				})
 			}
 			return void (async () => {
-				const listed = await fetch(`${hosted_api()}/v1/testing/${run_id}/previews`, {
-					headers: { authorization: `Bearer ${hosted_token()}` },
-				})
-				if (!listed.ok) throw new Error(`previews answered ${listed.status}`)
-				const body = (await listed.json()) as {
-					data: Array<{ id: string; client_name: string; status: string; error?: string }>
+				type Row = { id: string; client_name: string; status: string; error?: string }
+				const headers = { authorization: `Bearer ${hosted_token()}` }
+				const read = await fetch(`${hosted_api()}/v1/testing/${run_id}`, { headers })
+				if (!read.ok) throw new Error(`run answered ${read.status}`)
+				const run = (await read.json()) as {
+					previews?: Array<Row>
+					screenshots?: { state: string; notes?: Array<string> }
+				}
+				let rows: Array<Row>
+				if (run.screenshots) {
+					// A current server keeps the refusals ("Out of renders…") off the capture
+					// list, as notes. They go back in as the failed "Screenshots" rows the
+					// pane already explains, so an all-refused run still says why.
+					const notes = [...(run.screenshots.notes ?? [])]
+					if (run.screenshots.state === "disabled" && !notes.length) {
+						notes.push("Screenshots aren't enabled on this Postboi server.")
+					}
+					rows = [
+						...(run.previews ?? []),
+						...notes.map((note, i) => ({
+							id: `note_${i}`,
+							client_name: "Screenshots",
+							status: "failed",
+							error: note,
+						})),
+					]
+				} else {
+					// An older server has the ids and refusal rows on /previews only.
+					const listed = await fetch(`${hosted_api()}/v1/testing/${run_id}/previews`, { headers })
+					if (!listed.ok) throw new Error(`previews answered ${listed.status}`)
+					rows = ((await listed.json()) as { data: Array<Row> }).data
 				}
 				send_json(response, 200, {
 					enabled: true,
 					run_id,
 					billing: billing_url(),
-					previews: body.data.map((preview) => ({
+					previews: rows.map((preview) => ({
 						id: preview.id,
 						client_name: preview.client_name,
 						status: preview.status,

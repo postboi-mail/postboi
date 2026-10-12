@@ -1,0 +1,401 @@
+---
+title: SvelteKit
+name: SvelteKit
+description: Wire a contact form to Postboi with a one-line SvelteKit action.
+category: Frameworks
+---
+
+`postboi/kit` reads `FormData`, sends it, and returns `{ success: true }`, or
+`fail(400, { error })` on failure. A contact-form action is a single line.
+
+```typescript
+// +page.server.ts
+import { mail } from 'postboi/kit'
+
+export const actions = { default: mail }
+```
+
+## The form
+
+Point a `multipart/form-data` form at the action. Field names use the
+[`fieldset→field`](/formdata#grouped-fields) syntax to group related fields, and
+`_subject` (and friends) set the email's [special fields](/formdata#special-fields).
+
+Wire up a hidden `_reply_to` field bound to the sender's email. Then, when the
+notification lands in your inbox, hitting **Reply** goes straight back to the person who
+filled in the form, not to your no-reply `from` address.
+
+For most contact forms, a reply-to address is all you need: keep `from` as your default
+sending address and let reply-to carry the conversation. Only set a per-message `from`
+when you want the email itself to appear from a specific address.
+
+```svelte
+<!-- +page.svelte -->
+<script lang="ts">
+	import { enhance } from '$app/forms'
+
+	let email = $state('')
+</script>
+
+<form method="POST" use:enhance enctype="multipart/form-data">
+	<input type="hidden" name="_subject" value="Contact Form" />
+	<input type="hidden" name="_reply_to" value={email} />
+	<input
+		type="text"
+		name="_honey"
+		tabindex="-1"
+		autocomplete="off"
+		aria-hidden="true"
+		style="position: absolute; left: -9999px; height: 0; width: 0; opacity: 0"
+	/>
+	<input name="contact→name" placeholder="Name" required />
+	<input name="contact→email" type="email" placeholder="Email" required bind:value={email} />
+	<textarea name="details→message" placeholder="Message"></textarea>
+	<input type="file" name="details→attachments" multiple />
+	<button type="submit">Send</button>
+</form>
+```
+
+The submitted `FormData` becomes a tidy HTML table in the email body. See
+[FormData](/formdata) for how the table is built.
+
+The hidden `_honey` field is the built-in honeypot: bots fill it, humans can't see it, and a
+filled honeypot skips the send while the action still returns `{ success: true }`: the
+bot learns nothing. Want more? [Spam protection](/spam) covers the invisible captcha too:
+fully managed on the Postboi provider (one script tag, no keys), or bring your own Turnstile with
+a single env var.
+
+## Or use the Captcha component
+
+`postboi/svelte` ships that honeypot (plus the [managed invisible captcha](/spam) on
+the Postboi provider) as a single prop-free component. Your form stays a native `<form>`
+(`use:enhance` and form libraries keep working); just drop it inside:
+
+```svelte
+<script lang="ts">
+	import { enhance } from '$app/forms'
+	import Captcha from 'postboi/svelte'
+</script>
+
+<form method="POST" use:enhance enctype="multipart/form-data">
+	<!-- your fields… -->
+	<Captcha />
+	<button type="submit">Send</button>
+</form>
+```
+
+The publishable key is baked in by `bunx postboi sync`. See
+[Spam protection](/spam#the-captcha-component).
+
+A full, runnable version of this form lives in
+[`examples/sveltekit-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi).
+
+## Remote functions
+
+SvelteKit's [remote functions](https://svelte.dev/docs/kit/remote-functions) (experimental)
+let a library ship the whole backend. `postboi/remote` exports a ready-made remote form:
+no `+page.server.ts`, no action, no endpoint. The component *is* the app:
+
+```svelte
+<!-- +page.svelte -->
+<script lang="ts">
+	import { mail } from 'postboi/remote'
+	import Captcha from 'postboi/svelte'
+
+	let email = $state('')
+</script>
+
+<form {...mail} enctype="multipart/form-data">
+	<input {...mail.fields._subject.as('hidden', 'Contact Form')} />
+	<input {...mail.fields._reply_to.as('hidden', email)} />
+	<Captcha />
+
+	<input {...mail.fields.contact.name.as('text')} placeholder="Name" required />
+	<input {...mail.fields.contact.email.as('email')} placeholder="Email" required bind:value={email} />
+	<textarea {...mail.fields.details.message.as('text')} placeholder="Message"></textarea>
+	<input {...mail.fields.details.attachments.as('file')} multiple />
+
+	<button disabled={!!mail.pending}>{mail.pending ? 'Sending…' : 'Send'}</button>
+</form>
+
+{#if mail.result?.success}
+	<p>Thanks, we'll be in touch!</p>
+{:else if mail.result}
+	<p>{mail.result.error}</p>
+{/if}
+```
+
+Two lines of setup, since the feature is experimental:
+
+```js
+// vite.config.ts
+sveltekit({ experimental: { remoteFunctions: true } })
+```
+
+```ts
+// vite.config.ts — remote modules must reach the SvelteKit transform,
+// not Vite's dependency prebundle. `bunx postboi init` adds this for you.
+optimizeDeps: { exclude: ['postboi/remote'] }
+```
+
+> The [`postboi/vite`](/config#bundled-and-deployed-servers) plugin sets that exclude itself, so if you're
+> already using it (for edge deploys, say) you can drop the line.
+
+Worth knowing:
+
+- **Field names nest instead of using arrows.** Remote-form names must be valid JS paths,
+  so `fields.contact.name` replaces `contact→name`, and the email's
+  [grouped table](/formdata#grouped-fields) comes out identical. Special fields
+  (`_subject`, `_reply_to`, …) work unchanged.
+- **No schema required.** A contact form is arbitrary fields by design, so the handler
+  accepts whatever the form sends: spam checks and parsing happen in the send pipeline,
+  same as the classic action. Want client-side validation? Compose kit's own preflight:
+  `<form {...mail.preflight(schema)}>` with any Standard Schema (Zod, Valibot).
+- **Enhancement is built in.** The spread progressively enhances the form (no
+  `use:enhance` import) and resets it after a successful submit. `mail.pending` counts
+  in-flight submissions, `mail.result` is the (ephemeral) return value. Custom submit
+  behaviour uses the form's own method: `<form {...mail.enhance(async (form) => { await
+  form.submit(); … })}>`. Without JavaScript the form still posts and renders the result,
+  exactly like a native action.
+- **Spam protection carries over.** A remote form only accepts fields scoped to it, so
+  `<Captcha />` gives the honeypot and the captcha token the form's scoped names once the
+  page's JavaScript runs, and the managed captcha detects remote forms automatically. That
+  makes a form with `<Captcha />` need JavaScript, as the captcha does anyway. A tripped
+  honeypot still reports `{ success: true }` to the bot.
+- **A failed send doesn't throw.** `mail.result` becomes `{ success: false, error }`, with
+  the reason in `error`, so handle it in the markup (the `{:else if mail.result}` branch
+  above) rather than in a `try` around the submit.
+- **Checkboxes read like answers.** A ticked box (`true`) is "Yes" in the email, and an
+  unticked one (`false`) is left out rather than listed as "false".
+
+### A remote form with a schema
+
+`remote()` uses SvelteKit's `unchecked` mode, so it accepts whatever the form submits and
+the spam fields arrive intact. For typed fields and `issues()`, pass a
+[Standard Schema](https://standardschema.dev) (valibot, zod, arktype) first. Write it for
+your own fields only: `remote()` keeps `_honey` and `_captcha` out of your schema and puts
+them back after, so SvelteKit's validation can't drop them.
+
+```ts
+// contact.remote.ts
+import * as v from 'valibot'
+import { remote } from 'postboi/kit'
+
+const schema = v.object({
+	name: v.pipe(v.string(), v.minLength(1)),
+	email: v.pipe(v.string(), v.email())
+})
+
+export const contact = remote(schema, ({ value }) => ({
+	reply_to: value.email,
+	subject: `New enquiry from ${value.name}`,
+	// Runs once the email has gone; what it returns is merged into the result.
+	after: async () => ({ subscribed: await subscribe(value.email) })
+}))
+```
+
+```svelte
+<form {...contact}>
+	<Captcha />
+	<input {...contact.fields.name.as('text')} />
+	{#each contact.fields.name.issues() as issue}<p>{issue.message}</p>{/each}
+	<input {...contact.fields.email.as('email')} />
+	<button>Send</button>
+</form>
+{#if contact.result?.success}
+	<p>Thanks{contact.result.subscribed ? ', and welcome aboard' : ''}!</p>
+{:else if contact.result}
+	<p>{contact.result.error}</p>
+{/if}
+```
+
+`value` is the post as your schema returned it. The honeypot, the captcha token, the
+visitor's IP and a failed send are handled as they are for any `remote()`. A tripped
+honeypot returns `{ success: true }` without running `after`, and an `after` that throws is
+your error rather than a failed send, so it isn't caught.
+
+With a Postboi captcha key baked in, a form that arrives with no token at all is said once
+in the server's log. That's the sign a form library or a schema of your own dropped it.
+
+`_captcha` rather than `cf-turnstile-response`: remote-form field names must be valid JS
+paths, so the managed loader renames the token field. postboi strips both before rendering.
+
+> Sending through a **bring-your-own provider** while `<Captcha />` is on the page fails
+> with `captcha_misconfigured`: a token arrived with no secret to verify it against.
+> Managed captcha needs the Postboi provider; on any other one, configure Turnstile
+> yourself or opt out with `captcha: { turnstile: false }`. The **mock** provider is the
+> exception: it's credential-free by design, so it drops the token and sends anyway.
+
+For a custom provider or forced fields, build your own in a `.remote.ts` file with
+`remote()` from `postboi/kit`, the remote counterpart of `action()`:
+
+```ts
+// src/lib/mail.remote.ts
+import { remote } from 'postboi/kit'
+import Resend from 'postboi/resend'
+import { RESEND_API_KEY } from '$env/static/private'
+
+const resend = new Resend({ api_key: RESEND_API_KEY, default: { from: 'no-reply@example.com' } })
+
+export const contact = remote(resend, { to: 'team@example.com' })
+```
+
+## Testing actions
+
+`postboi/kit` imports under `bun test` or plain Node with no `$app/server` mock. Outside
+Vite it resolves to a build that leaves `$app/server` alone, so `action()`, `mail` and
+`webhook()` work as they do in the app. `remote()` is the one export that needs SvelteKit,
+and says so if you call it there.
+
+```ts
+import { action } from 'postboi/kit'
+import Mock from 'postboi/mock'
+
+const mail = new Mock({ default: { to: 'team@example.com', from: 'site@example.com' } })
+const body = new FormData()
+body.set('name', 'Ada')
+await action(mail)({ request: new Request('http://x', { method: 'POST', body }) } as never)
+expect(mail.last?.html).toContain('Ada')
+```
+
+## Options from the post
+
+When the options depend on the submission, the request or a CMS, pass a function instead of
+an object. It gets the request `event` and the post as `data`, parsed once, and returns the
+send options:
+
+```typescript
+import { action } from 'postboi/kit'
+
+export const actions = {
+	default: action(async ({ event, field }) => ({
+		to: await lookup(field('_blok')),
+		subject: `New enquiry from ${field('name') ?? 'the website'}`,
+		reply_to: field('email'),
+		form: event.locals.site.form_name,
+	}))
+}
+```
+
+- `field(name)` reads one text field, trimmed, and gives `undefined` when it's missing or
+  blank. Reach for it over `String(data.get(name))`, which turns a missing field into the
+  string `"null"`: a reply-to of "null", or a CMS lookup for `stories/null`.
+  `field.all(name)` does the same for a field posted more than once (a checkbox group, a
+  list of uploaded file URLs) and gives every non-blank value, or `[]`. Both trim, so a
+  check that counts characters exactly, like a `maxlength` where a line break is one
+  character, reads `data` itself.
+- A reply-to that isn't an address (a visitor typing `asdf` in the email box) is dropped
+  with a warning rather than failing the send, so a typo doesn't cost you the submission.
+- `data` is the post. Change it if you need to: validate it, delete fields, add some.
+- Return `fail(…)` from `@sveltejs/kit` to stop the send. `action()` hands it back as is.
+- A `_` field you read that isn't one of postboi's own (`_subject`, `_reply_to`, `_form`
+  and the rest) never reaches the email, so an id can travel in a hidden input instead of
+  the action's URL. A `_` field you don't read renders as before.
+- The honeypot runs first. A bot that fills it gets `{ success: true }` and your function
+  never runs, so nothing is looked up or fetched on its behalf.
+- The visitor's IP, `is_spam` and `fail` on a send error all work as they do with an
+  object.
+- A blank string counts as unset, so an empty CMS field falls through to the post or
+  `default.*`. `from` takes any address here (the API still refuses one your account can't
+  send from, with `from_not_allowed`).
+
+`remote()` takes the same function. There a returned `fail(…)` becomes
+`{ success: false, error }`, using `error` from its data when there is one.
+
+### Recipe: form recipients from a CMS
+
+Each form block keeps its own recipient, sender and subject in the CMS. The form posts
+which block it is, and the server looks it up, so a visitor can't pick the recipient:
+
+```svelte
+<form method="POST" action="/mail">
+	<input type="hidden" name="_story" value={story.uuid} />
+	<input type="hidden" name="_blok" value={block._uid} />
+	<!-- the form's own fields -->
+</form>
+```
+
+```typescript
+// src/routes/mail/+page.server.ts
+import { fail } from '@sveltejs/kit'
+import { action, type FieldReader } from 'postboi/kit'
+
+export const actions = {
+	default: action(async ({ field }) => {
+		const block = await find_form(field)
+		if (!block) return fail(404, { error: 'Form not found' })
+		// Blank fields in the CMS fall through to default.to, default.from and the post.
+		return { to: block.to, from: block.from, subject: block.subject, form: block.title || true }
+	})
+}
+
+// `FieldReader` is the type of `field`, for helpers that read the post themselves.
+async function find_form(field: FieldReader) {
+	const story = field('_story')
+	const uid = field('_blok')
+	if (!story || !uid) return undefined
+	const { data } = await storyblok.get(`cdn/stories/${story}`, { find_by: 'uuid' })
+	return find_block(data.story.content, uid)
+}
+```
+
+`_story` and `_blok` are read, so neither shows up in the email. `form: true` files an
+untitled block as a form submission without letting a posted `_form` choose one.
+
+### Recipe: reply-to and subject from the fields
+
+No hidden inputs mirroring the email field, and no subject built in the browser:
+
+```typescript
+export const actions = {
+	default: action(({ field }) => ({
+		reply_to: field('email'),
+		subject: `${field('topic') ?? 'General'} enquiry from ${field('name') ?? 'the website'}`
+	}))
+}
+```
+
+postboi doesn't guess the reply-to from a field called `email` for you: plenty of forms
+have an email field that isn't the sender's, and a guessed reply-to would go to the wrong
+person without anyone noticing.
+
+### Recipe: attachments uploaded first
+
+When the browser uploads files first and posts their URLs, fetch them into `File`s and drop
+the field. Only fetch from the host you uploaded to, or the post decides what your server
+requests:
+
+```typescript
+export const actions = {
+	default: action(async ({ data }) => {
+		const urls = data.getAll('Images').map(String)
+		data.delete('Images')
+		const files = await Promise.all(
+			urls
+				.filter((url) => new URL(url).origin === UPLOADS_ORIGIN)
+				.map(async (url) => {
+					const response = await fetch(url)
+					return new File([await response.blob()], new URL(url).pathname.split('/').pop()!)
+				})
+		)
+		return { attachments: files }
+	})
+}
+```
+
+## Using a configured instance
+
+Got a configured provider instance? Wrap it with `action()`. Any send option you pass
+is merged into every send, and `status` sets the failure code.
+
+```typescript
+import Resend from 'postboi/resend'
+import { action } from 'postboi/kit'
+import { RESEND_API_KEY, EMAIL_FROM_ADDRESS } from '$env/static/private'
+
+const mail = new Resend({ api_key: RESEND_API_KEY, default: { from: EMAIL_FROM_ADDRESS } })
+
+export const actions = {
+	default: action(mail, { status: 422, to: 'team@example.com' })
+}
+```

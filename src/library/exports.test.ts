@@ -56,6 +56,7 @@ describe("package exports", () => {
 			"transport.ts", // channel-agnostic provider base, re-exported from the root
 			"register.ts", // generated-types placeholder, reached via the root export
 			"inbox.ts", // dev inbox discovery, reached via mail.ts (and patched by postboi/vite)
+			"long_poll.ts", // waiting on a long poll, shared by postboi/inbox and postboi/mailbox
 			"inbox_server.ts", // dev inbox HTTP surface, mounted by postboi/vite and the CLI
 			"inbox_ui.ts", // the dev inbox document, served by inbox_server.ts
 			"inbox_sounds.ts", // the dev inbox's audio, served by inbox_server.ts
@@ -63,6 +64,7 @@ describe("package exports", () => {
 			"inbox_art.ts", // the dev inbox's sign-on artwork, served by inbox_server.ts
 			"inbox_desktop.ts", // the dev inbox's wallpaper, clip and Start button, served by inbox_server.ts
 			"inbox_poom.ts", // POOM.EXE's Freedoom weapon sprites, served by inbox_server.ts
+			"views.ts", // the views SDK (publish, seal, url), re-exported from the root
 		])
 		// Channel providers live in subdirectories (`sms/`), so scan those too — otherwise a
 		// new provider could ship with no exports entry and nothing would notice.
