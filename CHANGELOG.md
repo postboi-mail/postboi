@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Fixed
+
+- `postboi testing run <file> --set <name>` sent the default client list beside the set, so the server refused it with "Pass `set` or `clients`, not both." It now sends the set alone. `testing add --set` was not affected.
+
 ## 0.68.0
 
 ### Added

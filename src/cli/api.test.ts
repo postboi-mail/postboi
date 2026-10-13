@@ -1269,6 +1269,27 @@ describe("testing run and download", () => {
 		expect(calls.some((c) => c.key === "GET /v1/testing/clients")).toBe(false)
 	})
 
+	it("run and add with --set send the set alone, not the default clients beside it", async () => {
+		const { file } = workspace()
+		const { calls } = serve({
+			"GET /v1/testing/clients": {
+				data: [{ id: "gmail_web", name: "Gmail (web)", group: "Webmail", default: true }],
+				max_per_test: 25,
+			},
+			"GET /v1/testing/sets": {
+				data: [{ id: "set_1", name: "Core", clients: ["a", "b"], created_at: "" }],
+			},
+			"POST /v1/testing": { id: "test_1" },
+			"POST /v1/testing/test_1/source": { id: "test_1", status: "received" },
+		})
+		await api_command("testing", ["run", file, "--set", "core", "--no-wait", "--yes"])
+		await api_command("testing", ["add", "--set", "core"])
+		expect(calls.filter((c) => c.key === "POST /v1/testing").map((c) => c.body)).toEqual([
+			{ series: "partner", set: "core" },
+			{ set: "core" },
+		])
+	})
+
 	it("sets list, save and delete by name; share and revoke", async () => {
 		const set = { id: "set_1", name: "Core", clients: ["a", "b"], created_at: "" }
 		const { calls, lines } = serve({
