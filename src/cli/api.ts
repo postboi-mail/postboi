@@ -1777,8 +1777,10 @@ async function testing_run(args: Array<string>): Promise<void> {
 		)
 		estimate = ids.length
 	} else if (flags.set) {
-		// Only for the estimate: the server resolves the set itself and names the
-		// known ones when this one doesn't exist.
+		// The set names the clients, so no default list beside it (the server takes one or
+		// the other). Fetching the sets is only for the estimate: the server resolves the
+		// set itself and names the known ones when this one doesn't exist.
+		batches = [undefined]
 		const sets = await api<{ data: Array<ClientSet> }>("/v1/testing/sets").catch(() => undefined)
 		const found = sets?.data.find((s) => s.name.toLowerCase() === flags.set.toLowerCase())
 		if (found) estimate = found.clients.length
