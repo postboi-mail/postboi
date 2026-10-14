@@ -89,8 +89,13 @@ export interface PostboiConfig {
 	options?: Record<string, string>
 	/** Per-request timeout in milliseconds. */
 	timeout?: number
-	/** Retries on network / 429 / 5xx errors. */
+	/**
+	 * Retries. A 429 is always retried; a 5xx, a timeout or a network error only when the
+	 * send carries an `idempotency_key` the provider honours, or with `retry_unknown`.
+	 */
 	retries?: number
+	/** Retry a 5xx, a timeout or a network error without an idempotency key, risking a duplicate. */
+	retry_unknown?: boolean
 	/** Base retry backoff in milliseconds (doubles each attempt). */
 	retry_delay?: number
 	/** Derive a plain-text body from the HTML body when `text` is omitted. On by default. */

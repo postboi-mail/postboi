@@ -90,6 +90,7 @@ export default class JetEmail extends ProviderBase<SendResponse> {
 				...(message.idempotency_key ? { "Idempotency-Key": message.idempotency_key } : {}),
 			},
 			body: JSON.stringify(params),
+			idempotent: Boolean(message.idempotency_key),
 		}
 	}
 

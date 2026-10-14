@@ -15,6 +15,9 @@ import { pooled_map } from "./utils.js"
 
 export type { Channel, ProviderError } from "./errors.js"
 
+/** Methods HTTP defines as idempotent, which are safe to send again whatever came back. */
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"])
+
 /** A provider-agnostic description of the HTTP request to send. */
 export type RequestSpec = {
 	url: string
@@ -22,6 +25,14 @@ export type RequestSpec = {
 	headers: Record<string, string>
 	/** Omit for bodyless requests (GET/DELETE). */
 	body?: BodyInit
+	/**
+	 * The request carries a key the provider documents honouring (an `Idempotency-Key`
+	 * header, a `sendId`, an `Operation-Id`), so sending it twice can't send twice. Only
+	 * then is a 5xx, a timeout or a network error retried: without it nothing proves the
+	 * first attempt didn't land. GET, HEAD, PUT, DELETE and OPTIONS are idempotent by
+	 * definition and need no flag.
+	 */
+	idempotent?: boolean
 }
 
 /** The per-message outcome of a bulk send. */
@@ -112,11 +123,18 @@ export type TransportOptions<TPrepared = unknown> = {
 	/** Per-request timeout in milliseconds. Defaults to 30000. */
 	timeout?: number
 	/**
-	 * Number of retries on network errors and 429/5xx responses. Defaults to 0.
-	 * Retries are opt-in because retrying a send that already reached the provider can
-	 * deliver a duplicate message — pair this with `idempotency_key` where supported.
+	 * Number of retries. Defaults to 0. A 429 is always retried, since the provider refused
+	 * the request. A 5xx, a timeout or a network error leaves the outcome unknown, so those
+	 * are retried only when the request carries an `idempotency_key` the provider honours
+	 * (or with `retry_unknown`).
 	 */
 	retries?: number
+	/**
+	 * Retry a 5xx, a timeout or a network error even without an idempotency key the
+	 * provider honours. The first attempt may already have been sent, so this trades a
+	 * possible duplicate for a possible drop. Defaults to false.
+	 */
+	retry_unknown?: boolean
 	/** Base backoff delay in milliseconds between retries (doubles each attempt). Defaults to 500. */
 	retry_delay?: number
 	/** Lifecycle hooks run around every send. */
@@ -141,6 +159,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	#timeout: number
 	#retries: number
 	#retry_delay: number
+	#retry_unknown: boolean
 	#hooks: TransportHooks<TPrepared>
 
 	constructor(options: TransportOptions<TPrepared> = {}) {
@@ -154,6 +173,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		this.#timeout = options.timeout ?? s.timeout ?? 30000
 		this.#retries = options.retries ?? s.retries ?? 0
 		this.#retry_delay = options.retry_delay ?? s.retry_delay ?? 500
+		this.#retry_unknown = options.retry_unknown ?? s.retry_unknown ?? false
 		// Global hooks are declared over every channel's message union; this provider only
 		// ever hands them its own TPrepared, so the narrowing is safe inbound. A hook that
 		// *returns* another channel's shape is undefined behaviour — which is exactly what
@@ -219,6 +239,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: error.message,
 				code: error.code,
 				raw: data,
+				outcome_unknown: response.status >= 500,
 			})
 		}
 		if (!response.ok) {
@@ -228,6 +249,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				status: response.status,
 				message: `${this.provider} ${kind} failed with status ${response.status}`,
 				raw: data,
+				outcome_unknown: response.status >= 500,
 			})
 		}
 		return undefined
@@ -389,20 +411,33 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		return fetch(url, init)
 	}
 
-	/** Perform the HTTP request with a timeout and opt-in retry/backoff. */
+	/**
+	 * Perform the HTTP request with a timeout and opt-in retry/backoff.
+	 *
+	 * What may be retried is decided by what the failure proves. A 429 proves the provider
+	 * refused the request. A 5xx, a timeout or a dropped connection proves nothing: the
+	 * provider may have queued the message before answering badly or not at all, and a
+	 * second attempt is then a second message in somebody's inbox. Those are retried only
+	 * when the request is {@link RequestSpec.idempotent}, or the caller said `retry_unknown`.
+	 */
 	protected async request(spec: RequestSpec): Promise<Response> {
+		const method = spec.method ?? "POST"
 		const init: RequestInit = {
-			method: spec.method ?? "POST",
+			method,
 			headers: spec.headers,
 			body: spec.body,
 		}
+		const replayable =
+			this.#retry_unknown ||
+			spec.idempotent === true ||
+			IDEMPOTENT_METHODS.has(method.toUpperCase())
 
 		for (let attempt = 0; ; attempt++) {
 			const controller = new AbortController()
 			const timer = setTimeout(() => controller.abort(), this.#timeout)
 			try {
 				const response = await this.send_request(spec.url, { ...init, signal: controller.signal })
-				if (this.#should_retry(response.status) && attempt < this.#retries) {
+				if (this.#should_retry(response.status, replayable) && attempt < this.#retries) {
 					const delay = this.#backoff(attempt + 1, response)
 					await this.observe(() =>
 						this.#hooks.on?.retry?.({
@@ -418,7 +453,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				}
 				return response
 			} catch (cause) {
-				if (attempt < this.#retries) {
+				if (replayable && attempt < this.#retries) {
 					const delay = this.#backoff(attempt + 1)
 					await this.observe(() =>
 						this.#hooks.on?.retry?.({
@@ -438,6 +473,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 					channel: this.channel,
 					message: `${this.provider} request failed: ${reason}`,
 					raw: cause,
+					outcome_unknown: true,
 				})
 			} finally {
 				clearTimeout(timer)
@@ -445,8 +481,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		}
 	}
 
-	#should_retry(status: number): boolean {
-		return status === 429 || status >= 500
+	#should_retry(status: number, replayable: boolean): boolean {
+		return status === 429 || (replayable && status >= 500)
 	}
 
 	#backoff(attempt: number, response?: Response): number {

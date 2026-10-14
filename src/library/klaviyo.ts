@@ -108,6 +108,7 @@ export default class Klaviyo extends ProviderBase<SendResponse> {
 				Accept: "application/vnd.api+json",
 			},
 			body: JSON.stringify(params),
+			idempotent: Boolean(message.idempotency_key),
 		}
 	}
 

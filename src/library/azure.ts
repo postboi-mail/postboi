@@ -174,6 +174,8 @@ export default class Azure extends ProviderBase<SendResponse> {
 					: {}),
 			},
 			body,
+			// Azure only takes a UUID as an Operation-Id; any other key isn't sent.
+			idempotent: Boolean(message.idempotency_key && UUID.test(message.idempotency_key)),
 		}
 	}
 

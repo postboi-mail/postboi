@@ -359,8 +359,9 @@ export interface SendOptions {
 	/** Attachments to include. Accepts a single File or an array of File objects. */
 	attachments?: File | Array<File>
 	/**
-	 * Idempotency key forwarded to providers that support it (the Postboi provider, Resend),
-	 * so a retried request does not send a duplicate email.
+	 * Idempotency key forwarded to providers that support it (the Postboi provider, Resend
+	 * and others that document one), so a retried request does not send a duplicate email.
+	 * It is also what lets `retries` retry a 5xx, a timeout or a network error.
 	 */
 	idempotency_key?: string
 	/**
