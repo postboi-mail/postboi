@@ -95,7 +95,10 @@ export const TYPES: Record<string, WebhookEventType> = {
 }
 
 /** `whatsapp:+15551234` → the channel and the bare number. */
-export function address(value: string | undefined): { channel: Channel; phone?: string } {
+export function address(value: string | undefined): {
+	channel: Extract<Channel, "sms" | "whatsapp">
+	phone?: string
+} {
 	if (!value) return { channel: "sms" }
 	return value.startsWith("whatsapp:")
 		? { channel: "whatsapp", phone: value.slice("whatsapp:".length) }
@@ -121,7 +124,7 @@ function normalize_inbound(message: TwilioMessage): WebhookEvent | undefined {
 	const { channel, phone } = address(message.from)
 	return inbound_event({
 		provider: "twilio",
-		channel: channel === "whatsapp" ? "whatsapp" : "sms",
+		channel,
 		phone,
 		text: message.body,
 		message_id: message.sid,
@@ -201,7 +204,9 @@ const adapter: PollAdapter = {
 			if (event) events.push(event)
 		}
 
-		const trimmed = Object.entries(seen).slice(-SEEN_CAP)
+		// Never remember fewer than one page: a page is listed newest first, so trimming
+		// inside it would forget the newest rows and re-emit them on every later poll.
+		const trimmed = Object.entries(seen).slice(-Math.max(SEEN_CAP, page_size))
 		return {
 			events,
 			cursor: JSON.stringify({

@@ -251,6 +251,13 @@ export interface WebhookAdapter {
 	 * means the usual `{ received }` answer.
 	 */
 	respond?(body: string, ctx: NormalizeContext): Response | undefined
+	/**
+	 * The answer to a verified request once its events were handled, when the provider
+	 * reads more into it than a status. Twilio parses a reply to an inbound message as
+	 * TwiML and logs an error for anything else, so its adapter answers with an empty
+	 * `<Response/>`. Undefined means the usual `{ received }` answer.
+	 */
+	accepted?(events: Array<WebhookEvent>): Response | undefined
 }
 
 /** A loaded adapter module: the adapter plus its mock-payload builder (for tests). */
@@ -351,7 +358,9 @@ export interface ReceiveOptions {
 	/**
 	 * The URL the provider called, when it isn't the request's own: behind a proxy, a
 	 * load balancer or a tunnel, `request.url` can carry another host or scheme. Only
-	 * matters to providers that sign the URL (Twilio); the rest ignore it.
+	 * matters to providers that sign the URL (Twilio); the rest ignore it. Give it whole,
+	 * query string included: Twilio signs the query too, and a JSON request carries its
+	 * body hash there. Swapping the origin of `request.url` is usually all it takes.
 	 */
 	url?: string | URL
 	/**

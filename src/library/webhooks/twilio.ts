@@ -135,7 +135,7 @@ function normalize_inbound(f: Record<string, string>, sid: string): WebhookEvent
 	const { channel, phone } = address(f.From)
 	return inbound_event({
 		provider: "twilio",
-		channel: channel === "whatsapp" ? "whatsapp" : "sms",
+		channel,
 		phone,
 		text: f.Body,
 		message_id: sid,
@@ -146,9 +146,20 @@ function normalize_inbound(f: Record<string, string>, sid: string): WebhookEvent
 	})
 }
 
+/**
+ * Empty TwiML. Twilio reads the reply to an inbound message as instructions, so a JSON
+ * answer is "Invalid Content-Type" in its debugger; this says "nothing to send back".
+ * A status callback's reply is ignored, so the same answer serves both.
+ */
+const NO_REPLY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+
 const adapter: WebhookAdapter = {
 	provider: "twilio",
 	secret_env: ["TWILIO_AUTH_TOKEN"],
+
+	accepted() {
+		return new Response(NO_REPLY, { status: 200, headers: { "content-type": "text/xml" } })
+	},
 
 	async verify(ctx) {
 		const presented = ctx.headers.get("x-twilio-signature")
@@ -246,7 +257,9 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, url, channel }
 		body: new URLSearchParams(params).toString(),
 		headers: {
 			"content-type": "application/x-www-form-urlencoded",
-			"x-twilio-signature": await twilio_signature(secret, url, params),
+			// Signed over the URL as receive() will read it back, so a bare origin's slash
+			// and a host's case can't make the sample fail its own check.
+			"x-twilio-signature": await twilio_signature(secret, new URL(url).href, params),
 		},
 	}
 }

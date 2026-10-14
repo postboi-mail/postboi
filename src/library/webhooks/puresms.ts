@@ -89,7 +89,10 @@ export async function puresms_signature(secret: string, timestamp: string, body:
 
 /** The `MessageId` exactly as written in the body, so a 64-bit id keeps every digit. */
 function message_id(body: string, data: Receipt | Inbound): string | undefined {
-	const written = /"MessageId"\s*:\s*"?(\d+)"?/.exec(body)?.[1]
+	// The whole value or nothing: a quoted id that only starts with digits is a string the
+	// parse already kept exactly, and its leading digits alone would be somebody else's id.
+	const match = /"MessageId"\s*:\s*(?:"(\d+)"|(\d+))\s*[,}]/.exec(body)
+	const written = match?.[1] ?? match?.[2]
 	if (written) return written
 	return data.MessageId === undefined || data.MessageId === null
 		? undefined

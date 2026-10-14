@@ -1,6 +1,11 @@
 import { afterEach, describe, it, expect } from "vitest"
 
-import { receive, mock_request, WebhookVerificationError } from "$library/webhooks/index.js"
+import {
+	receive,
+	mock_request,
+	webhook,
+	WebhookVerificationError,
+} from "$library/webhooks/index.js"
 import { twilio_signature } from "$library/webhooks/twilio.js"
 import { puresms_signature } from "$library/webhooks/puresms.js"
 import { hex_encode } from "$library/webhooks/crypto.js"
@@ -197,6 +202,23 @@ describe("receive — twilio (signed status callbacks and inbound)", () => {
 				secret: "tok",
 			})
 		).rejects.toMatchObject({ code: "invalid_signature" })
+	})
+
+	it("answers through webhook() with empty TwiML, which Twilio reads a reply as", async () => {
+		const seen: Array<string> = []
+		const handle = webhook((event) => void seen.push(event.type), {
+			provider: "twilio",
+			secret: "tok",
+		})
+		const response = await handle(await twilio_request([...INBOUND, ["Body", "HELP"]]))
+		expect(response.status).toBe(200)
+		expect(response.headers.get("content-type")).toBe("text/xml")
+		expect(await response.text()).toContain("<Response></Response>")
+		expect(seen).toEqual(["received"])
+
+		// A bad signature is still a 401, not TwiML.
+		const forged = await twilio_request([...INBOUND, ["Body", "HELP"]], { token: "other" })
+		expect((await handle(forged)).status).toBe(401)
 	})
 
 	it("reads the auth token from TWILIO_AUTH_TOKEN when no webhook secret is set", async () => {

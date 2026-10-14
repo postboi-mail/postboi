@@ -256,7 +256,9 @@ normalized [webhook events](/webhooks#text-messages), with `channel: "sms"` and 
   Messaging Service's own setting) and point `receive()` at it with
   `{ provider: "twilio" }`. Requests are signed with your auth token, which
   `TWILIO_AUTH_TOKEN` already holds. Twilio signs the URL it called, so behind a proxy
-  or a tunnel pass that URL as `receive(request, { url })`. With nothing set up,
+  or a tunnel pass that URL, query string included, as `receive(request, { url })`.
+  `webhook()` answers Twilio with empty TwiML, which is what an inbound message's
+  webhook expects back. With nothing set up,
   `poll({ provider: "twilio" })` reads the same receipts from the Message resource and
   needs no public endpoint. See [polling](/webhooks#providers-that-dont-push-poll).
 
@@ -329,7 +331,7 @@ for (const event of events) {
 	if (event.type === "unsubscribed" && event.phone) {
 		await mail.suppressions.add({ phone: event.phone, channel: event.channel })
 	}
-	if (event.type === "received" && event.keyword === "help") {
+	if (event.type === "received" && event.keyword === "help" && event.channel === "sms" && event.phone) {
 		await sms({ to: event.phone, message: "Acme alerts. Reply STOP to opt out." })
 	}
 }

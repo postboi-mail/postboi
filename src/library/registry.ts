@@ -962,7 +962,16 @@ export const SMS_PROVIDERS = [
 		note: "UK-native flat-rate pay-as-you-go, hosted in the EU, with signed delivery webhooks",
 		price: "2.8p",
 		verified: "2026-09-01",
-		fields: [{ env: "PURESMS_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "PURESMS_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "PURESMS_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook secret (optional; the one set on the endpoint under Settings → Webhooks)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "twilio",
