@@ -35,6 +35,8 @@ afterEach(() => {
 		"TELNYX_API_KEY",
 		"VONAGE_API_KEY",
 		"VONAGE_API_SECRET",
+		"VONAGE_APPLICATION_ID",
+		"VONAGE_PRIVATE_KEY",
 	])
 		delete process.env[key]
 })
@@ -233,6 +235,10 @@ describe("vonage", () => {
 		process.env.POSTBOI_SMS_PROVIDER = "vonage"
 		process.env.VONAGE_API_KEY = "ek"
 		process.env.VONAGE_API_SECRET = "es"
+		// An application, where one is set, outranks the key and secret (a linked number
+		// needs it), so this test says there is none rather than trusting the machine.
+		process.env.VONAGE_APPLICATION_ID = ""
+		process.env.VONAGE_PRIVATE_KEY = ""
 		const fetch = stub(202, { message_uuid: "u" })
 		await sms({ to: "+447700900123", from: "ACME", message: "hi" })
 		expect(sent(fetch).headers.Authorization).toBe(`Basic ${btoa("ek:es")}`)
