@@ -998,6 +998,66 @@ export const SMS_PROVIDERS = [
 		],
 	},
 	{
+		key: "telnyx",
+		name: "Telnyx",
+		import: "postboi/telnyx",
+		class: "Telnyx",
+		url: "https://portal.telnyx.com/#/api-keys",
+		regions: ["global"],
+		note: "Global, on its own carrier network, and usually the cheapest US route",
+		fields: [
+			// Ambient: set by anyone using Telnyx Voice or Verify, so it isn't intent to text.
+			{ env: "TELNYX_API_KEY", arg: "api_key", label: "API key", secret: true, ambient: true },
+			{
+				env: "TELNYX_MESSAGING_PROFILE_ID",
+				arg: "messaging_profile_id",
+				label: "Messaging profile id (optional; needed for a number pool or alphanumeric sender)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "vonage",
+		name: "Vonage",
+		import: "postboi/vonage",
+		class: "Vonage",
+		url: "https://dashboard.nexmo.com/settings",
+		regions: ["global"],
+		note: "Global, through the Messages API; an API key and secret, or an application",
+		fields: [
+			// Required either way: an application belongs to the account the key names. Ambient,
+			// like Twilio's pair, because Vonage's Voice and Verify users set it too.
+			{ env: "VONAGE_API_KEY", arg: "api_key", label: "API key", secret: true, ambient: true },
+			{
+				env: "VONAGE_API_SECRET",
+				arg: "api_secret",
+				label: "API secret (or the application id and private key below)",
+				secret: true,
+				default: "",
+			},
+			{
+				env: "VONAGE_APPLICATION_ID",
+				arg: "application_id",
+				label:
+					"Application id (optional; use it instead of the key when the number is linked to one)",
+				default: "",
+			},
+			{
+				env: "VONAGE_PRIVATE_KEY",
+				arg: "private_key",
+				label: "Application private key (PEM, with the application id)",
+				secret: true,
+				default: "",
+			},
+			{
+				env: "VONAGE_REGION",
+				arg: "region",
+				label: "API region (optional; api, api-eu, api-us or api-ap)",
+				default: "",
+			},
+		],
+	},
+	{
 		key: "sns",
 		name: "Amazon SNS",
 		import: "postboi/sns",

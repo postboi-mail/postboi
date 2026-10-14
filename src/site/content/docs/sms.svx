@@ -169,6 +169,8 @@ for (const result of results) {
 | The SMS Works | `postboi/smsworks` | UK, bills only for delivered messages |
 | PureSMS | `postboi/puresms` | UK, flat-rate pay-as-you-go, hosted in the EU |
 | Twilio | `postboi/twilio` | Global, and automatic RCS upgrade via a Messaging Service |
+| Telnyx | `postboi/telnyx` | Global on its own carrier network, usually the cheapest US route |
+| Vonage | `postboi/vonage` | Global, through the Messages API |
 | Amazon SNS | `postboi/sns` | Already on AWS |
 
 **SMS always names its provider**. There is no inferring it from credentials:
@@ -184,6 +186,16 @@ one. `AWS_ACCESS_KEY_ID` is set by anything near AWS; `TWILIO_ACCOUNT_SID` and
 `TWILIO_AUTH_TOKEN` are the Twilio SDK's zero-argument defaults, so a project using Voice or
 Verify already has them. [WhatsApp](/whatsapp) works the same way. Push and chat, which cost
 nothing and can be recalled, do infer.
+
+**Telnyx** takes `TELNYX_API_KEY`, and `TELNYX_MESSAGING_PROFILE_ID` when you send from a
+number pool or an alphanumeric sender (the profile then picks the number, so `from` can be
+left out). It schedules with `scheduled_at`. **Vonage** takes `VONAGE_API_KEY` with either
+`VONAGE_API_SECRET` or, for a number linked to a Vonage application, `VONAGE_APPLICATION_ID`
+and `VONAGE_PRIVATE_KEY` (Vonage refuses the key and secret for those), plus
+`VONAGE_REGION` for `api-eu`, `api-us` or `api-ap`. It can't schedule, so a `scheduled_at`
+is refused rather than sent now. Both send one recipient per request, as Twilio does: pass
+an array of sends to reach several people. Their delivery receipts aren't read by
+`receive()` yet.
 
 Construct one directly instead of using the environment, exactly like an email provider:
 

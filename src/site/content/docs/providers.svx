@@ -10,7 +10,7 @@ exposes the same `send()` and `is_error()` methods: swap providers without chang
 calling code.
 
 This page is the **email** roster. The other channels' providers live with their channel:
-[SMS](/sms#providers) (The SMS Works, PureSMS, Twilio, Amazon SNS),
+[SMS](/sms#providers) (The SMS Works, PureSMS, Twilio, Telnyx, Vonage, Amazon SNS),
 [WhatsApp](/whatsapp#providers) (Twilio, Meta Cloud API), [Push](/push) (Web Push, FCM),
 and the chat platforms ([Slack](/slack), [Discord](/discord), [Teams](/teams),
 [Telegram](/telegram)), each on its own page.
