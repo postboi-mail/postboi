@@ -1220,6 +1220,18 @@ describe("resilience (shared base)", () => {
 		})
 	})
 
+	it("calls a 2xx whose body drops an unknown outcome, not a refusal", async () => {
+		fetch.mockResolvedValue({
+			...respond(),
+			text: async () => {
+				throw new TypeError("terminated")
+			},
+		})
+		const error = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(error.status).toBe(200)
+		expect(error.outcome_unknown).toBe(true)
+	})
+
 	it("does not retry a network failure without a key", async () => {
 		fetch.mockImplementation(async () => {
 			throw new Error("ECONNRESET")

@@ -12,7 +12,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Breaking
 
-- `retries` no longer resends after a 5xx, a timeout or a network error unless the send carries an `idempotency_key` the provider honours. None of those failures proves the message wasn't sent, so a retry could deliver it twice. A 429 is still always retried. Set `retry_unknown: true` (per provider or in `postboi.config`) to get the old behaviour back.
+- `retries` no longer resends after a 5xx, a timeout or a network error unless the send carries an `idempotency_key` the provider honours. None of those failures proves the message wasn't sent, so a retry could deliver it twice. A 429 is still always retried. This covers every POST a provider makes, not only sends: a cancel, a list subscribe or a contact upsert that gets a 5xx is no longer retried either. GET, HEAD, PUT, DELETE and OPTIONS requests still are. Set `retry_unknown: true` (per provider or in `postboi.config`) to get the old behaviour back.
 
 ### Added
 

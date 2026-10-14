@@ -205,7 +205,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	protected async deliver(message: TPrepared): Promise<TResponse> {
 		const spec = await this.build_request(message)
 		const response = await this.request(spec)
-		const data = await this.read_json(response)
+		const data = await this.read_reply(response)
 		const error = this.error_for(response, data, "request")
 		if (error) throw error
 		return this.parse_response(response, data)
@@ -219,7 +219,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	 */
 	protected async call(spec: RequestSpec, kind: string): Promise<unknown> {
 		const response = await this.request(spec)
-		const data = await this.read_json(response)
+		const data = await this.read_reply(response)
 		const error = this.error_for(response, data, kind)
 		if (error) throw error
 		return data
@@ -497,6 +497,28 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 
 	#sleep(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms))
+	}
+
+	/**
+	 * {@link read_json} for the answer to a request that was made. The status has already
+	 * arrived, so a body that drops halfway is not a refusal: after a 2xx the provider took
+	 * the message, and after a 5xx nothing proves it didn't, so the error says
+	 * `outcome_unknown` rather than leaving a bare stream error to read as "not sent".
+	 */
+	protected async read_reply(response: Response): Promise<unknown> {
+		try {
+			return await this.read_json(response)
+		} catch (cause) {
+			const reason = cause instanceof Error ? cause.message : String(cause)
+			throw new PostboiError({
+				provider: this.provider,
+				channel: this.channel,
+				status: response.status,
+				message: `${this.provider} answered ${response.status} but its body could not be read: ${reason}`,
+				raw: cause,
+				outcome_unknown: response.ok || response.status >= 500,
+			})
+		}
 	}
 
 	/** Read a Response body as JSON, tolerating empty bodies (e.g. 202 responses). */

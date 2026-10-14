@@ -61,12 +61,13 @@ export default config({
 })
 ```
 
-What gets retried depends on what the failure proves. The delay doubles each attempt
+Nothing is retried until `retries` is above 0. Then what gets retried depends on what
+the failure proves. The delay doubles each attempt
 (exponential backoff), and a `Retry-After` from the provider is honoured up to a minute.
 
 | Failure | Retried | `outcome_unknown` |
 | ------- | ------- | ----------------- |
-| `429` | Always. The provider refused the request. | `false` |
+| `429` | Yes. The provider refused the request. | `false` |
 | `5xx`, timeout, network error | Only when the send carries an `idempotency_key` the provider honours. | `true` |
 | Any other `4xx` | Never. Sending it again gets the same answer. | `false` |
 
