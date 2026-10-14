@@ -15,7 +15,7 @@
 import { read_env } from "../library/env.js"
 import { load_config } from "../library/config.js"
 import { resolve_fields } from "../library/channels.js"
-import { WHATSAPP_PROVIDERS } from "../library/registry.js"
+import { WHATSAPP_PROVIDERS, provider_keys } from "../library/registry.js"
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -156,7 +156,9 @@ export async function fetch_whatsapp_templates(
 	fetch_fn: FetchLike = fetch
 ): Promise<WhatsappTemplates> {
 	const config = await load_config()
-	const key = read_env("POSTBOI_WHATSAPP_PROVIDER") ?? config.whatsapp?.provider
+	// A chain syncs for its first provider, the one its friendly names were written against.
+	const key = (provider_keys(read_env("POSTBOI_WHATSAPP_PROVIDER")) ??
+		provider_keys(config.whatsapp?.provider))?.[0]
 	const meta = WHATSAPP_PROVIDERS.find((p) => p.key === key)
 	if (!meta) return NO_TEMPLATES
 

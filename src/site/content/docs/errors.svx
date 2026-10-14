@@ -24,11 +24,24 @@ try {
 		console.error(error.message) // normalised message
 		console.error(error.raw) // the original provider payload
 		console.error(error.outcome_unknown) // true when it may have been sent anyway
+		console.error(error.reason) // why it was refused: "auth", "recipient", … (see below)
 	} else {
 		console.error(error)
 	}
 }
 ```
+
+### Why it was refused
+
+`reason` says why a provider refused, the same words whichever provider it was: `auth`,
+`rate_limited`, `sender`, `account`, `recipient`, `compliance` or `request`. It comes from
+the provider's own error code where postboi knows it (Twilio's, AWS's), and from the HTTP
+status otherwise. It is never set on an unknown outcome, since nothing was refused.
+
+The first four are about the provider rather than the message, so another provider might
+accept the same message; that is what an [SMS or WhatsApp provider chain](/sms#failing-over)
+fails over on, and `fails_over(error)` is the same test. A chain that ran out of providers
+throws a `FailoverError` (still a `PostboiError`) whose `errors` lists every answer.
 
 ### Common codes
 
@@ -37,6 +50,7 @@ Beyond provider-specific codes passed through on `.code`, postboi itself uses a 
 | Code | Meaning |
 | ---- | ------- |
 | `skipped` / `spam` | The send was intentionally cancelled: a `before.send` hook or the [honeypot](/spam). |
+| `provider_chain_not_supported` | Several providers named on a channel that sends through one (push, chat). |
 | `no_provider` / `no_token` / `unknown_provider` / `missing_env` | Zero-config resolution failed. See [Quick start](/quick-start). In development a missing credential [logs instead of throwing](/providers#no-credential-yet). |
 | `cancel_not_supported` | [`cancel()`](/scheduling#cancelling-a-scheduled-send) on a provider without a cancellation API. |
 | `webhooks_not_supported` | [`receive()`](/webhooks) for a provider that emits no delivery events. |

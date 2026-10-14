@@ -11,11 +11,12 @@
  *
  * Internal: not part of the public surface.
  */
-import { PostboiError, type Channel } from "./errors.js"
+import { FailoverError, PostboiError, fails_over, type Channel } from "./errors.js"
 import type { BatchResult } from "./transport.js"
 import {
 	find_channel_provider,
 	infer_channel_provider,
+	provider_keys,
 	scoped_options,
 	type ProviderField,
 } from "./registry.js"
@@ -35,7 +36,13 @@ export interface ChannelResolution<TProvider> {
 	/** The channel's section of the config file. */
 	section: (
 		config: PostboiConfig
-	) => { provider?: string; options?: Record<string, string> } | undefined
+	) => { provider?: string | ReadonlyArray<string>; options?: Record<string, string> } | undefined
+	/**
+	 * May the channel name several providers, to fail over between? Only where the same
+	 * message means the same thing to each of them: a text or a WhatsApp message does, while a
+	 * push is addressed to one service's own device tokens and can't be sent through another.
+	 */
+	chains?: boolean
 	/** `bunx postboi init` flag suggested in errors, e.g. "--sms". Empty to omit. */
 	init_flag: string
 	/**
@@ -83,6 +90,11 @@ export interface ChannelSend<TOptions> {
  * provider afresh, then hand one-or-many to its send. One factory instead of a pasted
  * wrapper per channel, so a change to the dispatch shape can't land on three channels
  * and miss the fourth.
+ *
+ * Several providers named (`POSTBOI_SMS_PROVIDER=twilio,puresms`) are a failover chain:
+ * each message goes to the first, and moves to the next only when it was refused for a
+ * reason that is about that provider (see `fails_over`). Never after an unknown outcome:
+ * the message may already be on its way, and a second provider would send it twice.
  */
 export function channel_send<TOptions>(
 	spec: ChannelResolution<{
@@ -93,11 +105,83 @@ export function channel_send<TOptions>(
 		options: TOptions | Array<TOptions>,
 		batch: { concurrency?: number } = {}
 	): Promise<unknown> {
-		const provider = await resolve_channel_provider(spec)
-		if (Array.isArray(options)) return provider.send(options, batch)
-		return provider.send(options)
+		const providers = await resolve_channel_chain(spec)
+		if (providers.length === 1) {
+			const [provider] = providers
+			if (Array.isArray(options)) return provider.send(options, batch)
+			return provider.send(options)
+		}
+		if (Array.isArray(options)) return send_batch_through(providers, options, batch)
+		return send_through(providers, options)
 	}
 	return send_channel as ChannelSend<TOptions>
+}
+
+type Sends<TOptions> = {
+	send(options: TOptions | Array<TOptions>, batch?: { concurrency?: number }): Promise<unknown>
+}
+
+/** One message down a chain: the first answer that isn't a failover, or every error. */
+async function send_through<TOptions>(
+	providers: ReadonlyArray<Sends<TOptions>>,
+	options: TOptions
+): Promise<unknown> {
+	const errors: Array<PostboiError> = []
+	for (const provider of providers) {
+		try {
+			return await provider.send(options)
+		} catch (error) {
+			// Transport normalizes everything it throws; anything else is a bug to surface.
+			if (!(error instanceof PostboiError)) throw error
+			errors.push(error)
+			if (!fails_over(error)) break
+		}
+	}
+	throw errors.length === 1 ? errors[0] : new FailoverError(errors)
+}
+
+/**
+ * Many messages down a chain. Each provider is sent only what the one before it refused
+ * for a failover reason, as one batch, so a chain costs nothing extra while the first
+ * provider is healthy; results keep the caller's indexes.
+ */
+async function send_batch_through<TOptions>(
+	providers: ReadonlyArray<Sends<TOptions>>,
+	options: Array<TOptions>,
+	batch: { concurrency?: number }
+): Promise<Array<BatchResult<unknown>>> {
+	const results: Array<BatchResult<unknown>> = []
+	const errors: Array<Array<PostboiError>> = options.map(() => [])
+	let pending = options.map((message, index) => ({ message, index }))
+	for (const [step, provider] of providers.entries()) {
+		const last = step === providers.length - 1
+		const answers = (await provider.send(
+			pending.map((item) => item.message),
+			batch
+		)) as Array<BatchResult<unknown>>
+		const next: typeof pending = []
+		for (const answer of answers) {
+			const item = pending[answer.index]
+			if (answer.ok) {
+				results[item.index] = { ...answer, index: item.index }
+				continue
+			}
+			const tried = errors[item.index]
+			tried.push(answer.error)
+			if (!last && fails_over(answer.error)) {
+				next.push(item)
+				continue
+			}
+			results[item.index] = {
+				ok: false,
+				index: item.index,
+				error: tried.length === 1 ? tried[0] : new FailoverError(tried),
+			}
+		}
+		pending = next
+		if (pending.length === 0) break
+	}
+	return results
 }
 
 /** Construct the channel's logging mock, sinking captures to the dev inbox when one runs. */
@@ -115,7 +199,9 @@ async function dev_mock<TProvider>(spec: ChannelResolution<TProvider>): Promise<
  */
 export function resolve_fields(
 	fields: ReadonlyArray<ProviderField>,
-	section: { provider?: string; options?: Record<string, string> } | undefined,
+	section:
+		| { provider?: string | ReadonlyArray<string>; options?: Record<string, string> }
+		| undefined,
 	options: Record<string, unknown>,
 	key: string
 ): ProviderField | undefined {
@@ -134,11 +220,23 @@ export function resolve_fields(
  * Construct the configured provider for a channel, or the logging mock in development
  * when nothing is configured. Reads env and config afresh on every call, like `mail()` —
  * providers are cheap to construct, and per-call resolution is what makes changing an env
- * var take effect without a restart.
+ * var take effect without a restart. A chain answers its first provider.
  */
 export async function resolve_channel_provider<TProvider>(
 	spec: ChannelResolution<TProvider>
 ): Promise<TProvider> {
+	return (await resolve_channel_chain(spec))[0]
+}
+
+/**
+ * Every provider the channel names, in failover order: one for a plain setting, several
+ * for a chain (`POSTBOI_SMS_PROVIDER=twilio,puresms`), the logging mock alone in
+ * development. Each one in a chain must be fully configured, because a backup that turns
+ * out to be missing a credential is found at the worst moment otherwise.
+ */
+export async function resolve_channel_chain<TProvider>(
+	spec: ChannelResolution<TProvider>
+): Promise<Array<TProvider>> {
 	const config = await load_config()
 	await ensure_env_loaded()
 
@@ -155,31 +253,32 @@ export async function resolve_channel_provider<TProvider>(
 				announced_intercept.add(spec.channel)
 				console.warn(intercept.warning)
 			}
-			return dev_mock(spec)
+			return [await dev_mock(spec)]
 		}
 	}
 
 	const section = spec.section(config)
 	// Last resort, after both the explicit answers: credentials that can only mean one
 	// provider are an answer too, and one the user already gave by setting them.
-	const key =
-		read_env(spec.env_key) ??
-		section?.provider ??
-		(spec.infers
-			? infer_channel_provider(spec.channel, (env) => read_env(env) !== undefined)
-			: undefined)
+	const inferred = spec.infers
+		? infer_channel_provider(spec.channel, (env) => read_env(env) !== undefined)
+		: undefined
+	const keys =
+		provider_keys(read_env(spec.env_key)) ??
+		provider_keys(section?.provider) ??
+		(inferred ? [inferred] : undefined)
 
 	// Nothing configured. In development that's a fresh clone, so log rather than fail;
 	// anywhere else it's a broken deploy, and a silently-dropped message is worse than an
 	// error nobody can miss.
-	if (!key) {
+	if (!keys) {
 		if (is_development()) {
 			if (!warned_dev_fallback.has(spec.channel)) {
 				warned_dev_fallback.add(spec.channel)
 				console.warn(spec.dev_fallback_warning)
 			}
 			// Captures land in the dev inbox when one is running, console otherwise.
-			return dev_mock(spec)
+			return [await dev_mock(spec)]
 		}
 		throw new PostboiError({
 			provider: "postboi",
@@ -192,6 +291,26 @@ export async function resolve_channel_provider<TProvider>(
 		})
 	}
 
+	if (keys.length > 1 && !spec.chains) {
+		throw new PostboiError({
+			provider: "postboi",
+			channel: spec.channel,
+			code: "provider_chain_not_supported",
+			message: `${spec.env_key} names ${keys.join(", ")}, but ${spec.channel} sends through one provider. Name one.`,
+		})
+	}
+
+	const providers: Array<TProvider> = []
+	for (const key of keys) providers.push(await construct(spec, section, key))
+	return providers
+}
+
+/** Construct one named provider with its credentials, or say which one it is missing. */
+async function construct<TProvider>(
+	spec: ChannelResolution<TProvider>,
+	section: ReturnType<ChannelResolution<TProvider>["section"]>,
+	key: string
+): Promise<TProvider> {
 	const load = spec.loaders[key]
 	if (!load) {
 		throw new PostboiError({
@@ -206,6 +325,8 @@ export async function resolve_channel_provider<TProvider>(
 	// `meta` is undefined for credential-free providers (the mock) with no registry entry.
 	const meta = find_channel_provider(spec.channel, key)
 	const missing = resolve_fields(meta?.fields ?? [], section, options, key)
+	// The provider the config's `options` were written for: the one it names, or a chain's first.
+	const primary = provider_keys(section?.provider)?.[0]
 	if (missing) {
 		throw new PostboiError({
 			provider: key,
@@ -218,10 +339,8 @@ export async function resolve_channel_provider<TProvider>(
 					: ` or as \`${spec.channel}.options.${missing.arg}\` in postboi.config.ts`) +
 				// Without this, a config file plainly showing the option that's "missing" reads
 				// as the library ignoring it, rather than as it belonging to another provider.
-				(section?.options !== undefined &&
-				section.provider !== undefined &&
-				section.provider !== key
-					? `. \`${spec.channel}.options\` in postboi.config.ts belong to "${section.provider}" and don't apply here`
+				(section?.options !== undefined && primary !== undefined && primary !== key
+					? `. \`${spec.channel}.options\` in postboi.config.ts belong to "${primary}" and don't apply here`
 					: "") +
 				(spec.init_flag ? `. Run \`bunx postboi init ${spec.init_flag}\`.` : "."),
 		})

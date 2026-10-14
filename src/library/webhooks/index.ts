@@ -22,7 +22,12 @@
  */
 import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
-import type { ProviderKey, SmsProviderKey, WhatsappProviderKey } from "../registry.js"
+import {
+	provider_keys,
+	type ProviderKey,
+	type SmsProviderKey,
+	type WhatsappProviderKey,
+} from "../registry.js"
 import { load_config } from "../config.js"
 import { ensure_env_loaded, read_env } from "../env.js"
 import { parse_json, sns_envelope, sns_subscribe_url } from "./shared.js"
@@ -346,7 +351,10 @@ export async function resolve_key(): Promise<string> {
 		(read_env("POSTBOI_TOKEN") ? "postboi" : undefined)
 	// A channel provider stands in only when it pushes: Twilio names itself on both
 	// channels and polls, so it is never the answer here.
-	const pushes = (key: string | undefined) => (key && key in MODULES ? key : undefined)
+	// A chain (`twilio,puresms`) answers with the first of it that pushes; its others each
+	// call their own endpoint, which names its provider.
+	const pushes = (value: string | ReadonlyArray<string> | undefined) =>
+		provider_keys(value)?.find((key) => key in MODULES)
 	const whatsapp = pushes(read_env("POSTBOI_WHATSAPP_PROVIDER") ?? config.whatsapp?.provider)
 	const sms = pushes(read_env("POSTBOI_SMS_PROVIDER") ?? config.sms?.provider)
 	const key = email ?? whatsapp ?? sms

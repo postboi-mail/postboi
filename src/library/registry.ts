@@ -1432,14 +1432,34 @@ export function infer_channel_provider(
  *
  * The rule: options belong to the provider the section names. A section naming nothing
  * keeps the old behaviour, because unscoped options can only have been written for
- * whatever ends up running.
+ * whatever ends up running. A section naming a chain (`["twilio", "puresms"]`) gives them
+ * to the first provider only, for the same reason: one flat bag can't say which of two
+ * providers sharing an `arg` it was written for, so the ones after it read env alone.
  */
 export function scoped_options(
-	section: { provider?: string; options?: Record<string, string> } | undefined,
+	section:
+		| { provider?: string | ReadonlyArray<string>; options?: Record<string, string> }
+		| undefined,
 	key: string
 ): Record<string, string> | undefined {
-	if (section?.provider !== undefined && section.provider !== key) return undefined
+	const primary = provider_keys(section?.provider)?.[0]
+	if (primary !== undefined && primary !== key) return undefined
 	return section?.options
+}
+
+/**
+ * The provider keys a setting names, in order: a comma-separated string
+ * (`POSTBOI_SMS_PROVIDER=twilio,puresms`) or a list from the config file. Undefined when
+ * it names none, so `??` falls through to the next place a provider could be named.
+ */
+export function provider_keys(
+	value: string | ReadonlyArray<string> | undefined
+): Array<string> | undefined {
+	if (value === undefined) return undefined
+	const keys = (typeof value === "string" ? value.split(",") : [...value])
+		.map((key) => key.trim())
+		.filter(Boolean)
+	return keys.length > 0 ? keys : undefined
 }
 
 /**

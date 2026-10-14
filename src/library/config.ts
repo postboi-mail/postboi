@@ -111,8 +111,12 @@ export interface PostboiConfig {
 	 * anything here, the same way they do for email.
 	 */
 	sms?: {
-		/** Provider key (`twilio`, `smsworks`, …). `POSTBOI_SMS_PROVIDER` wins. */
-		provider?: SmsProviderKey | "mock"
+		/**
+		 * Provider key (`twilio`, `smsworks`, …), or several in order to fail over between
+		 * (`["twilio", "puresms"]`): the next is tried only when one refuses for a reason
+		 * that is about that provider. `POSTBOI_SMS_PROVIDER` wins, comma-separated for a chain.
+		 */
+		provider?: SmsProviderKey | "mock" | ReadonlyArray<SmsProviderKey>
 		/** Default fields applied to every text — sender, recipients, country. */
 		default?: SmsDefaults
 		/**
@@ -138,8 +142,8 @@ export interface PostboiConfig {
 	 * API. `POSTBOI_WHATSAPP_*` env vars win over anything here.
 	 */
 	whatsapp?: {
-		/** Provider key (`twilio`, `meta`). */
-		provider?: WhatsappProviderKey | "mock"
+		/** Provider key (`twilio`, `meta`), or several in order to fail over between. */
+		provider?: WhatsappProviderKey | "mock" | ReadonlyArray<WhatsappProviderKey>
 		/** Default sender, recipient, country and template language. */
 		default?: WhatsappDefaults
 		/** Non-secret constructor options. Access tokens are secrets — keep them in env. */

@@ -78,10 +78,14 @@ export {
 	PostboiError,
 	SkipSendError,
 	SpamError,
+	FailoverError,
 	is_error,
 	is_spam,
+	fails_over,
+	FAILOVER_REASONS,
 	type Channel,
 	type ProviderError,
+	type RejectionReason,
 } from "./errors.js"
 // The channel-agnostic base and the types that go with it. `Transport` is exported so a
 // third party can implement a channel we don't ship.
