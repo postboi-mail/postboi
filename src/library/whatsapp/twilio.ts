@@ -25,6 +25,12 @@ type Options = WhatsappProviderOptions & {
 	 * supplies the sender, making `from` unnecessary.
 	 */
 	messaging_service_sid?: string
+	/**
+	 * Where Twilio posts this message's status callbacks (sent, delivered, failed), for
+	 * `receive()` with the `twilio` webhook adapter. Optional: a Messaging Service can carry
+	 * its own, and `poll()` reads receipts with nothing set at all.
+	 */
+	status_callback?: string
 }
 
 type SendResponse = TwilioSendResponse
@@ -61,12 +67,20 @@ export default class TwilioWhatsapp extends WhatsappProvider<SendResponse> {
 	#account_sid: string
 	#auth_token: string
 	#messaging_service_sid?: string
+	#status_callback?: string
 
-	constructor({ account_sid, auth_token, messaging_service_sid, ...options }: Options) {
+	constructor({
+		account_sid,
+		auth_token,
+		messaging_service_sid,
+		status_callback,
+		...options
+	}: Options) {
 		super(options)
 		this.#account_sid = account_sid
 		this.#auth_token = auth_token
 		this.#messaging_service_sid = messaging_service_sid || undefined
+		this.#status_callback = status_callback || undefined
 		// A Messaging Service with a WhatsApp sender supplies `from`, same as Twilio SMS.
 		if (this.#messaging_service_sid) this.requires_from = false
 	}
@@ -82,6 +96,7 @@ export default class TwilioWhatsapp extends WhatsappProvider<SendResponse> {
 		} else {
 			body.set("Body", message.message ?? "")
 		}
+		if (this.#status_callback) body.set("StatusCallback", this.#status_callback)
 
 		return {
 			url: twilio_messages_url(this.#account_sid),

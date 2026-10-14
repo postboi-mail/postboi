@@ -20,6 +20,12 @@ type Options = SmsProviderOptions & {
 	 * message, and it's how you get sender pools and automatic RCS upgrade.
 	 */
 	messaging_service_sid?: string
+	/**
+	 * Where Twilio posts this message's status callbacks (sent, delivered, failed), for
+	 * `receive()` with the `twilio` webhook adapter. Optional: a Messaging Service can carry
+	 * its own, and `poll()` reads receipts with nothing set at all.
+	 */
+	status_callback?: string
 }
 
 type SendResponse = TwilioSendResponse
@@ -51,12 +57,20 @@ export default class Twilio extends SmsProvider<SendResponse> {
 	#account_sid: string
 	#auth_token: string
 	#messaging_service_sid?: string
+	#status_callback?: string
 
-	constructor({ account_sid, auth_token, messaging_service_sid, ...options }: Options) {
+	constructor({
+		account_sid,
+		auth_token,
+		messaging_service_sid,
+		status_callback,
+		...options
+	}: Options) {
 		super(options)
 		this.#account_sid = account_sid
 		this.#auth_token = auth_token
 		this.#messaging_service_sid = messaging_service_sid || undefined
+		this.#status_callback = status_callback || undefined
 		// A Messaging Service supplies the sender pool, so `from` is genuinely optional —
 		// without this, the base class's no_sender guard rejects the standard
 		// MessagingServiceSid-only setup before build_request's optional-From path can run.
@@ -83,6 +97,7 @@ export default class Twilio extends SmsProvider<SendResponse> {
 		if (this.#messaging_service_sid) body.set("MessagingServiceSid", this.#messaging_service_sid)
 		if (message.from) body.set("From", message.from)
 		body.set("Body", message.message)
+		if (this.#status_callback) body.set("StatusCallback", this.#status_callback)
 		if (message.scheduled_at) {
 			if (!this.#messaging_service_sid) {
 				throw new PostboiError({

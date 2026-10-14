@@ -995,6 +995,12 @@ export const SMS_PROVIDERS = [
 				label: "Messaging Service SID (optional; required to schedule)",
 				default: "",
 			},
+			{
+				env: "TWILIO_STATUS_CALLBACK",
+				arg: "status_callback",
+				label: "Status callback URL (optional; where Twilio posts delivery receipts)",
+				default: "",
+			},
 		],
 	},
 	{
@@ -1302,6 +1308,12 @@ export const WHATSAPP_PROVIDERS = [
 				env: "TWILIO_MESSAGING_SERVICE_SID",
 				arg: "messaging_service_sid",
 				label: "Messaging Service SID (optional; supplies the WhatsApp sender)",
+				default: "",
+			},
+			{
+				env: "TWILIO_STATUS_CALLBACK",
+				arg: "status_callback",
+				label: "Status callback URL (optional; where Twilio posts delivery receipts)",
 				default: "",
 			},
 		],

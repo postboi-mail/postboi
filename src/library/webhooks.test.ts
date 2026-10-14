@@ -1284,7 +1284,7 @@ describe("receive — smsworks (SMS delivery reports and replies)", () => {
 		expect(event.bounce?.detail).toContain("3001")
 	})
 
-	it("reads an inbound reply for an opt-out and nothing else", async () => {
+	it("reads inbound keywords, and passes every other reply on as received", async () => {
 		const { request, secret } = await mock_request({ provider: "smsworks", type: "unsubscribed" })
 		const [event] = await receive(request, { provider: "smsworks", secret })
 		// The number is the sender's — they are the one opting out.
@@ -1303,9 +1303,23 @@ describe("receive — smsworks (SMS delivery reports and replies)", () => {
 				messageid: "in-2",
 				content: "Thanks, see you at 3",
 				from: "447700900123",
+				outboundmessageid: "out-1",
 			}),
 		})
-		expect(await receive(reply, { provider: "smsworks", secret })).toEqual([])
+		// A reply names the send it answers, where The SMS Works knows it.
+		expect(await receive(reply, { provider: "smsworks", secret })).toMatchObject([
+			{
+				type: "received",
+				phone: "+447700900123",
+				message_id: "out-1",
+				body: { text: "Thanks, see you at 3" },
+			},
+		])
+
+		const start = await mock_request({ provider: "smsworks", type: "resubscribed", secret })
+		expect(await receive(start.request, { provider: "smsworks", secret })).toMatchObject([
+			{ type: "resubscribed", keyword: "start", phone: "+447700900123" },
+		])
 	})
 
 	it("is the default when no email provider is configured but the SMS one pushes", async () => {
@@ -1318,8 +1332,13 @@ describe("receive — smsworks (SMS delivery reports and replies)", () => {
 			const { request, secret } = await mock_request({ provider: "smsworks", type: "delivered" })
 			const [event] = await receive(request, { secret })
 			expect(event).toMatchObject({ provider: "smsworks", type: "delivered", channel: "sms" })
-			// Twilio polls, so naming it is not naming a webhook provider.
+			// Twilio pushes too, so naming it names its adapter.
 			process.env.POSTBOI_SMS_PROVIDER = "twilio"
+			const twilio = await mock_request({ provider: "twilio", type: "delivered", secret })
+			const [receipt] = await receive(twilio.request, { secret })
+			expect(receipt).toMatchObject({ provider: "twilio", type: "delivered", channel: "sms" })
+			// Amazon SNS reports nothing, so naming it is not naming a webhook provider.
+			process.env.POSTBOI_SMS_PROVIDER = "sns"
 			const again = await mock_request({ provider: "smsworks", type: "delivered", secret })
 			const error = await receive(again.request, { secret }).catch((e) => e)
 			expect(error).toMatchObject({ code: "no_provider" })

@@ -21,23 +21,22 @@
  * the one last seen, so the same row can be listed a hundred times and produce one
  * event per real transition.
  *
- * **Inbound replies are read for one thing: an opt-out.** The same list carries what
- * people text back, and a reply that is just "STOP" (or any of the standard keywords —
- * see `is_opt_out`) is an `unsubscribed` event for that number, on whichever channel
- * they replied over. That is the whole of it — a conversation is not a delivery event,
- * and everything else somebody writes stays in Twilio for the code that reads replies.
- * Twilio's own opt-out handling still applies where it exists (US and Canadian long
- * codes); this makes the fact reach *you*, so a suppression can be written wherever
- * you keep them. An alphanumeric sender can't be replied to at all, so nothing arrives.
+ * **Inbound replies are events too.** The same list carries what people text back: a
+ * STOP is `unsubscribed` and a START `resubscribed` for that number, on whichever
+ * channel they replied over, and anything else, HELP included, is `received` with their
+ * words (see `inbound_event`). Twilio's own opt-out handling still applies where it
+ * exists (US and Canadian long codes); this makes the fact reach *you*, so a suppression
+ * can be written wherever you keep them. An alphanumeric sender can't be replied to at
+ * all, so nothing arrives. The list doesn't carry Twilio's `OptOutType`, so a poll
+ * matches keywords itself; the `twilio` webhook adapter reads Twilio's verdict.
  */
 import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
 import { twilio_auth, twilio_messages_url } from "../twilio_common.js"
-import { is_opt_out } from "../sms/opt_out.js"
 import type { PollAdapter, PollModule, PollResult } from "./poll.js"
 import { parse_cursor } from "./poll.js"
 import type { WebhookEvent, WebhookEventType } from "./index.js"
-import { to_date } from "./shared.js"
+import { inbound_event, to_date } from "./shared.js"
 
 interface Cursor {
 	/** When the last poll ran. Informational — the query window is always trailing. */
@@ -87,7 +86,7 @@ const SEEN_CAP = 500
  * provider thinking, not something that happened to the message. `read` is WhatsApp's
  * read receipt, which is the same fact as an email open.
  */
-const TYPES: Record<string, WebhookEventType> = {
+export const TYPES: Record<string, WebhookEventType> = {
 	sent: "sent",
 	delivered: "delivered",
 	undelivered: "failed",
@@ -96,7 +95,7 @@ const TYPES: Record<string, WebhookEventType> = {
 }
 
 /** `whatsapp:+15551234` → the channel and the bare number. */
-function address(value: string | undefined): { channel: Channel; phone?: string } {
+export function address(value: string | undefined): { channel: Channel; phone?: string } {
 	if (!value) return { channel: "sms" }
 	return value.startsWith("whatsapp:")
 		? { channel: "whatsapp", phone: value.slice("whatsapp:".length) }
@@ -116,23 +115,19 @@ function failure_detail(message: TwilioMessage): string | undefined {
 	return text ?? (code ? String(code) : undefined)
 }
 
-/**
- * One inbound message as a normalized event — an `unsubscribed` for a reply that is an
- * opt-out keyword, nothing for anything else. The number is the *sender's*: they are the
- * one opting out, and `from` is where the reply came from.
- */
+/** One inbound message as a normalized event. The number is the *sender's*. */
 function normalize_inbound(message: TwilioMessage): WebhookEvent | undefined {
-	if (!message.sid || !is_opt_out(message.body)) return undefined
+	if (!message.sid) return undefined
 	const { channel, phone } = address(message.from)
-	return {
-		type: "unsubscribed",
+	return inbound_event({
 		provider: "twilio",
-		channel,
+		channel: channel === "whatsapp" ? "whatsapp" : "sms",
 		phone,
+		text: message.body,
 		message_id: message.sid,
 		timestamp: to_date(message.date_sent ?? message.date_created ?? message.date_updated),
 		raw: message,
-	}
+	})
 }
 
 /** One listed message as a normalized event — or nothing, for a status we don't emit. */
@@ -195,8 +190,7 @@ const adapter: PollAdapter = {
 			const status = message.status
 			if (!sid || !status) continue
 			// An inbound message is somebody writing to you, not a receipt for a send —
-			// its status never moves, so `seen` emits it exactly once, and `normalize`
-			// keeps only the replies that are an opt-out.
+			// its status never moves, so `seen` emits it exactly once.
 			if (seen[sid] === status) continue
 			// Delete first so the rewritten entry moves to the end: insertion order is
 			// what SEEN_CAP trims by, and a message still moving shouldn't age out.
@@ -231,13 +225,21 @@ export const mock: PollModule["mock"] = async ({ type, channel }) => {
 		failed: "undelivered",
 		opened: "read",
 		unsubscribed: "received",
+		resubscribed: "received",
+		received: "received",
 	}
 	const status = statuses[type] ?? "delivered"
 	const whatsapp = channel === "whatsapp"
 	const now = new Date().toISOString()
-	// An opt-out is the one inbound sample: the person at +1 555 777 0006 texting STOP
-	// back to the sender — so the addresses swap around, and the number is theirs.
-	const inbound = type === "unsubscribed"
+	// The inbound samples: the person at +1 555 777 0006 texting back to the sender, so
+	// the addresses swap around, and the number is theirs.
+	const replies: Partial<Record<WebhookEventType, string>> = {
+		unsubscribed: "STOP",
+		resubscribed: "START",
+		received: "Thanks, see you then",
+	}
+	const reply = replies[type]
+	const inbound = reply !== undefined
 	const person = whatsapp ? "whatsapp:+15557770006" : "+15557770006"
 	const sender = whatsapp ? "whatsapp:+15551110001" : "+15551110001"
 	const message: TwilioMessage = {
@@ -246,7 +248,7 @@ export const mock: PollModule["mock"] = async ({ type, channel }) => {
 		to: inbound ? sender : person,
 		from: inbound ? person : sender,
 		direction: inbound ? "inbound" : "outbound-api",
-		...(inbound ? { body: "STOP" } : {}),
+		...(inbound ? { body: reply } : {}),
 		date_sent: now,
 		date_updated: now,
 		...(status === "undelivered"
