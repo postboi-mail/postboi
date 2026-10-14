@@ -260,13 +260,12 @@ export async function resolve_channel_chain<TProvider>(
 	const section = spec.section(config)
 	// Last resort, after both the explicit answers: credentials that can only mean one
 	// provider are an answer too, and one the user already gave by setting them.
-	const inferred = spec.infers
-		? infer_channel_provider(spec.channel, (env) => read_env(env) !== undefined)
-		: undefined
 	const keys =
 		provider_keys(read_env(spec.env_key)) ??
 		provider_keys(section?.provider) ??
-		(inferred ? [inferred] : undefined)
+		(spec.infers
+			? provider_keys(infer_channel_provider(spec.channel, (env) => read_env(env) !== undefined))
+			: undefined)
 
 	// Nothing configured. In development that's a fresh clone, so log rather than fail;
 	// anywhere else it's a broken deploy, and a silently-dropped message is worse than an

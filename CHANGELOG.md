@@ -17,7 +17,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 ### Added
 
 - SMS and WhatsApp fail over between providers. Name several (`POSTBOI_SMS_PROVIDER=twilio,puresms`, or `sms: { provider: ["twilio", "puresms"] }`) and a message moves to the next only when the one before refused it for a reason about that provider: credentials, a rate limit, the sender or the account. Never for a bad number, an opt-out or an unknown outcome. A batch fails over message by message, and a chain that runs out throws `FailoverError` with every provider's answer in `errors`. Every provider in a chain needs its credentials; `options` in the config file belong to the first.
-- `PostboiError.reason` says why a provider refused, normalized: `auth`, `rate_limited`, `sender`, `account`, `recipient`, `compliance` or `request`. Read from Twilio's and AWS's error codes, and the HTTP status otherwise. `fails_over(error)` and `FAILOVER_REASONS` are exported from the root.
+- `PostboiError.reason` says why a provider refused, normalized: `auth`, `rate_limited`, `sender`, `account`, `recipient`, `compliance` or `request`. Read from Twilio's, Meta's and AWS's error codes, and the HTTP status otherwise. A batch the provider only partly accepted carries no reason and is `outcome_unknown`, since resending it would send the accepted part twice. `fails_over(error)` and `FAILOVER_REASONS` are exported from the root.
 - `PostboiError.outcome_unknown` is `true` when the message may have been sent despite the error (a 5xx, a timeout, a dropped connection), and `false` when the provider refused it or nothing was sent.
 
 ### Fixed

@@ -91,7 +91,7 @@ await mail.send({
 })
 ```
 
-Every provider also accepts `default`, `timeout`, `retries`, `retry_delay`, `auto_text`,
+Every provider also accepts `default`, `timeout`, `retries`, `retry_unknown`, `retry_delay`, `auto_text`,
 and `hooks` on top of its own credentials. See
 [Common constructor options](/api#common-constructor-options).
 

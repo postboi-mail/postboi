@@ -223,7 +223,21 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		const data = await this.read_reply(response)
 		const error = this.error_for(response, data, "request")
 		if (error) throw error
-		return this.parse_response(response, data)
+		try {
+			return this.parse_response(response, data)
+		} catch (cause) {
+			// A provider that recognises a refusal in its answer throws one of ours; anything
+			// else here is our reading of a 2xx failing, and the provider took the message.
+			if (cause instanceof PostboiError) throw cause
+			throw new PostboiError({
+				provider: this.provider,
+				channel: this.channel,
+				status: response.status,
+				message: `${this.provider} accepted the request but its answer could not be read: ${cause instanceof Error ? cause.message : String(cause)}`,
+				raw: data,
+				outcome_unknown: true,
+			})
+		}
 	}
 
 	/**
@@ -254,9 +268,9 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: error.message,
 				code: error.code,
 				raw: data,
-				outcome_unknown: response.status >= 500,
+				outcome_unknown: response.status >= 500 || error.partial === true,
 				reason:
-					response.status >= 500
+					response.status >= 500 || error.partial
 						? undefined
 						: (error.reason ?? this.reason_for(response.status) ?? "request"),
 			})
@@ -537,6 +551,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: `${this.provider} answered ${response.status} but its body could not be read: ${reason}`,
 				raw: cause,
 				outcome_unknown: response.ok || response.status >= 500,
+				// A 4xx is still a refusal whatever its body said, so it keeps the status's reason.
+				reason: response.ok ? undefined : this.reason_for(response.status),
 			})
 		}
 	}

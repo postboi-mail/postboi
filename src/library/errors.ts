@@ -50,6 +50,12 @@ export type ProviderError = {
 	code?: string | number
 	/** Why, where the provider's code says. Left out, the HTTP status decides. */
 	reason?: RejectionReason
+	/**
+	 * Part of the request went through: a batch the provider accepted some of. Not a
+	 * refusal, so it carries no reason, and the error is `outcome_unknown` because sending
+	 * the whole request again would send the accepted part twice.
+	 */
+	partial?: boolean
 }
 
 /**

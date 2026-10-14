@@ -98,6 +98,49 @@ describe("why a provider refused", () => {
 		expect((await send(sns)).reason).toBe("rate_limited")
 	})
 
+	it("reads Meta's codes, which arrive as 400s, and Twilio's WhatsApp ones", async () => {
+		const Meta = (await import("../whatsapp/meta.js")).default
+		const TwilioWhatsapp = (await import("../whatsapp/twilio.js")).default
+		const meta = new Meta({ access_token: "t", phone_number_id: "1" })
+		const wa = new TwilioWhatsapp({
+			account_sid: "AC1",
+			auth_token: "t",
+			default: { from: "+1555" },
+		})
+		const text = { to: "+447700900123", message: "hi" }
+		const cases: Array<[{ send(o: object): Promise<unknown> }, unknown, string]> = [
+			[meta, { error: { code: 130429, message: "Throughput reached" } }, "rate_limited"],
+			[meta, { error: { code: 131042, message: "Payment issue" } }, "account"],
+			[meta, { error: { code: 190, message: "Token expired" } }, "auth"],
+			[meta, { error: { code: 131026, message: "Undeliverable" } }, "recipient"],
+			[wa, { code: 63007, message: "No WhatsApp channel for From" }, "sender"],
+			[wa, { code: 63018, message: "Rate limit exceeded" }, "rate_limited"],
+		]
+		for (const [provider, body, reason] of cases) {
+			vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respond(400, body)))
+			const error = (await provider.send(text).catch((e) => e)) as PostboiError
+			expect(error.reason, JSON.stringify(body)).toBe(reason)
+		}
+	})
+
+	it("says a partly accepted batch may have gone, and never fails it over", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValue(
+					respond(207, { batchId: "b1", messageCount: 1, errors: [{ recipient: "+447700900002" }] })
+				)
+		)
+		const puresms = new PureSms({ api_key: "k", default: { from: "POSTBOI" } })
+		const error = (await puresms
+			.send({ to: ["+447700900001", "+447700900002"], message: "hi" })
+			.catch((e) => e)) as PostboiError
+		expect(error).toMatchObject({ code: "partial_batch", outcome_unknown: true })
+		expect(error.reason).toBeUndefined()
+		expect(fails_over(error)).toBe(false)
+	})
+
 	it("calls a 402 an account problem", async () => {
 		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(respond(402, { title: "Out of credit" })))
 		const puresms = new PureSms({ api_key: "k", default: { from: "POSTBOI" } })

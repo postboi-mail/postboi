@@ -166,6 +166,7 @@ interface PostboiError {
 	message: string // normalised message
 	raw: unknown // the original provider payload
 	outcome_unknown: boolean // true when the message may have been sent anyway
+	reason?: RejectionReason // why it was refused: "auth", "rate_limited", "recipient", …
 }
 ```
 

@@ -47,6 +47,8 @@ const REASONS: Record<number, RejectionReason> = {
 	21703: "sender", // The Messaging Service has no phone numbers to send from
 	21408: "account", // Permission to send to this region is not enabled
 	21608: "account", // A trial account can only send to verified numbers
+	63007: "sender", // WhatsApp: no channel for this From address
+	63018: "rate_limited", // WhatsApp: the channel's rate limit
 }
 
 /**
