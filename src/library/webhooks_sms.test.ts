@@ -9,6 +9,7 @@ import {
 import { twilio_signature } from "$library/webhooks/twilio.js"
 import { puresms_signature } from "$library/webhooks/puresms.js"
 import { vonage_token } from "$library/webhooks/vonage.js"
+import { plivo_signature } from "$library/webhooks/plivo.js"
 import { hex_encode } from "$library/webhooks/crypto.js"
 
 /** A form-encoded Twilio request to `url`, signed with `token` over `signed_url`. */
@@ -484,5 +485,142 @@ describe("receive — vonage (HS256 JWT)", () => {
 	it("signs the way it verifies", async () => {
 		const token = await vonage_token(secret, { iat: 1 })
 		expect(token.split(".")).toHaveLength(3)
+	})
+})
+
+describe("receive — plivo (V2-signed status and inbound)", () => {
+	it("maps a status and an inbound reply, and gives numbers back their +", async () => {
+		const delivered = await mock_request({ provider: "plivo", type: "delivered", secret: "tok" })
+		expect(await receive(delivered.request, { provider: "plivo", secret: "tok" })).toMatchObject([
+			{ type: "delivered", channel: "sms", phone: "+15557770006", message_id: expect.any(String) },
+		])
+		const failed = await mock_request({ provider: "plivo", type: "failed", secret: "tok" })
+		expect(await receive(failed.request, { provider: "plivo", secret: "tok" })).toMatchObject([
+			{ type: "failed", bounce: { category: "unknown", detail: "200" } },
+		])
+		const stop = await mock_request({ provider: "plivo", type: "unsubscribed", secret: "tok" })
+		expect(await receive(stop.request, { provider: "plivo", secret: "tok" })).toMatchObject([
+			{ type: "unsubscribed", phone: "+15557770006", keyword: "stop" },
+		])
+	})
+
+	it("signs the URL without its query string, plus the nonce", async () => {
+		const signature = await plivo_signature("tok", "https://example.com/hooks/plivo?a=1", "n1")
+		expect(signature).toBe(await plivo_signature("tok", "https://example.com/hooks/plivo", "n1"))
+		expect(signature).not.toBe(await plivo_signature("tok", "https://example.com/other", "n1"))
+	})
+
+	it("reads the auth token from PLIVO_AUTH_TOKEN, and refuses another token or URL", async () => {
+		const saved = process.env.PLIVO_AUTH_TOKEN
+		process.env.PLIVO_AUTH_TOKEN = "tok"
+		try {
+			const { request } = await mock_request({ provider: "plivo", type: "sent", secret: "tok" })
+			expect((await receive(request, { provider: "plivo" }))[0].type).toBe("sent")
+		} finally {
+			if (saved === undefined) delete process.env.PLIVO_AUTH_TOKEN
+			else process.env.PLIVO_AUTH_TOKEN = saved
+		}
+		const other = await mock_request({ provider: "plivo", type: "sent", secret: "other" })
+		await expect(
+			receive(other.request, { provider: "plivo", secret: "tok" })
+		).rejects.toBeInstanceOf(WebhookVerificationError)
+		const moved = await mock_request({
+			provider: "plivo",
+			type: "sent",
+			secret: "tok",
+			url: "https://example.com/elsewhere",
+		})
+		await expect(
+			receive(new Request("https://example.com/hooks/plivo", moved.request), {
+				provider: "plivo",
+				secret: "tok",
+			})
+		).rejects.toMatchObject({ code: "invalid_signature" })
+	})
+})
+
+describe("receive — sinch (Basic credentials on the callback URL)", () => {
+	it("maps a per-recipient report, a batch report and an inbound text", async () => {
+		const delivered = await mock_request({ provider: "sinch", type: "delivered", secret: "u:p" })
+		expect(await receive(delivered.request, { provider: "sinch", secret: "u:p" })).toMatchObject([
+			{ type: "delivered", phone: "+15557770006", message_id: expect.any(String), tags: ["otp"] },
+		])
+		const stop = await mock_request({ provider: "sinch", type: "unsubscribed", secret: "u:p" })
+		expect(await receive(stop.request, { provider: "sinch", secret: "u:p" })).toMatchObject([
+			{ type: "unsubscribed", phone: "+15557770006" },
+		])
+		const batch = new Request("https://example.com/hooks/sinch", {
+			method: "POST",
+			headers: { authorization: `Basic ${btoa("u:p")}` },
+			body: JSON.stringify({
+				type: "delivery_report_sms",
+				batch_id: "b1",
+				statuses: [
+					{ code: 0, status: "Delivered", recipients: ["447700900001"] },
+					{ code: 402, status: "Failed", recipients: ["447700900002"] },
+					{ code: 0, status: "Queued", recipients: ["447700900003"] },
+				],
+			}),
+		})
+		expect(await receive(batch, { provider: "sinch", secret: "u:p" })).toMatchObject([
+			{ type: "delivered", message_id: "b1", phone: "+447700900001" },
+			{
+				type: "failed",
+				message_id: "b1",
+				phone: "+447700900002",
+				bounce: { detail: "Failed 402" },
+			},
+		])
+	})
+
+	it("takes the password alone, and refuses other credentials or none", async () => {
+		const { request } = await mock_request({ provider: "sinch", type: "sent", secret: "u:p" })
+		expect((await receive(request, { provider: "sinch", secret: "p" }))[0].type).toBe("sent")
+		const wrong = await mock_request({ provider: "sinch", type: "sent", secret: "u:x" })
+		await expect(
+			receive(wrong.request, { provider: "sinch", secret: "u:p" })
+		).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+		const bare = new Request("https://example.com/hooks/sinch", { method: "POST", body: "{}" })
+		await expect(receive(bare, { provider: "sinch", secret: "u:p" })).rejects.toBeInstanceOf(
+			WebhookVerificationError
+		)
+	})
+})
+
+describe("receive — bandwidth (Basic credentials on the application)", () => {
+	it("maps delivered, failed and an inbound text, with the send's tag", async () => {
+		const delivered = await mock_request({
+			provider: "bandwidth",
+			type: "delivered",
+			secret: "u:p",
+		})
+		expect(
+			await receive(delivered.request, { provider: "bandwidth", secret: "u:p" })
+		).toMatchObject([
+			{ type: "delivered", phone: "+15557770006", message_id: expect.any(String), tags: ["otp"] },
+		])
+		const failed = await mock_request({ provider: "bandwidth", type: "failed", secret: "u:p" })
+		expect(await receive(failed.request, { provider: "bandwidth", secret: "u:p" })).toMatchObject([
+			{ type: "failed", bounce: { detail: "9902 rejected-unallocated-from-number" } },
+		])
+		const reply = await mock_request({ provider: "bandwidth", type: "received", secret: "u:p" })
+		expect(await receive(reply.request, { provider: "bandwidth", secret: "u:p" })).toMatchObject([
+			{ type: "received", phone: "+15557770006", body: { text: "Thanks, see you then" } },
+		])
+	})
+
+	it("drops message-sending, and refuses other credentials", async () => {
+		const sending = new Request("https://example.com/hooks/bandwidth", {
+			method: "POST",
+			headers: { authorization: `Basic ${btoa("u:p")}` },
+			body: JSON.stringify([{ type: "message-sending", message: { id: "m1" } }]),
+		})
+		expect(await receive(sending, { provider: "bandwidth", secret: "u:p" })).toEqual([])
+		const wrong = await mock_request({ provider: "bandwidth", type: "delivered", secret: "u:x" })
+		await expect(
+			receive(wrong.request, { provider: "bandwidth", secret: "u:p" })
+		).rejects.toBeInstanceOf(WebhookVerificationError)
 	})
 })
