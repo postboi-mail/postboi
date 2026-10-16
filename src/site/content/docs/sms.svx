@@ -91,20 +91,24 @@ strings and none of this applies.**
 ### Keeping numbers out of your logs
 
 A phone number is personal data, and an error tracker is the place it most often leaks to:
-a provider's refusal names the number it refused, and an `on.error` hook forwards it. Turn
-on `redact` and SMS keeps numbers out of everything that leaves a send for somewhere else:
-
-```typescript
-export default config({ sms: { redact: true } }) // or POSTBOI_SMS_REDACT=1
-```
+a provider's refusal names the number it refused, and an `on.error` hook forwards it. So SMS
+keeps numbers out of everything that leaves a send for somewhere else, with nothing to set.
 
 A thrown error's message, stack and `raw` are masked (`+447700900123` becomes
 `+4*********23`), and so is the message and response that `after.send` and `on.error` are
 shown. The class, `code`, `status` and `reason` are untouched, so handling an error works
 the same, and the text itself still goes to the real number. `before.send` sees the real
-message, since what it returns is what gets sent. `redact: true` on one provider's
-constructor does it for that provider alone. For your own logging, `redact_phones(text)`
+message, since what it returns is what gets sent. For your own logging, `redact_phones(text)`
 masks every run of seven digits or more in a string, and `mask_phone(number)` masks one.
+
+To see the numbers, while you debug a send for instance, turn it off:
+
+```typescript
+export default config({ sms: { redact: false } }) // or POSTBOI_SMS_REDACT=0
+```
+
+`redact: false` on one provider's constructor does it for that provider alone, and
+`redact: true` there keeps one provider masked when the rest aren't.
 
 ## Development sends nothing
 
@@ -546,12 +550,18 @@ normalized [webhook events](/webhooks#text-messages), with `channel: "sms"` and 
   `PLIVO_WEBHOOK_SECRET` if you'd rather set it apart. Plivo signs the URL and a nonce but
   not the body, and nothing is timestamped, so serve it over HTTPS and deduplicate. Behind a
   proxy, pass the URL Plivo calls as `receive(request, { url })`.
-- **Sinch and Bandwidth don't sign**, so their callbacks are checked against the Basic
-  credentials you give them. Put a username and password in your Sinch callback URL
-  (`https://user:pass@example.com/hooks/sinch`), or on your Bandwidth application's
-  callback, and set the same `username:password` as `SINCH_WEBHOOK_SECRET` or
-  `BANDWIDTH_WEBHOOK_SECRET`. `message_id` is the id the send answered with: the batch id
-  on Sinch, the message id on Bandwidth.
+- **Sinch signs with HMAC, if you ask it to.** HMAC is turned on for a service plan by
+  your Sinch account manager. Once it is, every callback carries
+  `x-sinch-webhook-signature`, a base64 HMAC-SHA256 over the body, a nonce and a
+  timestamp, and `receive()` with `{ provider: "sinch" }` checks it against
+  `SINCH_WEBHOOK_SECRET` and refuses one more than five minutes old. Until then, put a
+  username and password in your callback URL (`https://user:pass@example.com/hooks/sinch`)
+  and set the same `username:password` as `SINCH_WEBHOOK_SECRET`. Whichever the request
+  carries is the one checked, and a wrong signature is never let through on Basic
+  credentials instead. `message_id` is the batch id the send answered with.
+- **Bandwidth doesn't sign**, so its callbacks are checked against the Basic credentials
+  on your application's callback. Set the same `username:password` as
+  `BANDWIDTH_WEBHOOK_SECRET`. `message_id` is the message id the send answered with.
 - **PureSMS pushes signed receipts.** Add your endpoint under **Settings → Webhooks** with
   a secret, and set the same value as `PURESMS_WEBHOOK_SECRET`. Each request is signed with
   HMAC-SHA256 over its timestamp and body. A receipt doesn't name the recipient's number,

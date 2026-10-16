@@ -10,6 +10,15 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- Phone numbers are now masked by default in SMS errors (message, stack and `raw`) and in what `after.send` and `on.error` hooks are shown, so a refusal doesn't put a number in your error tracker. `+447700900123` reads `+4*********23`. To see them, set `sms: { redact: false }` in `postboi.config`, `POSTBOI_SMS_REDACT=0`, or `redact: false` on one provider. `sms: { redact: true }` and `POSTBOI_SMS_REDACT=1` still work and now say what's already the default.
+
+### Added
+
+- `receive()` checks Sinch's HMAC-signed callbacks: with HMAC on for the service plan, `x-sinch-webhook-signature` is verified against `SINCH_WEBHOOK_SECRET` over the body, nonce and timestamp, and one more than five minutes old is refused. A callback without it is still checked against the Basic credentials in the URL.
+- A text blocked as spam is `bounce.category: "filtered"` on Sinch (15, 62), Plivo (30) and Bandwidth (4470, 4770) too, beside Twilio, Telnyx and Vonage.
+
 ## 0.70.0
 
 ### Added

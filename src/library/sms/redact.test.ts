@@ -87,12 +87,13 @@ describe("sms redact", () => {
 			...options,
 		})
 
-	it("leaves everything alone by default", async () => {
+	it("masks by default, with nothing set", async () => {
 		refuse()
 		const error = (await twilio()
 			.send({ to, message: "hi" })
 			.catch((e) => e)) as PostboiError
-		expect(error.message).toContain(to)
+		expect(error.message).not.toContain(to)
+		expect(error.message).toContain("+4*********23")
 	})
 
 	it("masks the error's message, stack and raw, and keeps its class and code", async () => {
@@ -128,26 +129,29 @@ describe("sms redact", () => {
 		expect(body).toContain(encodeURIComponent(to))
 	})
 
-	it("turns on from the environment and from the config", async () => {
+	it("is turned off by the environment, the config, or the instance", async () => {
 		refuse()
-		process.env.POSTBOI_SMS_REDACT = "1"
-		let error = (await twilio()
-			.send({ to, message: "hi" })
-			.catch((e) => e)) as PostboiError
-		expect(error.message).not.toContain(to)
-
+		const message = async (options = {}) =>
+			(
+				(await twilio(options)
+					.send({ to, message: "hi" })
+					.catch((e) => e)) as PostboiError
+			).message
+		for (const off of ["0", "false", "off"]) {
+			process.env.POSTBOI_SMS_REDACT = off
+			expect(await message(), off).toContain(to)
+		}
+		// An empty variable says nothing, so the default stands.
+		process.env.POSTBOI_SMS_REDACT = ""
+		expect(await message()).not.toContain(to)
 		delete process.env.POSTBOI_SMS_REDACT
-		configure({ sms: { redact: true } })
-		error = (await twilio()
-			.send({ to, message: "hi" })
-			.catch((e) => e)) as PostboiError
-		expect(error.message).not.toContain(to)
 
-		// An instance's own answer wins over both.
-		error = (await twilio({ redact: false })
-			.send({ to, message: "hi" })
-			.catch((e) => e)) as PostboiError
-		expect(error.message).toContain(to)
+		configure({ sms: { redact: false } })
+		expect(await message()).toContain(to)
+		// An instance's own answer wins over the config.
+		expect(await message({ redact: true })).not.toContain(to)
+		reset_config()
+		expect(await message({ redact: false })).toContain(to)
 	})
 
 	it("masks a number refused before any request", async () => {

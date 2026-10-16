@@ -6,24 +6,44 @@
  * for one report per recipient) or the service plan's default, and inbound texts to the
  * plan's callback. Point both at `receive()` with `{ provider: "sinch" }`. Both are JSON.
  *
- * **Verification is the Basic credentials on the callback URL.** Sinch's SMS API doesn't
- * publish a signature for these callbacks; what it does document is credentials in the
- * callback URL (`https://user:pass@example.com/hooks/sinch`), which arrive as an
- * `Authorization: Basic` header. Set `SINCH_WEBHOOK_SECRET` to the same `username:password`
- * (or the password alone). A `?token=` on the URL works too. Nothing is timestamped, so
- * deduplicate on `dedupe_key`.
+ * **Verification is an HMAC signature or the Basic credentials, whichever Sinch sends.**
+ * With HMAC turned on for the service plan (your account manager does this), every callback
+ * carries `x-sinch-webhook-signature`: the base64 HMAC-SHA256, keyed with the secret you
+ * agreed, of the body, a `.`, `x-sinch-webhook-signature-nonce`, a `.` and
+ * `x-sinch-webhook-signature-timestamp`. A signature older than five minutes is refused, so
+ * a captured request can't be replayed later. Without it, what Sinch documents is
+ * credentials in the callback URL (`https://user:pass@example.com/hooks/sinch`), which
+ * arrive as `Authorization: Basic`; nothing in those is timestamped, so deduplicate on
+ * `dedupe_key`. Either way `SINCH_WEBHOOK_SECRET` is the secret: the HMAC key, or the same
+ * `username:password` (or the password alone). A `?token=` on the URL works too.
  *
  * **Events**: a `recipient_delivery_report_sms` is one recipient's state: `Dispatched` is
  * `sent`, `Delivered` is `delivered`, and `Aborted`, `Rejected`, `Failed`, `Expired`,
- * `Cancelled` and `Deleted` are `failed`, with Sinch's status code in `bounce.detail`. A
+ * `Cancelled` and `Deleted` are `failed`, with Sinch's status code in `bounce.detail`, and
+ * `bounce.category: "filtered"` for its spam blocks (15, screening; 62, its spam filter). A
  * batch report (`delivery_report_sms`, the plan's default) is one event per recipient it
  * lists, and nothing for a summary that lists none. `message_id` is the batch id a send
  * answered with. An inbound `mo_text` goes through `inbound_event`. Numbers are given back
  * their `+`.
  */
 import { PostboiError } from "../index.js"
-import type { AdapterModule, WebhookAdapter, WebhookEvent, WebhookEventType } from "./index.js"
-import { basic_auth_verify, inbound_event, parse_json, plus_e164, to_date } from "./shared.js"
+import type {
+	AdapterModule,
+	VerifyContext,
+	WebhookAdapter,
+	WebhookEvent,
+	WebhookEventType,
+} from "./index.js"
+import { WebhookVerificationError, type WebhookVerificationCode } from "./errors.js"
+import { base64_encode, hmac_sha256, timing_safe_equal } from "./crypto.js"
+import {
+	assert_fresh_timestamp,
+	basic_auth_verify,
+	inbound_event,
+	parse_json,
+	plus_e164,
+	to_date,
+} from "./shared.js"
 
 /** A status → normalized event. `Queued` and `Unknown` say nothing new. */
 const TYPES: Record<string, WebhookEventType> = {
@@ -35,6 +55,55 @@ const TYPES: Record<string, WebhookEventType> = {
 	expired: "failed",
 	cancelled: "failed",
 	deleted: "failed",
+}
+
+/**
+ * Sinch's codes for a text blocked as spam: 15, "screening blocked the message for possible
+ * spam", and 62, its own spam filter. 255 isn't here: it also covers an opted-out number.
+ */
+const FILTERED = new Set(["15", "62"])
+
+/** How far a signed callback's timestamp may be from now, in seconds. */
+const TOLERANCE_SECONDS = 300
+
+/** `x-sinch-webhook-signature` for a body, a nonce and a timestamp, keyed with `secret`. */
+export async function sinch_signature(
+	secret: string,
+	body: string,
+	nonce: string,
+	timestamp: string
+): Promise<string> {
+	return base64_encode(await hmac_sha256(secret, `${body}.${nonce}.${timestamp}`))
+}
+
+function fail(message: string, code: WebhookVerificationCode = "invalid_signature"): never {
+	throw new WebhookVerificationError({ provider: "sinch", message, code })
+}
+
+/** Check a callback signed with HMAC, which is the one that carries the signature header. */
+async function hmac_verify(ctx: VerifyContext, signature: string) {
+	if (!ctx.secret) {
+		fail(
+			"No secret configured for sinch. Set SINCH_WEBHOOK_SECRET to the HMAC secret, or pass { secret }.",
+			"missing_secret"
+		)
+	}
+	const nonce = ctx.headers.get("x-sinch-webhook-signature-nonce")
+	const timestamp = ctx.headers.get("x-sinch-webhook-signature-timestamp")
+	if (!nonce || !timestamp) fail("sinch webhook signature is missing its nonce or timestamp")
+	const algorithm = ctx.headers.get("x-sinch-webhook-signature-algorithm")
+	if (algorithm && algorithm.toLowerCase() !== "hmacsha256") {
+		fail(`sinch webhook is signed with ${algorithm}, which postboi doesn't check`)
+	}
+	// Seconds since the epoch. One that can't be aged is refused rather than let through
+	// without replay protection.
+	assert_fresh_timestamp("sinch", timestamp, TOLERANCE_SECONDS)
+	const expected = await sinch_signature(ctx.secret, ctx.body, nonce, timestamp)
+	if (!timing_safe_equal(expected, signature)) {
+		fail(
+			"sinch webhook signature did not match. Check SINCH_WEBHOOK_SECRET is the HMAC secret agreed with Sinch."
+		)
+	}
 }
 
 interface Report {
@@ -74,7 +143,10 @@ function report_event(
 		// A text has no bounce classification; Sinch's status and code are the detail.
 		bounce:
 			type === "failed"
-				? { category: "unknown", detail: [status, code].filter((p) => p !== undefined).join(" ") }
+				? {
+						category: FILTERED.has(String(code ?? "")) ? "filtered" : "unknown",
+						detail: [status, code].filter((p) => p !== undefined).join(" "),
+					}
 				: undefined,
 		raw: report,
 	}
@@ -83,7 +155,9 @@ function report_event(
 const adapter: WebhookAdapter = {
 	provider: "sinch",
 
-	verify(ctx) {
+	async verify(ctx) {
+		const signature = ctx.headers.get("x-sinch-webhook-signature")
+		if (signature) return hmac_verify(ctx, signature)
 		basic_auth_verify("sinch", ctx, "in your Sinch callback URL")
 	},
 
@@ -130,7 +204,10 @@ const adapter: WebhookAdapter = {
 
 export default adapter
 
-/** Build a Sinch sample request, authenticated with `secret` as `username:password`. */
+/**
+ * Build a Sinch sample request, authenticated with `secret` as `username:password`. A secret
+ * starting `hmac:` signs it with HMAC instead, keyed with the rest, which is the secret returned.
+ */
 export const mock: AdapterModule["mock"] = async ({ type, secret }) => {
 	const now = new Date().toISOString()
 	const replies: Partial<Record<WebhookEventType, string>> = {
@@ -159,9 +236,23 @@ export const mock: AdapterModule["mock"] = async ({ type, secret }) => {
 					at: now,
 					client_reference: "otp",
 				}
+	const body = JSON.stringify(payload)
+	if (secret.startsWith("hmac:")) {
+		const nonce = "01FJA8B4A7BM672RDXN9HZG3N2"
+		const timestamp = String(Math.floor(Date.now() / 1000))
+		const key = secret.slice("hmac:".length)
+		const headers: Record<string, string> = {
+			"content-type": "application/json",
+			"x-sinch-webhook-signature-algorithm": "HmacSHA256",
+			"x-sinch-webhook-signature-nonce": nonce,
+			"x-sinch-webhook-signature-timestamp": timestamp,
+			"x-sinch-webhook-signature": await sinch_signature(key, body, nonce, timestamp),
+		}
+		return { body, secret: key, headers }
+	}
 	const credentials = secret.includes(":") ? secret : `sinch:${secret}`
 	return {
-		body: JSON.stringify(payload),
+		body,
 		headers: {
 			"content-type": "application/json",
 			authorization: `Basic ${btoa(credentials)}`,
