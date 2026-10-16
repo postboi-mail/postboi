@@ -87,13 +87,17 @@ describe("an idempotency store", () => {
 
 	it("refuses a repeat while the first is still in flight", async () => {
 		let finish: (value: unknown) => void = () => {}
-		vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise((resolve) => (finish = resolve))))
+		const fetch = vi.fn().mockReturnValue(new Promise((resolve) => (finish = resolve)))
+		vi.stubGlobal("fetch", fetch)
 		const text = twilio(memory_idempotency_store())
 		const first = text.send({ to, message: "hi", idempotency_key: "k" })
+		// Only once the first is on the wire has it certainly reserved the key.
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalled())
 		const second = await text.send({ to, message: "hi", idempotency_key: "k" }).catch((e) => e)
 		expect(second).toMatchObject({ code: "idempotency_in_progress", outcome_unknown: true })
 		finish(answer(201, { sid: "SM1", status: "queued" }))
 		await expect(first).resolves.toMatchObject({ id: "SM1" })
+		expect(fetch).toHaveBeenCalledTimes(1)
 	})
 
 	it("does nothing without a key, and forgets a key after its ttl", async () => {
