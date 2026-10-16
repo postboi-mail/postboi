@@ -322,6 +322,32 @@ const text = new Twilio({
 await text.send({ to: "+447788223344", message: "…" })
 ```
 
+## Sending once
+
+No SMS provider takes an idempotency key on a send, so on its own an `idempotency_key` does
+nothing: send it twice and two texts go. Give the channel a store and it means what it says:
+
+```typescript
+import { config, memory_idempotency_store } from "postboi"
+
+export default config({ sms: { idempotency: memory_idempotency_store() } })
+
+await sms({ to, message: "Your order has shipped", idempotency_key: "order:123:shipped" })
+```
+
+- **Sent**: the same key and message again returns the first result, and sends nothing.
+- **Refused** by the provider: the key is freed, so the same key can try again.
+- **Unknown** (a timeout or a 5xx): the key is held, because the text may be on its way. A
+  repeat throws `idempotency_unknown` with `outcome_unknown`; check with the provider, then
+  use a new key. A repeat while the first is still sending throws `idempotency_in_progress`.
+- **The same key for a different message** throws `IdempotencyConflictError` and sends
+  nothing.
+
+`memory_idempotency_store()` protects one process for a day (`ttl_ms` to change it). For
+several instances, implement `IdempotencyStore` over your database: `reserve` has to be one
+atomic insert-if-absent. A record names its message by a hash, and keeps the first result
+to answer a repeat with.
+
 ## Failing over
 
 Name more than one provider and `sms()` tries them in order:
