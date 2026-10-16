@@ -1105,7 +1105,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			})
 			if (!response.ok) {
 				const data = await this.read_json(response)
-				const error = this.error_for(response, data, "/exports/download")
+				const error = this.error_for(response, data, "/exports/download", "GET")
 				if (error) throw error
 			}
 			const bytes = new Uint8Array(await response.arrayBuffer())

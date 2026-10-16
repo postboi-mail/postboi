@@ -11,6 +11,7 @@ import Brevo from "$library/brevo.js"
 import Mailjet from "$library/mailjet.js"
 import ElasticEmail from "$library/elasticemail.js"
 import Mock from "$library/mock.js"
+import Lettermint from "$library/lettermint.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -308,3 +309,41 @@ async function _type_inference_guards() {
 		body: "{name}",
 	})
 }
+
+describe("Resend batch idempotency", () => {
+	it("sends the batch's key on the one request, and retries a 5xx with it", async () => {
+		fetch
+			.mockResolvedValueOnce(respond({ ok: false, status: 503 }))
+			.mockResolvedValueOnce(respond({ json: { data: [{ id: "id-a" }, { id: "id-b" }] } }))
+		const mail = new Resend({ api_key: "re_key", retries: 1, retry_delay: 0 })
+		const results = await mail.send({ ...batch, idempotency_key: "order-42" })
+
+		expect(results.every((r) => r.ok)).toBe(true)
+		expect(fetch).toHaveBeenCalledTimes(2)
+		expect(sent_init().headers["Idempotency-Key"]).toBe("order-42")
+	})
+})
+
+describe("fan-out batch (no native endpoint)", () => {
+	it("gives each recipient its own idempotency key, so none is dropped as a replay", async () => {
+		fetch.mockImplementation(async () => respond({ json: { message_id: "m", status: "pending" } }))
+		const mail = new Lettermint({ api_key: "lm_key" })
+		const results = await mail.send({ ...batch, idempotency_key: "order-42" })
+
+		expect(results.every((r) => r.ok)).toBe(true)
+		const keys = fetch.mock.calls.map(
+			([, init]) =>
+				(init as RequestInit & { headers: Record<string, string> }).headers["Idempotency-Key"]
+		)
+		expect(keys).toEqual(["order-42:0", "order-42:1"])
+	})
+
+	it("sends no key when the batch has none", async () => {
+		fetch.mockImplementation(async () => respond({ json: { message_id: "m", status: "pending" } }))
+		await new Lettermint({ api_key: "lm_key" }).send(batch)
+		for (const [, init] of fetch.mock.calls)
+			expect(
+				(init as RequestInit & { headers: Record<string, string> }).headers["Idempotency-Key"]
+			).toBeUndefined()
+	})
+})

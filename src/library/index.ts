@@ -1054,7 +1054,18 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 		})
 
 		// No native endpoint → existing fan-out gives full hooks/retries (and mock support).
-		if (!this.build_batch_request) return this.send_batch(expanded)
+		// Each request is its own message there, so each needs its own key: one key names one
+		// message, and a provider that deduplicates on it would answer every recipient after
+		// the first as a replay of the first, and deliver nothing to them. The suffix is the
+		// one the Postboi provider's native batch uses, so a retried batch replays item by item.
+		if (!this.build_batch_request) {
+			const key = base.idempotency_key
+			return this.send_batch(
+				key
+					? expanded.map((message, index) => ({ ...message, idempotency_key: `${key}:${index}` }))
+					: expanded
+			)
+		}
 
 		// Native batch: prepare + run before.send per recipient, then one request for survivors.
 		const template = await this.prepare_send(base)
