@@ -169,9 +169,9 @@ export type SmsProviderOptions = TransportOptions<PreparedSms> & {
 	/**
 	 * Mask phone numbers in what leaves a send for somewhere else: a thrown error's message,
 	 * stack and `raw`, and the message and response `after.send` and `on.error` are shown.
-	 * `+447700900123` becomes `+4*********23`. Off by default; `sms.redact` in the config or
-	 * `POSTBOI_SMS_REDACT=1` turns it on for every SMS provider. The text that is sent, and
-	 * `before.send`, are never touched.
+	 * `+447700900123` becomes `+4*********23`. On by default; `redact: false` here,
+	 * `sms.redact: false` in the config or `POSTBOI_SMS_REDACT=0` turns it off. The text that
+	 * is sent, and `before.send`, are never touched.
 	 */
 	redact?: boolean
 	/**
