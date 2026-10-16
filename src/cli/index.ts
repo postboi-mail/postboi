@@ -2074,7 +2074,7 @@ async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = fals
 				{
 					label: "SMS",
 					value: "sms",
-					hint: "The SMS Works, PureSMS, Twilio, Telnyx, Vonage, Amazon SNS",
+					hint: "The SMS Works, PureSMS, Twilio, Telnyx, Vonage, Plivo, Sinch, Bandwidth, Amazon SNS",
 				},
 				{
 					label: "Push notifications",

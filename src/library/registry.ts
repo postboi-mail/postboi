@@ -1073,6 +1073,95 @@ export const SMS_PROVIDERS = [
 		],
 	},
 	{
+		key: "plivo",
+		name: "Plivo",
+		import: "postboi/plivo",
+		class: "Plivo",
+		url: "https://console.plivo.com/dashboard/",
+		regions: ["global"],
+		note: "Global, with MMS in the US and Canada and Powerpack number pools",
+		fields: [
+			// The Plivo SDK's own zero-argument defaults, set by its Voice users too.
+			{ env: "PLIVO_AUTH_ID", arg: "auth_id", label: "Auth ID", secret: true, ambient: true },
+			{
+				env: "PLIVO_AUTH_TOKEN",
+				arg: "auth_token",
+				label: "Auth token",
+				secret: true,
+				ambient: true,
+			},
+			{
+				env: "PLIVO_POWERPACK_UUID",
+				arg: "powerpack_uuid",
+				label: "Powerpack UUID (optional; sends from its number pool instead of a from)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "sinch",
+		name: "Sinch",
+		import: "postboi/sinch",
+		class: "Sinch",
+		url: "https://dashboard.sinch.com/sms/api/rest",
+		regions: ["global"],
+		note: "Global, a carrier-grade route, with scheduling and batches of up to 1000",
+		fields: [
+			{ env: "SINCH_SERVICE_PLAN_ID", arg: "service_plan_id", label: "Service plan ID" },
+			{ env: "SINCH_API_TOKEN", arg: "api_token", label: "API token", secret: true },
+			{
+				env: "SINCH_REGION",
+				arg: "region",
+				label: "Region (optional; us, eu, au, br or ca)",
+				default: "",
+			},
+			{
+				env: "SINCH_CALLBACK_URL",
+				arg: "callback_url",
+				label: "Callback URL (optional; where Sinch posts delivery reports)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "bandwidth",
+		name: "Bandwidth",
+		import: "postboi/bandwidth",
+		class: "Bandwidth",
+		url: "https://app.bandwidth.com",
+		regions: ["US"],
+		note: "US carrier-owned network, with MMS",
+		fields: [
+			// Account and API user are shared with Bandwidth's Voice users; the messaging
+			// application is what says a text is meant.
+			{
+				env: "BANDWIDTH_ACCOUNT_ID",
+				arg: "account_id",
+				label: "Account ID",
+				ambient: true,
+			},
+			{
+				env: "BANDWIDTH_USERNAME",
+				arg: "username",
+				label: "API username",
+				secret: true,
+				ambient: true,
+			},
+			{
+				env: "BANDWIDTH_PASSWORD",
+				arg: "password",
+				label: "API password",
+				secret: true,
+				ambient: true,
+			},
+			{
+				env: "BANDWIDTH_MESSAGING_APPLICATION_ID",
+				arg: "application_id",
+				label: "Messaging application ID",
+			},
+		],
+	},
+	{
 		key: "sns",
 		name: "Amazon SNS",
 		import: "postboi/sns",
