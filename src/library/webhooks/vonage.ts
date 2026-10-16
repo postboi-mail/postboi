@@ -47,6 +47,12 @@ const TYPES: Record<string, WebhookEventType> = {
 	undeliverable: "failed",
 }
 
+/** Vonage's 1210, "Anti-Spam Rejection": a carrier blocked the sender or the content. */
+function filtered(payload: Payload): boolean {
+	const fragment = payload.error?.type?.split("#")[1]
+	return (fragment ?? String(payload.error?.title ?? "")) === "1210"
+}
+
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
@@ -156,7 +162,10 @@ const adapter: WebhookAdapter = {
 			message_id: payload.message_uuid,
 			timestamp,
 			tags: payload.client_ref ? [payload.client_ref] : undefined,
-			bounce: type === "failed" ? { category: "unknown", detail } : undefined,
+			bounce:
+				type === "failed"
+					? { category: filtered(payload) ? "filtered" : "unknown", detail }
+					: undefined,
 			raw: payload,
 		}
 		return [event]

@@ -624,3 +624,87 @@ describe("receive — bandwidth (Basic credentials on the application)", () => {
 		).rejects.toBeInstanceOf(WebhookVerificationError)
 	})
 })
+
+describe("dedupe_key and filtered texts", () => {
+	const post = (body: string, type = "application/json") =>
+		new Request("https://example.com/hooks", {
+			method: "POST",
+			headers: { "content-type": type },
+			body,
+		})
+
+	it("gives a redelivery the same key, and a different event a different one", async () => {
+		const a = await mock_request({ provider: "plivo", type: "delivered", secret: "tok" })
+		const b = await mock_request({ provider: "plivo", type: "delivered", secret: "tok" })
+		const c = await mock_request({ provider: "plivo", type: "sent", secret: "tok" })
+		const [first] = await receive(a.request, { provider: "plivo", secret: "tok" })
+		const [again] = await receive(b.request, { provider: "plivo", secret: "tok" })
+		const [other] = await receive(c.request, { provider: "plivo", secret: "tok" })
+		expect(first.dedupe_key).toBe(
+			"plivo:db3ce55a-7f1d-11e1-8ea7-1231380bc196:delivered:+15557770006"
+		)
+		expect(again.dedupe_key).toBe(first.dedupe_key)
+		expect(other.dedupe_key).not.toBe(first.dedupe_key)
+	})
+
+	it("tells one recipient of a batch from another", async () => {
+		const batch = post(
+			JSON.stringify({
+				type: "delivery_report_sms",
+				batch_id: "b1",
+				statuses: [{ code: 0, status: "Delivered", recipients: ["447700900001", "447700900002"] }],
+			})
+		)
+		const events = await receive(batch, { provider: "sinch", verify: false })
+		expect(new Set(events.map((e) => e.dedupe_key)).size).toBe(2)
+	})
+
+	it("calls a carrier's spam block filtered, on Twilio, Telnyx and Vonage", async () => {
+		const twilio = post(
+			new URLSearchParams({
+				MessageSid: "SM1",
+				MessageStatus: "undelivered",
+				ErrorCode: "30007",
+				To: "+15557770006",
+			}).toString(),
+			"application/x-www-form-urlencoded"
+		)
+		expect((await receive(twilio, { provider: "twilio", verify: false }))[0].bounce).toEqual({
+			category: "filtered",
+			detail: "30007",
+		})
+		const telnyx = post(
+			JSON.stringify({
+				data: {
+					event_type: "message.finalized",
+					payload: {
+						id: "m1",
+						to: [{ phone_number: "+15557770006", status: "delivery_failed" }],
+						errors: [{ code: "40002", title: "Blocked as spam (temporary)" }],
+					},
+				},
+			})
+		)
+		expect((await receive(telnyx, { provider: "telnyx", verify: false }))[0].bounce).toMatchObject({
+			category: "filtered",
+		})
+		const vonage = post(
+			JSON.stringify({
+				message_uuid: "u1",
+				to: "447700900123",
+				status: "rejected",
+				error: { type: "https://developer.vonage.com/api-errors/messages#1210", title: 1210 },
+			})
+		)
+		expect((await receive(vonage, { provider: "vonage", verify: false }))[0].bounce).toMatchObject({
+			category: "filtered",
+		})
+		// Any other failure is still unknown.
+		const other = await mock_request({ provider: "vonage", type: "failed", secret: "s" })
+		expect(
+			(await receive(other.request, { provider: "vonage", secret: "s" }))[0].bounce
+		).toMatchObject({
+			category: "unknown",
+		})
+	})
+})

@@ -25,7 +25,7 @@ import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
 import type { ProviderField, ProviderKey } from "../registry.js"
 import { ensure_env_loaded, read_env } from "../env.js"
-import { resolve_key, type WebhookEvent, type WebhookEventType } from "./index.js"
+import { resolve_key, with_dedupe_keys, type WebhookEvent, type WebhookEventType } from "./index.js"
 
 /** What an adapter's poll sees: resolved options, the previous cursor, a soft cap. */
 export interface PollContext {
@@ -211,11 +211,12 @@ export async function poll(options: PollOptions = {}): Promise<PollResult> {
 			? options.provider
 			: await poll_adapter_for(options.provider ?? (await resolve_key()))
 
-	return adapter.poll({
+	const result = await adapter.poll({
 		options: await resolve_options(adapter, options.options),
 		cursor: options.cursor,
 		limit: options.limit,
 	})
+	return { ...result, events: with_dedupe_keys(result.events) }
 }
 
 /** Parse a JSON cursor an adapter previously returned, or throw `invalid_cursor`. */
