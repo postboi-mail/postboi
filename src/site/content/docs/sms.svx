@@ -306,7 +306,7 @@ schedules, and the first of a send's `tags` rides along as Sinch's `client_refer
 message where everyone sees everyone, so a send carries one recipient. Bandwidth documents no
 limit on how long a text is tried, so `validity` is refused there; pass
 `provider_options: { expiration }` to set it yourself. Plivo and Bandwidth can't schedule.
-Receipts from these three aren't read by `receive()` yet; point them at your own handler.
+Their receipts and replies arrive at `receive()` too; see [delivery receipts](#delivery-receipts).
 
 Construct one directly instead of using the environment, exactly like an email provider:
 
@@ -458,6 +458,17 @@ normalized [webhook events](/webhooks#text-messages), with `channel: "sms"` and 
   `receive()` with `{ provider: "vonage" }`, and set `VONAGE_WEBHOOK_SECRET` to the
   signature secret from the dashboard's settings. The token's `payload_hash` ties it to the
   body as delivered.
+- **Plivo signs with its V2 signature.** Point the Message URL (or a send's `url`) at
+  `receive()` with `{ provider: "plivo" }`. It's verified with `PLIVO_AUTH_TOKEN`, or
+  `PLIVO_WEBHOOK_SECRET` if you'd rather set it apart. Plivo signs the URL and a nonce but
+  not the body, and nothing is timestamped, so serve it over HTTPS and deduplicate. Behind a
+  proxy, pass the URL Plivo calls as `receive(request, { url })`.
+- **Sinch and Bandwidth don't sign**, so their callbacks are checked against the Basic
+  credentials you give them. Put a username and password in your Sinch callback URL
+  (`https://user:pass@example.com/hooks/sinch`), or on your Bandwidth application's
+  callback, and set the same `username:password` as `SINCH_WEBHOOK_SECRET` or
+  `BANDWIDTH_WEBHOOK_SECRET`. `message_id` is the id the send answered with: the batch id
+  on Sinch, the message id on Bandwidth.
 - **PureSMS pushes signed receipts.** Add your endpoint under **Settings → Webhooks** with
   a secret, and set the same value as `PURESMS_WEBHOOK_SECRET`. Each request is signed with
   HMAC-SHA256 over its timestamp and body. A receipt doesn't name the recipient's number,

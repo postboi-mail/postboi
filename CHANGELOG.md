@@ -13,6 +13,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 ### Added
 
 - Every SMS send now resolves with the same four fields, whichever provider sent it: `id` (the provider's id, the one its receipts name), `ids` (one per recipient where the provider makes several), `provider` and `delivery` (`queued`, `scheduled`, `sent`, `delivered` or `unknown`). The provider's own fields are still there beside them, and `sms()` is typed to return `SmsReceipt`, so a failover chain or a change of provider reads the result the same way.
+- `receive()` reads Plivo, Sinch and Bandwidth: delivery receipts and inbound texts, with STOP, START and HELP as everywhere else. Plivo is checked with its V2 signature against `PLIVO_AUTH_TOKEN` (or `PLIVO_WEBHOOK_SECRET`). Sinch and Bandwidth don't sign their callbacks, so they're checked against the Basic credentials you set on their side, given as `SINCH_WEBHOOK_SECRET` or `BANDWIDTH_WEBHOOK_SECRET` (`username:password`).
 
 ## 0.69.0
 
