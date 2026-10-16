@@ -15,11 +15,9 @@
  * source addresses are a second check a deployment can add in front.
  *
  * One handler takes both webhooks. A delivery report is a message with a `status`. An
- * inbound reply — a reply-number or keyword webhook — is `messagetype: "incoming"`, and
- * it is read for one thing: a reply that is an opt-out keyword (see `is_opt_out`) is an
- * `unsubscribed` event for the number that sent it. Everything else somebody texts
- * back stays theirs to read; a conversation is not a delivery event, which is the same
- * line the Twilio poll draws.
+ * inbound reply — a reply-number or keyword webhook — is `messagetype: "incoming"`: STOP
+ * is `unsubscribed` and START `resubscribed` for the number that sent it, and anything
+ * else, HELP included, is `received` with their words (see `inbound_event`).
  */
 import { PostboiError } from "../index.js"
 import type {
@@ -29,8 +27,7 @@ import type {
 	WebhookEvent,
 	WebhookEventType,
 } from "./index.js"
-import { parse_json, to_date, shared_secret_verify } from "./shared.js"
-import { is_opt_out } from "../sms/opt_out.js"
+import { parse_json, to_date, shared_secret_verify, inbound_event } from "./shared.js"
 import { to_e164 } from "../sms/phone.js"
 
 /** Why a message didn't (or hasn't yet) arrived — `permanent` is the classification. */
@@ -131,20 +128,19 @@ function bounce(reason: FailureReason | null | undefined): BounceDetail {
 }
 
 /**
- * One inbound reply as an event — `unsubscribed` for an opt-out keyword, nothing for
- * anything else. The number is the *sender's*: they are the one opting out. The id is
- * the reply's own, as the Twilio poll does; `outboundmessageid` stays in `raw`.
+ * One inbound reply as an event. The number is the *sender's*, and a `received` carries
+ * the send they replied to when The SMS Works can tell (`outboundmessageid`).
  */
-function normalize_inbound(payload: InboundMessage): WebhookEvent | undefined {
-	if (!is_opt_out(payload.content)) return undefined
-	return {
-		type: "unsubscribed",
+function normalize_inbound(payload: InboundMessage): WebhookEvent {
+	return inbound_event({
 		provider: "smsworks",
 		channel: "sms",
 		phone: e164(payload.from),
+		text: payload.content,
 		message_id: payload.messageid,
+		replied_to: payload.outboundmessageid || undefined,
 		raw: payload,
-	}
+	})
 }
 
 /** One delivery report as an event — or nothing, for a status we don't emit. */
@@ -212,6 +208,13 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, url }) => {
 		modified: now,
 		tag: "otp",
 	}
+	const incoming: Payload = {
+		messagetype: "incoming",
+		messageid: "328827210622192878142",
+		from: "447700900123",
+		to: "447700900456",
+		outboundmessageid: report.messageid,
+	}
 	const samples: Partial<Record<WebhookEventType, Payload>> = {
 		sent: { ...report, status: "SENT" },
 		delivered: { ...report, status: "DELIVERED" },
@@ -233,16 +236,11 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, url }) => {
 				permanent: true,
 			},
 		},
-		// The one inbound sample: the person at +44 7700 900123 texting STOP back to the
-		// reply number — so the addresses swap around, and the number is theirs.
-		unsubscribed: {
-			messagetype: "incoming",
-			messageid: "328827210622192878142",
-			content: "STOP",
-			from: "447700900123",
-			to: "447700900456",
-			outboundmessageid: report.messageid,
-		},
+		// The inbound samples: the person at +44 7700 900123 texting back to the reply
+		// number — so the addresses swap around, and the number is theirs.
+		unsubscribed: { ...incoming, content: "STOP" },
+		resubscribed: { ...incoming, content: "START" },
+		received: { ...incoming, content: "Thanks, see you then" },
 	}
 	const target = new URL(url)
 	target.searchParams.set("token", secret)
