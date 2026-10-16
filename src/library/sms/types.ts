@@ -5,6 +5,7 @@
  * {@link PreparedSms} without pulling the SMS provider into the email module graph.
  */
 import type { Duration, TransportOptions } from "../transport.js"
+import type { IdempotencyStore } from "../idempotency.js"
 
 /**
  * A phone number, in any of the shapes the public API accepts.
@@ -44,9 +45,10 @@ export interface SmsOptions {
 	/** Tags for analytics and filtering, where the provider supports them. */
 	tags?: Array<string>
 	/**
-	 * Idempotency key. None of the SMS providers here documents one for sending (Twilio,
-	 * SNS, The SMS Works and PureSMS alike), so it is not forwarded and does not make a
-	 * retry safe: a send that fails with `outcome_unknown` may already have gone out.
+	 * Idempotency key. None of the SMS providers here takes one on a send, so it isn't
+	 * forwarded, and on its own it doesn't make a retry safe. With an idempotency store
+	 * (`sms.idempotency`), a key that was sent returns the first result instead of sending
+	 * again, and one whose outcome is unknown refuses rather than risk a second copy.
 	 */
 	idempotency_key?: string
 	/** Override the default country for national-format numbers in this send. */
@@ -158,6 +160,12 @@ export type SmsProviderOptions = TransportOptions<PreparedSms> & {
 	 * `before.send`, are never touched.
 	 */
 	redact?: boolean
+	/**
+	 * Where sent `idempotency_key`s are kept, so a key sent once is sent once: a repeat
+	 * returns the first result. `sms.idempotency` in the config sets it for every SMS
+	 * provider. See `memory_idempotency_store()`.
+	 */
+	idempotency?: IdempotencyStore
 }
 
 /** Options for SMS providers that authenticate with a single API key or token. */

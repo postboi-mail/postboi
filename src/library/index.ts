@@ -91,6 +91,13 @@ export {
 	type ProviderError,
 	type RejectionReason,
 } from "./errors.js"
+// Sending a key once: the store a channel keeps its idempotency keys in.
+export {
+	memory_idempotency_store,
+	IdempotencyConflictError,
+	type IdempotencyStore,
+	type IdempotencyRecord,
+} from "./idempotency.js"
 // What a channel mock's `fail` option scripts: a refusal with a reason, or an unknown outcome.
 export type { MockFailure } from "./mock_recorder.js"
 // The channel-agnostic base and the types that go with it. `Transport` is exported so a

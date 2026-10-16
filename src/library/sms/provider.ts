@@ -9,6 +9,7 @@ import { PostboiError, SkipSendError, type Channel } from "../errors.js"
 import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
 import { ensure_env_loaded, read_env } from "../env.js"
+import { send_once, type IdempotencyStore } from "../idempotency.js"
 import { gsm7_breakers, phone_e164, redact_deep, redact_phones, segments } from "./phone.js"
 import type {
 	Phone,
@@ -81,6 +82,7 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 	protected defaults: SmsDefaults
 
 	#redact?: boolean
+	#idempotency?: IdempotencyStore
 
 	constructor(options: SmsProviderOptions = {}) {
 		super(options)
@@ -88,6 +90,7 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 		const s = get_config()
 		this.defaults = { ...s.sms?.default, ...options.default }
 		this.#redact = options.redact
+		this.#idempotency = options.idempotency
 	}
 
 	/**
@@ -147,10 +150,35 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 	}
 
 	/**
-	 * A send with `scheduled_at` that the provider calls queued is held, not on its way, so
-	 * it reads `scheduled`; the provider's own fields are left as it gave them.
+	 * One text, sent once per `idempotency_key` when a store is set (see
+	 * {@link IdempotencyStore}): a repeat of a key already sent returns the first result.
 	 */
 	protected override async deliver(message: PreparedSms): Promise<TResponse> {
+		return send_once({
+			store: this.#idempotency ?? get_config().sms?.idempotency,
+			key: message.idempotency_key,
+			// What makes it the same message; the store keeps a hash of it, not the text.
+			message: {
+				to: message.to,
+				from: message.from,
+				message: message.message,
+				media: message.media,
+				scheduled_at: message.scheduled_at,
+				validity: message.validity,
+				provider_options: message.provider_options,
+			},
+			provider: this.provider,
+			channel: "sms",
+			send: () => this.transmit(message),
+		})
+	}
+
+	/**
+	 * The request itself. A send with `scheduled_at` that the provider calls queued is held,
+	 * not on its way, so it reads `scheduled`; the provider's own fields are left as it gave
+	 * them. The mock overrides this, so it keeps a store's promise too.
+	 */
+	protected async transmit(message: PreparedSms): Promise<TResponse> {
 		const response = await super.deliver(message)
 		if (message.scheduled_at && response.delivery === "queued") response.delivery = "scheduled"
 		return response

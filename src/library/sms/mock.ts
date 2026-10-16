@@ -82,9 +82,10 @@ export default class MockSms extends SmsProvider<SendResponse> {
 		this.#recorder.clear()
 	}
 
-	// Capture instead of sending. Overriding `deliver` (not `send`) keeps the base class's
-	// overload handling, hooks and batching — the parts that would otherwise drift.
-	protected override async deliver(message: PreparedSms): Promise<SendResponse> {
+	// Capture instead of sending. Overriding `transmit` (not `send` or `deliver`) keeps the
+	// base class's overload handling, hooks, batching and idempotency store, the parts that
+	// would otherwise drift.
+	protected override async transmit(message: PreparedSms): Promise<SendResponse> {
 		const captured = this.#recorder.capture({
 			to: message.to,
 			from: message.from,
