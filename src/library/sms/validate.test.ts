@@ -3,6 +3,8 @@ import { reset_config } from "../config.js"
 import Twilio from "./twilio.js"
 import Vonage from "./vonage.js"
 import SmsWorks from "./smsworks.js"
+import Bandwidth from "./bandwidth.js"
+import { sender_kind } from "./provider.js"
 import { sms } from "./send.js"
 
 const fetch = vi.fn()
@@ -31,6 +33,63 @@ afterEach(() => {
 const twilio = (options = {}) =>
 	new Twilio({ account_sid: "AC1", auth_token: "t", default: { from: "+15550001111" }, ...options })
 
+describe("sender kinds", () => {
+	it("reads what kind of sender a from is", () => {
+		expect(sender_kind("+15550001111")).toBe("phone_number")
+		expect(sender_kind("447700900123")).toBe("phone_number")
+		expect(sender_kind("12345")).toBe("short_code")
+		expect(sender_kind("ACME")).toBe("alphanumeric")
+		expect(sender_kind("12")).toBeUndefined()
+	})
+
+	it("says when a provider doesn't send from that kind, without refusing the send", async () => {
+		const bandwidth = new Bandwidth({
+			account_id: "1",
+			username: "u",
+			password: "p",
+			application_id: "a",
+			default: { from: "ACME" },
+		})
+		const check = await bandwidth.validate({ to: "+15557770006", message: "hi" })
+		expect(check.sender).toBe("alphanumeric")
+		expect(check.issues).toEqual([
+			{
+				code: "sender_not_supported",
+				message:
+					'bandwidth doesn\'t send from an alphanumeric sender ID like "ACME". It sends from a phone number or a short code.',
+			},
+		])
+		const vonage = new Vonage({ api_key: "k", api_secret: "s", default: { from: "12345" } })
+		expect((await vonage.validate({ to: "+447700900123", message: "hi" })).issues).toMatchObject([
+			{ code: "sender_not_supported" },
+		])
+	})
+
+	it("names the providers in a chain that would take the text", async () => {
+		process.env.POSTBOI_SMS_PROVIDER = "bandwidth,twilio"
+		process.env.BANDWIDTH_ACCOUNT_ID = "1"
+		process.env.BANDWIDTH_USERNAME = "u"
+		process.env.BANDWIDTH_PASSWORD = "p"
+		process.env.BANDWIDTH_MESSAGING_APPLICATION_ID = "a"
+		process.env.TWILIO_ACCOUNT_SID = "AC1"
+		process.env.TWILIO_AUTH_TOKEN = "t"
+		try {
+			const check = await sms.validate({ to: "+15557770006", from: "ACME", message: "hi" })
+			expect(check.provider).toBe("bandwidth")
+			expect(check.ok).toBe(false)
+			expect(check.candidates).toEqual(["twilio"])
+		} finally {
+			for (const key of [
+				"BANDWIDTH_ACCOUNT_ID",
+				"BANDWIDTH_USERNAME",
+				"BANDWIDTH_PASSWORD",
+				"BANDWIDTH_MESSAGING_APPLICATION_ID",
+			])
+				delete process.env[key]
+		}
+	})
+})
+
 describe("validate()", () => {
 	it("says what a good text costs, and sends nothing", async () => {
 		const check = await twilio().validate({
@@ -46,6 +105,7 @@ describe("validate()", () => {
 			segments: 1,
 			units: 17,
 			ucs2_characters: [],
+			sender: "phone_number",
 			issues: [],
 		})
 		expect(fetch).not.toHaveBeenCalled()

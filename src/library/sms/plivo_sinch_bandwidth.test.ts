@@ -62,7 +62,14 @@ describe("plivo", () => {
 			to: ["+447700900001", "+447700900002"],
 			message: "Your code is 4291",
 		})
-		expect(result).toEqual({ message_uuid: ["u1", "u2"], api_id: "a" })
+		expect(result).toEqual({
+			id: "u1",
+			ids: ["u1", "u2"],
+			provider: "plivo",
+			delivery: "queued",
+			message_uuid: ["u1", "u2"],
+			api_id: "a",
+		})
 		const { url, headers, body } = sent(fetch)
 		expect(url).toBe("https://api.plivo.com/v1/Account/MA1/Message/")
 		expect(headers.Authorization).toBe(`Basic ${btoa("MA1:tok")}`)
@@ -145,7 +152,12 @@ describe("sinch", () => {
 			message: "Your code is 4291",
 			tags: ["otp"],
 		})
-		expect(result).toEqual({ id: "batch-1" })
+		expect(result).toEqual({
+			id: "batch-1",
+			ids: ["batch-1"],
+			provider: "sinch",
+			delivery: "queued",
+		})
 		const { url, headers, body } = sent(fetch)
 		expect(url).toBe("https://eu.sms.api.sinch.com/xms/v1/plan/batches")
 		expect(headers.Authorization).toBe("Bearer tok")
@@ -227,7 +239,13 @@ describe("bandwidth", () => {
 			media: [image],
 			tags: ["otp"],
 		})
-		expect(result).toEqual({ id: "m-1", segment_count: 1 })
+		expect(result).toEqual({
+			id: "m-1",
+			ids: ["m-1"],
+			provider: "bandwidth",
+			delivery: "queued",
+			segment_count: 1,
+		})
 		const { url, headers, body } = sent(fetch)
 		expect(url).toBe("https://messaging.bandwidth.com/api/v2/users/9900/messages")
 		expect(headers.Authorization).toBe(`Basic ${btoa("user:pass")}`)

@@ -11,13 +11,13 @@ import {
 	type ChannelResolution,
 	type ChannelSend,
 } from "../channels.js"
-import type { SmsCheck } from "./types.js"
+import type { SmsCheck, SmsReceipt } from "./types.js"
 import { read_env } from "../env.js"
 
-type SmsConstructor = new (options: Record<string, unknown>) => SmsProvider<unknown>
+type SmsConstructor = new (options: Record<string, unknown>) => SmsProvider<SmsReceipt>
 
 /** Lazy loaders keyed by `POSTBOI_SMS_PROVIDER` — one chunk per provider. */
-const LOADERS: ChannelResolution<SmsProvider<unknown>>["loaders"] = {
+const LOADERS: ChannelResolution<SmsProvider<SmsReceipt>>["loaders"] = {
 	smsworks: () => import("./smsworks.js").then((m) => m.default as unknown as SmsConstructor),
 	puresms: () => import("./puresms.js").then((m) => m.default as unknown as SmsConstructor),
 	twilio: () => import("./twilio.js").then((m) => m.default as unknown as SmsConstructor),
@@ -43,7 +43,7 @@ export function sms_env_defaults(): SmsDefaults {
 	return out
 }
 
-const RESOLUTION: ChannelResolution<SmsProvider<unknown>> = {
+const RESOLUTION: ChannelResolution<SmsProvider<SmsReceipt>> = {
 	channel: "sms",
 	env_key: "POSTBOI_SMS_PROVIDER",
 	loaders: LOADERS,
@@ -72,7 +72,9 @@ const RESOLUTION: ChannelResolution<SmsProvider<unknown>> = {
 async function validate(options: SmsOptions): Promise<SmsCheck> {
 	const providers = await resolve_channel_chain(RESOLUTION)
 	const checks = await Promise.all(providers.map((provider) => provider.validate(options)))
-	return checks.length > 1 ? { ...checks[0], chain: checks } : checks[0]
+	if (checks.length === 1) return checks[0]
+	const candidates = checks.filter((check) => check.ok).map((check) => check.provider)
+	return { ...checks[0], chain: checks, candidates }
 }
 
 /**
@@ -88,7 +90,5 @@ async function validate(options: SmsOptions): Promise<SmsCheck> {
  * const check = await sms.validate({ to: "07788 223344", message: "Hi 👋" }) // no send
  * ```
  */
-export const sms: ChannelSend<SmsOptions> & { validate: typeof validate } = Object.assign(
-	channel_send<SmsOptions>(RESOLUTION),
-	{ validate }
-)
+export const sms: ChannelSend<SmsOptions, SmsReceipt> & { validate: typeof validate } =
+	Object.assign(channel_send<SmsOptions, SmsReceipt>(RESOLUTION), { validate })

@@ -166,7 +166,13 @@ describe("a provider chain", () => {
 			[respond(200, { id: "357551956102758401" })]
 		)
 		const result = await sms({ to: "+447700900123", message: "hi" })
-		expect(result).toEqual({ id: "357551956102758401", kind: "message" })
+		expect(result).toEqual({
+			id: "357551956102758401",
+			ids: ["357551956102758401"],
+			provider: "puresms",
+			delivery: "queued",
+			kind: "message",
+		})
 		expect(sent.urls()).toEqual([TWILIO, PURESMS])
 	})
 

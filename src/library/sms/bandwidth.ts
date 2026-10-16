@@ -1,4 +1,10 @@
-import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsProviderOptions,
+	type SmsSenderKind,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
 
@@ -27,7 +33,7 @@ export interface SendParams {
 	[option: string]: unknown
 }
 
-type SendResponse = { id: string; segment_count?: number }
+type SendResponse = { id: string; segment_count?: number } & SmsReceipt
 
 /**
  * Bandwidth — https://dev.bandwidth.com/docs/messaging/
@@ -50,6 +56,11 @@ type SendResponse = { id: string; segment_count?: number }
  */
 export default class Bandwidth extends SmsProvider<SendResponse> {
 	protected readonly provider = "bandwidth"
+	// US numbers and short codes; Bandwidth has no alphanumeric sender IDs.
+	protected override readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"short_code",
+	]
 	protected override readonly single_recipient = true
 	protected override readonly max_media = 10
 	protected override readonly reserved_options = [
@@ -100,7 +111,7 @@ export default class Bandwidth extends SmsProvider<SendResponse> {
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {
 		const d = data as { id?: string; segmentCount?: number } | null
-		return { id: d?.id ?? "", segment_count: d?.segmentCount }
+		return { ...this.receipt([d?.id]), segment_count: d?.segmentCount }
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {

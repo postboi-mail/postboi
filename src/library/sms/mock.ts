@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsProviderOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError } from "../errors.js"
 import { MockRecorder, type MockRecorderOptions } from "../mock_recorder.js"
@@ -27,7 +32,7 @@ export interface SentSms {
 /** Options for the SMS mock constructor. */
 type Options = SmsProviderOptions & MockRecorderOptions<SentSms>
 
-type SendResponse = { id: string; message: SentSms }
+type SendResponse = { id: string; message: SentSms } & SmsReceipt
 
 /**
  * In-memory mock SMS provider. Runs the same normalization and validation as a real one —
@@ -77,10 +82,11 @@ export default class MockSms extends SmsProvider<SendResponse> {
 		this.#recorder.clear()
 	}
 
-	// Capture instead of sending. Overriding `deliver` (not `send`) keeps the base class's
-	// overload handling, hooks and batching — the parts that would otherwise drift.
-	protected override async deliver(message: PreparedSms): Promise<SendResponse> {
-		return this.#recorder.capture({
+	// Capture instead of sending. Overriding `transmit` (not `send` or `deliver`) keeps the
+	// base class's overload handling, hooks, batching and idempotency store, the parts that
+	// would otherwise drift.
+	protected override async transmit(message: PreparedSms): Promise<SendResponse> {
+		const captured = this.#recorder.capture({
 			to: message.to,
 			from: message.from,
 			message: message.message,
@@ -89,9 +95,11 @@ export default class MockSms extends SmsProvider<SendResponse> {
 			media: message.media,
 			validity: message.validity,
 		})
+		const receipt = this.receipt([captured.id], message.scheduled_at ? "scheduled" : "sent")
+		return { ...captured, ...receipt }
 	}
 
-	// Never reached — `deliver` is overridden and nothing calls through to the HTTP path.
+	// Never reached: `transmit` is overridden and nothing calls through to the HTTP path.
 	protected build_request(_message: PreparedSms): RequestSpec {
 		throw new PostboiError({
 			provider: "mock",

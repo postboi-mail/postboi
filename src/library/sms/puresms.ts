@@ -1,4 +1,10 @@
-import { SmsProvider, type PreparedSms, type SmsApiKeyOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsApiKeyOptions,
+	type SmsSenderKind,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
 
@@ -19,7 +25,7 @@ export interface SendParams {
 }
 
 /** `kind` says which endpoint `cancel` needs; `count` only comes back from a batch. */
-type SendResponse = { id: string; kind: "message" | "batch"; count?: number }
+type SendResponse = { id: string; kind: "message" | "batch"; count?: number } & SmsReceipt
 
 /**
  * PureSMS — https://puresms.uk/developers
@@ -37,6 +43,11 @@ type SendResponse = { id: string; kind: "message" | "batch"; count?: number }
  */
 export default class PureSms extends SmsProvider<SendResponse> {
 	protected readonly provider = "puresms"
+	// A UK number or an alphanumeric ID; no short codes.
+	protected override readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"alphanumeric",
+	]
 	// `sendAtUtc` sits on the message for a single send and on the batch for bulk, and
 	// `cancel` undoes either while it's still pending.
 	protected override readonly supports_scheduling = true
@@ -90,9 +101,10 @@ export default class PureSms extends SmsProvider<SendResponse> {
 		const d = data as Record<string, unknown> | null
 		// Ids are int64s serialised as strings; the bulk endpoint calls its one `batchId`.
 		if (d?.batchId !== undefined) {
-			return { id: String(d.batchId), kind: "batch", count: d.messageCount as number }
+			const receipt = this.receipt([String(d.batchId)])
+			return { ...receipt, kind: "batch", count: d.messageCount as number }
 		}
-		return { id: String(d?.id ?? ""), kind: "message" }
+		return { ...this.receipt([d?.id === undefined ? undefined : String(d.id)]), kind: "message" }
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {

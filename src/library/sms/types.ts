@@ -5,6 +5,7 @@
  * {@link PreparedSms} without pulling the SMS provider into the email module graph.
  */
 import type { Duration, TransportOptions } from "../transport.js"
+import type { IdempotencyStore } from "../idempotency.js"
 
 /**
  * A phone number, in any of the shapes the public API accepts.
@@ -44,9 +45,10 @@ export interface SmsOptions {
 	/** Tags for analytics and filtering, where the provider supports them. */
 	tags?: Array<string>
 	/**
-	 * Idempotency key. None of the SMS providers here documents one for sending (Twilio,
-	 * SNS, The SMS Works and PureSMS alike), so it is not forwarded and does not make a
-	 * retry safe: a send that fails with `outcome_unknown` may already have gone out.
+	 * Idempotency key. None of the SMS providers here takes one on a send, so it isn't
+	 * forwarded, and on its own it doesn't make a retry safe. With an idempotency store
+	 * (`sms.idempotency`), a key that was sent returns the first result instead of sending
+	 * again, and one whose outcome is unknown refuses rather than risk a second copy.
 	 */
 	idempotency_key?: string
 	/** Override the default country for national-format numbers in this send. */
@@ -89,6 +91,35 @@ export interface PreparedSms {
 	provider_options?: Record<string, unknown>
 }
 
+/**
+ * Where a text stood when the provider answered, in one vocabulary across every provider:
+ * `queued` (taken, not yet sent), `scheduled` (held for `scheduled_at`), `sent` (handed to
+ * the carrier) or `delivered` (the provider already knows it arrived, which is rare at send
+ * time). `unknown` where the provider's word doesn't map. What happens next arrives through
+ * a delivery receipt; this is only the answer to the send.
+ */
+export type SmsDelivery = "queued" | "scheduled" | "sent" | "delivered" | "unknown"
+
+/**
+ * What every SMS send resolves with, on top of the provider's own fields: the same few
+ * names whichever provider sent it, so a failover chain or a provider swap reads the id
+ * and the state the same way.
+ */
+export interface SmsReceipt {
+	/** The provider's id for the message, the one its receipts and webhooks name. */
+	id: string
+	/**
+	 * Every id the send produced, one per recipient where the provider makes several
+	 * (Plivo), otherwise just `id`. A batch-style provider (Sinch, PureSMS) gives one for
+	 * the whole send.
+	 */
+	ids: Array<string>
+	/** The provider that sent it: the key `POSTBOI_SMS_PROVIDER` names it by. */
+	provider: string
+	/** Where it stood when the provider answered. */
+	delivery: SmsDelivery
+}
+
 /** One problem {@link SmsCheck} found. `code` is the one a send would throw, where it would. */
 export type SmsIssue = { code: string; message: string }
 
@@ -113,9 +144,23 @@ export interface SmsCheck {
 	ucs2_characters: Array<string>
 	/** Every problem found, in the order a send would meet them. Empty when `ok`. */
 	issues: Array<SmsIssue>
+	/** What kind of sender `from` is, when there is one. */
+	sender?: SmsSenderKind
 	/** For a failover chain, the check against each provider in it, in order. */
 	chain?: Array<SmsCheck>
+	/**
+	 * For a failover chain, the providers in it that would take this text as it is, in
+	 * order: where it can go if the first refuses. Empty means none of them would.
+	 */
+	candidates?: Array<string>
 }
+
+/**
+ * What kind of sender a `from` is: a phone number (long code or toll-free, written with or
+ * without its `+`), a short code (3 to 8 digits), or an alphanumeric sender ID (letters,
+ * digits and spaces, at least one letter). Read from the string by `sender_kind()`.
+ */
+export type SmsSenderKind = "phone_number" | "short_code" | "alphanumeric"
 
 /** Constructor options shared by every SMS provider. */
 export type SmsProviderOptions = TransportOptions<PreparedSms> & {
@@ -129,6 +174,12 @@ export type SmsProviderOptions = TransportOptions<PreparedSms> & {
 	 * `before.send`, are never touched.
 	 */
 	redact?: boolean
+	/**
+	 * Where sent `idempotency_key`s are kept, so a key sent once is sent once: a repeat
+	 * returns the first result. `sms.idempotency` in the config sets it for every SMS
+	 * provider. See `memory_idempotency_store()`.
+	 */
+	idempotency?: IdempotencyStore
 }
 
 /** Options for SMS providers that authenticate with a single API key or token. */

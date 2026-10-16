@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsProviderOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
 import { sign_aws_request } from "../aws.js"
@@ -38,7 +43,7 @@ type Options = SmsProviderOptions & {
 	sms_type?: "Transactional" | "Promotional"
 }
 
-type SendResponse = { message_id: string }
+type SendResponse = { message_id: string } & SmsReceipt
 
 /**
  * Amazon SNS `Publish` — https://docs.aws.amazon.com/sns/latest/api/API_Publish.html
@@ -141,7 +146,8 @@ export default class SNS extends SmsProvider<SendResponse> {
 	protected parse_response(_response: Response, data: unknown): SendResponse {
 		// SNS answers in XML, which read_json hands back as a string.
 		const text = typeof data === "string" ? data : ""
-		return { message_id: text.match(/<MessageId>([^<]+)<\/MessageId>/)?.[1] ?? "" }
+		const message_id = text.match(/<MessageId>([^<]+)<\/MessageId>/)?.[1] ?? ""
+		return { message_id, ...this.receipt([message_id]) }
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {

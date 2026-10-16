@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsProviderOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
 import {
@@ -28,7 +33,7 @@ type Options = SmsProviderOptions & {
 	status_callback?: string
 }
 
-type SendResponse = TwilioSendResponse
+type SendResponse = TwilioSendResponse & SmsReceipt
 
 /**
  * Twilio — https://www.twilio.com/docs/messaging/api/message-resource
@@ -161,7 +166,8 @@ export default class Twilio extends SmsProvider<SendResponse> {
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {
-		return twilio_parse_response(data)
+		const twilio = twilio_parse_response(data)
+		return { ...twilio, ...this.receipt([twilio.sid], twilio.status) }
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {

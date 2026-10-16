@@ -3,6 +3,9 @@ import { cwd, exit } from "node:process"
 import { ensure_env_loaded, read_env } from "../library/env.js"
 import { provider_keys, SMS_PROVIDERS } from "../library/registry.js"
 import { sender_problem } from "../library/sms/provider.js"
+import { gsm7_breakers, segments } from "../library/sms/phone.js"
+import { PostboiError } from "../library/errors.js"
+import { load_config } from "../library/config.js"
 import { api, ApiCommandError } from "./api.js"
 import { cloud_base, fetch_domains, type PostboiDomain } from "./postboi.js"
 import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
@@ -593,12 +596,105 @@ export function print_checks(checks: Array<Check>): void {
 	}
 }
 
+/** The value after `--name`, or `--name=value`, if the flag was given one. */
+function flag(args: Array<string>, name: string): string | undefined {
+	const index = args.indexOf(`--${name}`)
+	if (index >= 0) {
+		const value = args[index + 1]
+		return value === undefined || value.startsWith("--") ? undefined : value
+	}
+	return args.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3)
+}
+
+/** What the text that `--sms-text` names costs: its encoding, its segments, and why. */
+export function sms_text_check(text: string): Check {
+	const cost = segments(text)
+	const breakers = cost.encoding === "ucs2" ? gsm7_breakers(text) : []
+	return {
+		name: "sms text",
+		level: cost.count > 1 ? "warn" : "ok",
+		detail: `${cost.count} segment${cost.count === 1 ? "" : "s"}, ${cost.encoding === "gsm7" ? "GSM-7" : "UCS-2"}, ${cost.units} units${breakers.length ? `, UCS-2 because of ${breakers.map((c) => JSON.stringify(c)).join(" ")}` : ""}`,
+		fix:
+			cost.count > 1 && breakers.length
+				? `without ${breakers.join("")} it would be GSM-7 and cost less`
+				: undefined,
+	}
+}
+
+/**
+ * `--sms-live`: send one real text, which costs money and reaches a handset, so only on
+ * three conditions. Nothing above failed; `--confirm-to` repeats `--to` exactly; and
+ * `--confirm-from` repeats the sender it will go from (`POSTBOI_SMS_FROM`, or "none" when
+ * the provider picks it). A typo in any of them sends nothing.
+ */
+export async function sms_live_check(
+	args: Array<string>,
+	failed: boolean,
+	send: (options: { to: string; message: string }) => Promise<unknown> = async (options) =>
+		(await import("../library/sms/send.js")).sms(options)
+): Promise<Check> {
+	const to = flag(args, "to")
+	// The sender a send resolves: the environment's, then the one postboi.config commits.
+	const from = read_env("POSTBOI_SMS_FROM") ?? (await load_config()).sms?.default?.from ?? "none"
+	const refuse = (detail: string, fix?: string): Check => ({
+		name: "sms live",
+		level: "fail",
+		detail,
+		fix,
+	})
+	if (failed) return refuse("not sent: fix the failures above first")
+	if (!to) return refuse("not sent: --sms-live needs --to <number>")
+	if (flag(args, "confirm-to") !== to) {
+		return refuse("not sent: --confirm-to has to repeat --to exactly", `--confirm-to ${to}`)
+	}
+	if (flag(args, "confirm-from") !== from) {
+		return refuse(
+			`not sent: --confirm-from has to repeat the sender it goes from, which is ${from}`,
+			`--confirm-from ${from}`
+		)
+	}
+	try {
+		const receipt = (await send({
+			to,
+			message: flag(args, "sms-text") ?? "A test text from postboi doctor.",
+		})) as { id?: string; provider?: string; delivery?: string }
+		// Development mode hands every text to the logging mock, so nothing reached a handset.
+		if (receipt.provider === "mock") {
+			return refuse(
+				"not sent: development mode logged it instead",
+				"set POSTBOI_SMS_DEV=send, or run with NODE_ENV other than development"
+			)
+		}
+		return {
+			name: "sms live",
+			level: "ok",
+			detail: `${receipt.provider ?? "sent"} took it: ${receipt.id ?? "no id"}, ${receipt.delivery ?? "queued"}. Whether it arrives comes later, in a delivery receipt`,
+		}
+	} catch (error) {
+		const e = error instanceof PostboiError ? error : undefined
+		return refuse(
+			`${e?.provider ?? "the provider"} ${e?.outcome_unknown ? "may or may not have sent it" : "refused it"}: ${error instanceof Error ? error.message : String(error)}`,
+			e?.outcome_unknown ? "check with the provider before sending again" : undefined
+		)
+	}
+}
+
 export async function doctor_command(args: Array<string>, dir = cwd()): Promise<number> {
 	// One read of the app's source for both checks that look at it.
 	const sources = project_sources(dir)
 	const checks = diagnose(await gather(dir, sources))
 	const auth = magic_link_check(dir, sources)
 	if (auth) checks.push(auth)
+	const text = flag(args, "sms-text")
+	if (text) checks.push(sms_text_check(text))
+	if (args.includes("--sms-live")) {
+		checks.push(
+			await sms_live_check(
+				args,
+				checks.some((check) => check.level === "fail")
+			)
+		)
+	}
 	const failed = checks.some((check) => check.level === "fail")
 	if (args.includes("--json")) {
 		console.log(JSON.stringify({ ok: !failed, checks }, null, 2))

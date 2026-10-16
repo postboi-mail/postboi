@@ -105,7 +105,7 @@ interface WebhookEvent {
 	subject?: string
 	tags?: Array<string>
 	url?: string          // clicked events: the link
-	bounce?: { category: 'hard' | 'soft' | 'suppressed' | 'unknown'; detail?: string }
+	bounce?: { category: 'hard' | 'soft' | 'suppressed' | 'filtered' | 'unknown'; detail?: string }
 	client?: EmailClient  // opened/clicked, see below
 	ip?: string
 	body?: { html?: string; text?: string }  // received events: the message
@@ -114,9 +114,16 @@ interface WebhookEvent {
 	fields?: Array<[string, string]>         // Postboi: the submission's fields, in order
 	test?: TestingRun                        // test_* events: the test run
 	view?: ViewViewed                        // view_viewed events: the page and its reader
+	dedupe_key?: string   // the same for a redelivery of this event, see below
 	raw: unknown          // the untouched provider payload
 }
 ```
+
+Providers deliver at least once, and several sign nothing that would tell a replay from
+the first delivery, so store `dedupe_key` and skip an event you've already handled. It's
+built from the provider, the message, the type and the recipient (and the time and link
+for an open, a click or a delay, which happen more than once), and set on every event that names a
+message, by `receive()` and `poll()` alike.
 
 On the Postboi provider, every event about a form submission, `sent` through `clicked`,
 names the form and carries the fields it was submitted with, so a handler that files
@@ -203,7 +210,10 @@ The same events cover [SMS](/sms#delivery-receipts): `channel` says `"sms"` (abs
 still means email), and the number is in `phone`, never in `email`, so a handler that
 reads `event.email` is never handed a phone number. A text that reached the handset is
 `delivered`; one the carrier gave up on is `failed`, with the carrier's code in
-`bounce.detail`; one it is still retrying is `delayed`. Which way they arrive depends on
+`bounce.detail`; one it is still retrying is `delayed`. A `failed` text a carrier blocked
+as spam has `bounce.category: 'filtered'` (Twilio's 30007, Telnyx's spam codes, Vonage's
+1210): the number is fine and the message or the sender is the problem, so resending it
+unchanged won't help. Which way they arrive depends on
 the provider. **The SMS Works** pushes account-wide delivery reports, so it is a
 `receive()` provider like any of the email ones: `provider: 'smsworks'`, verified with
 `SMSWORKS_WEBHOOK_SECRET` as `?token=…` (see the [table below](#verification)).
@@ -266,6 +276,9 @@ Providers fall into three camps:
 | Twilio (SMS, WhatsApp) | Signed (`X-Twilio-Signature`, HMAC-SHA1 of the URL and the POST parameters) | `TWILIO_WEBHOOK_SECRET`, or else `TWILIO_AUTH_TOKEN` as it is: Twilio signs with the auth token. The URL is signed, so behind a proxy or a tunnel pass `receive(request, { url })` with the one Twilio calls, query string included. `webhook()` answers with empty TwiML, as Twilio's inbound webhook expects |
 | Telnyx (SMS) | Signed (Ed25519 of timestamp and body, 5-minute replay window) | `TELNYX_WEBHOOK_SECRET`, the account's public key from Mission Control (Keys & Credentials) |
 | Vonage (SMS) | Signed (HS256 JWT in `Authorization`, with `payload_hash` over the body) | `VONAGE_WEBHOOK_SECRET`, the signature secret from the dashboard's settings |
+| Plivo (SMS) | Signed (V2: HMAC-SHA256 of the URL and a nonce, not the body) | `PLIVO_WEBHOOK_SECRET`, or `PLIVO_AUTH_TOKEN` |
+| Sinch (SMS) | Basic credentials in the callback URL (Sinch doesn't sign SMS callbacks) | `SINCH_WEBHOOK_SECRET`, the `username:password` in the URL |
+| Bandwidth (SMS) | Basic credentials on the application's callback (Bandwidth doesn't sign) | `BANDWIDTH_WEBHOOK_SECRET`, the application's `username:password` |
 | PureSMS (SMS) | Signed (HMAC-SHA256 of timestamp and body). The timestamp's age isn't checked, because PureSMS retries for up to a day | `PURESMS_WEBHOOK_SECRET`, the secret you set on the endpoint (Settings → Webhooks). PureSMS treats it as optional; `receive()` doesn't |
 | The SMS Works (SMS) | Shared secret | `SMSWORKS_WEBHOOK_SECRET`, a token you make up, as `?token=…` on the delivery-report URL (Delivery Reports → Webhook Configuration), or the basic-auth password on a reply-number webhook |
 | Amazon SES, Scaleway | Shared secret over SNS | `SES_WEBHOOK_SECRET` / `SCALEWAY_WEBHOOK_SECRET` as `?token=…` on the subscription URL; SNS subscription handshakes confirm automatically |

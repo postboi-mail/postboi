@@ -110,6 +110,18 @@ function date_only(at: Date): string {
 	return at.toISOString().slice(0, 10)
 }
 
+/**
+ * Twilio's code for a text a carrier filtered: 30007, "Message filtered"
+ * (https://www.twilio.com/docs/api/errors/30007). The number is fine; the content or the
+ * sender is what was blocked.
+ */
+export const FILTERED_CODE = "30007"
+
+/** A failed text's bounce category: `filtered` for a carrier's filter, else `unknown`. */
+export function text_category(code: unknown): "filtered" | "unknown" {
+	return String(code ?? "") === FILTERED_CODE ? "filtered" : "unknown"
+}
+
 /** What went wrong, in one line, for a message Twilio couldn't deliver. */
 function failure_detail(message: TwilioMessage): string | undefined {
 	const code = message.error_code ?? undefined
@@ -150,7 +162,9 @@ function normalize(message: TwilioMessage): WebhookEvent | undefined {
 		// "unknown" and the carrier's own code and words go in the detail — the one
 		// field consumers already read for "why didn't this arrive".
 		bounce:
-			type === "failed" ? { category: "unknown", detail: failure_detail(message) } : undefined,
+			type === "failed"
+				? { category: text_category(message.error_code), detail: failure_detail(message) }
+				: undefined,
 		raw: message,
 	}
 }

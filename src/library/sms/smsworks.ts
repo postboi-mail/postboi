@@ -1,4 +1,10 @@
-import { SmsProvider, type PreparedSms, type SmsApiKeyOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsApiKeyOptions,
+	type SmsSenderKind,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import type { ProviderError } from "../errors.js"
 
@@ -18,7 +24,7 @@ export interface SendParams {
 	[option: string]: unknown
 }
 
-type SendResponse = { messageid: string; status: string; credits?: number }
+type SendResponse = { messageid: string; status: string; credits?: number } & SmsReceipt
 
 /**
  * The SMS Works — https://thesmsworks.co.uk/developers
@@ -37,6 +43,11 @@ type SendResponse = { messageid: string; status: string; credits?: number }
  */
 export default class SmsWorks extends SmsProvider<SendResponse> {
 	protected readonly provider = "smsworks"
+	// A UK number or an alphanumeric ID; no short codes.
+	protected override readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"alphanumeric",
+	]
 	// `/message/schedule` takes an ISO date on the same payload.
 	protected override readonly supports_scheduling = true
 	protected override readonly reserved_options = [
@@ -95,9 +106,12 @@ export default class SmsWorks extends SmsProvider<SendResponse> {
 		const d = data as Record<string, unknown> | null
 		// The batch endpoint answers with { batchid }, the single send with { messageid }.
 		const id = (d?.messageid ?? d?.batchid) as string | undefined
+		const status = d?.status as string | undefined
 		return {
+			// No status is no word on its state: `queued`, and `scheduled` for a scheduled send.
+			...this.receipt([id], status),
 			messageid: id ?? "",
-			status: (d?.status as string) ?? "sent",
+			status: status ?? "sent",
 			credits: d?.credits as number,
 		}
 	}

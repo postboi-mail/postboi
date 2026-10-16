@@ -34,6 +34,7 @@ import type { ChatDefaults } from "./chat/types.js"
 import type { PushDefaults } from "./push/types.js"
 import type { WhatsappDefaults } from "./whatsapp/types.js"
 import type { ParamSpec } from "./views.js"
+import type { IdempotencyStore } from "./idempotency.js"
 
 /** The senders `postboi views publish` writes a link for, in their own merge syntax. */
 export type ViewProvider =
@@ -124,6 +125,11 @@ export interface PostboiConfig {
 		 * shown, for logs and error trackers. `POSTBOI_SMS_REDACT=1` does the same.
 		 */
 		redact?: boolean
+		/**
+		 * Where sent `idempotency_key`s are kept, so sending the same key twice sends once.
+		 * `memory_idempotency_store()` for one process, or your own over a database.
+		 */
+		idempotency?: IdempotencyStore
 		/**
 		 * Non-secret SMS provider constructor options, keyed by the provider's option name.
 		 * Keep secrets in the environment.

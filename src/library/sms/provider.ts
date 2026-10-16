@@ -9,11 +9,15 @@ import { PostboiError, SkipSendError, type Channel } from "../errors.js"
 import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
 import { ensure_env_loaded, read_env } from "../env.js"
+import { send_once, type IdempotencyStore } from "../idempotency.js"
 import { gsm7_breakers, phone_e164, redact_deep, redact_phones, segments } from "./phone.js"
 import type {
 	Phone,
 	PreparedSms,
 	SmsCheck,
+	SmsDelivery,
+	SmsReceipt,
+	SmsSenderKind,
 	SmsDefaults,
 	SmsIssue,
 	SmsOptions,
@@ -22,6 +26,9 @@ import type {
 
 export type {
 	SmsCheck,
+	SmsDelivery,
+	SmsReceipt,
+	SmsSenderKind,
 	SmsIssue,
 	Phone,
 	PreparedSms,
@@ -42,11 +49,25 @@ export type {
  * await text.send({ to: "+447788223344", message: "Your code is 4291" })
  * ```
  */
-export abstract class SmsProvider<TResponse = unknown> extends Transport<TResponse, PreparedSms> {
+export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> extends Transport<
+	TResponse,
+	PreparedSms
+> {
 	protected readonly channel: Channel = "sms"
 
 	/** Whether the provider needs a sender. Providers that default it account-side set false. */
 	protected requires_from: boolean = true
+
+	/**
+	 * The kinds of sender the provider can send from. A `from` of another kind is an issue
+	 * `validate()` reports (`sender_not_supported`); the send itself is left to the provider,
+	 * which knows what is registered on the account and in which countries.
+	 */
+	protected readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"short_code",
+		"alphanumeric",
+	]
 
 	/** Whether the provider takes one recipient per request (Twilio, Telnyx, Vonage). */
 	protected readonly single_recipient: boolean = false
@@ -74,6 +95,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 	protected defaults: SmsDefaults
 
 	#redact?: boolean
+	#idempotency?: IdempotencyStore
 
 	constructor(options: SmsProviderOptions = {}) {
 		super(options)
@@ -81,6 +103,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 		const s = get_config()
 		this.defaults = { ...s.sms?.default, ...options.default }
 		this.#redact = options.redact
+		this.#idempotency = options.idempotency
 	}
 
 	/**
@@ -127,6 +150,54 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 		batch: { concurrency?: number } = {}
 	): Promise<TResponse | Array<BatchResult<TResponse>>> {
 		return this.dispatch(options, batch, (one) => this.prepare_sms(one))
+	}
+
+	/**
+	 * The common fields every response carries ({@link SmsReceipt}), from the ids the provider
+	 * answered with and its own word for the message's state. Absent ids are dropped; a
+	 * provider that answered 2xx and named no state has taken the message, so it's `queued`.
+	 */
+	protected receipt(ids: ReadonlyArray<string | undefined>, status?: string): SmsReceipt {
+		const all = ids.filter((id): id is string => typeof id === "string" && id !== "")
+		return { id: all[0] ?? "", ids: all, provider: this.provider, delivery: sms_delivery(status) }
+	}
+
+	/**
+	 * One text, sent once per `idempotency_key` when a store is set (see
+	 * {@link IdempotencyStore}): a repeat of a key already sent returns the first result.
+	 */
+	protected override async deliver(message: PreparedSms): Promise<TResponse> {
+		return send_once({
+			store: this.#idempotency ?? get_config().sms?.idempotency,
+			key: message.idempotency_key,
+			// What makes it the same message; the store keeps a hash of it, not the text.
+			message: {
+				to: message.to,
+				from: message.from,
+				message: message.message,
+				media: message.media,
+				// Whether it is scheduled, not when: a relative `scheduled_at` ({ days: 1 })
+				// resolves against the clock, so a retry of the same send would name a
+				// different instant and read as a different message.
+				scheduled: message.scheduled_at !== undefined,
+				validity: message.validity,
+				provider_options: message.provider_options,
+			},
+			provider: this.provider,
+			channel: "sms",
+			send: () => this.transmit(message),
+		})
+	}
+
+	/**
+	 * The request itself. A send with `scheduled_at` that the provider calls queued is held,
+	 * not on its way, so it reads `scheduled`; the provider's own fields are left as it gave
+	 * them. The mock overrides this, so it keeps a store's promise too.
+	 */
+	protected async transmit(message: PreparedSms): Promise<TResponse> {
+		const response = await super.deliver(message)
+		if (message.scheduled_at && response.delivery === "queued") response.delivery = "scheduled"
+		return response
 	}
 
 	/** Normalise one-or-many recipients, accepting a comma-separated string like `to` does. */
@@ -184,6 +255,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 			segments: cost.count,
 			units: cost.units,
 			ucs2_characters: cost.encoding === "ucs2" ? gsm7_breakers(message) : [],
+			sender: sender ? sender_kind(sender) : undefined,
 			issues,
 		}
 	}
@@ -195,15 +267,21 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 	 * builder, so this exists to say so early, not to enforce it.
 	 */
 	protected check(message: PreparedSms): Array<SmsIssue> {
+		const issues: Array<SmsIssue> = []
 		if (this.single_recipient && message.to.length > 1) {
-			return [
-				{
-					code: "single_recipient_only",
-					message: `${this.provider} sends to one recipient per message. Pass an array of sends instead of an array of recipients.`,
-				},
-			]
+			issues.push({
+				code: "single_recipient_only",
+				message: `${this.provider} sends to one recipient per message. Pass an array of sends instead of an array of recipients.`,
+			})
 		}
-		return []
+		const kind = message.from ? sender_kind(message.from) : undefined
+		if (kind && !this.sender_kinds.includes(kind)) {
+			issues.push({
+				code: "sender_not_supported",
+				message: `${this.provider} doesn't send from ${SENDER_WORDS[kind]} like "${message.from}". It sends from ${this.sender_kinds.map((k) => SENDER_WORDS[k]).join(" or ")}.`,
+			})
+		}
+		return issues
 	}
 
 	/**
@@ -348,6 +426,46 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 			},
 		}
 	}
+}
+
+/** How a sender kind reads in a sentence. */
+const SENDER_WORDS: Record<SmsSenderKind, string> = {
+	phone_number: "a phone number",
+	short_code: "a short code",
+	alphanumeric: "an alphanumeric sender ID",
+}
+
+/**
+ * What kind of sender a `from` is. A `+` or 9 to 15 digits is a phone number; 3 to 8
+ * digits a short code; anything with a letter in it an alphanumeric ID. A shape none of
+ * those take is undefined, and is `sender_problem`'s to name.
+ */
+export function sender_kind(from: string): SmsSenderKind | undefined {
+	const sender = from.trim()
+	if (/^\+\d+$/.test(sender) || /^\d{9,15}$/.test(sender)) return "phone_number"
+	if (/^\d{3,8}$/.test(sender)) return "short_code"
+	if (/[A-Za-z]/.test(sender)) return "alphanumeric"
+	return undefined
+}
+
+/** Each provider's word for a message it just took, in {@link SmsDelivery}'s terms. */
+const DELIVERY: Record<string, SmsDelivery> = {
+	accepted: "queued",
+	queued: "queued",
+	pending: "queued",
+	enqueued: "queued",
+	submitted: "queued",
+	created: "queued",
+	scheduled: "scheduled",
+	sending: "sent",
+	sent: "sent",
+	delivered: "delivered",
+}
+
+/** A provider's status word as {@link SmsDelivery}, case-insensitively. */
+export function sms_delivery(status: string | undefined): SmsDelivery {
+	if (status === undefined || status === "") return "queued"
+	return DELIVERY[status.toLowerCase()] ?? "unknown"
 }
 
 /** One-or-many recipients as a list, splitting a comma-separated string as `to` does. */

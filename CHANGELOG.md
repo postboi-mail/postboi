@@ -10,6 +10,17 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- Every SMS send now resolves with the same four fields, whichever provider sent it: `id` (the provider's id, the one its receipts name), `ids` (one per recipient where the provider makes several), `provider` and `delivery` (`queued`, `scheduled`, `sent`, `delivered` or `unknown`). The provider's own fields are still there beside them, and `sms()` is typed to return `SmsReceipt`, so a failover chain or a change of provider reads the result the same way.
+- `receive()` reads Plivo, Sinch and Bandwidth: delivery receipts and inbound texts, with STOP, START and HELP as everywhere else. Plivo is checked with its V2 signature against `PLIVO_AUTH_TOKEN` (or `PLIVO_WEBHOOK_SECRET`). Sinch and Bandwidth don't sign their callbacks, so they're checked against the Basic credentials you set on their side, given as `SINCH_WEBHOOK_SECRET` or `BANDWIDTH_WEBHOOK_SECRET` (`username:password`).
+- `sms.idempotency` (or `idempotency` on a provider) takes a store for `idempotency_key`s, so a key is sent once: a repeat returns the first result, a key whose outcome is unknown refuses rather than risk a second copy, and the same key for a different message throws `IdempotencyConflictError`. `memory_idempotency_store()` covers one process; implement `IdempotencyStore` over a database for more.
+- `postboi doctor --sms-text "…"` previews a text's encoding and segment count and names the characters that forced UCS-2. `--sms-live --to <n> --confirm-to <n> --confirm-from <sender>` sends one real text, only when every check passes and both confirmations match, and says what the provider answered.
+- Every webhook and polled event that names a message carries a `dedupe_key`, the same for a redelivery and different for anything else, so a handler can skip what it has already handled. Providers redeliver, and Plivo, Sinch, Bandwidth and Twilio sign nothing that tells a replay apart.
+- A text a carrier blocked as spam is `failed` with `bounce.category: "filtered"`, on Twilio (30007), Telnyx (40002, 40003, 40015, 40017) and Vonage (1210), rather than `unknown`: the number is fine, and the message or sender is what to change.
+- `validate()` says what kind of sender `from` is (`sender`: `phone_number`, `short_code` or `alphanumeric`) and reports `sender_not_supported` where the provider doesn't send from that kind, without refusing the send. Through a failover chain, `sms.validate()` also lists `candidates`: the providers in it that would take the text.
+- `postboi/testing` is a new entry point. `mock_fetch()` answers HTTP requests from a script and records them, and `sms_contract_cases()` / `run_sms_contract()` hold an SMS provider of your own to what postboi's promise: one request per send, the common result, a reason on every refusal, an unknown outcome for a 5xx or a dropped connection, no request from `validate()`. Every SMS provider postboi ships runs the contract in its tests.
+
 ## 0.69.0
 
 ### Breaking

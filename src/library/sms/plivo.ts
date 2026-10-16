@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsProviderOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import type { ProviderError } from "../errors.js"
 
@@ -26,7 +31,7 @@ export interface SendParams {
 	[option: string]: unknown
 }
 
-type SendResponse = { message_uuid: Array<string>; api_id?: string }
+type SendResponse = { message_uuid: Array<string>; api_id?: string } & SmsReceipt
 
 /**
  * Plivo — https://www.plivo.com/docs/messaging
@@ -94,7 +99,8 @@ export default class Plivo extends SmsProvider<SendResponse> {
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {
 		const d = data as { message_uuid?: Array<string>; api_id?: string } | null
-		return { message_uuid: d?.message_uuid ?? [], api_id: d?.api_id }
+		const message_uuid = d?.message_uuid ?? []
+		return { ...this.receipt(message_uuid), message_uuid, api_id: d?.api_id }
 	}
 
 	/**
