@@ -105,7 +105,7 @@ function build(
 			return json({ error: message }, 500)
 		}
 
-		return json({ received: events.length }, 200)
+		return adapter.accepted?.(events) ?? json({ received: events.length }, 200)
 	}
 }
 

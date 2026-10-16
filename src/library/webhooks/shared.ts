@@ -2,7 +2,9 @@ import { PostboiError } from "../index.js"
 import { WebhookVerificationError } from "./errors.js"
 import { timing_safe_equal, svix_verify } from "./crypto.js"
 import { parse_user_agent, type EmailClient } from "./ua.js"
-import type { VerifyContext } from "./index.js"
+import type { VerifyContext, WebhookEvent } from "./index.js"
+import type { Channel } from "../errors.js"
+import { sms_keyword, type SmsKeyword } from "../sms/opt_out.js"
 
 /** Parse a JSON body, throwing a normalized `invalid_payload` error on garbage. */
 export function parse_json(provider: string, body: string): unknown {
@@ -170,6 +172,47 @@ export function engagement(
 	return {
 		client: parse_user_agent(user_agent),
 		ip: ip ?? undefined,
+	}
+}
+
+/**
+ * One text somebody sent to your number, as an event. STOP is `unsubscribed` and START
+ * `resubscribed`, for the number that sent it, since they are the one opting out or back
+ * in. Everything else is `received` with their words, and a HELP says so in `keyword`.
+ *
+ * `keyword` is the provider's verdict where it has one (Twilio's Advanced Opt-Out says
+ * which keyword a message was, `YES` included). Without one, the whole message is matched.
+ * `message_id` is the text's own id, except on a `received` that answers one of your
+ * sends the provider can name (`replied_to`), where that send is what you'd look up.
+ */
+export function inbound_event(options: {
+	provider: string
+	channel: Extract<Channel, "sms" | "whatsapp">
+	phone?: string
+	text?: string
+	message_id?: string
+	replied_to?: string
+	timestamp?: Date
+	keyword?: SmsKeyword
+	raw: unknown
+}): WebhookEvent {
+	const keyword = options.keyword ?? sms_keyword(options.text)
+	const base: WebhookEvent = {
+		type: "received",
+		provider: options.provider,
+		channel: options.channel,
+		phone: options.phone,
+		message_id: options.message_id,
+		timestamp: options.timestamp,
+		raw: options.raw,
+	}
+	if (keyword === "stop") return { ...base, type: "unsubscribed", keyword }
+	if (keyword === "start") return { ...base, type: "resubscribed", keyword }
+	return {
+		...base,
+		message_id: options.replied_to ?? options.message_id,
+		body: options.text ? { text: options.text } : undefined,
+		keyword,
 	}
 }
 

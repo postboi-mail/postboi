@@ -22,7 +22,7 @@
  * writing to the number. The shared vocabulary covers both — `read` is `opened`, because
  * it is the same fact as an email open; a `failed` status is `failed` with Meta's error
  * code and words in `bounce.detail` (a text message has no bounce *classification*); a
- * reply that is an opt-out keyword is `unsubscribed` for the sender; and anything else
+ * reply that is STOP is `unsubscribed` for the sender and START `resubscribed`; and anything else
  * somebody writes is `received`, the same event as a reply to an email, with `phone`
  * as the person and `body.text` as what they said. A `received` also means the 24-hour
  * customer service window just opened for that number.
@@ -30,8 +30,7 @@
  */
 import type { WebhookAdapter, WebhookEvent, WebhookEventType, AdapterModule } from "./index.js"
 import { WebhookVerificationError } from "./errors.js"
-import { is_opt_out } from "../sms/opt_out.js"
-import { parse_json, to_date } from "./shared.js"
+import { inbound_event, parse_json, to_date } from "./shared.js"
 import { hmac_sha256, hex_encode, timing_safe_equal } from "./crypto.js"
 
 interface MetaError {
@@ -155,12 +154,12 @@ function normalize_status(status: MetaStatus): WebhookEvent | undefined {
 }
 
 /**
- * One inbound message as a normalized event. A reply that is an opt-out keyword is an
- * `unsubscribed` for the number that sent it; anything else a person writes is
+ * One inbound message as a normalized event. STOP is `unsubscribed` and START
+ * `resubscribed` for the number that sent it; anything else a person writes is
  * `received`, carrying their words when they were words — typed, or the label of the
- * button or list row they tapped. The id worth carrying on a `received` is the send
- * they answered, when they used WhatsApp's reply on one of yours — otherwise the
- * message's own.
+ * button or list row they tapped — and `keyword: "help"` for a HELP. The id worth
+ * carrying on a `received` is the send they answered, when they used WhatsApp's reply
+ * on one of yours — otherwise the message's own.
  */
 function normalize_message(message: MetaMessage): WebhookEvent | undefined {
 	if (!message.id || !message.from) return undefined
@@ -170,26 +169,20 @@ function normalize_message(message: MetaMessage): WebhookEvent | undefined {
 		message.button?.text ??
 		message.interactive?.button_reply?.title ??
 		message.interactive?.list_reply?.title
-	const base: Pick<WebhookEvent, "provider" | "channel" | "phone" | "timestamp" | "raw"> = {
-		provider: "meta",
-		channel: "whatsapp",
-		phone: e164(message.from),
-		timestamp: to_date(message.timestamp),
-		raw: message,
-	}
-	if (is_opt_out(text)) {
-		return { ...base, type: "unsubscribed", message_id: message.id }
-	}
 	// A quoted message is only "the send they answered" when it wasn't theirs: WhatsApp
 	// lets a person reply to their own earlier message too, and that id is no send of yours.
 	const replied_to =
 		message.context?.from && message.context.from !== message.from ? message.context.id : undefined
-	return {
-		...base,
-		type: "received",
-		message_id: replied_to ?? message.id,
-		body: text ? { text } : undefined,
-	}
+	return inbound_event({
+		provider: "meta",
+		channel: "whatsapp",
+		phone: e164(message.from),
+		text,
+		message_id: message.id,
+		replied_to,
+		timestamp: to_date(message.timestamp),
+		raw: message,
+	})
 }
 
 /**
@@ -260,19 +253,26 @@ export default adapter
 export const mock: AdapterModule["mock"] = async ({ type, secret }) => {
 	const now = String(Math.floor(Date.now() / 1000))
 	// The person at +1 555 777 0006, on the receiving end of a send from your number —
-	// or, for the two inbound samples, writing back to it.
+	// or, for the inbound samples, writing back to it.
 	const person = "15557770006"
 	const value: MetaValue = {
 		messaging_product: "whatsapp",
 		metadata: { display_phone_number: "15551110001", phone_number_id: "100000000000001" },
 	}
-	if (type === "unsubscribed" || type === "received") {
+	if (type === "unsubscribed" || type === "resubscribed" || type === "received") {
 		const message: MetaMessage = {
 			from: person,
 			id: "wamid.mock-inbound",
 			timestamp: now,
 			type: "text",
-			text: { body: type === "unsubscribed" ? "STOP" : "Thanks, that works for me." },
+			text: {
+				body:
+					type === "unsubscribed"
+						? "STOP"
+						: type === "resubscribed"
+							? "START"
+							: "Thanks, that works for me.",
+			},
 		}
 		// A reply to one of yours — so the event carries the send it answers.
 		if (type === "received") message.context = { from: "15551110001", id: "wamid.mock" }

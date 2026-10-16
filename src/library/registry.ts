@@ -962,7 +962,16 @@ export const SMS_PROVIDERS = [
 		note: "UK-native flat-rate pay-as-you-go, hosted in the EU, with signed delivery webhooks",
 		price: "2.8p",
 		verified: "2026-09-01",
-		fields: [{ env: "PURESMS_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "PURESMS_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "PURESMS_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook secret (optional; the one set on the endpoint under Settings → Webhooks)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "twilio",
@@ -993,6 +1002,12 @@ export const SMS_PROVIDERS = [
 				env: "TWILIO_MESSAGING_SERVICE_SID",
 				arg: "messaging_service_sid",
 				label: "Messaging Service SID (optional; required to schedule)",
+				default: "",
+			},
+			{
+				env: "TWILIO_STATUS_CALLBACK",
+				arg: "status_callback",
+				label: "Status callback URL (optional; where Twilio posts delivery receipts)",
 				default: "",
 			},
 		],
@@ -1362,6 +1377,12 @@ export const WHATSAPP_PROVIDERS = [
 				env: "TWILIO_MESSAGING_SERVICE_SID",
 				arg: "messaging_service_sid",
 				label: "Messaging Service SID (optional; supplies the WhatsApp sender)",
+				default: "",
+			},
+			{
+				env: "TWILIO_STATUS_CALLBACK",
+				arg: "status_callback",
+				label: "Status callback URL (optional; where Twilio posts delivery receipts)",
 				default: "",
 			},
 		],
