@@ -67,4 +67,11 @@ order.
 > native-batch path, `after.send` / `on.error` fire per recipient only when a provider has no
 > batch endpoint and falls back to fan-out.
 
+An `idempotency_key` on a personalized batch covers every recipient without naming the
+same message twice. Where the batch is one request, the provider keys that request: Resend
+replays the whole batch, and the Postboi provider gives each item `<key>:<index>`. Where it
+fans out, each recipient's request carries `<key>:<index>`, its position in your `to`
+array. One shared key would read to a provider that deduplicates on it as one message sent
+several times, and everyone after the first recipient would get nothing.
+
 Each message can also carry its own [`scheduled_at`](/scheduling) to send it later.

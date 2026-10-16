@@ -24,6 +24,17 @@ export type { Channel, ProviderError } from "./errors.js"
 /** Methods HTTP defines as idempotent, which are safe to send again whatever came back. */
 const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"])
 
+/**
+ * Methods that change nothing, so a failure on one can't have sent anything: an unknown
+ * outcome is only ever a question about a request that could have.
+ */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
+
+/** Could a request with this method have sent or changed something? */
+function changes(method: string | undefined): boolean {
+	return !SAFE_METHODS.has((method ?? "POST").toUpperCase())
+}
+
 /** A provider-agnostic description of the HTTP request to send. */
 export type RequestSpec = {
 	url: string
@@ -248,8 +259,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	 */
 	protected async call(spec: RequestSpec, kind: string): Promise<unknown> {
 		const response = await this.request(spec)
-		const data = await this.read_reply(response)
-		const error = this.error_for(response, data, kind)
+		const data = await this.read_reply(response, spec.method)
+		const error = this.error_for(response, data, kind, spec.method)
 		if (error) throw error
 		return data
 	}
@@ -257,8 +268,15 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	/**
 	 * Map a response into a {@link PostboiError} if the provider flags it as a failure
 	 * (via `parse_error`) or the HTTP status is not ok. Returns undefined on success.
+	 * `method` is the request's: a 5xx on a GET is a failed read, never an unknown send.
 	 */
-	protected error_for(response: Response, data: unknown, kind: string): PostboiError | undefined {
+	protected error_for(
+		response: Response,
+		data: unknown,
+		kind: string,
+		method?: string
+	): PostboiError | undefined {
+		const may_have_sent = changes(method)
 		const error = this.parse_error(response, data)
 		if (error) {
 			return new PostboiError({
@@ -268,7 +286,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: error.message,
 				code: error.code,
 				raw: data,
-				outcome_unknown: response.status >= 500 || error.partial === true,
+				outcome_unknown: may_have_sent && (response.status >= 500 || error.partial === true),
 				reason:
 					response.status >= 500 || error.partial
 						? undefined
@@ -282,7 +300,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				status: response.status,
 				message: `${this.provider} ${kind} failed with status ${response.status}`,
 				raw: data,
-				outcome_unknown: response.status >= 500,
+				outcome_unknown: may_have_sent && response.status >= 500,
 				reason: this.reason_for(response.status),
 			})
 		}
@@ -507,7 +525,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 					channel: this.channel,
 					message: `${this.provider} request failed: ${reason}`,
 					raw: cause,
-					outcome_unknown: true,
+					outcome_unknown: changes(method),
 				})
 			} finally {
 				clearTimeout(timer)
@@ -539,7 +557,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	 * the message, and after a 5xx nothing proves it didn't, so the error says
 	 * `outcome_unknown` rather than leaving a bare stream error to read as "not sent".
 	 */
-	protected async read_reply(response: Response): Promise<unknown> {
+	protected async read_reply(response: Response, method?: string): Promise<unknown> {
 		try {
 			return await this.read_json(response)
 		} catch (cause) {
@@ -550,7 +568,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				status: response.status,
 				message: `${this.provider} answered ${response.status} but its body could not be read: ${reason}`,
 				raw: cause,
-				outcome_unknown: response.ok || response.status >= 500,
+				outcome_unknown: changes(method) && (response.ok || response.status >= 500),
 				// A 4xx is still a refusal whatever its body said, so it keeps the status's reason.
 				reason: response.ok ? undefined : this.reason_for(response.status),
 			})

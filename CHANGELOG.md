@@ -32,6 +32,9 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Fixed
 
+- A personalized batch (`to` plus `data`) through a provider with no batch endpoint gave every recipient the batch's `idempotency_key`, so a provider that deduplicates on it (Lettermint, Loops, AhaSend, JetEmail, Primitive and others) could treat everyone after the first as a replay and deliver nothing to them. Each recipient's request now carries `<key>:<index>`, as the Postboi provider's native batch already did.
+- Resend's batch request now sends the batch's `idempotency_key`, so a keyed batch is retried after a 5xx like a single send.
+- A 5xx or a dropped connection on a read (a `GET`) is no longer `outcome_unknown`: a read can't have sent anything.
 - The Twilio SMS provider no longer sends `idempotency_key` as `I-Twilio-Idempotency-Token`. That is a header Twilio puts on webhooks it sends you, and Twilio documents no idempotency control for creating a message, so it never made a retried text safe.
 
 ## 0.68.1

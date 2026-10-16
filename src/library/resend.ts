@@ -98,17 +98,22 @@ export default class Resend extends ProviderBase<SendResponse> {
 
 	// Resend's native batch endpoint: one POST carrying a fully-rendered message per recipient.
 	protected async build_batch_request(
-		_template: PreparedMessage,
+		template: PreparedMessage,
 		recipients: Array<BatchRecipient>
 	): Promise<RequestSpec> {
 		const payload = await Promise.all(recipients.map((r) => this.#params(r.message)))
+		// Resend keys the whole batch request, so the batch's own key is the one to send: a
+		// replay returns the original ids for every item at once.
+		const key = template.idempotency_key
 		return {
 			url: "https://api.resend.com/emails/batch",
 			headers: {
 				Authorization: `Bearer ${this.#api_key}`,
 				"Content-Type": "application/json",
+				...(key ? { "Idempotency-Key": key } : {}),
 			},
 			body: JSON.stringify(payload),
+			idempotent: Boolean(key),
 		}
 	}
 

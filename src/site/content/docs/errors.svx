@@ -91,9 +91,11 @@ That is why those retries wait for a key the provider deduplicates on, and why t
 says `outcome_unknown: true` when they run out: look the message up with the provider
 before you send it again yourself.
 
-Providers that honour a key: the Postboi provider, Resend, AhaSend, Lettermint, JetEmail,
-Loops, Primitive, Klaviyo (`unique_id`), HubSpot (`sendId`) and Azure (a UUID, as its
-`Operation-Id`). None of the SMS providers documents one for sending, Twilio included, so
+Providers that honour a key: the Postboi provider, Resend (a [batch](/bulk#personalized-batches)
+too), AhaSend, Lettermint, JetEmail, Loops, Primitive, Klaviyo (`unique_id`), HubSpot
+(`sendId`) and Azure (a UUID, as its `Operation-Id`; a batch's per-recipient keys aren't
+UUIDs, so a batch through Azure isn't keyed). A failed read (a `GET`) is never
+`outcome_unknown`, since it can't have sent anything. None of the SMS providers documents one for sending, Twilio included, so
 a text is never retried after a `5xx`.
 
 If a duplicate is better than a drop for you, `retry_unknown: true` retries those failures
