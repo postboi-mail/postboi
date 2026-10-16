@@ -82,6 +82,7 @@ const REASONS: Record<string, RejectionReason> = {
 export default class Telnyx extends SmsProvider<SendResponse> {
 	protected readonly provider = "telnyx"
 	protected override readonly supports_scheduling = true
+	protected override readonly single_recipient = true
 	#api_key: string
 	#messaging_profile_id?: string
 	#webhook_url?: string

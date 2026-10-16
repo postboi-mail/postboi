@@ -62,6 +62,7 @@ type SendResponse = { message_id: string }
  */
 export default class SNS extends SmsProvider<SendResponse> {
 	protected readonly provider = "sns"
+	protected override readonly single_recipient = true
 	// AWS attaches the sender identity account-side in most regions.
 	protected override readonly requires_from = false
 	#access_key_id: string

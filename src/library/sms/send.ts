@@ -5,7 +5,13 @@
  */
 import type { SmsOptions, SmsDefaults } from "./types.js"
 import type { SmsProvider } from "./provider.js"
-import { channel_send, type ChannelResolution, type ChannelSend } from "../channels.js"
+import {
+	channel_send,
+	resolve_channel_chain,
+	type ChannelResolution,
+	type ChannelSend,
+} from "../channels.js"
+import type { SmsCheck } from "./types.js"
 import { read_env } from "../env.js"
 
 type SmsConstructor = new (options: Record<string, unknown>) => SmsProvider<unknown>
@@ -56,6 +62,17 @@ const RESOLUTION: ChannelResolution<SmsProvider<unknown>> = {
 }
 
 /**
+ * Check a text against the configured provider without sending it: numbers, encoding,
+ * segments and every problem a send would refuse it for. With a failover chain the answer
+ * is the first provider's, and `chain` holds the check against each. Local and free.
+ */
+async function validate(options: SmsOptions): Promise<SmsCheck> {
+	const providers = await resolve_channel_chain(RESOLUTION)
+	const checks = await Promise.all(providers.map((provider) => provider.validate(options)))
+	return checks.length > 1 ? { ...checks[0], chain: checks } : checks[0]
+}
+
+/**
  * Send a text without constructing anything. The provider is whichever
  * `POSTBOI_SMS_PROVIDER` names; its credentials and the `POSTBOI_SMS_*` defaults are read
  * from the environment on each call. Pass an array to send many.
@@ -65,6 +82,10 @@ const RESOLUTION: ChannelResolution<SmsProvider<unknown>> = {
  * import { sms } from "postboi"
  *
  * await sms({ to: "+447788223344", message: "Your code is 4291" })
+ * const check = await sms.validate({ to: "07788 223344", message: "Hi 👋" }) // no send
  * ```
  */
-export const sms: ChannelSend<SmsOptions> = channel_send(RESOLUTION)
+export const sms: ChannelSend<SmsOptions> & { validate: typeof validate } = Object.assign(
+	channel_send<SmsOptions>(RESOLUTION),
+	{ validate }
+)

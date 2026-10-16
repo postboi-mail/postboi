@@ -68,6 +68,34 @@ export interface PreparedSms {
 	idempotency_key?: string
 }
 
+/** One problem {@link SmsCheck} found. `code` is the one a send would throw, where it would. */
+export type SmsIssue = { code: string; message: string }
+
+/** What `validate()` says about a text before it is sent. */
+export interface SmsCheck {
+	/** No issues: as far as anything local can tell, the provider would take it. */
+	ok: boolean
+	/** The provider it was checked against. */
+	provider: string
+	/** The recipients, in E.164, as they would be sent. */
+	to: Array<string>
+	/** GSM-7 (160 characters a segment) or UCS-2 (70), whichever the message forces. */
+	encoding: "gsm7" | "ucs2"
+	/** Segments it costs, the unit most providers bill. An estimate, not a quote. */
+	segments: number
+	/** Septets for GSM-7 (an extension character is two), UTF-16 units for UCS-2. */
+	units: number
+	/**
+	 * The characters that forced UCS-2, when it was forced: a curly quote or a dash pasted
+	 * from a document quietly halves what fits in a segment.
+	 */
+	ucs2_characters: Array<string>
+	/** Every problem found, in the order a send would meet them. Empty when `ok`. */
+	issues: Array<SmsIssue>
+	/** For a failover chain, the check against each provider in it, in order. */
+	chain?: Array<SmsCheck>
+}
+
 /** Constructor options shared by every SMS provider. */
 export type SmsProviderOptions = TransportOptions<PreparedSms> & {
 	/** Default field values applied when a send omits them. */

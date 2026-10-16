@@ -86,6 +86,7 @@ const encoder = new TextEncoder()
  */
 export default class Vonage extends SmsProvider<SendResponse> {
 	protected readonly provider = "vonage"
+	protected override readonly single_recipient = true
 	#basic?: string
 	#application?: { id: string; key: string }
 	#jwt?: { token: string; until: number }
