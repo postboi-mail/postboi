@@ -10,14 +10,7 @@ import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
 import { ensure_env_loaded, read_flag } from "../env.js"
 import { send_once, type IdempotencyStore } from "../idempotency.js"
-import {
-	gsm7_breakers,
-	phone_e164,
-	redact_deep,
-	redact_phones,
-	segments,
-	withhold_text,
-} from "./phone.js"
+import { gsm7_breakers, phone_e164, redact_deep, segments } from "./phone.js"
 import type {
 	Phone,
 	PreparedSms,
@@ -137,9 +130,19 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 		const e = super.normalize_error(error)
 		if (!this.redacting || e instanceof SkipSendError) return e
 		const text = text_of(message)
-		const scrub = (value: string) => redact_phones(text ? withhold_text(value, text) : value)
-		e.message = scrub(e.message)
-		if (e.stack) e.stack = scrub(e.stack)
+		const before = e.message
+		e.message = redact_deep(before, text)
+		if (e.stack) {
+			// The stack opens with the message as it was. Say it as it is now, so a short text
+			// hidden only where it is the whole message isn't left showing there.
+			const at = e.stack.indexOf(before)
+			e.stack =
+				at === -1
+					? redact_deep(e.stack, text)
+					: redact_deep(e.stack.slice(0, at), text) +
+						e.message +
+						redact_deep(e.stack.slice(at + before.length), text)
+		}
 		Object.defineProperty(e, "raw", { value: redact_deep(e.raw, text), enumerable: true })
 		return e
 	}

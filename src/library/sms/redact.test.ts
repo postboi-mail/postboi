@@ -62,6 +62,14 @@ describe("withhold_text", () => {
 		expect(withhold_text("ok", "ok")).toBe("[text withheld, 2 characters]")
 		expect(withhold_text("token is ok", "ok")).toBe("token is ok")
 		expect(withhold_text("anything", "")).toBe("anything")
+		// A code on its own is the secret however short it is.
+		expect(withhold_text("Message '482913' refused", "482913")).toBe(
+			"Message '[text withheld, 6 characters]' refused"
+		)
+	})
+
+	it("counts a character as a person would", () => {
+		expect(withheld_text("ok 👍🏽")).toBe("[text withheld, 4 characters]")
 	})
 
 	it("goes through objects with the numbers, hiding the text first", () => {
@@ -203,6 +211,23 @@ describe("sms redact", () => {
 			.send({ to, message })
 			.catch((e) => e)) as PostboiError
 		expect(JSON.stringify(open.raw)).toContain(message)
+	})
+
+	it("withholds a short text that is the whole error from its stack too", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({
+				ok: false,
+				status: 400,
+				headers: new Headers(),
+				text: async () => JSON.stringify({ code: 30044, message: "ok" }),
+			})
+		)
+		const short = (await twilio()
+			.send({ to, message: "ok" })
+			.catch((e) => e)) as PostboiError
+		expect(short.message).toBe("[text withheld, 2 characters]")
+		expect(short.stack?.split("\n")[0]).not.toMatch(/: ok$/)
 	})
 
 	it("is turned off by the environment, the config, or the instance", async () => {

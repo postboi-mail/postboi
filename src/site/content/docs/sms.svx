@@ -98,7 +98,9 @@ keeps both out of everything that leaves a send for somewhere else, with nothing
 A thrown error's message, stack and `raw` are masked (`+447700900123` becomes
 `+4*********23`), and so is the message and response that `after.send` and `on.error` are
 shown. The text is withheld from all of them too, as `[text withheld, 24 characters]`,
-wherever it turns up, including where a provider echoes it back. The class, `code`, `status`
+wherever it turns up, including where a provider echoes it back. A text of a word or
+two ("ok") is hidden only where it is the whole of a value, since it is also a word
+anywhere else; a code on its own is hidden everywhere. The class, `code`, `status`
 and `reason` are untouched, so handling an error works the same, and the text itself still
 goes to the real number. `before.send` sees the real message, since what it returns is what
 gets sent. For your own logging, `redact_phones(text)` masks every run of seven digits or
