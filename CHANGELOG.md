@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Fixed
+
+- Installing `postboi` no longer installs two font packages (`@fontsource-variable/archivo` and `@fontsource-variable/golos-text`). They're for the docs site and were listed as runtime dependencies by mistake; the package has none again.
+
 ## 0.71.0
 
 ### Breaking
