@@ -23,7 +23,7 @@
  */
 import { PostboiError } from "../index.js"
 import type { AdapterModule, WebhookAdapter, WebhookEvent, WebhookEventType } from "./index.js"
-import { basic_auth_verify, inbound_event, parse_json, to_date } from "./shared.js"
+import { basic_auth_verify, inbound_event, parse_json, plus_e164, to_date } from "./shared.js"
 
 /** A status → normalized event. `Queued` and `Unknown` say nothing new. */
 const TYPES: Record<string, WebhookEventType> = {
@@ -54,12 +54,6 @@ interface Report {
 	received_at?: string
 }
 
-/** `447700900123` → `+447700900123`; a short code or a name is left alone. */
-function e164(value: string | undefined): string | undefined {
-	if (!value) return undefined
-	return /^\d{8,15}$/.test(value) ? `+${value}` : value
-}
-
 /** One recipient's report as an event, or nothing for a status that isn't one. */
 function report_event(
 	report: Report,
@@ -73,7 +67,7 @@ function report_event(
 		type,
 		provider: "sinch",
 		channel: "sms",
-		phone: e164(recipient),
+		phone: plus_e164(recipient),
 		message_id: report.batch_id,
 		timestamp: to_date(report.at),
 		tags: report.client_reference ? [report.client_reference] : undefined,
@@ -108,7 +102,7 @@ const adapter: WebhookAdapter = {
 				inbound_event({
 					provider: "sinch",
 					channel: "sms",
-					phone: e164(report.from),
+					phone: plus_e164(report.from),
 					text: report.body,
 					message_id: report.id,
 					timestamp: to_date(report.received_at),

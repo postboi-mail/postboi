@@ -74,6 +74,15 @@ export function shared_secret_verify(
 }
 
 /**
+ * A number a provider wrote without its `+` (`447700900123`), given it back. Only 8 to 15
+ * digits read as a phone number: a short code or a sender name is left as it came.
+ */
+export function plus_e164(value: string | undefined): string | undefined {
+	if (!value) return undefined
+	return /^\d{8,15}$/.test(value) ? `+${value}` : value
+}
+
+/**
  * For providers that don't sign their callbacks and authenticate them with the Basic
  * credentials you set on their side (Bandwidth's application, Sinch's callback URL). The
  * secret is `username:password`, or the password alone, and is compared timing-safe against

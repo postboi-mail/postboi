@@ -99,7 +99,7 @@ export default class MockSms extends SmsProvider<SendResponse> {
 		return { ...captured, ...receipt }
 	}
 
-	// Never reached — `deliver` is overridden and nothing calls through to the HTTP path.
+	// Never reached: `transmit` is overridden and nothing calls through to the HTTP path.
 	protected build_request(_message: PreparedSms): RequestSpec {
 		throw new PostboiError({
 			provider: "mock",

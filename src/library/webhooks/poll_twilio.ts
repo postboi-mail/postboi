@@ -110,7 +110,6 @@ function date_only(at: Date): string {
 	return at.toISOString().slice(0, 10)
 }
 
-/** What went wrong, in one line, for a message Twilio couldn't deliver. */
 /**
  * Twilio's code for a text a carrier filtered: 30007, "Message filtered"
  * (https://www.twilio.com/docs/api/errors/30007). The number is fine; the content or the
@@ -123,6 +122,7 @@ export function text_category(code: unknown): "filtered" | "unknown" {
 	return String(code ?? "") === FILTERED_CODE ? "filtered" : "unknown"
 }
 
+/** What went wrong, in one line, for a message Twilio couldn't deliver. */
 function failure_detail(message: TwilioMessage): string | undefined {
 	const code = message.error_code ?? undefined
 	const text = message.error_message ?? undefined

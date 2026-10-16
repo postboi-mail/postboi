@@ -28,7 +28,7 @@ import { PostboiError } from "../index.js"
 import type { AdapterModule, WebhookAdapter, WebhookEvent, WebhookEventType } from "./index.js"
 import { WebhookVerificationError } from "./errors.js"
 import { base64_encode, hmac_sha256, timing_safe_equal } from "./crypto.js"
-import { inbound_event } from "./shared.js"
+import { inbound_event, plus_e164 } from "./shared.js"
 
 /** A status → normalized event. Anything else Plivo reports isn't one we emit. */
 const TYPES: Record<string, WebhookEventType> = {
@@ -37,12 +37,6 @@ const TYPES: Record<string, WebhookEventType> = {
 	failed: "failed",
 	undelivered: "failed",
 	rejected: "failed",
-}
-
-/** `14155550123` → `+14155550123`; anything that isn't digits is left alone. */
-function e164(value: string | undefined): string | undefined {
-	if (!value) return undefined
-	return /^\d+$/.test(value) ? `+${value}` : value
 }
 
 /** The URL Plivo signs: everything but the query string and the fragment. */
@@ -107,7 +101,7 @@ const adapter: WebhookAdapter = {
 				inbound_event({
 					provider: "plivo",
 					channel: "sms",
-					phone: e164(f.From),
+					phone: plus_e164(f.From),
 					text: f.Text,
 					message_id: id,
 					raw: f,
@@ -122,7 +116,7 @@ const adapter: WebhookAdapter = {
 			type,
 			provider: "plivo",
 			channel: "sms",
-			phone: e164(f.To),
+			phone: plus_e164(f.To),
 			message_id: id,
 			bounce: type === "failed" ? { category: "unknown", detail: code } : undefined,
 			raw: f,

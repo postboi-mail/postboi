@@ -19,6 +19,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 - Every webhook and polled event that names a message carries a `dedupe_key`, the same for a redelivery and different for anything else, so a handler can skip what it has already handled. Providers redeliver, and Plivo, Sinch, Bandwidth and Twilio sign nothing that tells a replay apart.
 - A text a carrier blocked as spam is `failed` with `bounce.category: "filtered"`, on Twilio (30007), Telnyx (40002, 40003, 40015, 40017) and Vonage (1210), rather than `unknown`: the number is fine, and the message or sender is what to change.
 - `validate()` says what kind of sender `from` is (`sender`: `phone_number`, `short_code` or `alphanumeric`) and reports `sender_not_supported` where the provider doesn't send from that kind, without refusing the send. Through a failover chain, `sms.validate()` also lists `candidates`: the providers in it that would take the text.
+- `postboi/testing` is a new entry point. `mock_fetch()` answers HTTP requests from a script and records them, and `sms_contract_cases()` / `run_sms_contract()` hold an SMS provider of your own to what postboi's promise: one request per send, the common result, a reason on every refusal, an unknown outcome for a 5xx or a dropped connection, no request from `validate()`. Every SMS provider postboi ships runs the contract in its tests.
 
 ## 0.69.0
 

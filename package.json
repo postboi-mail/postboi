@@ -270,6 +270,10 @@
 			"types": "./dist/sms/sns.d.ts",
 			"default": "./dist/sms/sns.js"
 		},
+		"./testing": {
+			"types": "./dist/testing.d.ts",
+			"default": "./dist/testing.js"
+		},
 		"./sms-mock": {
 			"types": "./dist/sms/mock.d.ts",
 			"default": "./dist/sms/mock.js"

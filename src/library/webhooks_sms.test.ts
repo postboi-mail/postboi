@@ -4,6 +4,7 @@ import {
 	receive,
 	mock_request,
 	webhook,
+	dedupe_key,
 	WebhookVerificationError,
 } from "$library/webhooks/index.js"
 import { twilio_signature } from "$library/webhooks/twilio.js"
@@ -645,6 +646,21 @@ describe("dedupe_key and filtered texts", () => {
 		)
 		expect(again.dedupe_key).toBe(first.dedupe_key)
 		expect(other.dedupe_key).not.toBe(first.dedupe_key)
+	})
+
+	it("tells one delay of a message from the next", () => {
+		const delay = (at: string) =>
+			dedupe_key({
+				type: "delayed",
+				provider: "smsworks",
+				channel: "sms",
+				phone: "+447700900123",
+				message_id: "m1",
+				timestamp: new Date(at),
+				raw: {},
+			})
+		expect(delay("2026-10-01T10:00:00Z")).not.toBe(delay("2026-10-01T11:00:00Z"))
+		expect(delay("2026-10-01T10:00:00Z")).toBe(delay("2026-10-01T10:00:00Z"))
 	})
 
 	it("tells one recipient of a batch from another", async () => {

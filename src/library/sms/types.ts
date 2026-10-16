@@ -91,7 +91,6 @@ export interface PreparedSms {
 	provider_options?: Record<string, unknown>
 }
 
-/** One problem {@link SmsCheck} found. `code` is the one a send would throw, where it would. */
 /**
  * Where a text stood when the provider answered, in one vocabulary across every provider:
  * `queued` (taken, not yet sent), `scheduled` (held for `scheduled_at`), `sent` (handed to
@@ -121,6 +120,7 @@ export interface SmsReceipt {
 	delivery: SmsDelivery
 }
 
+/** One problem {@link SmsCheck} found. `code` is the one a send would throw, where it would. */
 export type SmsIssue = { code: string; message: string }
 
 /** What `validate()` says about a text before it is sent. */

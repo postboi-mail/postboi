@@ -106,11 +106,12 @@ export default class SmsWorks extends SmsProvider<SendResponse> {
 		const d = data as Record<string, unknown> | null
 		// The batch endpoint answers with { batchid }, the single send with { messageid }.
 		const id = (d?.messageid ?? d?.batchid) as string | undefined
-		const status = (d?.status as string) ?? "sent"
+		const status = d?.status as string | undefined
 		return {
+			// No status is no word on its state: `queued`, and `scheduled` for a scheduled send.
 			...this.receipt([id], status),
 			messageid: id ?? "",
-			status,
+			status: status ?? "sent",
 			credits: d?.credits as number,
 		}
 	}

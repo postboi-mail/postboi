@@ -209,7 +209,8 @@ export interface WebhookEvent {
 	 * The same for a repeat of this event and different for any other, to deduplicate on:
 	 * providers redeliver, and several (Plivo, Sinch, Bandwidth, Twilio) sign nothing that
 	 * would tell a replay apart. Built from the provider, the message, the type and the
-	 * recipient, plus the time and link for an open or a click, which happen more than once.
+	 * recipient, plus the time and link for an open, a click or a delay, which happen more
+	 * than once.
 	 * Set by `receive()` and `poll()` on every event that names a message.
 	 */
 	dedupe_key?: string
@@ -220,7 +221,8 @@ export interface WebhookEvent {
 /** {@link WebhookEvent.dedupe_key} for an event, or undefined for one that names no message. */
 export function dedupe_key(event: WebhookEvent): string | undefined {
 	if (!event.message_id) return undefined
-	const repeats = event.type === "opened" || event.type === "clicked"
+	// These happen more than once for one message, so the time tells one from the next.
+	const repeats = event.type === "opened" || event.type === "clicked" || event.type === "delayed"
 	return [
 		event.provider,
 		event.message_id,
