@@ -8,6 +8,7 @@ import {
 } from "$library/webhooks/index.js"
 import { twilio_signature } from "$library/webhooks/twilio.js"
 import { puresms_signature } from "$library/webhooks/puresms.js"
+import { vonage_token } from "$library/webhooks/vonage.js"
 import { hex_encode } from "$library/webhooks/crypto.js"
 
 /** A form-encoded Twilio request to `url`, signed with `token` over `signed_url`. */
@@ -341,5 +342,134 @@ describe("receive — meta (WhatsApp keywords)", () => {
 		expect(await receive(request, { provider: "meta", secret })).toMatchObject([
 			{ type: "resubscribed", keyword: "start", channel: "whatsapp", phone: "+15557770006" },
 		])
+	})
+})
+
+describe("receive — telnyx (Ed25519-signed events)", () => {
+	it("maps delivery events and inbound texts", async () => {
+		const delivered = await mock_request({ provider: "telnyx", type: "delivered" })
+		expect(
+			await receive(delivered.request, { provider: "telnyx", secret: delivered.secret })
+		).toMatchObject([
+			{
+				type: "delivered",
+				channel: "sms",
+				phone: "+15557770006",
+				message_id: "40385f64-5717-4562-b3fc-2c963f66afa6",
+			},
+		])
+		const failed = await mock_request({ provider: "telnyx", type: "failed" })
+		expect(
+			await receive(failed.request, { provider: "telnyx", secret: failed.secret })
+		).toMatchObject([
+			{ type: "failed", bounce: { category: "unknown", detail: "40008 Undeliverable" } },
+		])
+		const sent = await mock_request({ provider: "telnyx", type: "sent" })
+		expect((await receive(sent.request, { provider: "telnyx", secret: sent.secret }))[0].type).toBe(
+			"sent"
+		)
+		const stop = await mock_request({ provider: "telnyx", type: "unsubscribed" })
+		expect(await receive(stop.request, { provider: "telnyx", secret: stop.secret })).toMatchObject([
+			{ type: "unsubscribed", keyword: "stop", phone: "+15557770006" },
+		])
+	})
+
+	it("refuses a tampered body, a stale timestamp and another key", async () => {
+		const { request, secret } = await mock_request({ provider: "telnyx", type: "delivered" })
+		const body = await request.clone().text()
+		const tampered = new Request(request.url, {
+			method: "POST",
+			headers: request.headers,
+			body: body.replace("delivered", "expired"),
+		})
+		await expect(receive(tampered, { provider: "telnyx", secret })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+		const stale = new Request(request.url, {
+			method: "POST",
+			headers: { ...Object.fromEntries(request.headers), "telnyx-timestamp": "1700000000" },
+			body,
+		})
+		await expect(receive(stale, { provider: "telnyx", secret })).rejects.toMatchObject({
+			code: "stale_timestamp",
+		})
+		const other = await mock_request({ provider: "telnyx", type: "delivered" })
+		await expect(
+			receive(request, { provider: "telnyx", secret: other.secret })
+		).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+	})
+
+	it("drops a delivery Telnyx couldn't confirm either way", async () => {
+		const { request, secret } = await mock_request({ provider: "telnyx", type: "delivered" })
+		const adapter = (await import("$library/webhooks/telnyx.js")).default
+		const body = (await request.text()).replace(
+			'"status":"delivered"',
+			'"status":"delivery_unconfirmed"'
+		)
+		expect(
+			await adapter.normalize(body, { headers: new Headers(), url: new URL("https://x") })
+		).toEqual([])
+		expect(secret).toBeTruthy()
+	})
+})
+
+describe("receive — vonage (HS256 JWT)", () => {
+	const secret = "vonage-signature-secret"
+
+	it("maps statuses and inbound texts, putting the + back", async () => {
+		const failed = await mock_request({ provider: "vonage", type: "failed", secret })
+		expect(await receive(failed.request, { provider: "vonage", secret })).toMatchObject([
+			{
+				type: "failed",
+				phone: "+447700900123",
+				tags: ["otp"],
+				bounce: { category: "unknown", detail: "1170 Invalid recipient" },
+			},
+		])
+		const sent = await mock_request({ provider: "vonage", type: "sent", secret })
+		expect((await receive(sent.request, { provider: "vonage", secret }))[0].type).toBe("sent")
+		const reply = await mock_request({ provider: "vonage", type: "received", secret })
+		expect(await receive(reply.request, { provider: "vonage", secret })).toMatchObject([
+			{ type: "received", phone: "+447700900123", body: { text: "Thanks, see you then" } },
+		])
+	})
+
+	it("refuses another secret, a body its payload_hash doesn't match, and another algorithm", async () => {
+		const { request } = await mock_request({ provider: "vonage", type: "delivered", secret })
+		await expect(
+			receive(request.clone(), { provider: "vonage", secret: "other" })
+		).rejects.toMatchObject({ code: "invalid_signature" })
+
+		const body = await request.clone().text()
+		const tampered = new Request(request.url, {
+			method: "POST",
+			headers: request.headers,
+			body: body.replace("delivered", "rejected"),
+		})
+		await expect(receive(tampered, { provider: "vonage", secret })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+
+		const token = request.headers.get("authorization")!.replace("Bearer ", "")
+		const [, payload, signature] = token.split(".")
+		const none = btoa(JSON.stringify({ alg: "none", typ: "JWT" })).replace(/=+$/, "")
+		const forged = new Request(request.url, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				authorization: `Bearer ${none}.${payload}.${signature}`,
+			},
+			body,
+		})
+		await expect(receive(forged, { provider: "vonage", secret })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+	})
+
+	it("signs the way it verifies", async () => {
+		const token = await vonage_token(secret, { iat: 1 })
+		expect(token.split(".")).toHaveLength(3)
 	})
 })

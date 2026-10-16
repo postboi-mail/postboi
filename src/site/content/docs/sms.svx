@@ -223,8 +223,8 @@ left out). It schedules with `scheduled_at`. **Vonage** takes `VONAGE_API_KEY` w
 and `VONAGE_PRIVATE_KEY` (Vonage refuses the key and secret for those), plus
 `VONAGE_REGION` for `api-eu`, `api-us` or `api-ap`. It can't schedule, so a `scheduled_at`
 is refused rather than sent now. Both send one recipient per request, as Twilio does: pass
-an array of sends to reach several people. Their delivery receipts aren't read by
-`receive()` yet.
+an array of sends to reach several people. Their receipts and replies arrive at `receive()`; see
+[delivery receipts](#delivery-receipts).
 
 Construct one directly instead of using the environment, exactly like an email provider:
 
@@ -368,6 +368,14 @@ normalized [webhook events](/webhooks#text-messages), with `channel: "sms"` and 
   providers offer. Their delivery reports come from three published source addresses
   (listed on their [developer page](https://thesmsworks.co.uk/developers)) if you want a
   second check in front.
+- **Telnyx pushes Ed25519-signed events** to the messaging profile's webhook URL (or the
+  provider's `webhook_url`). Set `TELNYX_WEBHOOK_SECRET` to the account's *public* key
+  (Mission Control → Keys & Credentials), and point the URL at `receive()` with
+  `{ provider: "telnyx" }`. Timestamps older than five minutes are refused, as Telnyx asks.
+- **Vonage signs with a JWT.** Point the application's Status and Inbound URLs at
+  `receive()` with `{ provider: "vonage" }`, and set `VONAGE_WEBHOOK_SECRET` to the
+  signature secret from the dashboard's settings. The token's `payload_hash` ties it to the
+  body as delivered.
 - **PureSMS pushes signed receipts.** Add your endpoint under **Settings → Webhooks** with
   a secret, and set the same value as `PURESMS_WEBHOOK_SECRET`. Each request is signed with
   HMAC-SHA256 over its timestamp and body. A receipt doesn't name the recipient's number,

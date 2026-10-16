@@ -323,11 +323,14 @@ export const MODULES: Record<string, () => Promise<AdapterModule>> = {
 	scaleway: () => import("./scaleway.js"),
 	// The channel providers that push, keyed like `sms()`'s and `whatsapp()`'s. Twilio
 	// pushes when it is given somewhere to (and can be polled when it isn't); Meta's Cloud
-	// API and PureSMS push signed requests, and The SMS Works an account-wide report.
+	// API, PureSMS, Telnyx and Vonage push signed requests, and The SMS Works an
+	// account-wide report.
 	meta: () => import("./meta.js"),
 	smsworks: () => import("./smsworks.js"),
 	twilio: () => import("./twilio.js"),
 	puresms: () => import("./puresms.js"),
+	telnyx: () => import("./telnyx.js"),
+	vonage: () => import("./vonage.js"),
 }
 
 /** Options for {@link receive}. */
