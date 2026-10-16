@@ -143,6 +143,8 @@ both put one API over several, and they cover much of the same ground:
 | A key for skipping redelivered webhooks             | ✅ `dedupe_key`                                            | ✅ `dedupeKey`                              |
 | Spam blocks reported apart from other failures      | Twilio, Telnyx, Vonage, Sinch, Plivo, Bandwidth            | Twilio, Telnyx, Vonage, Sinch               |
 | Phone numbers masked in errors and hooks            | ✅ by default (`sms.redact: false` shows them)             | ✅ always                                   |
+| Message text kept out of errors and hooks           | ✅ by default, with the numbers                            | ✅ always                                   |
+| Runtime dependencies                                | None                                                       | None                                        |
 | Dry-run doctor, and one confirmed live send         | ✅ `postboi doctor --sms-text`, `--sms-live`               | ✅ `sms-sdk doctor`, `--live`               |
 | Contract tests for an adapter you write             | ✅ `postboi/testing`                                       | ✅ `/testing`                               |
 | Configured from the environment, no setup code      | ✅ `POSTBOI_SMS_PROVIDER` and its keys                     | ❌ adapters are constructed in code          |
