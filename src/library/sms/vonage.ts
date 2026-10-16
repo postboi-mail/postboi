@@ -3,6 +3,7 @@ import {
 	type PreparedSms,
 	type SmsReceipt,
 	type SmsProviderOptions,
+	type SmsSenderKind,
 } from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError, type RejectionReason } from "../errors.js"
@@ -94,6 +95,11 @@ const encoder = new TextEncoder()
  */
 export default class Vonage extends SmsProvider<SendResponse> {
 	protected readonly provider = "vonage"
+	// Vonage documents long codes, toll-free numbers and alphanumeric IDs, not short codes.
+	protected override readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"alphanumeric",
+	]
 	protected override readonly single_recipient = true
 	protected override readonly validity_range = [20, 604800] as const
 	protected override readonly reserved_options = [

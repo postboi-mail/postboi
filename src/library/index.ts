@@ -46,6 +46,7 @@ export type {
 	SmsIssue,
 	SmsDelivery,
 	SmsReceipt,
+	SmsSenderKind,
 } from "./sms/types.js"
 
 // The chat channel's public types.

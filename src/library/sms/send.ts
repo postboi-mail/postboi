@@ -72,7 +72,9 @@ const RESOLUTION: ChannelResolution<SmsProvider<SmsReceipt>> = {
 async function validate(options: SmsOptions): Promise<SmsCheck> {
 	const providers = await resolve_channel_chain(RESOLUTION)
 	const checks = await Promise.all(providers.map((provider) => provider.validate(options)))
-	return checks.length > 1 ? { ...checks[0], chain: checks } : checks[0]
+	if (checks.length === 1) return checks[0]
+	const candidates = checks.filter((check) => check.ok).map((check) => check.provider)
+	return { ...checks[0], chain: checks, candidates }
 }
 
 /**

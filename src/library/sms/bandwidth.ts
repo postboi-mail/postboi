@@ -3,6 +3,7 @@ import {
 	type PreparedSms,
 	type SmsReceipt,
 	type SmsProviderOptions,
+	type SmsSenderKind,
 } from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
@@ -55,6 +56,11 @@ type SendResponse = { id: string; segment_count?: number } & SmsReceipt
  */
 export default class Bandwidth extends SmsProvider<SendResponse> {
 	protected readonly provider = "bandwidth"
+	// US numbers and short codes; Bandwidth has no alphanumeric sender IDs.
+	protected override readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"short_code",
+	]
 	protected override readonly single_recipient = true
 	protected override readonly max_media = 10
 	protected override readonly reserved_options = [
