@@ -118,6 +118,7 @@ export default class HubSpot extends ProviderBase<SendResponse> {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(params),
+			idempotent: Boolean(message.idempotency_key),
 		}
 	}
 

@@ -10,8 +10,13 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- `retries` no longer resends after a 5xx, a timeout or a network error unless the send carries an `idempotency_key` the provider honours. None of those failures proves the message wasn't sent, so a retry could deliver it twice. A 429 is still always retried. This covers every POST a provider makes, not only sends: a cancel, a list subscribe or a contact upsert that gets a 5xx is no longer retried either. GET, HEAD, PUT, DELETE and OPTIONS requests still are. Set `retry_unknown: true` (per provider or in `postboi.config`) to get the old behaviour back.
+
 ### Added
 
+- `PostboiError.outcome_unknown` is `true` when the message may have been sent despite the error (a 5xx, a timeout, a dropped connection), and `false` when the provider refused it or nothing was sent.
 - `receive()` takes Twilio's status callbacks and inbound messages, for SMS and WhatsApp, with `{ provider: "twilio" }`. Requests are verified by `X-Twilio-Signature` against your auth token (`TWILIO_WEBHOOK_SECRET`, else `TWILIO_AUTH_TOKEN`), including JSON bodies signed by `bodySHA256`. The Twilio SMS and WhatsApp providers take `status_callback` (`TWILIO_STATUS_CALLBACK`) to say where receipts go. `poll()` still works with nothing set up.
 - `receive()` takes PureSMS's delivery receipts and inbound messages with `{ provider: "puresms" }`, verified by its HMAC-SHA256 signature (`PURESMS_WEBHOOK_SECRET`). Message ids keep all 64 bits.
 - `receive(request, { url })` names the URL the provider called, for a provider that signs it (Twilio) when a proxy or tunnel changed the request's own.
@@ -21,6 +26,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 - Every inbound SMS is now an event. The Twilio poll and The SMS Works used to read replies for STOP and drop the rest; now anything that isn't STOP or START is `received`, with the words in `body.text`, as WhatsApp replies already were. A HELP is a `received` with `keyword: "help"`. A handler that switches on `type` sees new events and nothing it already handled changes.
 - On WhatsApp via Meta, a START is now `resubscribed` rather than `received`.
+
+### Fixed
+
+- The Twilio SMS provider no longer sends `idempotency_key` as `I-Twilio-Idempotency-Token`. That is a header Twilio puts on webhooks it sends you, and Twilio documents no idempotency control for creating a message, so it never made a retried text safe.
 
 ## 0.68.1
 

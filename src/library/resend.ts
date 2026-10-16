@@ -92,6 +92,7 @@ export default class Resend extends ProviderBase<SendResponse> {
 				...(message.idempotency_key ? { "Idempotency-Key": message.idempotency_key } : {}),
 			},
 			body: JSON.stringify(await this.#params(message)),
+			idempotent: Boolean(message.idempotency_key),
 		}
 	}
 

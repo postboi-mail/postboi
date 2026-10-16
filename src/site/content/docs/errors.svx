@@ -23,6 +23,7 @@ try {
 		console.error(error.code) // provider-specific code, when available
 		console.error(error.message) // normalised message
 		console.error(error.raw) // the original provider payload
+		console.error(error.outcome_unknown) // true when it may have been sent anyway
 	} else {
 		console.error(error)
 	}
@@ -55,14 +56,34 @@ import { config } from 'postboi'
 
 export default config({
 	timeout: 30000, // per-request timeout in ms (default 30000)
-	retries: 2, // retries on 429/5xx and network errors (default 0)
+	retries: 2, // retries on 429; on 5xx and network errors only with an idempotency_key (default 0)
 	retry_delay: 500 // base backoff in ms, doubles each attempt (default 500)
 })
 ```
 
-Retries fire on `429`, `5xx`, and network errors. The delay doubles each attempt
-(exponential backoff).
+Nothing is retried until `retries` is above 0. Then what gets retried depends on what
+the failure proves. The delay doubles each attempt
+(exponential backoff), and a `Retry-After` from the provider is honoured up to a minute.
 
-> **Retries are off by default on purpose.** Retrying a send that already reached the
-> provider can deliver a duplicate email, so enable `retries` only alongside an
-> `idempotency_key` (where the provider supports it).
+| Failure | Retried | `outcome_unknown` |
+| ------- | ------- | ----------------- |
+| `429` | Yes. The provider refused the request. | `false` |
+| `5xx`, timeout, network error | Only when the send carries an `idempotency_key` the provider honours. | `true` |
+| Any other `4xx` | Never. Sending it again gets the same answer. | `false` |
+
+A `5xx` or a dropped connection doesn't mean the message didn't go. The provider may have
+queued it before answering badly or not at all, so sending it again can deliver it twice.
+That is why those retries wait for a key the provider deduplicates on, and why the error
+says `outcome_unknown: true` when they run out: look the message up with the provider
+before you send it again yourself.
+
+Providers that honour a key: the Postboi provider, Resend, AhaSend, Lettermint, JetEmail,
+Loops, Primitive, Klaviyo (`unique_id`), HubSpot (`sendId`) and Azure (a UUID, as its
+`Operation-Id`). None of the SMS providers documents one for sending, Twilio included, so
+a text is never retried after a `5xx`.
+
+If a duplicate is better than a drop for you, `retry_unknown: true` retries those failures
+without a key too.
+
+> **Retries are off by default on purpose.** Set `retries` and pass an `idempotency_key`
+> on sends to a provider that honours one.

@@ -1142,9 +1142,43 @@ describe("resilience (shared base)", () => {
 	const make = (opts = {}) =>
 		new Resend({ api_key: "k", default: { from: "from@test.com" }, retry_delay: 0, ...opts })
 
-	it("retries on 5xx then succeeds", async () => {
+	it("retries a 5xx when the send carries an idempotency key", async () => {
 		fetch
 			.mockResolvedValueOnce(respond({ ok: false, status: 503 }))
+			.mockResolvedValueOnce(respond({ json: { id: "ok" } }))
+		const result = await make({ retries: 1 }).send({
+			to: "to@test.com",
+			body: "x",
+			idempotency_key: "k1",
+		})
+		expect(result).toEqual({ id: "ok" })
+		expect(fetch).toHaveBeenCalledTimes(2)
+		expect(sent_init().headers).toMatchObject({ "Idempotency-Key": "k1" })
+	})
+
+	it("does not retry a 5xx without a key, and says the outcome is unknown", async () => {
+		fetch.mockResolvedValue(respond({ ok: false, status: 503 }))
+		const error = await caught(make({ retries: 2 }).send({ to: "to@test.com", body: "x" }))
+		expect(fetch).toHaveBeenCalledTimes(1)
+		expect(error.status).toBe(503)
+		expect(error.outcome_unknown).toBe(true)
+	})
+
+	it("retries a 5xx without a key when retry_unknown says so", async () => {
+		fetch
+			.mockResolvedValueOnce(respond({ ok: false, status: 503 }))
+			.mockResolvedValueOnce(respond({ json: { id: "ok" } }))
+		const result = await make({ retries: 1, retry_unknown: true }).send({
+			to: "to@test.com",
+			body: "x",
+		})
+		expect(result).toEqual({ id: "ok" })
+		expect(fetch).toHaveBeenCalledTimes(2)
+	})
+
+	it("retries a 429 with no key, since the provider refused it", async () => {
+		fetch
+			.mockResolvedValueOnce(respond({ ok: false, status: 429 }))
 			.mockResolvedValueOnce(respond({ json: { id: "ok" } }))
 		const result = await make({ retries: 1 }).send({ to: "to@test.com", body: "x" })
 		expect(result).toEqual({ id: "ok" })
@@ -1155,20 +1189,26 @@ describe("resilience (shared base)", () => {
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 503, json: { message: "down", name: "x" } })
 		)
-		const error = await caught(make({ retries: 2 }).send({ to: "to@test.com", body: "x" }))
+		const error = await caught(
+			make({ retries: 2 }).send({ to: "to@test.com", body: "x", idempotency_key: "k1" })
+		)
 		expect(error.status).toBe(503)
+		expect(error.outcome_unknown).toBe(true)
 		expect(fetch).toHaveBeenCalledTimes(3)
 	})
 
-	it("does not retry on 4xx", async () => {
+	it("does not retry on 4xx, and a refusal is not an unknown outcome", async () => {
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 400, json: { message: "bad", name: "x" } })
 		)
-		await caught(make({ retries: 3 }).send({ to: "to@test.com", body: "x" }))
+		const error = await caught(
+			make({ retries: 3 }).send({ to: "to@test.com", body: "x", idempotency_key: "k1" })
+		)
 		expect(fetch).toHaveBeenCalledTimes(1)
+		expect(error.outcome_unknown).toBe(false)
 	})
 
-	it("wraps network failures in a PostboiError", async () => {
+	it("wraps network failures in a PostboiError with an unknown outcome", async () => {
 		fetch.mockImplementation(async () => {
 			throw new Error("ECONNRESET")
 		})
@@ -1176,7 +1216,43 @@ describe("resilience (shared base)", () => {
 			name: "PostboiError",
 			provider: "resend",
 			message: expect.stringContaining("ECONNRESET"),
+			outcome_unknown: true,
 		})
+	})
+
+	it("calls a 2xx whose body drops an unknown outcome, not a refusal", async () => {
+		fetch.mockResolvedValue({
+			...respond(),
+			text: async () => {
+				throw new TypeError("terminated")
+			},
+		})
+		const error = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(error.status).toBe(200)
+		expect(error.outcome_unknown).toBe(true)
+	})
+
+	it("does not retry a network failure without a key", async () => {
+		fetch.mockImplementation(async () => {
+			throw new Error("ECONNRESET")
+		})
+		await caught(make({ retries: 2 }).send({ to: "to@test.com", body: "x" }))
+		expect(fetch).toHaveBeenCalledTimes(1)
+	})
+
+	it("retries a network failure with a key", async () => {
+		fetch
+			.mockImplementationOnce(async () => {
+				throw new Error("ECONNRESET")
+			})
+			.mockResolvedValueOnce(respond({ json: { id: "ok" } }))
+		const result = await make({ retries: 1 }).send({
+			to: "to@test.com",
+			body: "x",
+			idempotency_key: "k1",
+		})
+		expect(result).toEqual({ id: "ok" })
+		expect(fetch).toHaveBeenCalledTimes(2)
 	})
 
 	it("forwards an idempotency key header", async () => {

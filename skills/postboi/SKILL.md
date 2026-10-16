@@ -230,7 +230,7 @@ WhatsApp receipts: Twilio is `receive()` with `{ provider: "twilio" }` once send
 
 ## Errors & retries
 
-Every provider on every channel throws the same normalised `PostboiError` (`provider`, `channel?`, `status?`, `code?`, `message`, `raw`); check with `mail.is_error(e)`. `channel` is what tells you which leg of a fan-out failed. Retries are **off by default on purpose** — enable `retries` only alongside an `idempotency_key` where supported, or you risk duplicate sends. `/raw/errors`
+Every provider on every channel throws the same normalised `PostboiError` (`provider`, `channel?`, `status?`, `code?`, `message`, `raw`); check with `mail.is_error(e)`. `channel` is what tells you which leg of a fan-out failed. Retries are **off by default on purpose**. A 429 is always retried; a 5xx, timeout or network error only when the send carries an `idempotency_key` the provider honours (no SMS provider does), and otherwise the error has `outcome_unknown: true`, meaning it may have been sent anyway. `retry_unknown: true` retries those without a key, accepting duplicates. `/raw/errors`
 
 ## Testing
 

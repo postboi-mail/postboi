@@ -36,6 +36,14 @@ export class PostboiError extends Error {
 	readonly code?: string | number
 	/** The original provider error payload (parsed body or thrown cause). */
 	readonly raw: unknown
+	/**
+	 * True when nothing proves the message wasn't sent: a timeout, a dropped connection or a
+	 * 5xx. The provider may have queued it before answering badly or not at all, so sending
+	 * it again can deliver it twice. Look it up with the provider, or resend with the same
+	 * `idempotency_key` where the provider honours one. False for everything the provider
+	 * refused outright and everything caught before a request was made.
+	 */
+	readonly outcome_unknown: boolean
 
 	constructor(args: {
 		provider: string
@@ -44,6 +52,7 @@ export class PostboiError extends Error {
 		status?: number
 		code?: string | number
 		raw?: unknown
+		outcome_unknown?: boolean
 	}) {
 		super(args.message)
 		this.name = "PostboiError"
@@ -52,6 +61,7 @@ export class PostboiError extends Error {
 		this.status = args.status
 		this.code = args.code
 		this.raw = args.raw
+		this.outcome_unknown = args.outcome_unknown ?? false
 	}
 }
 

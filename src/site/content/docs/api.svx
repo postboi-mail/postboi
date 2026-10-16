@@ -124,7 +124,8 @@ Every provider also accepts these, on top of its own credentials:
 	// field defaults applied when a send omits them; to/cc/bcc accept a string or array
 	default?: { from?, to?, cc?, bcc?, reply_to? }
 	timeout?: number // per-request timeout in ms (default 30000)
-	retries?: number // retries on 429/5xx and network errors (default 0)
+	retries?: number // retries on 429; on 5xx and network errors only with an idempotency_key (default 0)
+	retry_unknown?: boolean // also retry 5xx and network errors without a key (default false)
 	retry_delay?: number // base backoff in ms, doubles each attempt (default 500)
 	auto_text?: boolean // derive a plain-text body from the HTML (default true)
 	hooks?: Hooks // see Hooks
@@ -164,6 +165,7 @@ interface PostboiError {
 	code?: string // provider-specific code, when available
 	message: string // normalised message
 	raw: unknown // the original provider payload
+	outcome_unknown: boolean // true when the message may have been sent anyway
 }
 ```
 

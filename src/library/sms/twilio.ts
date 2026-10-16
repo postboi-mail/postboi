@@ -117,9 +117,9 @@ export default class Twilio extends SmsProvider<SendResponse> {
 			headers: {
 				Authorization: twilio_auth(this.#account_sid, this.#auth_token),
 				"Content-Type": "application/x-www-form-urlencoded",
-				...(message.idempotency_key
-					? { "I-Twilio-Idempotency-Token": message.idempotency_key }
-					: {}),
+				// No idempotency header: Twilio documents none for creating a message.
+				// `I-Twilio-Idempotency-Token` is the one Twilio puts on webhooks it sends you,
+				// so forwarding it here promised a safe retry nothing on Twilio's side kept.
 			},
 			body: body.toString(),
 		}
