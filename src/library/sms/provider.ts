@@ -51,6 +51,19 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 	/** Whether the provider takes one recipient per request (Twilio, Telnyx, Vonage). */
 	protected readonly single_recipient: boolean = false
 
+	/** How many `media` URLs a send may carry. 0 means no MMS, and a send with media is refused. */
+	protected readonly max_media: number = 0
+
+	/** The `validity` this provider accepts, in seconds, or undefined where it takes none. */
+	protected readonly validity_range?: readonly [number, number]
+
+	/**
+	 * The request fields the send's own options set, which `provider_options` may not
+	 * overwrite (compared case-insensitively). Undefined where `provider_options` aren't
+	 * carried at all.
+	 */
+	protected readonly reserved_options?: ReadonlyArray<string>
+
 	/**
 	 * Whether the provider can schedule a send. Left false, a `scheduled_at` is **rejected**
 	 * rather than quietly sent immediately — a text that was meant for Tuesday arriving now
@@ -218,6 +231,64 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 			}
 		}
 
+		const media = options.media?.length ? options.media : undefined
+		if (media) {
+			if (this.max_media === 0) {
+				fail(
+					"media_not_supported",
+					`${this.provider} can't send MMS. Remove media, or use a provider that can (Twilio, Telnyx).`
+				)
+			} else if (media.length > this.max_media) {
+				fail(
+					"too_much_media",
+					`${this.provider} takes up to ${this.max_media} media URLs; got ${media.length}.`
+				)
+			}
+			for (const url of media) {
+				if (!/^https?:\/\//i.test(url))
+					fail("invalid_media", `Media must be a public http(s) URL: ${url}`)
+			}
+		}
+
+		if (options.validity !== undefined) {
+			const range = this.validity_range
+			if (!range) {
+				fail(
+					"validity_not_supported",
+					`${this.provider} can't limit how long it tries. Remove validity, or use a provider that can (Twilio, Vonage).`
+				)
+			} else if (
+				!Number.isInteger(options.validity) ||
+				options.validity < range[0] ||
+				options.validity > range[1]
+			) {
+				fail(
+					"invalid_validity",
+					`${this.provider} takes a validity of ${range[0]} to ${range[1]} seconds; got ${options.validity}.`
+				)
+			}
+		}
+
+		const extra =
+			options.provider_options && Object.keys(options.provider_options).length > 0
+				? options.provider_options
+				: undefined
+		if (extra) {
+			const reserved = this.reserved_options
+			if (!reserved) {
+				fail("provider_options_not_supported", `${this.provider} doesn't take provider_options.`)
+			} else {
+				const lower = new Set(reserved.map((name) => name.toLowerCase()))
+				const taken = Object.keys(extra).filter((name) => lower.has(name.toLowerCase()))
+				if (taken.length > 0) {
+					fail(
+						"reserved_provider_option",
+						`provider_options can't set ${taken.join(", ")}: the send's own fields set ${taken.length === 1 ? "it" : "them"}.`
+					)
+				}
+			}
+		}
+
 		// Each number on its own, so one bad number doesn't hide the rest from validate().
 		const recipients: Array<string> = []
 		let unreadable = 0
@@ -247,6 +318,9 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 				scheduled_at,
 				tags: options.tags,
 				idempotency_key: options.idempotency_key,
+				media,
+				validity: options.validity,
+				provider_options: extra,
 			},
 		}
 	}

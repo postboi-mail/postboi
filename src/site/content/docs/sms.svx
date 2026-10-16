@@ -176,6 +176,34 @@ await sms({ to: "+447788223344", message: "…", scheduled_at: { hours: 2 } })
 Providers that **can't** schedule reject the send rather than delivering immediately. A
 text meant for Tuesday arriving now is worse than an error, and silent.
 
+## Pictures, expiry and provider options
+
+Three more options, each carried only where the provider can, and refused before any
+request where it can't. [`sms.validate()`](#checking-a-text-before-you-send-it) lists all
+three.
+
+```typescript
+await sms({
+	to: "+15550001111",
+	message: "Your order is on its way",
+	media: ["https://example.com/parcel.png"], // MMS
+	validity: 600, // give up after ten minutes
+	provider_options: { MessageIntent: "notifications" }, // straight into the request
+})
+```
+
+| Option | Carried by | Refused elsewhere as |
+| ------ | ---------- | -------------------- |
+| `media`, public http(s) URLs | Twilio and Telnyx, up to 10 | `media_not_supported` |
+| `validity`, seconds the provider keeps trying | Twilio (1 to 36000), Vonage (20 to 604800) | `validity_not_supported` |
+| `provider_options` | Every provider but Amazon SNS | `provider_options_not_supported` |
+
+`validity` is for the text that's worthless late, such as a one-time code. `provider_options`
+are the provider's own parameter names, written as its reference spells them (Twilio's are
+PascalCase), and checked for one thing only: they can't set a field the send already sets,
+such as `Body` or `to` (`reserved_provider_option`). The rest is between you and the
+provider.
+
 ## Sending many
 
 Pass an array. Each message gets its own result, so one failure never loses the rest:

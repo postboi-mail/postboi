@@ -22,6 +22,10 @@ export interface SendParams {
 	webhook_url?: string
 	/** ISO 8601, for a scheduled send. */
 	send_at?: string
+	/** Public URLs, with `type: "MMS"`. */
+	media_urls?: Array<string>
+	type?: "SMS" | "MMS"
+	[option: string]: unknown
 }
 
 type SendResponse = { id: string; status: string }
@@ -83,6 +87,17 @@ export default class Telnyx extends SmsProvider<SendResponse> {
 	protected readonly provider = "telnyx"
 	protected override readonly supports_scheduling = true
 	protected override readonly single_recipient = true
+	protected override readonly max_media = 10
+	protected override readonly reserved_options = [
+		"to",
+		"from",
+		"text",
+		"messaging_profile_id",
+		"media_urls",
+		"type",
+		"webhook_url",
+		"send_at",
+	]
 	#api_key: string
 	#messaging_profile_id?: string
 	#webhook_url?: string
@@ -115,6 +130,8 @@ export default class Telnyx extends SmsProvider<SendResponse> {
 			messaging_profile_id: this.#messaging_profile_id,
 			webhook_url: this.#webhook_url,
 			send_at: message.scheduled_at?.toISOString(),
+			...(message.media ? { media_urls: message.media, type: "MMS" as const } : {}),
+			...message.provider_options,
 		}
 		return {
 			url: "https://api.telnyx.com/v2/messages",

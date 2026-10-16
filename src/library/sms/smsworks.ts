@@ -15,6 +15,7 @@ export interface SendParams {
 	tag?: string
 	/** Echoed back on the delivery report, so a webhook can correlate. */
 	metadata?: Record<string, string>
+	[option: string]: unknown
 }
 
 type SendResponse = { messageid: string; status: string; credits?: number }
@@ -38,6 +39,13 @@ export default class SmsWorks extends SmsProvider<SendResponse> {
 	protected readonly provider = "smsworks"
 	// `/message/schedule` takes an ISO date on the same payload.
 	protected override readonly supports_scheduling = true
+	protected override readonly reserved_options = [
+		"sender",
+		"destination",
+		"content",
+		"schedule",
+		"tag",
+	]
 	#api_key: string
 	#host = "https://api.thesmsworks.co.uk/v1"
 
@@ -53,6 +61,7 @@ export default class SmsWorks extends SmsProvider<SendResponse> {
 			content: message.message,
 			schedule: message.scheduled_at?.toISOString(),
 			tag: message.tags?.[0],
+			...message.provider_options,
 		}
 	}
 

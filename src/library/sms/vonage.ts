@@ -32,6 +32,9 @@ export interface SendParams {
 	/** Echoed on the status webhook; up to 100 characters. */
 	client_ref?: string
 	webhook_url?: string
+	/** Seconds Vonage keeps trying before the message expires. */
+	ttl?: number
+	[option: string]: unknown
 }
 
 type SendResponse = { message_uuid: string }
@@ -87,6 +90,17 @@ const encoder = new TextEncoder()
 export default class Vonage extends SmsProvider<SendResponse> {
 	protected readonly provider = "vonage"
 	protected override readonly single_recipient = true
+	protected override readonly validity_range = [20, 604800] as const
+	protected override readonly reserved_options = [
+		"message_type",
+		"channel",
+		"to",
+		"from",
+		"text",
+		"client_ref",
+		"webhook_url",
+		"ttl",
+	]
 	#basic?: string
 	#application?: { id: string; key: string }
 	#jwt?: { token: string; until: number }
@@ -168,6 +182,8 @@ export default class Vonage extends SmsProvider<SendResponse> {
 			text: message.message,
 			client_ref: message.tags?.[0]?.slice(0, 100),
 			webhook_url: this.#webhook_url,
+			ttl: message.validity,
+			...message.provider_options,
 		}
 		return {
 			url: `${this.#host}/v1/messages`,

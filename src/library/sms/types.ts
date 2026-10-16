@@ -51,6 +51,24 @@ export interface SmsOptions {
 	idempotency_key?: string
 	/** Override the default country for national-format numbers in this send. */
 	country?: string
+	/**
+	 * Images or files to send with the text, as public http(s) URLs: an MMS. Twilio and
+	 * Telnyx carry up to 10; a provider that can't send MMS refuses rather than dropping them.
+	 */
+	media?: Array<string>
+	/**
+	 * How many seconds the provider keeps trying to deliver before giving up: a one-time code
+	 * that arrives an hour late is worse than one that never does. Twilio takes 1 to 36000,
+	 * Vonage 20 to 604800; anywhere else it is refused rather than ignored.
+	 */
+	validity?: number
+	/**
+	 * Parameters this provider takes that the fields above don't cover, passed straight into
+	 * its request (Twilio's `MessageIntent`, Telnyx's `subject`, Vonage's `sms` object, …).
+	 * Not validated beyond refusing a name the send sets itself, so check the provider's own
+	 * reference. Not carried by every provider: Amazon SNS refuses them.
+	 */
+	provider_options?: Record<string, unknown>
 }
 
 /**
@@ -66,6 +84,9 @@ export interface PreparedSms {
 	scheduled_at?: Date
 	tags?: Array<string>
 	idempotency_key?: string
+	media?: Array<string>
+	validity?: number
+	provider_options?: Record<string, unknown>
 }
 
 /** One problem {@link SmsCheck} found. `code` is the one a send would throw, where it would. */
