@@ -138,11 +138,11 @@ both put one API over several, and they cover much of the same ground:
 | Encoding and segments, checked before sending       | ✅ `sms.validate()`                                        | ✅ `validate()`                             |
 | MMS, validity period, provider options              | ✅                                                         | ✅                                          |
 | Verified delivery and inbound webhooks              | ✅ 8 providers                                             | ✅ 6 providers                              |
-| Sinch callbacks                                     | Basic credentials                                          | Basic credentials or HMAC                   |
+| Sinch callbacks                                     | ✅ Basic credentials or HMAC                               | ✅ Basic credentials or HMAC                |
 | STOP, START and HELP                                | ✅                                                         | ✅                                          |
 | A key for skipping redelivered webhooks             | ✅ `dedupe_key`                                            | ✅ `dedupeKey`                              |
-| Spam blocks reported apart from other failures      | Twilio, Telnyx, Vonage                                     | Twilio, Telnyx, Vonage, Sinch               |
-| Phone numbers masked in errors and hooks            | When you turn it on (`sms.redact`)                         | ✅ always                                   |
+| Spam blocks reported apart from other failures      | Twilio, Telnyx, Vonage, Sinch, Plivo, Bandwidth            | Twilio, Telnyx, Vonage, Sinch               |
+| Phone numbers masked in errors and hooks            | ✅ by default (`sms.redact: false` shows them)             | ✅ always                                   |
 | Dry-run doctor, and one confirmed live send         | ✅ `postboi doctor --sms-text`, `--sms-live`               | ✅ `sms-sdk doctor`, `--live`               |
 | Contract tests for an adapter you write             | ✅ `postboi/testing`                                       | ✅ `/testing`                               |
 | Configured from the environment, no setup code      | ✅ `POSTBOI_SMS_PROVIDER` and its keys                     | ❌ adapters are constructed in code          |
@@ -157,8 +157,7 @@ list.
 environment than wire it up in code, if you text into the UK (The SMS Works and PureSMS are
 UK-native and cheaper there), or if a dev machine shouldn't be able to text a real phone.
 
-**Pick sms-sdk** if you only send texts and want a small package that does nothing else, with
-masking on by default, or if you need Sinch's HMAC-signed callbacks.
+**Pick sms-sdk** if you only send texts and want a small package that does nothing else.
 
 ## Why it works well with AI agents
 
