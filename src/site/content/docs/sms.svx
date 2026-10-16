@@ -285,6 +285,18 @@ second.
 - **Receipts come from each provider separately**, so a chain needs each one's
   [webhook](#delivery-receipts) set up, each naming its provider.
 
+To test a chain without a provider, script a mock's failures. `fail` takes one failure
+for every send, or a list read one entry per send (`null` succeeds):
+
+```typescript
+import MockSms from "postboi/sms-mock"
+
+const first = new MockSms({ fail: [{ reason: "sender" }, null] }) // refused once, then fine
+const flaky = new MockSms({ fail: { outcome_unknown: true } }) // never fails over
+```
+
+The same `fail` works on the WhatsApp, push and chat mocks.
+
 `fails_over(error)` from the package root is the same test, for a chain of your own:
 
 ```typescript

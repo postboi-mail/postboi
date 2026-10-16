@@ -4,6 +4,8 @@ import { PostboiError } from "../errors.js"
 import { MockRecorder, type MockRecorderOptions } from "../mock_recorder.js"
 import { segments } from "./phone.js"
 
+export type { MockFailure } from "../mock_recorder.js"
+
 /** A normalized snapshot of a text captured by the mock provider. */
 export interface SentSms {
 	to: Array<string>

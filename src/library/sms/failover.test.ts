@@ -272,3 +272,46 @@ describe("naming several providers", () => {
 		expect(scoped_options(section, "puresms")).toBeUndefined()
 	})
 })
+
+describe("scripting a mock's failures", () => {
+	it("answers each send from the script, then succeeds", async () => {
+		const { default: MockSms } = await import("./mock.js")
+		const text = new MockSms({ fail: [{ reason: "sender", status: 400 }, null] })
+		const send = () => text.send({ to: "+447700900123", message: "hi" })
+
+		const first = (await send().catch((e) => e)) as PostboiError
+		expect(first).toMatchObject({ provider: "mock", reason: "sender", status: 400 })
+		expect(fails_over(first)).toBe(true)
+		await expect(send()).resolves.toMatchObject({ id: expect.any(String) })
+		// Past the script's end, sends go through.
+		await expect(send()).resolves.toBeDefined()
+		expect(text.sent).toHaveLength(2)
+	})
+
+	it("fails every send the same way with one failure, and an unknown outcome never fails over", async () => {
+		const { default: MockSms } = await import("./mock.js")
+		const text = new MockSms({ fail: { reason: "auth", outcome_unknown: true } })
+		const error = (await text
+			.send({ to: "+447700900123", message: "hi" })
+			.catch((e) => e)) as PostboiError
+		expect(error).toMatchObject({ outcome_unknown: true })
+		expect(error.reason).toBeUndefined()
+		expect(fails_over(error)).toBe(false)
+	})
+
+	it("lets a hand-built chain be tested without a provider", async () => {
+		const { default: MockSms } = await import("./mock.js")
+		const chain = [new MockSms({ fail: { reason: "rate_limited" } }), new MockSms()]
+		let answered_by = -1
+		for (const [i, provider] of chain.entries()) {
+			try {
+				await provider.send({ to: "+447700900123", message: "hi" })
+				answered_by = i
+				break
+			} catch (error) {
+				if (!fails_over(error)) throw error
+			}
+		}
+		expect(answered_by).toBe(1)
+	})
+})

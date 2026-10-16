@@ -89,6 +89,8 @@ export {
 	type ProviderError,
 	type RejectionReason,
 } from "./errors.js"
+// What a channel mock's `fail` option scripts: a refusal with a reason, or an unknown outcome.
+export type { MockFailure } from "./mock_recorder.js"
 // The channel-agnostic base and the types that go with it. `Transport` is exported so a
 // third party can implement a channel we don't ship.
 export {
