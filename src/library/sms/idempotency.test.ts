@@ -46,6 +46,16 @@ describe("an idempotency store", () => {
 		expect(fetch).toHaveBeenCalledTimes(1)
 	})
 
+	it("reads a repeat of a relative schedule as the same message", async () => {
+		const text = new MockSms({ idempotency: memory_idempotency_store() })
+		const send = () =>
+			text.send({ to, message: "hi", scheduled_at: { days: 1 }, idempotency_key: "later" })
+		const first = await send()
+		await new Promise((resolve) => setTimeout(resolve, 5))
+		expect(await send()).toEqual(first)
+		expect(text.sent).toHaveLength(1)
+	})
+
 	it("refuses the same key for a different message, and sends nothing", async () => {
 		const fetch = vi.fn().mockResolvedValue(answer(201, { sid: "SM1", status: "queued" }))
 		vi.stubGlobal("fetch", fetch)

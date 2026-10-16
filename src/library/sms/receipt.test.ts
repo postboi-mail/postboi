@@ -54,6 +54,16 @@ describe("every send answers with the same few fields", () => {
 		})
 	})
 
+	it("says scheduled for a scheduled send whose answer names no state", async () => {
+		stub(201, { messageid: "w-2" })
+		const result = await new SmsWorks({ api_key: "k", default: { from: "ACME" } }).send({
+			to,
+			message: "hi",
+			scheduled_at: new Date(Date.now() + 3_600_000),
+		})
+		expect(result).toMatchObject({ id: "w-2", status: "sent", delivery: "scheduled" })
+	})
+
 	it("says scheduled for a send held for later, whatever the provider called it", async () => {
 		stub(201, { sid: "SM1", status: "accepted" })
 		const result = await new Twilio({

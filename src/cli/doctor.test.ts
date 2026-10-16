@@ -556,6 +556,16 @@ describe("sms text and live send", () => {
 		})
 	})
 
+	it("doesn't call a text development mode logged a live send", async () => {
+		const send = vi.fn().mockResolvedValue({ id: "m1", provider: "mock", delivery: "sent" })
+		const check = await sms_live_check(
+			["--to", "+1", "--confirm-to", "+1", "--confirm-from", "none"],
+			false,
+			send
+		)
+		expect(check).toMatchObject({ level: "fail", detail: expect.stringContaining("not sent") })
+	})
+
 	it("says an unknown outcome is unknown", async () => {
 		const send = vi
 			.fn()

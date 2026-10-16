@@ -176,7 +176,10 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 				from: message.from,
 				message: message.message,
 				media: message.media,
-				scheduled_at: message.scheduled_at,
+				// Whether it is scheduled, not when: a relative `scheduled_at` ({ days: 1 })
+				// resolves against the clock, so a retry of the same send would name a
+				// different instant and read as a different message.
+				scheduled: message.scheduled_at !== undefined,
 				validity: message.validity,
 				provider_options: message.provider_options,
 			},

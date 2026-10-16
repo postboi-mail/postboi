@@ -5,6 +5,7 @@ import { provider_keys, SMS_PROVIDERS } from "../library/registry.js"
 import { sender_problem } from "../library/sms/provider.js"
 import { gsm7_breakers, segments } from "../library/sms/phone.js"
 import { PostboiError } from "../library/errors.js"
+import { load_config } from "../library/config.js"
 import { api, ApiCommandError } from "./api.js"
 import { cloud_base, fetch_domains, type PostboiDomain } from "./postboi.js"
 import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
@@ -633,7 +634,8 @@ export async function sms_live_check(
 		(await import("../library/sms/send.js")).sms(options)
 ): Promise<Check> {
 	const to = flag(args, "to")
-	const from = read_env("POSTBOI_SMS_FROM") ?? "none"
+	// The sender a send resolves: the environment's, then the one postboi.config commits.
+	const from = read_env("POSTBOI_SMS_FROM") ?? (await load_config()).sms?.default?.from ?? "none"
 	const refuse = (detail: string, fix?: string): Check => ({
 		name: "sms live",
 		level: "fail",
@@ -656,6 +658,13 @@ export async function sms_live_check(
 			to,
 			message: flag(args, "sms-text") ?? "A test text from postboi doctor.",
 		})) as { id?: string; provider?: string; delivery?: string }
+		// Development mode hands every text to the logging mock, so nothing reached a handset.
+		if (receipt.provider === "mock") {
+			return refuse(
+				"not sent: development mode logged it instead",
+				"set POSTBOI_SMS_DEV=send, or run with NODE_ENV other than development"
+			)
+		}
 		return {
 			name: "sms live",
 			level: "ok",

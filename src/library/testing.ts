@@ -71,9 +71,12 @@ export function mock_fetch(
 ): MockFetch {
 	const calls: Array<MockRequest> = []
 	const fake = async (input: string | URL | Request, init: RequestInit = {}) => {
+		// A Request carries its own method, headers and body; `init` overrides them, as in fetch.
+		const original = input instanceof Request ? new Request(input, init) : undefined
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
-		const body =
-			init.body === undefined || init.body === null
+		const body = original
+			? await original.text()
+			: init.body === undefined || init.body === null
 				? ""
 				: typeof init.body === "string"
 					? init.body
@@ -82,8 +85,8 @@ export function mock_fetch(
 						: await new Response(init.body).text()
 		const request: MockRequest = {
 			url,
-			method: (init.method ?? "GET").toUpperCase(),
-			headers: new Headers(init.headers),
+			method: (original?.method ?? init.method ?? "GET").toUpperCase(),
+			headers: original ? new Headers(original.headers) : new Headers(init.headers),
 			body,
 			json: () => JSON.parse(body),
 			form: () => new URLSearchParams(body),

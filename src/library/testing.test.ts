@@ -58,6 +58,20 @@ describe("mock_fetch", () => {
 		expect(globalThis.fetch).toBe(original)
 		expect(fetch.calls).toHaveLength(2)
 	})
+
+	it("reads the method, headers and body off a Request", async () => {
+		const fetch = mock_fetch([{ json: {} }])
+		await fetch(
+			new Request("https://example.com/r", {
+				method: "POST",
+				headers: { "x-key": "k" },
+				body: JSON.stringify({ to: "+1" }),
+			})
+		)
+		expect(fetch.calls[0].method).toBe("POST")
+		expect(fetch.calls[0].headers.get("x-key")).toBe("k")
+		expect(fetch.calls[0].json()).toEqual({ to: "+1" })
+	})
 })
 
 /** Every SMS provider postboi ships, with the answer its API gives an accepted send. */
