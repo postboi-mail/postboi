@@ -91,20 +91,24 @@ strings and none of this applies.**
 ### Keeping numbers out of your logs
 
 A phone number is personal data, and an error tracker is the place it most often leaks to:
-a provider's refusal names the number it refused, and an `on.error` hook forwards it. Turn
-on `redact` and SMS keeps numbers out of everything that leaves a send for somewhere else:
-
-```typescript
-export default config({ sms: { redact: true } }) // or POSTBOI_SMS_REDACT=1
-```
+a provider's refusal names the number it refused, and an `on.error` hook forwards it. So SMS
+keeps numbers out of everything that leaves a send for somewhere else, with nothing to set.
 
 A thrown error's message, stack and `raw` are masked (`+447700900123` becomes
 `+4*********23`), and so is the message and response that `after.send` and `on.error` are
 shown. The class, `code`, `status` and `reason` are untouched, so handling an error works
 the same, and the text itself still goes to the real number. `before.send` sees the real
-message, since what it returns is what gets sent. `redact: true` on one provider's
-constructor does it for that provider alone. For your own logging, `redact_phones(text)`
+message, since what it returns is what gets sent. For your own logging, `redact_phones(text)`
 masks every run of seven digits or more in a string, and `mask_phone(number)` masks one.
+
+To see the numbers, while you debug a send for instance, turn it off:
+
+```typescript
+export default config({ sms: { redact: false } }) // or POSTBOI_SMS_REDACT=0
+```
+
+`redact: false` on one provider's constructor does it for that provider alone, and
+`redact: true` there keeps one provider masked when the rest aren't.
 
 ## Development sends nothing
 

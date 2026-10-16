@@ -107,14 +107,16 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 	}
 
 	/**
-	 * Whether phone numbers are masked on the way out. Read per use rather than at
-	 * construction, because the environment may not be loaded until the first send.
+	 * Whether phone numbers are masked on the way out: yes, unless something says no. A
+	 * number is personal data, and an error tracker is where it leaks to. Read per use
+	 * rather than at construction, because the environment may not be loaded until the
+	 * first send.
 	 */
 	protected get redacting(): boolean {
 		if (this.#redact !== undefined) return this.#redact
 		const env = read_env("POSTBOI_SMS_REDACT")
-		if (env !== undefined) return env === "1" || env.toLowerCase() === "true"
-		return get_config().sms?.redact === true
+		if (env !== undefined && env !== "") return !/^(0|false|off|no)$/i.test(env.trim())
+		return get_config().sms?.redact !== false
 	}
 
 	protected override observable<T>(value: T): T {
