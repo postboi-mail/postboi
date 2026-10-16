@@ -1,7 +1,7 @@
 ---
 title: Postboi compared
 name: Postboi compared
-description: How Postboi stacks up against Resend, SendGrid, Postmark, Mailtrap and nodemailer. Postboi is an email provider in its own right, and using someone else's is optional.
+description: How Postboi stacks up against Resend, SendGrid, Postmark, Mailtrap, nodemailer and SMS SDKs like sms-sdk. Postboi is an email provider in its own right, and using someone else's is optional.
 category: Getting started
 ---
 
@@ -119,6 +119,46 @@ nodemailer is a library. You still need an SMTP server or a provider behind it, 
 don't get a delivery log, suppressions or webhooks. Postboi is a provider and a library, so
 `bunx postboi init` replaces installing nodemailer, signing up somewhere and pasting in SMTP
 credentials. If you do want SMTP, Postboi supports that too (`postboi/smtp`).
+
+## Postboi vs sms-sdk and other SMS libraries
+
+For text messages Postboi works differently from email. We don't send texts ourselves:
+[`sms()`](/sms) sends through your own account with an SMS provider, so the comparison is
+with other SMS libraries, such as [opencoredev/sms-sdk](https://github.com/opencoredev/sms-sdk)
+or a provider's own SDK. A provider's SDK only talks to that provider. sms-sdk and Postboi
+both put one API over several, and they cover much of the same ground:
+
+|                                                     | Postboi                                                    | sms-sdk                                     |
+| --------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------- |
+| SMS providers                                       | 9: Twilio, Telnyx, Vonage, Plivo, Sinch, Bandwidth, The SMS Works, PureSMS, Amazon SNS | 6: Twilio, Telnyx, Vonage, Plivo, Sinch, Bandwidth |
+| One result shape whichever provider sent it         | ✅ `id`, `ids`, `provider`, `delivery`                     | ✅ `providerId`, `handoff`, `delivery`      |
+| Fail over only when a provider proves it refused    | ✅ `POSTBOI_SMS_PROVIDER=twilio,puresms`                   | ✅ `fallback: "on-known-rejection"`         |
+| Never resend after a timeout or a 5xx               | ✅                                                         | ✅                                          |
+| Idempotency store, so a key sends once              | ✅ `memory_idempotency_store()` or your own                | ✅ `memoryIdempotencyStore()` or your own   |
+| Encoding and segments, checked before sending       | ✅ `sms.validate()`                                        | ✅ `validate()`                             |
+| MMS, validity period, provider options              | ✅                                                         | ✅                                          |
+| Verified delivery and inbound webhooks              | ✅ 8 providers                                             | ✅ 6 providers                              |
+| Sinch callbacks                                     | Basic credentials                                          | Basic credentials or HMAC                   |
+| STOP, START and HELP                                | ✅                                                         | ✅                                          |
+| A key for skipping redelivered webhooks             | ✅ `dedupe_key`                                            | ✅ `dedupeKey`                              |
+| Spam blocks reported apart from other failures      | Twilio, Telnyx, Vonage                                     | Twilio, Telnyx, Vonage, Sinch               |
+| Phone numbers masked in errors and hooks            | When you turn it on (`sms.redact`)                         | ✅ always                                   |
+| Dry-run doctor, and one confirmed live send         | ✅ `postboi doctor --sms-text`, `--sms-live`               | ✅ `sms-sdk doctor`, `--live`               |
+| Contract tests for an adapter you write             | ✅ `postboi/testing`                                       | ✅ `/testing`                               |
+| Configured from the environment, no setup code      | ✅ `POSTBOI_SMS_PROVIDER` and its keys                     | ❌ adapters are constructed in code          |
+| Texts logged, not sent, in development              | ✅ by default                                              | ❌ swap in the memory adapter yourself       |
+| Email, WhatsApp, push and chat in the same API      | ✅                                                         | ❌ SMS only                                  |
+
+This is sms-sdk 0.1 as we read it in October 2026. Its
+[README](https://github.com/opencoredev/sms-sdk/tree/main/packages/sms-sdk) has the current
+list.
+
+**Pick Postboi** if you send more than texts, if you'd rather set the provider in the
+environment than wire it up in code, if you text into the UK (The SMS Works and PureSMS are
+UK-native and cheaper there), or if a dev machine shouldn't be able to text a real phone.
+
+**Pick sms-sdk** if you only send texts and want a small package that does nothing else, with
+masking on by default, or if you need Sinch's HMAC-signed callbacks.
 
 ## Why it works well with AI agents
 
