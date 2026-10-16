@@ -71,8 +71,8 @@ export interface PollModule {
 
 /**
  * Lazy loaders for every provider's poll adapter. Presence here is the capability signal:
- * a key in {@link POLL_MODULES} polls, a key in `MODULES` receives webhooks, and a
- * provider in neither has no delivery-event story at all.
+ * a key in {@link POLL_MODULES} polls, a key in `MODULES` receives webhooks, a key in both
+ * (Twilio) does either, and a provider in neither has no delivery-event story at all.
  */
 export const POLL_MODULES: Record<string, () => Promise<PollModule>> = {
 	cloudflare: () => import("./poll_cloudflare.js"),

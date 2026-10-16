@@ -102,16 +102,17 @@ describe("poll — provider handling", () => {
 		}
 	})
 
-	it("covers the providers with no webhook adapter, and never overlaps one", () => {
-		// The email three have no delivery webhooks at all; Twilio's are per message and
-		// set at send time, which is the same problem from the caller's side.
+	it("covers the providers with no webhook adapter, plus Twilio, which has both", () => {
+		// The email three have no delivery webhooks at all. Twilio's callbacks are set per
+		// message at send time, so it can be polled with nothing set up, or told.
 		expect(Object.keys(POLL_MODULES).sort()).toEqual([
 			"cloudflare",
 			"microsoft365",
 			"smtp",
 			"twilio",
 		])
-		for (const key of Object.keys(POLL_MODULES)) expect(MODULES[key]).toBeUndefined()
+		const both = Object.keys(POLL_MODULES).filter((key) => MODULES[key])
+		expect(both).toEqual(["twilio"])
 	})
 
 	it("receive() points polling providers at poll()", async () => {
@@ -526,7 +527,7 @@ describe("poll — twilio (SMS and WhatsApp)", () => {
 					message({ sid: "f", status: "queued" }),
 					message({ sid: "g", status: "sending" }),
 					message({ sid: "h", status: "accepted" }),
-					// Somebody writing to us, not a receipt for a send.
+					// Somebody writing to us: a reply, not a receipt for a send.
 					message({ sid: "i", status: "received", direction: "inbound", body: "Thanks!" }),
 				],
 			})
@@ -538,13 +539,14 @@ describe("poll — twilio (SMS and WhatsApp)", () => {
 			["c", "failed"],
 			["d", "failed"],
 			["e", "opened"],
+			["i", "received"],
 		])
 		// The carrier's own words, in the field consumers already read.
 		expect(result.events[2].bounce).toEqual({ category: "unknown", detail: "30006" })
 		expect(result.events[3].bounce?.detail).toBe("Unknown error")
 	})
 
-	it("reads an inbound STOP as an unsubscribe from the number that sent it", async () => {
+	it("reads inbound keywords and replies from the number that sent them", async () => {
 		const inbound = (overrides: Record<string, unknown>) =>
 			message({
 				status: "received",
@@ -568,15 +570,22 @@ describe("poll — twilio (SMS and WhatsApp)", () => {
 					// A sentence is a person to talk to, not a flag to set.
 					inbound({ sid: "r4", body: "please stop texting me" }),
 					inbound({ sid: "r5", body: "What time do you open?" }),
+					inbound({ sid: "r6", body: "Start" }),
+					inbound({ sid: "r7", body: "HELP" }),
 				],
 			})
 		)
 		const result = await poll({ provider: "twilio", options: TW_OPTIONS })
 		expect(result.events).toMatchObject([
-			{ message_id: "r1", type: "unsubscribed", channel: "sms", phone: "+15557770006" },
+			{ message_id: "r1", type: "unsubscribed", keyword: "stop", phone: "+15557770006" },
 			{ message_id: "r2", type: "unsubscribed", channel: "sms", phone: "+15557770006" },
 			{ message_id: "r3", type: "unsubscribed", channel: "whatsapp", phone: "+15557770006" },
+			{ message_id: "r4", type: "received", body: { text: "please stop texting me" } },
+			{ message_id: "r5", type: "received", body: { text: "What time do you open?" } },
+			{ message_id: "r6", type: "resubscribed", keyword: "start", phone: "+15557770006" },
+			{ message_id: "r7", type: "received", keyword: "help", body: { text: "HELP" } },
 		])
+		expect(result.events[3].keyword).toBeUndefined()
 		for (const event of result.events) expect(event.email).toBeUndefined()
 
 		// An inbound message never changes status, so the cursor emits it exactly once.

@@ -1,0 +1,345 @@
+import { afterEach, describe, it, expect } from "vitest"
+
+import {
+	receive,
+	mock_request,
+	webhook,
+	WebhookVerificationError,
+} from "$library/webhooks/index.js"
+import { twilio_signature } from "$library/webhooks/twilio.js"
+import { puresms_signature } from "$library/webhooks/puresms.js"
+import { hex_encode } from "$library/webhooks/crypto.js"
+
+/** A form-encoded Twilio request to `url`, signed with `token` over `signed_url`. */
+async function twilio_request(
+	params: Array<[string, string]>,
+	{ token = "tok", url = "https://example.com/hooks/twilio", signed_url = url } = {}
+) {
+	return new Request(url, {
+		method: "POST",
+		headers: {
+			"content-type": "application/x-www-form-urlencoded",
+			"x-twilio-signature": await twilio_signature(token, signed_url, params),
+		},
+		body: new URLSearchParams(params).toString(),
+	})
+}
+
+const INBOUND: Array<[string, string]> = [
+	["MessageSid", "SM1"],
+	["SmsStatus", "received"],
+	["From", "+15557770006"],
+	["To", "+15551110001"],
+	["NumMedia", "0"],
+]
+
+describe("receive — twilio (signed status callbacks and inbound)", () => {
+	const saved = { ...process.env }
+	afterEach(() => {
+		for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]
+		Object.assign(process.env, saved)
+	})
+
+	it("signs the way Twilio's published example does", async () => {
+		const signature = await twilio_signature("12345", "https://example.com/myapp.php?foo=1&bar=2", [
+			["Digits", "1234"],
+			["To", "+18005551212"],
+			["From", "+14158675310"],
+			["Caller", "+14158675310"],
+			["CallSid", "CA1234567890ABCDE"],
+		])
+		expect(signature).toBe("L/OH5YylLD5NRKLltdqwSvS0BnU=")
+	})
+
+	it("maps a status callback, on either channel", async () => {
+		const { request, secret } = await mock_request({ provider: "twilio", type: "delivered" })
+		expect(await receive(request, { provider: "twilio", secret })).toMatchObject([
+			{ type: "delivered", channel: "sms", phone: "+15557770006", message_id: expect.any(String) },
+		])
+
+		const failed = await mock_request({
+			provider: "twilio",
+			type: "failed",
+			channel: "whatsapp",
+			secret,
+		})
+		expect(await receive(failed.request, { provider: "twilio", secret })).toMatchObject([
+			{
+				type: "failed",
+				channel: "whatsapp",
+				phone: "+15557770006",
+				bounce: { category: "unknown", detail: "30006" },
+			},
+		])
+	})
+
+	it("drops the in-flight statuses", async () => {
+		for (const status of ["queued", "sending", "accepted", "scheduled"]) {
+			const request = await twilio_request([
+				["MessageSid", "SM2"],
+				["MessageStatus", status],
+				["To", "+15557770006"],
+			])
+			expect(await receive(request, { provider: "twilio", secret: "tok" }), status).toEqual([])
+		}
+	})
+
+	it("reads inbound texts: keywords from the words, and every other reply as received", async () => {
+		const post = async (body: string) => {
+			const request = await twilio_request([...INBOUND, ["Body", body]])
+			return (await receive(request, { provider: "twilio", secret: "tok" }))[0]
+		}
+		expect(await post("STOP")).toMatchObject({
+			type: "unsubscribed",
+			keyword: "stop",
+			phone: "+15557770006",
+			message_id: "SM1",
+		})
+		expect(await post("start")).toMatchObject({ type: "resubscribed", keyword: "start" })
+		expect(await post("HELP")).toMatchObject({
+			type: "received",
+			keyword: "help",
+			body: { text: "HELP" },
+		})
+		const reply = await post("See you at 3")
+		expect(reply).toMatchObject({ type: "received", body: { text: "See you at 3" } })
+		expect(reply.keyword).toBeUndefined()
+	})
+
+	it("believes Twilio's Advanced Opt-Out over the words, YES included", async () => {
+		const request = await twilio_request([...INBOUND, ["Body", "Yes"], ["OptOutType", "START"]])
+		expect(await receive(request, { provider: "twilio", secret: "tok" })).toMatchObject([
+			{ type: "resubscribed", keyword: "start" },
+		])
+	})
+
+	it("names the send a WhatsApp reply answered", async () => {
+		const request = await twilio_request([
+			["MessageSid", "SM3"],
+			["SmsStatus", "received"],
+			["From", "whatsapp:+15557770006"],
+			["To", "whatsapp:+15551110001"],
+			["Body", "Works for me"],
+			["OriginalRepliedMessageSid", "SM0"],
+		])
+		expect(await receive(request, { provider: "twilio", secret: "tok" })).toMatchObject([
+			{ type: "received", channel: "whatsapp", phone: "+15557770006", message_id: "SM0" },
+		])
+	})
+
+	it("refuses a wrong token, a tampered body and a missing signature", async () => {
+		const good = await twilio_request([...INBOUND, ["Body", "STOP"]])
+		const wrong = await receive(good.clone(), { provider: "twilio", secret: "other" }).catch(
+			(e) => e
+		)
+		expect(wrong).toBeInstanceOf(WebhookVerificationError)
+		expect(wrong.code).toBe("invalid_signature")
+
+		const tampered = new Request(good.url, {
+			method: "POST",
+			headers: good.headers,
+			body: new URLSearchParams([...INBOUND, ["Body", "START"]]).toString(),
+		})
+		await expect(receive(tampered, { provider: "twilio", secret: "tok" })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+
+		const unsigned = new Request(good.url, { method: "POST", body: "MessageSid=SM1" })
+		await expect(receive(unsigned, { provider: "twilio", secret: "tok" })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+	})
+
+	it("checks the URL Twilio called when a proxy changed the request's own", async () => {
+		const request = await twilio_request([...INBOUND, ["Body", "hi"]], {
+			url: "http://internal:8080/hooks/twilio",
+			signed_url: "https://example.com/hooks/twilio",
+		})
+		await expect(
+			receive(request.clone(), { provider: "twilio", secret: "tok" })
+		).rejects.toMatchObject({ code: "invalid_signature" })
+		expect(
+			await receive(request, {
+				provider: "twilio",
+				secret: "tok",
+				url: "https://example.com/hooks/twilio",
+			})
+		).toHaveLength(1)
+	})
+
+	it("accepts a signature over the URL with its default port typed in", async () => {
+		const request = await twilio_request([...INBOUND, ["Body", "hi"]], {
+			signed_url: "https://example.com:443/hooks/twilio",
+		})
+		expect(await receive(request, { provider: "twilio", secret: "tok" })).toHaveLength(1)
+	})
+
+	it("verifies a JSON body by its bodySHA256", async () => {
+		const body = JSON.stringify({
+			MessageSid: "SM4",
+			MessageStatus: "delivered",
+			To: "+15557770006",
+		})
+		const hash = hex_encode(
+			new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)))
+		)
+		const url = `https://example.com/hooks/twilio?bodySHA256=${hash}`
+		const make = async (payload: string) =>
+			new Request(url, {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-twilio-signature": await twilio_signature("tok", url, []),
+				},
+				body: payload,
+			})
+		expect(await receive(await make(body), { provider: "twilio", secret: "tok" })).toMatchObject([
+			{ type: "delivered", message_id: "SM4" },
+		])
+		await expect(
+			receive(await make(body.replace("delivered", "failed")), {
+				provider: "twilio",
+				secret: "tok",
+			})
+		).rejects.toMatchObject({ code: "invalid_signature" })
+	})
+
+	it("answers through webhook() with empty TwiML, which Twilio reads a reply as", async () => {
+		const seen: Array<string> = []
+		const handle = webhook((event) => void seen.push(event.type), {
+			provider: "twilio",
+			secret: "tok",
+		})
+		const response = await handle(await twilio_request([...INBOUND, ["Body", "HELP"]]))
+		expect(response.status).toBe(200)
+		expect(response.headers.get("content-type")).toBe("text/xml")
+		expect(await response.text()).toContain("<Response></Response>")
+		expect(seen).toEqual(["received"])
+
+		// A bad signature is still a 401, not TwiML.
+		const forged = await twilio_request([...INBOUND, ["Body", "HELP"]], { token: "other" })
+		expect((await handle(forged)).status).toBe(401)
+	})
+
+	it("reads the auth token from TWILIO_AUTH_TOKEN when no webhook secret is set", async () => {
+		delete process.env.TWILIO_WEBHOOK_SECRET
+		process.env.TWILIO_AUTH_TOKEN = "from-env"
+		const request = await twilio_request([...INBOUND, ["Body", "hi"]], { token: "from-env" })
+		expect(await receive(request, { provider: "twilio" })).toHaveLength(1)
+	})
+})
+
+describe("receive — puresms (signed delivery receipts and inbound)", () => {
+	const secret = "puresms-secret"
+
+	/** A PureSMS request for `body`, signed now unless told otherwise. */
+	async function request(
+		body: string,
+		{ sign_with = secret, timestamp = String(Math.floor(Date.now() / 1000)) } = {}
+	) {
+		return new Request("https://example.com/hooks/puresms", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				"x-webhook-timestamp": timestamp,
+				"x-webhook-signature": await puresms_signature(sign_with, timestamp, body),
+			},
+			body,
+		})
+	}
+
+	const receipt = (data: string) =>
+		`{"id":"evt-1","timestamp":"2026-09-13T15:43:54.2773048Z","workspace_id":"1","event_type":1,"data":${data}}`
+
+	it("maps the documented example, keeping all 64 bits of the id", async () => {
+		const body = receipt(
+			`{"MessageId":357551956102758401,"ClientReference":"order-confirmation-456","DeliveryStatus":7,"DeliveryStatusStr":"Delivered","ErrorCode":null,"ProcessedAt":"2026-09-13T15:43:49.607Z","DeliveredAt":"2026-09-13T15:43:54.2756245Z","SmsParts":1,"CostEur":0.031,"CostGbp":0.028}`
+		)
+		const [event] = await receive(await request(body), { provider: "puresms", secret })
+		expect(event).toMatchObject({
+			type: "delivered",
+			provider: "puresms",
+			channel: "sms",
+			message_id: "357551956102758401",
+			tags: ["order-confirmation-456"],
+		})
+		expect(event.timestamp?.toISOString()).toBe("2026-09-13T15:43:54.275Z")
+		expect(event.phone).toBeUndefined()
+	})
+
+	it("maps the statuses worth an event and drops the rest", async () => {
+		const type = async (status: number) => {
+			const body = receipt(`{"MessageId":1,"DeliveryStatus":${status},"ErrorCode":"E1"}`)
+			return (await receive(await request(body), { provider: "puresms", secret }))[0]?.type
+		}
+		expect(await type(2)).toBe("sent")
+		for (const status of [3, 5, 8, 9]) expect(await type(status), String(status)).toBe("failed")
+		for (const status of [1, 4, 6, 10]) expect(await type(status), String(status)).toBeUndefined()
+	})
+
+	it("reads an inbound text through the keyword rules", async () => {
+		const { request: stop } = await mock_request({
+			provider: "puresms",
+			type: "unsubscribed",
+			secret,
+		})
+		expect(await receive(stop, { provider: "puresms", secret })).toMatchObject([
+			{ type: "unsubscribed", keyword: "stop", phone: "+447700900123" },
+		])
+		const { request: reply } = await mock_request({ provider: "puresms", type: "received", secret })
+		expect(await receive(reply, { provider: "puresms", secret })).toMatchObject([
+			{
+				type: "received",
+				phone: "+447700900123",
+				message_id: "357552103948288001",
+				body: { text: "Yes, please confirm my appointment" },
+			},
+		])
+	})
+
+	it("refuses a wrong secret, a tampered body, and a missing secret", async () => {
+		const body = receipt(`{"MessageId":1,"DeliveryStatus":7}`)
+		await expect(
+			receive(await request(body, { sign_with: "other" }), { provider: "puresms", secret })
+		).rejects.toMatchObject({ code: "invalid_signature" })
+
+		const good = await request(body)
+		const tampered = new Request(good.url, {
+			method: "POST",
+			headers: good.headers,
+			body: body.replace('"DeliveryStatus":7', '"DeliveryStatus":8'),
+		})
+		await expect(receive(tampered, { provider: "puresms", secret })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+
+		delete process.env.PURESMS_WEBHOOK_SECRET
+		await expect(receive(await request(body), { provider: "puresms" })).rejects.toMatchObject({
+			code: "missing_secret",
+		})
+	})
+
+	it("signs the timestamp, so a moved one fails even though its age is not checked", async () => {
+		const body = receipt(`{"MessageId":1,"DeliveryStatus":7}`)
+		const good = await request(body, { timestamp: "1700000000" })
+		// An old timestamp still verifies: PureSMS retries for hours. See the adapter.
+		expect(await receive(good.clone(), { provider: "puresms", secret })).toHaveLength(1)
+		const moved = new Request(good.url, {
+			method: "POST",
+			headers: { ...Object.fromEntries(good.headers), "x-webhook-timestamp": "1800000000" },
+			body,
+		})
+		await expect(receive(moved, { provider: "puresms", secret })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+	})
+})
+
+describe("receive — meta (WhatsApp keywords)", () => {
+	it("reads START as a resubscribe, through the same rules as a text", async () => {
+		const { request, secret } = await mock_request({ provider: "meta", type: "resubscribed" })
+		expect(await receive(request, { provider: "meta", secret })).toMatchObject([
+			{ type: "resubscribed", keyword: "start", channel: "whatsapp", phone: "+15557770006" },
+		])
+	})
+})

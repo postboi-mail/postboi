@@ -19,6 +19,15 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 - SMS and WhatsApp fail over between providers. Name several (`POSTBOI_SMS_PROVIDER=twilio,puresms`, or `sms: { provider: ["twilio", "puresms"] }`) and a message moves to the next only when the one before refused it for a reason about that provider: credentials, a rate limit, the sender or the account. Never for a bad number, an opt-out or an unknown outcome. A batch fails over message by message, and a chain that runs out throws `FailoverError` with every provider's answer in `errors`. Every provider in a chain needs its credentials; `options` in the config file belong to the first.
 - `PostboiError.reason` says why a provider refused, normalized: `auth`, `rate_limited`, `sender`, `account`, `recipient`, `compliance` or `request`. Read from Twilio's, Meta's and AWS's error codes, and the HTTP status otherwise. A batch the provider only partly accepted carries no reason and is `outcome_unknown`, since resending it would send the accepted part twice. `fails_over(error)` and `FAILOVER_REASONS` are exported from the root.
 - `PostboiError.outcome_unknown` is `true` when the message may have been sent despite the error (a 5xx, a timeout, a dropped connection), and `false` when the provider refused it or nothing was sent.
+- `receive()` takes Twilio's status callbacks and inbound messages, for SMS and WhatsApp, with `{ provider: "twilio" }`. Requests are verified by `X-Twilio-Signature` against your auth token (`TWILIO_WEBHOOK_SECRET`, else `TWILIO_AUTH_TOKEN`), including JSON bodies signed by `bodySHA256`. The Twilio SMS and WhatsApp providers take `status_callback` (`TWILIO_STATUS_CALLBACK`) to say where receipts go. `poll()` still works with nothing set up.
+- `receive()` takes PureSMS's delivery receipts and inbound messages with `{ provider: "puresms" }`, verified by its HMAC-SHA256 signature (`PURESMS_WEBHOOK_SECRET`). Message ids keep all 64 bits.
+- `receive(request, { url })` names the URL the provider called, for a provider that signs it (Twilio) when a proxy or tunnel changed the request's own.
+- A `resubscribed` event for a START or UNSTOP texted back, and `keyword` (`"stop"`, `"start"` or `"help"`) on the events an inbound text produces. `sms_keyword(text)`, `OPT_IN_KEYWORDS` and `HELP_KEYWORDS` are exported from the package root beside `is_opt_out`.
+
+### Changed
+
+- Every inbound SMS is now an event. The Twilio poll and The SMS Works used to read replies for STOP and drop the rest; now anything that isn't STOP or START is `received`, with the words in `body.text`, as WhatsApp replies already were. A HELP is a `received` with `keyword: "help"`. A handler that switches on `type` sees new events and nothing it already handled changes.
+- On WhatsApp via Meta, a START is now `resubscribed` rather than `received`.
 
 ### Fixed
 
