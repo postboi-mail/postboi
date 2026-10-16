@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.71.0
+
 ### Breaking
 
 - Phone numbers are now masked by default in SMS errors (message, stack and `raw`) and in what `after.send` and `on.error` hooks are shown, so a refusal doesn't put a number in your error tracker. `+447700900123` reads `+4*********23`. To see them, set `sms: { redact: false }` in `postboi.config`, `POSTBOI_SMS_REDACT=0`, or `redact: false` on one provider. `sms: { redact: true }` and `POSTBOI_SMS_REDACT=1` still work and now say what's already the default.
