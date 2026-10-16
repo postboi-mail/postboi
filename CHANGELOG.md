@@ -18,6 +18,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 - `postboi doctor --sms-text "…"` previews a text's encoding and segment count and names the characters that forced UCS-2. `--sms-live --to <n> --confirm-to <n> --confirm-from <sender>` sends one real text, only when every check passes and both confirmations match, and says what the provider answered.
 - Every webhook and polled event that names a message carries a `dedupe_key`, the same for a redelivery and different for anything else, so a handler can skip what it has already handled. Providers redeliver, and Plivo, Sinch, Bandwidth and Twilio sign nothing that tells a replay apart.
 - A text a carrier blocked as spam is `failed` with `bounce.category: "filtered"`, on Twilio (30007), Telnyx (40002, 40003, 40015, 40017) and Vonage (1210), rather than `unknown`: the number is fine, and the message or sender is what to change.
+- `validate()` says what kind of sender `from` is (`sender`: `phone_number`, `short_code` or `alphanumeric`) and reports `sender_not_supported` where the provider doesn't send from that kind, without refusing the send. Through a failover chain, `sms.validate()` also lists `candidates`: the providers in it that would take the text.
 
 ## 0.69.0
 

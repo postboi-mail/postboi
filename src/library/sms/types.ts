@@ -144,9 +144,23 @@ export interface SmsCheck {
 	ucs2_characters: Array<string>
 	/** Every problem found, in the order a send would meet them. Empty when `ok`. */
 	issues: Array<SmsIssue>
+	/** What kind of sender `from` is, when there is one. */
+	sender?: SmsSenderKind
 	/** For a failover chain, the check against each provider in it, in order. */
 	chain?: Array<SmsCheck>
+	/**
+	 * For a failover chain, the providers in it that would take this text as it is, in
+	 * order: where it can go if the first refuses. Empty means none of them would.
+	 */
+	candidates?: Array<string>
 }
+
+/**
+ * What kind of sender a `from` is: a phone number (long code or toll-free, written with or
+ * without its `+`), a short code (3 to 8 digits), or an alphanumeric sender ID (letters,
+ * digits and spaces, at least one letter). Read from the string by `sender_kind()`.
+ */
+export type SmsSenderKind = "phone_number" | "short_code" | "alphanumeric"
 
 /** Constructor options shared by every SMS provider. */
 export type SmsProviderOptions = TransportOptions<PreparedSms> & {

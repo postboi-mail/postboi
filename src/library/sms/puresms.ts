@@ -3,6 +3,7 @@ import {
 	type PreparedSms,
 	type SmsReceipt,
 	type SmsApiKeyOptions,
+	type SmsSenderKind,
 } from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
@@ -42,6 +43,11 @@ type SendResponse = { id: string; kind: "message" | "batch"; count?: number } & 
  */
 export default class PureSms extends SmsProvider<SendResponse> {
 	protected readonly provider = "puresms"
+	// A UK number or an alphanumeric ID; no short codes.
+	protected override readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"alphanumeric",
+	]
 	// `sendAtUtc` sits on the message for a single send and on the batch for bulk, and
 	// `cancel` undoes either while it's still pending.
 	protected override readonly supports_scheduling = true

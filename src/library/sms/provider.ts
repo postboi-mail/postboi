@@ -17,6 +17,7 @@ import type {
 	SmsCheck,
 	SmsDelivery,
 	SmsReceipt,
+	SmsSenderKind,
 	SmsDefaults,
 	SmsIssue,
 	SmsOptions,
@@ -27,6 +28,7 @@ export type {
 	SmsCheck,
 	SmsDelivery,
 	SmsReceipt,
+	SmsSenderKind,
 	SmsIssue,
 	Phone,
 	PreparedSms,
@@ -55,6 +57,17 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 
 	/** Whether the provider needs a sender. Providers that default it account-side set false. */
 	protected requires_from: boolean = true
+
+	/**
+	 * The kinds of sender the provider can send from. A `from` of another kind is an issue
+	 * `validate()` reports (`sender_not_supported`); the send itself is left to the provider,
+	 * which knows what is registered on the account and in which countries.
+	 */
+	protected readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"short_code",
+		"alphanumeric",
+	]
 
 	/** Whether the provider takes one recipient per request (Twilio, Telnyx, Vonage). */
 	protected readonly single_recipient: boolean = false
@@ -239,6 +252,7 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 			segments: cost.count,
 			units: cost.units,
 			ucs2_characters: cost.encoding === "ucs2" ? gsm7_breakers(message) : [],
+			sender: sender ? sender_kind(sender) : undefined,
 			issues,
 		}
 	}
@@ -250,15 +264,21 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 	 * builder, so this exists to say so early, not to enforce it.
 	 */
 	protected check(message: PreparedSms): Array<SmsIssue> {
+		const issues: Array<SmsIssue> = []
 		if (this.single_recipient && message.to.length > 1) {
-			return [
-				{
-					code: "single_recipient_only",
-					message: `${this.provider} sends to one recipient per message. Pass an array of sends instead of an array of recipients.`,
-				},
-			]
+			issues.push({
+				code: "single_recipient_only",
+				message: `${this.provider} sends to one recipient per message. Pass an array of sends instead of an array of recipients.`,
+			})
 		}
-		return []
+		const kind = message.from ? sender_kind(message.from) : undefined
+		if (kind && !this.sender_kinds.includes(kind)) {
+			issues.push({
+				code: "sender_not_supported",
+				message: `${this.provider} doesn't send from ${SENDER_WORDS[kind]} like "${message.from}". It sends from ${this.sender_kinds.map((k) => SENDER_WORDS[k]).join(" or ")}.`,
+			})
+		}
+		return issues
 	}
 
 	/**
@@ -403,6 +423,26 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 			},
 		}
 	}
+}
+
+/** How a sender kind reads in a sentence. */
+const SENDER_WORDS: Record<SmsSenderKind, string> = {
+	phone_number: "a phone number",
+	short_code: "a short code",
+	alphanumeric: "an alphanumeric sender ID",
+}
+
+/**
+ * What kind of sender a `from` is. A `+` or 9 to 15 digits is a phone number; 3 to 8
+ * digits a short code; anything with a letter in it an alphanumeric ID. A shape none of
+ * those take is undefined, and is `sender_problem`'s to name.
+ */
+export function sender_kind(from: string): SmsSenderKind | undefined {
+	const sender = from.trim()
+	if (/^\+\d+$/.test(sender) || /^\d{9,15}$/.test(sender)) return "phone_number"
+	if (/^\d{3,8}$/.test(sender)) return "short_code"
+	if (/[A-Za-z]/.test(sender)) return "alphanumeric"
+	return undefined
 }
 
 /** Each provider's word for a message it just took, in {@link SmsDelivery}'s terms. */

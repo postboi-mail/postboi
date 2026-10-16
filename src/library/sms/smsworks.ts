@@ -3,6 +3,7 @@ import {
 	type PreparedSms,
 	type SmsReceipt,
 	type SmsApiKeyOptions,
+	type SmsSenderKind,
 } from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import type { ProviderError } from "../errors.js"
@@ -42,6 +43,11 @@ type SendResponse = { messageid: string; status: string; credits?: number } & Sm
  */
 export default class SmsWorks extends SmsProvider<SendResponse> {
 	protected readonly provider = "smsworks"
+	// A UK number or an alphanumeric ID; no short codes.
+	protected override readonly sender_kinds: ReadonlyArray<SmsSenderKind> = [
+		"phone_number",
+		"alphanumeric",
+	]
 	// `/message/schedule` takes an ISO date on the same payload.
 	protected override readonly supports_scheduling = true
 	protected override readonly reserved_options = [
