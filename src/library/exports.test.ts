@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 const root = fileURLToPath(new URL("../../", import.meta.url))
 const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8")) as {
 	exports: Record<string, string | { types?: string; default: string }>
+	dependencies?: Record<string, string>
 }
 
 /** Map an exports target like "./dist/resend.js" or "./dist/resend.d.ts" to "src/library/resend.ts". */
@@ -15,6 +16,13 @@ const to_source = (target: string) =>
 		.replace(/\.svelte\.d\.ts$/, ".svelte")
 		.replace(/\.d\.ts$/, ".ts")
 		.replace(/\.js$/, ".ts")
+
+describe("package dependencies", () => {
+	it("has none at runtime, so installing postboi installs nothing else", () => {
+		// The docs site's fonts and tooling are devDependencies; providers are reached over fetch.
+		expect(pkg.dependencies ?? {}).toEqual({})
+	})
+})
 
 describe("package exports", () => {
 	const entries = Object.entries(pkg.exports).map(

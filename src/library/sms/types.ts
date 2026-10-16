@@ -167,11 +167,12 @@ export type SmsProviderOptions = TransportOptions<PreparedSms> & {
 	/** Default field values applied when a send omits them. */
 	default?: SmsDefaults
 	/**
-	 * Mask phone numbers in what leaves a send for somewhere else: a thrown error's message,
-	 * stack and `raw`, and the message and response `after.send` and `on.error` are shown.
-	 * `+447700900123` becomes `+4*********23`. On by default; `redact: false` here,
-	 * `sms.redact: false` in the config or `POSTBOI_SMS_REDACT=0` turns it off. The text that
-	 * is sent, and `before.send`, are never touched.
+	 * Keep phone numbers and the text itself out of what leaves a send for somewhere else: a
+	 * thrown error's message, stack and `raw`, and the message and response `after.send` and
+	 * `on.error` are shown. `+447700900123` becomes `+4*********23`, and the text becomes
+	 * `[text withheld, 24 characters]` wherever it turns up. On by default; `redact: false`
+	 * here, `sms.redact: false` in the config or `POSTBOI_SMS_REDACT=0` turns it off. What is
+	 * sent, and what `before.send` sees, are never touched.
 	 */
 	redact?: boolean
 	/**

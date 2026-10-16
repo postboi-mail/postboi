@@ -10,7 +10,7 @@ import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
 import { ensure_env_loaded, read_flag } from "../env.js"
 import { send_once, type IdempotencyStore } from "../idempotency.js"
-import { gsm7_breakers, phone_e164, redact_deep, redact_phones, segments } from "./phone.js"
+import { gsm7_breakers, phone_e164, redact_deep, segments } from "./phone.js"
 import type {
 	Phone,
 	PreparedSms,
@@ -117,21 +117,33 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 		return read_flag("POSTBOI_SMS_REDACT") ?? get_config().sms?.redact !== false
 	}
 
-	protected override observable<T>(value: T): T {
-		return this.redacting ? redact_deep(value) : value
+	protected override observable<T>(value: T, message?: PreparedSms): T {
+		return this.redacting ? redact_deep(value, text_of(message)) : value
 	}
 
 	/**
-	 * The error a send throws, with its numbers masked when redacting. Masked in place, so a
-	 * subclass and its `instanceof` survive, and the stack too, since it opens with the
-	 * message. An intentional skip is not a failure and is left alone.
+	 * The error a send throws, with its numbers masked and the text withheld when redacting.
+	 * Masked in place, so a subclass and its `instanceof` survive, and the stack too, since it
+	 * opens with the message. An intentional skip is not a failure and is left alone.
 	 */
-	protected override normalize_error(error: unknown): PostboiError {
+	protected override normalize_error(error: unknown, message?: PreparedSms): PostboiError {
 		const e = super.normalize_error(error)
 		if (!this.redacting || e instanceof SkipSendError) return e
-		e.message = redact_phones(e.message)
-		if (e.stack) e.stack = redact_phones(e.stack)
-		Object.defineProperty(e, "raw", { value: redact_deep(e.raw), enumerable: true })
+		const text = text_of(message)
+		const before = e.message
+		e.message = redact_deep(before, text)
+		if (e.stack) {
+			// The stack opens with the message as it was. Say it as it is now, so a short text
+			// hidden only where it is the whole message isn't left showing there.
+			const at = e.stack.indexOf(before)
+			e.stack =
+				at === -1
+					? redact_deep(e.stack, text)
+					: redact_deep(e.stack.slice(0, at), text) +
+						e.message +
+						redact_deep(e.stack.slice(at + before.length), text)
+		}
+		Object.defineProperty(e, "raw", { value: redact_deep(e.raw, text), enumerable: true })
 		return e
 	}
 
@@ -466,6 +478,13 @@ const DELIVERY: Record<string, SmsDelivery> = {
 export function sms_delivery(status: string | undefined): SmsDelivery {
 	if (status === undefined || status === "") return "queued"
 	return DELIVERY[status.toLowerCase()] ?? "unknown"
+}
+
+/** The words a message carries, to withhold wherever they turn up, or nothing for none. */
+function text_of(message: { message?: unknown } | undefined): string | undefined {
+	return typeof message?.message === "string" && message.message !== ""
+		? message.message
+		: undefined
 }
 
 /** One-or-many recipients as a list, splitting a comma-separated string as `to` does. */
