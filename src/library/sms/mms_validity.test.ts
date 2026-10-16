@@ -35,12 +35,17 @@ describe("MMS, validity and provider_options", () => {
 			message: "hi",
 			media: [image, "https://example.com/b.png"],
 			validity: 600,
-			provider_options: { MessageIntent: "otp", SmartEncoded: true },
+			provider_options: {
+				MessageIntent: "otp",
+				SmartEncoded: true,
+				PersistentAction: ["mailto:a@example.com", "geo:51.5,-0.1"],
+			},
 		})
 		expect(form().getAll("MediaUrl")).toEqual([image, "https://example.com/b.png"])
 		expect(form().get("ValidityPeriod")).toBe("600")
 		expect(form().get("MessageIntent")).toBe("otp")
 		expect(form().get("SmartEncoded")).toBe("true")
+		expect(form().getAll("PersistentAction")).toEqual(["mailto:a@example.com", "geo:51.5,-0.1"])
 	})
 
 	it("Telnyx: media_urls with type MMS, and its own fields", async () => {

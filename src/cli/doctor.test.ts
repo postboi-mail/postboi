@@ -461,6 +461,27 @@ describe("sms", () => {
 		expect(check?.detail).toContain("11")
 	})
 
+	it("fails Vonage with neither its secret nor its application pair", () => {
+		const key_only = sms_check(
+			sms_facts(env({ POSTBOI_SMS_PROVIDER: "vonage", VONAGE_API_KEY: "k" }))
+		)
+		expect(key_only).toMatchObject({
+			level: "fail",
+			detail: "vonage needs VONAGE_API_SECRET, not set in the environment",
+		})
+		const application = sms_check(
+			sms_facts(
+				env({
+					POSTBOI_SMS_PROVIDER: "vonage",
+					VONAGE_API_KEY: "k",
+					VONAGE_APPLICATION_ID: "a",
+					VONAGE_PRIVATE_KEY: "p",
+				})
+			)
+		)
+		expect(application).toMatchObject({ level: "ok" })
+	})
+
 	it("only warns about a setting that may live in the config instead", () => {
 		const check = sms_check(sms_facts(env({ POSTBOI_SMS_PROVIDER: "sinch", SINCH_API_TOKEN: "t" })))
 		expect(check).toMatchObject({

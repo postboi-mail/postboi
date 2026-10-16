@@ -23,6 +23,13 @@ describe("redact_phones", () => {
 		)
 	})
 
+	it("leaves the digits inside an id or a timestamp, and masks an encoded number", () => {
+		const ids =
+			"sid SM1234567890abcdef1234567890abcdef, uuid 40385f64-5717-4562-b3fc-2c963f66afa6, uuid 12345678-1234-4562-b3fc-2c963f66afa6, at 2026-10-16 12:30:00"
+		expect(redact_phones(ids)).toBe(ids)
+		expect(redact_phones("To=%2B447700900123&From=ACME")).toBe("To=+4*********23&From=ACME")
+	})
+
 	it("copies plain objects and arrays, and stops at a cycle", () => {
 		const raw: Record<string, unknown> = {
 			to: [to],

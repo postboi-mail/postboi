@@ -176,7 +176,7 @@ Each issue's `code` is the one a send would throw. Beyond the checks every send 
 (a recipient, a sender, a message, scheduling, readable numbers), it reports what the
 provider in particular would refuse: several recipients on a provider that takes one per
 request, Twilio scheduling without a Messaging Service, and an alphanumeric sender longer
-than 11 characters or with anything but letters, digits and spaces. With a
+than 11 characters or with anything but letters, digits, spaces and `+ - _ &`. With a
 [failover chain](#failing-over) the answer is the first provider's, and `chain` holds the
 check against each. Every provider has the same `validate()`, and it's free: nothing is
 asked of the provider, so whether a sender is registered or a number reachable is still

@@ -468,6 +468,19 @@ describe("receive — vonage (HS256 JWT)", () => {
 		})
 	})
 
+	it("refuses a token that names no payload_hash", async () => {
+		const body = JSON.stringify({ message_uuid: "u", status: "delivered", to: "447700900123" })
+		const token = await vonage_token(secret, { iat: Math.floor(Date.now() / 1000) })
+		const request = new Request("https://example.com/webhooks", {
+			method: "POST",
+			headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+			body,
+		})
+		await expect(receive(request, { provider: "vonage", secret })).rejects.toMatchObject({
+			code: "invalid_signature",
+		})
+	})
+
 	it("signs the way it verifies", async () => {
 		const token = await vonage_token(secret, { iat: 1 })
 		expect(token.split(".")).toHaveLength(3)

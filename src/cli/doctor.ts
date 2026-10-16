@@ -110,6 +110,15 @@ export function sms_facts(read: (env: string) => string | undefined): SmsFacts |
 		const fields = (
 			meta.fields as ReadonlyArray<{ env: string; default?: string; secret?: boolean }>
 		).filter((f) => f.default === undefined && !read(f.env))
+		// Vonage's secret and its application pair are each optional in the registry, but one
+		// of the two is required: with neither, constructing it throws `missing_env`.
+		if (
+			key === "vonage" &&
+			!read("VONAGE_API_SECRET") &&
+			!(read("VONAGE_APPLICATION_ID") && read("VONAGE_PRIVATE_KEY"))
+		) {
+			fields.push({ env: "VONAGE_API_SECRET", secret: true })
+		}
 		if (fields.length)
 			missing.push({
 				provider: key,
@@ -382,7 +391,7 @@ export function sms_check(sms: SmsFacts | undefined): Check | undefined {
 			name: "sms",
 			level: "fail",
 			detail: `POSTBOI_SMS_FROM: ${sms.from_problem}`,
-			fix: "use a number in E.164 (+447700900123) or an ID of up to 11 letters, digits and spaces",
+			fix: "use a number in E.164 (+447700900123) or an ID of up to 11 letters, digits, spaces and + - _ &",
 		}
 	}
 	// A setting that isn't a secret may be committed under `sms.options` instead.

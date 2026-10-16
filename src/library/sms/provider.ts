@@ -131,15 +131,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 
 	/** Normalise one-or-many recipients, accepting a comma-separated string like `to` does. */
 	protected parse_phones(phones: Array<Phone> | Phone, country?: string): Array<string> {
-		if (Array.isArray(phones)) return phones.map((p) => phone_e164(p, country))
-		if (typeof phones === "string" && phones.includes(",")) {
-			return phones
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean)
-				.map((p) => phone_e164(p, country))
-		}
-		return [phone_e164(phones, country)]
+		return phone_list(phones).map((p) => phone_e164(p, country))
 	}
 
 	/**
@@ -372,7 +364,8 @@ function phone_list(phones: Array<Phone> | Phone): Array<Phone> {
 
 /**
  * What's wrong with a sender, if anything a carrier would refuse: an alphanumeric ID longer
- * than 11 characters or carrying anything but letters, digits and spaces. A number, short
+ * than 11 characters or carrying anything but letters, digits, spaces and `+ - _ &` (the
+ * set Twilio and the networks behind it take, so "Co-op" and "M&S" pass). A number, short
  * code or `+`-prefixed sender is left to the provider, which knows what it registered.
  */
 export function sender_problem(from: string): string | undefined {
@@ -382,8 +375,8 @@ export function sender_problem(from: string): string | undefined {
 	if (sender.length > 11) {
 		return `Alphanumeric sender "${sender}" is ${sender.length} characters; carriers allow 11.`
 	}
-	if (!/^[A-Za-z0-9 ]+$/.test(sender)) {
-		return `Alphanumeric sender "${sender}" may only use letters, digits and spaces.`
+	if (!/^[A-Za-z0-9 +\-_&]+$/.test(sender)) {
+		return `Alphanumeric sender "${sender}" may only use letters, digits, spaces and + - _ &.`
 	}
 	return undefined
 }

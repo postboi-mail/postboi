@@ -101,8 +101,10 @@ describe("validate()", () => {
 		expect(long.issues).toEqual([
 			{ code: "invalid_sender", message: expect.stringContaining("carriers allow 11") },
 		])
-		const odd = await works.validate({ to: "+447700900123", from: "ACME-CO", message: "hi" })
+		const odd = await works.validate({ to: "+447700900123", from: "ACME!", message: "hi" })
 		expect(odd.issues[0].code).toBe("invalid_sender")
+		const hyphen = await works.validate({ to: "+447700900123", from: "Co-op M&S", message: "hi" })
+		expect(hyphen.ok).toBe(true)
 		const fine = await works.validate({ to: "+447700900123", from: "ACME CO", message: "hi" })
 		expect(fine.ok).toBe(true)
 	})
