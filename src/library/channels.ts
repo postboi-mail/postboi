@@ -80,9 +80,9 @@ const warned_dev_fallback = new Set<Channel>()
 const announced_intercept = new Set<Channel>()
 
 /** The overloaded one-or-many shape every zero-config channel function shares. */
-export interface ChannelSend<TOptions> {
-	(options: TOptions): Promise<unknown>
-	(options: Array<TOptions>, batch?: { concurrency?: number }): Promise<Array<BatchResult<unknown>>>
+export interface ChannelSend<TOptions, TResult = unknown> {
+	(options: TOptions): Promise<TResult>
+	(options: Array<TOptions>, batch?: { concurrency?: number }): Promise<Array<BatchResult<TResult>>>
 }
 
 /**
@@ -96,11 +96,11 @@ export interface ChannelSend<TOptions> {
  * reason that is about that provider (see `fails_over`). Never after an unknown outcome:
  * the message may already be on its way, and a second provider would send it twice.
  */
-export function channel_send<TOptions>(
+export function channel_send<TOptions, TResult = unknown>(
 	spec: ChannelResolution<{
 		send(options: TOptions | Array<TOptions>, batch?: { concurrency?: number }): Promise<unknown>
 	}>
-): ChannelSend<TOptions> {
+): ChannelSend<TOptions, TResult> {
 	async function send_channel(
 		options: TOptions | Array<TOptions>,
 		batch: { concurrency?: number } = {}
@@ -114,7 +114,7 @@ export function channel_send<TOptions>(
 		if (Array.isArray(options)) return send_batch_through(providers, options, batch)
 		return send_through(providers, options)
 	}
-	return send_channel as ChannelSend<TOptions>
+	return send_channel as ChannelSend<TOptions, TResult>
 }
 
 type Sends<TOptions> = {

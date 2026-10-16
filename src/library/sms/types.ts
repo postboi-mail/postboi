@@ -90,6 +90,35 @@ export interface PreparedSms {
 }
 
 /** One problem {@link SmsCheck} found. `code` is the one a send would throw, where it would. */
+/**
+ * Where a text stood when the provider answered, in one vocabulary across every provider:
+ * `queued` (taken, not yet sent), `scheduled` (held for `scheduled_at`), `sent` (handed to
+ * the carrier) or `delivered` (the provider already knows it arrived, which is rare at send
+ * time). `unknown` where the provider's word doesn't map. What happens next arrives through
+ * a delivery receipt; this is only the answer to the send.
+ */
+export type SmsDelivery = "queued" | "scheduled" | "sent" | "delivered" | "unknown"
+
+/**
+ * What every SMS send resolves with, on top of the provider's own fields: the same few
+ * names whichever provider sent it, so a failover chain or a provider swap reads the id
+ * and the state the same way.
+ */
+export interface SmsReceipt {
+	/** The provider's id for the message, the one its receipts and webhooks name. */
+	id: string
+	/**
+	 * Every id the send produced, one per recipient where the provider makes several
+	 * (Plivo), otherwise just `id`. A batch-style provider (Sinch, PureSMS) gives one for
+	 * the whole send.
+	 */
+	ids: Array<string>
+	/** The provider that sent it: the key `POSTBOI_SMS_PROVIDER` names it by. */
+	provider: string
+	/** Where it stood when the provider answered. */
+	delivery: SmsDelivery
+}
+
 export type SmsIssue = { code: string; message: string }
 
 /** What `validate()` says about a text before it is sent. */

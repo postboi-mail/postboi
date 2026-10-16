@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsApiKeyOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsApiKeyOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
 
@@ -19,7 +24,7 @@ export interface SendParams {
 }
 
 /** `kind` says which endpoint `cancel` needs; `count` only comes back from a batch. */
-type SendResponse = { id: string; kind: "message" | "batch"; count?: number }
+type SendResponse = { id: string; kind: "message" | "batch"; count?: number } & SmsReceipt
 
 /**
  * PureSMS — https://puresms.uk/developers
@@ -90,9 +95,10 @@ export default class PureSms extends SmsProvider<SendResponse> {
 		const d = data as Record<string, unknown> | null
 		// Ids are int64s serialised as strings; the bulk endpoint calls its one `batchId`.
 		if (d?.batchId !== undefined) {
-			return { id: String(d.batchId), kind: "batch", count: d.messageCount as number }
+			const receipt = this.receipt([String(d.batchId)])
+			return { ...receipt, kind: "batch", count: d.messageCount as number }
 		}
-		return { id: String(d?.id ?? ""), kind: "message" }
+		return { ...this.receipt([d?.id === undefined ? undefined : String(d.id)]), kind: "message" }
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {

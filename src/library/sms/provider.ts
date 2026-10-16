@@ -14,6 +14,8 @@ import type {
 	Phone,
 	PreparedSms,
 	SmsCheck,
+	SmsDelivery,
+	SmsReceipt,
 	SmsDefaults,
 	SmsIssue,
 	SmsOptions,
@@ -22,6 +24,8 @@ import type {
 
 export type {
 	SmsCheck,
+	SmsDelivery,
+	SmsReceipt,
 	SmsIssue,
 	Phone,
 	PreparedSms,
@@ -42,7 +46,10 @@ export type {
  * await text.send({ to: "+447788223344", message: "Your code is 4291" })
  * ```
  */
-export abstract class SmsProvider<TResponse = unknown> extends Transport<TResponse, PreparedSms> {
+export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> extends Transport<
+	TResponse,
+	PreparedSms
+> {
 	protected readonly channel: Channel = "sms"
 
 	/** Whether the provider needs a sender. Providers that default it account-side set false. */
@@ -127,6 +134,26 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 		batch: { concurrency?: number } = {}
 	): Promise<TResponse | Array<BatchResult<TResponse>>> {
 		return this.dispatch(options, batch, (one) => this.prepare_sms(one))
+	}
+
+	/**
+	 * The common fields every response carries ({@link SmsReceipt}), from the ids the provider
+	 * answered with and its own word for the message's state. Absent ids are dropped; a
+	 * provider that answered 2xx and named no state has taken the message, so it's `queued`.
+	 */
+	protected receipt(ids: ReadonlyArray<string | undefined>, status?: string): SmsReceipt {
+		const all = ids.filter((id): id is string => typeof id === "string" && id !== "")
+		return { id: all[0] ?? "", ids: all, provider: this.provider, delivery: sms_delivery(status) }
+	}
+
+	/**
+	 * A send with `scheduled_at` that the provider calls queued is held, not on its way, so
+	 * it reads `scheduled`; the provider's own fields are left as it gave them.
+	 */
+	protected override async deliver(message: PreparedSms): Promise<TResponse> {
+		const response = await super.deliver(message)
+		if (message.scheduled_at && response.delivery === "queued") response.delivery = "scheduled"
+		return response
 	}
 
 	/** Normalise one-or-many recipients, accepting a comma-separated string like `to` does. */
@@ -348,6 +375,26 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 			},
 		}
 	}
+}
+
+/** Each provider's word for a message it just took, in {@link SmsDelivery}'s terms. */
+const DELIVERY: Record<string, SmsDelivery> = {
+	accepted: "queued",
+	queued: "queued",
+	pending: "queued",
+	enqueued: "queued",
+	submitted: "queued",
+	created: "queued",
+	scheduled: "scheduled",
+	sending: "sent",
+	sent: "sent",
+	delivered: "delivered",
+}
+
+/** A provider's status word as {@link SmsDelivery}, case-insensitively. */
+export function sms_delivery(status: string | undefined): SmsDelivery {
+	if (status === undefined || status === "") return "queued"
+	return DELIVERY[status.toLowerCase()] ?? "unknown"
 }
 
 /** One-or-many recipients as a list, splitting a comma-separated string as `to` does. */

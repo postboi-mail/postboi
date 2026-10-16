@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsProviderOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError, type RejectionReason } from "../errors.js"
 import { pem_to_der, to_base64url } from "../encoding.js"
@@ -37,7 +42,7 @@ export interface SendParams {
 	[option: string]: unknown
 }
 
-type SendResponse = { message_uuid: string }
+type SendResponse = { message_uuid: string } & SmsReceipt
 
 /**
  * Vonage's Messages API error codes, by what they say about the refusal — from
@@ -197,7 +202,8 @@ export default class Vonage extends SmsProvider<SendResponse> {
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {
-		return { message_uuid: (data as { message_uuid?: string } | null)?.message_uuid ?? "" }
+		const message_uuid = (data as { message_uuid?: string } | null)?.message_uuid ?? ""
+		return { message_uuid, ...this.receipt([message_uuid]) }
 	}
 
 	/**

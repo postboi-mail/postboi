@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsProviderOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import type { ProviderError } from "../errors.js"
 
@@ -30,7 +35,7 @@ export interface SendParams {
 	[option: string]: unknown
 }
 
-type SendResponse = { id: string }
+type SendResponse = SmsReceipt
 
 /** Three days, the most Sinch keeps trying. */
 const MAX_VALIDITY = 3 * 24 * 60 * 60
@@ -105,7 +110,7 @@ export default class Sinch extends SmsProvider<SendResponse> {
 	}
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {
-		return { id: (data as { id?: string } | null)?.id ?? "" }
+		return this.receipt([(data as { id?: string } | null)?.id])
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {

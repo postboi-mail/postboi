@@ -21,6 +21,24 @@ environment, [hooks](/hooks) run around every send, and failures throw a normali
 
 <InstallationTabs exec args="init --sms" />
 
+## What a send answers
+
+A send resolves once the provider has taken the text, with the same four fields whichever
+provider took it, beside that provider's own:
+
+```typescript
+const sent = await sms({ to: "+447788223344", message: "Your code is 4291" })
+sent.id // the provider's id for it, the one its receipts name
+sent.ids // one per recipient where the provider makes several, else [id]
+sent.provider // "twilio", or whichever in a chain took it
+sent.delivery // "queued", "scheduled", "sent", "delivered" or "unknown"
+```
+
+`delivery` is where the text stood when the provider answered, not whether it arrived:
+that comes later, through [a delivery receipt](#delivery-receipts). So a
+[failover chain](#failing-over) or a change of provider reads the same `id` and `delivery`,
+and the provider's own fields (`sid` on Twilio, `message_uuid` on Vonage) are still there.
+
 The first question is **where you're sending**, because unlike email the right SMS provider
 depends on the destination: a UK-native provider is materially cheaper into the UK and no
 use anywhere else. Your answer also becomes the default country, which is how national

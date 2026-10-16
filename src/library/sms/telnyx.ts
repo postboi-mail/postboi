@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsApiKeyOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsApiKeyOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError, type RejectionReason } from "../errors.js"
 
@@ -28,7 +33,7 @@ export interface SendParams {
 	[option: string]: unknown
 }
 
-type SendResponse = { id: string; status: string }
+type SendResponse = { id: string; status: string } & SmsReceipt
 
 /**
  * Telnyx's error codes, by what they say about the refusal — titles from its error catalog,
@@ -142,7 +147,8 @@ export default class Telnyx extends SmsProvider<SendResponse> {
 
 	protected parse_response(_response: Response, data: unknown): SendResponse {
 		const d = (data as { data?: { id?: string; to?: Array<{ status?: string }> } } | null)?.data
-		return { id: d?.id ?? "", status: d?.to?.[0]?.status ?? "queued" }
+		const status = d?.to?.[0]?.status ?? "queued"
+		return { ...this.receipt([d?.id], status), status }
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
