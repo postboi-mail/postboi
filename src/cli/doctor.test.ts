@@ -9,8 +9,11 @@ import {
 	magic_link_check,
 	sms_check,
 	sms_facts,
+	sms_live_check,
+	sms_text_check,
 	type DoctorFacts,
 } from "./doctor.js"
+import { PostboiError } from "../library/errors.js"
 
 afterEach(() => {
 	vi.restoreAllMocks()
@@ -493,5 +496,81 @@ describe("sms", () => {
 	it("is checked when another email provider is in use too", () => {
 		const sms = sms_facts(env({ POSTBOI_SMS_PROVIDER: "mock" }))
 		expect(by_name(diagnose({ ...wired, provider: "resend", sms })).sms?.level).toBe("ok")
+	})
+})
+
+describe("sms text and live send", () => {
+	it("previews a text's encoding and segments", () => {
+		expect(sms_text_check("Your code is 4291")).toEqual({
+			name: "sms text",
+			level: "ok",
+			detail: "1 segment, GSM-7, 17 units",
+		})
+		const long = sms_text_check(`${"x".repeat(80)} 📦`)
+		expect(long).toMatchObject({ level: "warn" })
+		expect(long.detail).toContain("2 segments, UCS-2")
+		expect(long.detail).toContain('"📦"')
+		expect(long.fix).toContain("GSM-7")
+	})
+
+	it("sends nothing unless every confirmation matches", async () => {
+		const send = vi.fn()
+		vi.stubEnv("POSTBOI_SMS_FROM", "ACME")
+		const run = (args: Array<string>, failed = false) => sms_live_check(args, failed, send)
+		expect(await run(["--to", "+447700900123"], true)).toMatchObject({ level: "fail" })
+		expect(await run([])).toMatchObject({ detail: expect.stringContaining("--to") })
+		expect(
+			await run([
+				"--to",
+				"+447700900123",
+				"--confirm-to",
+				"+447700900124",
+				"--confirm-from",
+				"ACME",
+			])
+		).toMatchObject({ level: "fail", fix: "--confirm-to +447700900123" })
+		expect(
+			await run(["--to", "+447700900123", "--confirm-to", "+447700900123", "--confirm-from", "ACM"])
+		).toMatchObject({ level: "fail", fix: "--confirm-from ACME" })
+		expect(send).not.toHaveBeenCalled()
+	})
+
+	it("sends one text once confirmed, and says what the provider answered", async () => {
+		vi.stubEnv("POSTBOI_SMS_FROM", "ACME")
+		const send = vi.fn().mockResolvedValue({ id: "SM1", provider: "twilio", delivery: "queued" })
+		const check = await sms_live_check(
+			[
+				"--to=+447700900123",
+				"--confirm-to=+447700900123",
+				"--confirm-from=ACME",
+				"--sms-text",
+				"hello",
+			],
+			false,
+			send
+		)
+		expect(send).toHaveBeenCalledWith({ to: "+447700900123", message: "hello" })
+		expect(check).toMatchObject({
+			level: "ok",
+			detail: expect.stringContaining("twilio took it: SM1"),
+		})
+	})
+
+	it("says an unknown outcome is unknown", async () => {
+		const send = vi
+			.fn()
+			.mockRejectedValue(
+				new PostboiError({ provider: "twilio", message: "timed out", outcome_unknown: true })
+			)
+		const check = await sms_live_check(
+			["--to", "+1", "--confirm-to", "+1", "--confirm-from", "none"],
+			false,
+			send
+		)
+		expect(check).toMatchObject({
+			level: "fail",
+			detail: expect.stringContaining("may or may not have sent it"),
+			fix: "check with the provider before sending again",
+		})
 	})
 })

@@ -278,7 +278,17 @@ POSTBOI_SMS_PROVIDER=twilio
 `bunx postboi init --sms` writes that line for you, and `bunx postboi doctor` checks it:
 that each provider it names is one, that their credentials are set, and that
 `POSTBOI_SMS_FROM` is a sender carriers take. Nothing is sent, so a wrong token still
-passes; only a send can find that out. The reason it isn't optional is the same
+passes; only a send can find that out. Two flags go further:
+
+```bash
+bunx postboi doctor --sms-text "Your parcel is ready 📦"   # encoding and segments
+bunx postboi doctor --sms-live --to +447700900123 --confirm-to +447700900123 --confirm-from ACME
+```
+
+`--sms-text` says what a text costs, and which characters forced it into UCS-2. `--sms-live`
+sends one real text, which is billed and reaches a handset, so it asks for everything twice:
+the number again as `--confirm-to`, and the sender it goes from as `--confirm-from` (`none`
+when the provider picks it). Any mismatch, or any failing check above it, sends nothing. The reason it isn't optional is the same
 one behind [development interception](#development-sends-nothing): a text costs money and reaches a real
 handset, and the credentials that would do the guessing aren't evidence you meant to send
 one. `AWS_ACCESS_KEY_ID` is set by anything near AWS; `TWILIO_ACCOUNT_SID` and
