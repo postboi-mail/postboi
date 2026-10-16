@@ -550,12 +550,18 @@ normalized [webhook events](/webhooks#text-messages), with `channel: "sms"` and 
   `PLIVO_WEBHOOK_SECRET` if you'd rather set it apart. Plivo signs the URL and a nonce but
   not the body, and nothing is timestamped, so serve it over HTTPS and deduplicate. Behind a
   proxy, pass the URL Plivo calls as `receive(request, { url })`.
-- **Sinch and Bandwidth don't sign**, so their callbacks are checked against the Basic
-  credentials you give them. Put a username and password in your Sinch callback URL
-  (`https://user:pass@example.com/hooks/sinch`), or on your Bandwidth application's
-  callback, and set the same `username:password` as `SINCH_WEBHOOK_SECRET` or
-  `BANDWIDTH_WEBHOOK_SECRET`. `message_id` is the id the send answered with: the batch id
-  on Sinch, the message id on Bandwidth.
+- **Sinch signs with HMAC, if you ask it to.** HMAC is turned on for a service plan by
+  your Sinch account manager. Once it is, every callback carries
+  `x-sinch-webhook-signature`, a base64 HMAC-SHA256 over the body, a nonce and a
+  timestamp, and `receive()` with `{ provider: "sinch" }` checks it against
+  `SINCH_WEBHOOK_SECRET` and refuses one more than five minutes old. Until then, put a
+  username and password in your callback URL (`https://user:pass@example.com/hooks/sinch`)
+  and set the same `username:password` as `SINCH_WEBHOOK_SECRET`. Whichever the request
+  carries is the one checked, and a wrong signature is never let through on Basic
+  credentials instead. `message_id` is the batch id the send answered with.
+- **Bandwidth doesn't sign**, so its callbacks are checked against the Basic credentials
+  on your application's callback. Set the same `username:password` as
+  `BANDWIDTH_WEBHOOK_SECRET`. `message_id` is the message id the send answered with.
 - **PureSMS pushes signed receipts.** Add your endpoint under **Settings → Webhooks** with
   a secret, and set the same value as `PURESMS_WEBHOOK_SECRET`. Each request is signed with
   HMAC-SHA256 over its timestamp and body. A receipt doesn't name the recipient's number,

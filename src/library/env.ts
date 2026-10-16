@@ -121,12 +121,26 @@ function warn_once(name: string, message: string): void {
  * neither yes nor no is **said out loud and then ignored**: these decide how mail looks,
  * and a typo that quietly meant "no" is a fortnight of unbranded email nobody notices.
  */
-function read_flag(name: string): boolean | undefined {
-	const value = read_env(name)?.trim().toLowerCase()
-	if (value === undefined || value === "") return undefined
-	if (["1", "true", "on", "yes"].includes(value)) return true
-	if (["0", "false", "off", "no"].includes(value)) return false
-	warn_once(name, `postboi: ${name} is "${value}", which is neither true nor false. Ignoring it.`)
+export function read_flag(name: string): boolean | undefined {
+	const raw = read_env(name)
+	const value = parse_flag(raw)
+	if (value === undefined && raw?.trim()) {
+		warn_once(
+			name,
+			`postboi: ${name} is "${raw.trim()}", which is neither true nor false. Ignoring it.`
+		)
+	}
+	return value
+}
+
+/**
+ * A flag's value read as yes or no: `1`, `true`, `on`, `yes` and their opposites, in any
+ * case. Undefined for nothing at all and for anything else.
+ */
+export function parse_flag(raw: string | undefined): boolean | undefined {
+	const value = raw?.trim().toLowerCase()
+	if (["1", "true", "on", "yes"].includes(value ?? "")) return true
+	if (["0", "false", "off", "no"].includes(value ?? "")) return false
 	return undefined
 }
 
