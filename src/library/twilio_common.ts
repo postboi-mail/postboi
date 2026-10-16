@@ -6,7 +6,7 @@
  *
  * Internal: not part of the public surface.
  */
-import type { ProviderError } from "./errors.js"
+import type { ProviderError, RejectionReason } from "./errors.js"
 
 /** The `{ sid, status }` both Twilio providers resolve with. */
 export type TwilioSendResponse = { sid: string; status: string }
@@ -29,6 +29,29 @@ export function twilio_parse_response(data: unknown): TwilioSendResponse {
 }
 
 /**
+ * Twilio's error codes, by what they say about the refusal — from its error dictionary,
+ * https://www.twilio.com/docs/api/errors. A code that isn't here is left to the HTTP status,
+ * which makes most of them `request`: a refusal nobody else would answer differently.
+ */
+const REASONS: Record<number, RejectionReason> = {
+	20003: "auth", // Permission denied
+	20429: "rate_limited", // Too many requests
+	21211: "recipient", // Invalid 'To' phone number
+	21614: "recipient", // 'To' is not a valid mobile number
+	21610: "compliance", // The recipient replied STOP
+	21212: "sender", // Invalid 'From' phone number
+	21606: "sender", // The 'From' number is not a valid, SMS-capable number for this account
+	21612: "sender", // The 'To' number is not reachable from this 'From' number
+	21659: "sender", // The 'From' is not a Twilio number or verified caller ID
+	21660: "sender", // Mismatch between the 'From' number and the account
+	21703: "sender", // The Messaging Service has no phone numbers to send from
+	21408: "account", // Permission to send to this region is not enabled
+	21608: "account", // A trial account can only send to verified numbers
+	63007: "sender", // WhatsApp: no channel for this From address
+	63018: "rate_limited", // WhatsApp: the channel's rate limit
+}
+
+/**
  * Recognise Twilio's error payload — `{ code, message, more_info, status }`; a success
  * carries `sid`. Returns undefined to fall back to HTTP status handling.
  */
@@ -36,7 +59,8 @@ export function twilio_parse_error(data: unknown): ProviderError | undefined {
 	if (data === null || typeof data !== "object") return undefined
 	const e = data as Record<string, unknown>
 	if (typeof e.message === "string" && !("sid" in e)) {
-		return { message: e.message, code: e.code as string | number | undefined }
+		const code = e.code as string | number | undefined
+		return { message: e.message, code, reason: REASONS[Number(code)] }
 	}
 	return undefined
 }

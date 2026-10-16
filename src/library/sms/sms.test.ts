@@ -178,6 +178,53 @@ describe("twilio", () => {
 		).rejects.toMatchObject({ code: "scheduling_needs_service" })
 	})
 
+	it("sends no idempotency header, since Twilio documents none for a send", async () => {
+		const fetch = vi.fn().mockResolvedValue(respond({ json: { sid: "SM1", status: "queued" } }))
+		vi.stubGlobal("fetch", fetch)
+		const text = new Twilio({ account_sid: "AC1", auth_token: "t", default: { from: "+1555" } })
+		await text.send({ to: "+447788223344", message: "hi", idempotency_key: "order-1" })
+		const headers = fetch.mock.calls[0][1].headers as Record<string, string>
+		expect(Object.keys(headers).some((h) => /idempotency/i.test(h))).toBe(false)
+	})
+
+	it("never retries a 5xx, even with a key, because the text may already have gone", async () => {
+		const fetch = vi.fn().mockResolvedValue(respond({ ok: false, status: 503 }))
+		vi.stubGlobal("fetch", fetch)
+		const text = new Twilio({
+			account_sid: "AC1",
+			auth_token: "t",
+			default: { from: "+1555" },
+			retries: 2,
+			retry_delay: 0,
+		})
+		const error = await text
+			.send({ to: "+447788223344", message: "hi", idempotency_key: "order-1" })
+			.catch((e: unknown) => e)
+		expect(fetch).toHaveBeenCalledTimes(1)
+		expect(error).toMatchObject({ status: 503, outcome_unknown: true })
+	})
+
+	it("retries a 429, which Twilio refused before creating anything", async () => {
+		const fetch = vi
+			.fn()
+			.mockResolvedValueOnce(
+				respond({ ok: false, status: 429, json: { code: 20429, message: "Too Many Requests" } })
+			)
+			.mockResolvedValueOnce(respond({ json: { sid: "SM1", status: "queued" } }))
+		vi.stubGlobal("fetch", fetch)
+		const text = new Twilio({
+			account_sid: "AC1",
+			auth_token: "t",
+			default: { from: "+1555" },
+			retries: 1,
+			retry_delay: 0,
+		})
+		await expect(text.send({ to: "+447788223344", message: "hi" })).resolves.toMatchObject({
+			sid: "SM1",
+		})
+		expect(fetch).toHaveBeenCalledTimes(2)
+	})
+
 	it("refuses several recipients on one send instead of texting only the first", async () => {
 		vi.stubGlobal("fetch", vi.fn())
 		const text = new Twilio({ account_sid: "AC1", auth_token: "t", default: { from: "+1555" } })

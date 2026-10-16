@@ -20,6 +20,12 @@ type Options = SmsProviderOptions & {
 	 * message, and it's how you get sender pools and automatic RCS upgrade.
 	 */
 	messaging_service_sid?: string
+	/**
+	 * Where Twilio posts this message's status callbacks (sent, delivered, failed), for
+	 * `receive()` with the `twilio` webhook adapter. Optional: a Messaging Service can carry
+	 * its own, and `poll()` reads receipts with nothing set at all.
+	 */
+	status_callback?: string
 }
 
 type SendResponse = TwilioSendResponse
@@ -48,19 +54,53 @@ type SendResponse = TwilioSendResponse
 export default class Twilio extends SmsProvider<SendResponse> {
 	protected readonly provider = "twilio"
 	protected override readonly supports_scheduling = true
+	protected override readonly single_recipient = true
+	protected override readonly max_media = 10
+	protected override readonly validity_range = [1, 36000] as const
+	protected override readonly reserved_options = [
+		"To",
+		"From",
+		"MessagingServiceSid",
+		"Body",
+		"MediaUrl",
+		"StatusCallback",
+		"ValidityPeriod",
+		"SendAt",
+		"ScheduleType",
+	]
 	#account_sid: string
 	#auth_token: string
 	#messaging_service_sid?: string
+	#status_callback?: string
 
-	constructor({ account_sid, auth_token, messaging_service_sid, ...options }: Options) {
+	constructor({
+		account_sid,
+		auth_token,
+		messaging_service_sid,
+		status_callback,
+		...options
+	}: Options) {
 		super(options)
 		this.#account_sid = account_sid
 		this.#auth_token = auth_token
 		this.#messaging_service_sid = messaging_service_sid || undefined
+		this.#status_callback = status_callback || undefined
 		// A Messaging Service supplies the sender pool, so `from` is genuinely optional —
 		// without this, the base class's no_sender guard rejects the standard
 		// MessagingServiceSid-only setup before build_request's optional-From path can run.
 		if (this.#messaging_service_sid) this.requires_from = false
+	}
+
+	protected override check(message: PreparedSms) {
+		const issues = super.check(message)
+		if (message.scheduled_at && !this.#messaging_service_sid) {
+			issues.push({
+				code: "scheduling_needs_service",
+				message:
+					"Twilio can only schedule through a Messaging Service. Construct the provider with { messaging_service_sid }.",
+			})
+		}
+		return issues
 	}
 
 	protected build_request(message: PreparedSms): RequestSpec {
@@ -83,6 +123,16 @@ export default class Twilio extends SmsProvider<SendResponse> {
 		if (this.#messaging_service_sid) body.set("MessagingServiceSid", this.#messaging_service_sid)
 		if (message.from) body.set("From", message.from)
 		body.set("Body", message.message)
+		for (const url of message.media ?? []) body.append("MediaUrl", url)
+		if (message.validity !== undefined) body.set("ValidityPeriod", String(message.validity))
+		if (this.#status_callback) body.set("StatusCallback", this.#status_callback)
+		for (const [name, value] of Object.entries(message.provider_options ?? {})) {
+			// A list parameter (`PersistentAction`, say) is the name repeated, as `MediaUrl` is.
+			body.delete(name)
+			for (const item of Array.isArray(value) ? value : [value]) {
+				body.append(name, typeof item === "string" ? item : JSON.stringify(item))
+			}
+		}
 		if (message.scheduled_at) {
 			if (!this.#messaging_service_sid) {
 				throw new PostboiError({
@@ -102,9 +152,9 @@ export default class Twilio extends SmsProvider<SendResponse> {
 			headers: {
 				Authorization: twilio_auth(this.#account_sid, this.#auth_token),
 				"Content-Type": "application/x-www-form-urlencoded",
-				...(message.idempotency_key
-					? { "I-Twilio-Idempotency-Token": message.idempotency_key }
-					: {}),
+				// No idempotency header: Twilio documents none for creating a message.
+				// `I-Twilio-Idempotency-Token` is the one Twilio puts on webhooks it sends you,
+				// so forwarding it here promised a safe retry nothing on Twilio's side kept.
 			},
 			body: body.toString(),
 		}

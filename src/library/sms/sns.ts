@@ -2,6 +2,23 @@ import { SmsProvider, type PreparedSms, type SmsProviderOptions } from "./provid
 import type { RequestSpec } from "../transport.js"
 import { PostboiError, type ProviderError } from "../errors.js"
 import { sign_aws_request } from "../aws.js"
+import type { RejectionReason } from "../errors.js"
+
+/**
+ * AWS error codes, by what they say about the refusal. Throttling comes back as a 400, so
+ * without this it would read as a bad request rather than a provider asking for a pause;
+ * the credential failures are 403s and would be `auth` anyway, and are listed to say so.
+ */
+const SNS_REASONS: Record<string, RejectionReason> = {
+	Throttling: "rate_limited",
+	ThrottlingException: "rate_limited",
+	ThrottledException: "rate_limited",
+	AuthorizationError: "auth",
+	InvalidClientTokenId: "auth",
+	SignatureDoesNotMatch: "auth",
+	AccessDenied: "auth",
+	ExpiredToken: "auth",
+}
 
 /** Options for the Amazon SNS provider constructor. */
 type Options = SmsProviderOptions & {
@@ -45,6 +62,7 @@ type SendResponse = { message_id: string }
  */
 export default class SNS extends SmsProvider<SendResponse> {
 	protected readonly provider = "sns"
+	protected override readonly single_recipient = true
 	// AWS attaches the sender identity account-side in most regions.
 	protected override readonly requires_from = false
 	#access_key_id: string
@@ -127,11 +145,14 @@ export default class SNS extends SmsProvider<SendResponse> {
 	}
 
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
+		// AWS throttles with a 400, so the status alone would call it a bad request.
 		const text = typeof data === "string" ? data : ""
 		if (!text.includes("<Error>")) return undefined
+		const code = text.match(/<Code>([^<]+)<\/Code>/)?.[1]
 		return {
 			message: text.match(/<Message>([^<]+)<\/Message>/)?.[1] ?? "SNS publish failed",
-			code: text.match(/<Code>([^<]+)<\/Code>/)?.[1],
+			code,
+			reason: code ? SNS_REASONS[code] : undefined,
 		}
 	}
 }

@@ -567,8 +567,9 @@ await mail.send({
 ```
 
 Sends accept an [`idempotency_key`](/errors#retries): retrying a send with the same key
-returns the original message id instead of delivering a duplicate. Pair it with
-`retries` for safe automatic retry.
+returns the original message id instead of delivering a duplicate. It is also what lets
+`retries` retry a `5xx` or a dropped connection: without one, those fail with
+`outcome_unknown: true` rather than risk a second send.
 
 A batch takes **one** key and gives each recipient its own, suffixed with that
 recipient's position: `order-42` becomes `order-42:0`, `order-42:1` and so on. One key

@@ -42,6 +42,8 @@ export type {
 	SmsOptions,
 	SmsProviderOptions,
 	SmsApiKeyOptions,
+	SmsCheck,
+	SmsIssue,
 } from "./sms/types.js"
 
 // The chat channel's public types.
@@ -78,11 +80,17 @@ export {
 	PostboiError,
 	SkipSendError,
 	SpamError,
+	FailoverError,
 	is_error,
 	is_spam,
+	fails_over,
+	FAILOVER_REASONS,
 	type Channel,
 	type ProviderError,
+	type RejectionReason,
 } from "./errors.js"
+// What a channel mock's `fail` option scripts: a refusal with a reason, or an unknown outcome.
+export type { MockFailure } from "./mock_recorder.js"
 // The channel-agnostic base and the types that go with it. `Transport` is exported so a
 // third party can implement a channel we don't ship.
 export {
@@ -359,8 +367,9 @@ export interface SendOptions {
 	/** Attachments to include. Accepts a single File or an array of File objects. */
 	attachments?: File | Array<File>
 	/**
-	 * Idempotency key forwarded to providers that support it (the Postboi provider, Resend),
-	 * so a retried request does not send a duplicate email.
+	 * Idempotency key forwarded to providers that support it (the Postboi provider, Resend
+	 * and others that document one), so a retried request does not send a duplicate email.
+	 * It is also what lets `retries` retry a 5xx, a timeout or a network error.
 	 */
 	idempotency_key?: string
 	/**
@@ -1049,7 +1058,18 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 		})
 
 		// No native endpoint → existing fan-out gives full hooks/retries (and mock support).
-		if (!this.build_batch_request) return this.send_batch(expanded)
+		// Each request is its own message there, so each needs its own key: one key names one
+		// message, and a provider that deduplicates on it would answer every recipient after
+		// the first as a replay of the first, and deliver nothing to them. The suffix is the
+		// one the Postboi provider's native batch uses, so a retried batch replays item by item.
+		if (!this.build_batch_request) {
+			const key = base.idempotency_key
+			return this.send_batch(
+				key
+					? expanded.map((message, index) => ({ ...message, idempotency_key: `${key}:${index}` }))
+					: expanded
+			)
+		}
 
 		// Native batch: prepare + run before.send per recipient, then one request for survivors.
 		const template = await this.prepare_send(base)
@@ -1074,7 +1094,7 @@ export abstract class EmailProvider<TResponse = unknown> extends Transport<
 			try {
 				const spec = await this.build_batch_request(template, live)
 				const response = await this.request(spec)
-				const body = await this.read_json(response)
+				const body = await this.read_reply(response)
 				const error = this.error_for(response, body, "batch request")
 				if (error) throw error
 				const parsed = this.parse_batch_response(response, body, live)

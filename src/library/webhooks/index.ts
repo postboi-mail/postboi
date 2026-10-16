@@ -22,7 +22,13 @@
  */
 import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
-import type { ProviderKey, SmsProviderKey, WhatsappProviderKey } from "../registry.js"
+import type { SmsKeyword } from "../sms/opt_out.js"
+import {
+	provider_keys,
+	type ProviderKey,
+	type SmsProviderKey,
+	type WhatsappProviderKey,
+} from "../registry.js"
 import { load_config } from "../config.js"
 import { ensure_env_loaded, read_env } from "../env.js"
 import { parse_json, sns_envelope, sns_subscribe_url } from "./shared.js"
@@ -59,14 +65,21 @@ export type WebhookEventType =
 	| "opened"
 	| "clicked"
 	| "unsubscribed"
+	/**
+	 * Someone who opted out texted to opt back in: START or UNSTOP on SMS or WhatsApp, or
+	 * Twilio's own `OptOutType=START`. The number is in `phone` and `keyword` is `"start"`.
+	 * The reverse of an `unsubscribed` from a STOP, so clear the suppression you wrote then.
+	 */
+	| "resubscribed"
 	| "failed"
 	/**
 	 * Mail arriving at your sending address — the one event that isn't about a
 	 * send. `email` is the person who wrote to you, not a recipient, and
 	 * `message_id` is the send being replied to when the provider can tell.
-	 * The Postboi provider, Lettermint and Sequenzy (a tracked reply); on WhatsApp
-	 * via Meta it is a message to your number, with the person in `phone`. Providers
-	 * without inbound never emit it.
+	 * The Postboi provider, Lettermint and Sequenzy (a tracked reply). On SMS and
+	 * WhatsApp it is a text to your number, with the person in `phone` and their words
+	 * in `body.text`; a HELP carries `keyword: "help"`, because carriers expect it
+	 * answered. Providers without inbound never emit it.
 	 */
 	| "received"
 	/**
@@ -163,6 +176,13 @@ export interface WebhookEvent {
 	/** The message body — `received` events only, when the provider includes it. */
 	body?: { html?: string; text?: string }
 	/**
+	 * The keyword an inbound text was, on SMS and WhatsApp: `"stop"` on an `unsubscribed`,
+	 * `"start"` on a `resubscribed`, `"help"` on a `received`. Read from the provider's own
+	 * verdict where it gives one (Twilio's Advanced Opt-Out), otherwise from the whole
+	 * message (see `sms_keyword`). Unset on everything else.
+	 */
+	keyword?: SmsKeyword
+	/**
 	 * The form a submission was filed under — Postboi provider events about a send that
 	 * named one (`mail({ form })`) or came through a hosted endpoint.
 	 */
@@ -210,6 +230,12 @@ export interface WebhookAdapter {
 	provider: string
 	/** SNS-wrapped providers (SES, Scaleway) — lets `receive` confirm subscriptions. */
 	sns?: boolean
+	/**
+	 * Where else the secret may be read from, after `<PROVIDER>_WEBHOOK_SECRET`. For a
+	 * provider that signs with a credential you already have (Twilio's auth token), so
+	 * it needn't be set twice.
+	 */
+	secret_env?: Array<string>
 	/** Throw a {@link WebhookVerificationError} unless the request is authentic. */
 	verify(ctx: VerifyContext): void | Promise<void>
 	/** Map the raw body to normalized events (providers may batch several per request). */
@@ -230,6 +256,13 @@ export interface WebhookAdapter {
 	 * means the usual `{ received }` answer.
 	 */
 	respond?(body: string, ctx: NormalizeContext): Response | undefined
+	/**
+	 * The answer to a verified request once its events were handled, when the provider
+	 * reads more into it than a status. Twilio parses a reply to an inbound message as
+	 * TwiML and logs an error for anything else, so its adapter answers with an empty
+	 * `<Response/>`. Undefined means the usual `{ received }` answer.
+	 */
+	accepted?(events: Array<WebhookEvent>): Response | undefined
 }
 
 /** A loaded adapter module: the adapter plus its mock-payload builder (for tests). */
@@ -288,11 +321,16 @@ export const MODULES: Record<string, () => Promise<AdapterModule>> = {
 	plunk: () => import("./plunk.js"),
 	ses: () => import("./ses.js"),
 	scaleway: () => import("./scaleway.js"),
-	// The channel providers that push. Twilio reports both its channels by `poll()`;
-	// Meta's Cloud API pushes a real webhook, keyed like `whatsapp()`'s provider, and
-	// The SMS Works pushes account-wide SMS delivery reports, keyed like `sms()`'s.
+	// The channel providers that push, keyed like `sms()`'s and `whatsapp()`'s. Twilio
+	// pushes when it is given somewhere to (and can be polled when it isn't); Meta's Cloud
+	// API, PureSMS, Telnyx and Vonage push signed requests, and The SMS Works an
+	// account-wide report.
 	meta: () => import("./meta.js"),
 	smsworks: () => import("./smsworks.js"),
+	twilio: () => import("./twilio.js"),
+	puresms: () => import("./puresms.js"),
+	telnyx: () => import("./telnyx.js"),
+	vonage: () => import("./vonage.js"),
 }
 
 /** Options for {@link receive}. */
@@ -306,8 +344,8 @@ export interface ReceiveOptions {
 	 * `whatsapp.provider`) or the SMS provider (`POSTBOI_SMS_PROVIDER` / `sms.provider`)
 	 * when it pushes webhooks. A project with both names the channel one here: the
 	 * endpoint Meta or The SMS Works calls is never the one the email provider calls.
-	 * A key with no adapter (Twilio types but polls) is a `webhooks_not_supported`
-	 * error at runtime, not a type error — `poll()` is where its receipts are.
+	 * A key with no adapter (Amazon SNS's SMS) is a `webhooks_not_supported` error at
+	 * runtime, not a type error.
 	 */
 	provider?: ProviderKey | SmsProviderKey | WhatsappProviderKey | "postboi" | WebhookAdapter
 	/**
@@ -326,6 +364,14 @@ export interface ReceiveOptions {
 	 */
 	verify_token?: string
 	/**
+	 * The URL the provider called, when it isn't the request's own: behind a proxy, a
+	 * load balancer or a tunnel, `request.url` can carry another host or scheme. Only
+	 * matters to providers that sign the URL (Twilio); the rest ignore it. Give it whole,
+	 * query string included: Twilio signs the query too, and a JSON request carries its
+	 * body hash there. Swapping the origin of `request.url` is usually all it takes.
+	 */
+	url?: string | URL
+	/**
 	 * Set false to skip signature verification and only normalize. Verification is
 	 * otherwise required — a missing secret is an error, never a silent pass.
 	 */
@@ -335,7 +381,7 @@ export interface ReceiveOptions {
 /**
  * Resolve the provider key the same way the zero-config `mail()` does. A project with
  * no email provider at all falls through to its WhatsApp one, if that pushes webhooks
- * (Meta does; Twilio polls) — so a WhatsApp-only app gets zero-config `receive()` too.
+ * (Meta and Twilio do) — so a WhatsApp-only app gets zero-config `receive()` too.
  */
 export async function resolve_key(): Promise<string> {
 	const config = await load_config()
@@ -344,9 +390,11 @@ export async function resolve_key(): Promise<string> {
 		read_env("POSTBOI_PROVIDER") ??
 		config.provider ??
 		(read_env("POSTBOI_TOKEN") ? "postboi" : undefined)
-	// A channel provider stands in only when it pushes: Twilio names itself on both
-	// channels and polls, so it is never the answer here.
-	const pushes = (key: string | undefined) => (key && key in MODULES ? key : undefined)
+	// A channel provider stands in only when it pushes: SNS's SMS reports nothing, so it
+	// is never the answer here. A chain (`twilio,puresms`) answers with the first of it
+	// that pushes; its others each call their own endpoint, which names its provider.
+	const pushes = (value: string | ReadonlyArray<string> | undefined) =>
+		provider_keys(value)?.find((key) => key in MODULES)
 	const whatsapp = pushes(read_env("POSTBOI_WHATSAPP_PROVIDER") ?? config.whatsapp?.provider)
 	const sms = pushes(read_env("POSTBOI_SMS_PROVIDER") ?? config.sms?.provider)
 	const key = email ?? whatsapp ?? sms
@@ -400,18 +448,22 @@ export async function receive(
 	const adapter = await resolve_adapter(options.provider)
 
 	await ensure_env_loaded()
+	const env = `${adapter.provider.toUpperCase()}_WEBHOOK_SECRET`
 	const secret =
-		options.secret ?? read_env(`${adapter.provider.toUpperCase()}_WEBHOOK_SECRET`) ?? undefined
+		options.secret ??
+		read_env(env) ??
+		adapter.secret_env?.map((name) => read_env(name)).find(Boolean) ??
+		undefined
 
 	const body = await request.text()
-	const url = new URL(request.url)
+	const url = new URL(options.url ?? request.url)
 	const ctx: VerifyContext = { body, headers: request.headers, url, secret }
 
 	if (options.verify !== false) {
 		if (!secret) {
 			throw new WebhookVerificationError({
 				provider: adapter.provider,
-				message: `No webhook secret configured for ${adapter.provider}. Set ${adapter.provider.toUpperCase()}_WEBHOOK_SECRET or pass { secret }, or pass { verify: false } to explicitly skip verification.`,
+				message: `No webhook secret configured for ${adapter.provider}. Set ${[env, ...(adapter.secret_env ?? [])].join(" or ")} or pass { secret }, or pass { verify: false } to explicitly skip verification.`,
 				code: "missing_secret",
 			})
 		}

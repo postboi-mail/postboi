@@ -10,6 +10,39 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- `retries` no longer resends after a 5xx, a timeout or a network error unless the send carries an `idempotency_key` the provider honours. None of those failures proves the message wasn't sent, so a retry could deliver it twice. A 429 is still always retried. This covers every POST a provider makes, not only sends: a cancel, a list subscribe or a contact upsert that gets a 5xx is no longer retried either. GET, HEAD, PUT, DELETE and OPTIONS requests still are. Set `retry_unknown: true` (per provider or in `postboi.config`) to get the old behaviour back.
+
+### Added
+
+- SMS sends take `media` (MMS, on Twilio and Telnyx, up to 10 URLs), `validity` (how many seconds the provider keeps trying: Twilio 1 to 36000, Vonage 20 to 604800) and `provider_options` (the provider's own parameters, passed into its request, never overwriting a field the send sets). A provider that can't carry one refuses the send before any request, and `validate()` lists it.
+- The SMS, WhatsApp, push and chat mocks' `fail` takes a scripted failure (`{ reason: "sender" }`, `{ outcome_unknown: true }`) or a list, one entry per send, so a failover chain can be tested without a provider. `true` still fails every send as before. `MockFailure` is exported for the shape.
+- `sms.validate(options)`, and `validate()` on every SMS provider, checks a text without sending it: the numbers in E.164, GSM-7 or UCS-2 and the segment count, the characters that forced UCS-2, and every problem a send would refuse rather than the first. It also reports what the provider in particular would refuse (several recipients on Twilio, Telnyx, Vonage or SNS, Twilio scheduling without a Messaging Service) and an alphanumeric sender carriers won't take. Nothing is sent and nothing is asked of the provider.
+- Telnyx (`postboi/telnyx`, `TELNYX_API_KEY`) and Vonage (`postboi/vonage`, through the Messages API) send SMS. Telnyx takes an optional messaging profile and schedules with `scheduled_at`. Vonage authenticates with an API key and secret, or an application id and private key for numbers linked to an application, and refuses `scheduled_at`. Both map their error codes to `reason`, so either can sit in a failover chain. `receive()` takes their delivery events and inbound texts with `{ provider: "telnyx" }` (Ed25519, `TELNYX_WEBHOOK_SECRET` is the account's public key, five-minute replay window) and `{ provider: "vonage" }` (HS256 JWT with `payload_hash`, `VONAGE_WEBHOOK_SECRET`). `TELNYX_API_KEY` and `VONAGE_API_KEY` are never read as intent to send texts, because their Voice and Verify customers set them too.
+- Plivo (`postboi/plivo`), Sinch (`postboi/sinch`) and Bandwidth (`postboi/bandwidth`) send SMS. Plivo takes several recipients a request, MMS, `validity` from 5 to 10799 seconds and an optional Powerpack in place of `from`. Sinch sends batches of up to 1000, schedules with `scheduled_at`, takes `validity` up to three days and a region. Bandwidth carries MMS and one recipient a send, since several numbers there make a group message. `PLIVO_AUTH_ID`, `PLIVO_AUTH_TOKEN` and Bandwidth's account and API user are never read as intent to send texts, because their Voice customers set them too.
+- `sms.redact` (or `POSTBOI_SMS_REDACT=1`, or `redact: true` on a provider) masks phone numbers in SMS errors, in their message, stack and `raw`, and in the message and response `after.send` and `on.error` hooks are shown, so an error tracker never receives a number. `+447700900123` becomes `+4*********23`. The send itself and `before.send` are untouched. `redact_phones(text)` and `mask_phone(number)` are exported for your own logs.
+- `postboi doctor` checks SMS when `POSTBOI_SMS_PROVIDER` is set: every provider in the chain exists, its credentials are set, and `POSTBOI_SMS_FROM` is a sender carriers take. Nothing is sent.
+- SMS and WhatsApp fail over between providers. Name several (`POSTBOI_SMS_PROVIDER=twilio,puresms`, or `sms: { provider: ["twilio", "puresms"] }`) and a message moves to the next only when the one before refused it for a reason about that provider: credentials, a rate limit, the sender or the account. Never for a bad number, an opt-out or an unknown outcome. A batch fails over message by message, and a chain that runs out throws `FailoverError` with every provider's answer in `errors`. Every provider in a chain needs its credentials; `options` in the config file belong to the first.
+- `PostboiError.reason` says why a provider refused, normalized: `auth`, `rate_limited`, `sender`, `account`, `recipient`, `compliance` or `request`. Read from Twilio's, Meta's and AWS's error codes, and the HTTP status otherwise. A batch the provider only partly accepted carries no reason and is `outcome_unknown`, since resending it would send the accepted part twice. `fails_over(error)` and `FAILOVER_REASONS` are exported from the root.
+- `PostboiError.outcome_unknown` is `true` when the message may have been sent despite the error (a 5xx, a timeout, a dropped connection), and `false` when the provider refused it or nothing was sent.
+- `receive()` takes Twilio's status callbacks and inbound messages, for SMS and WhatsApp, with `{ provider: "twilio" }`. Requests are verified by `X-Twilio-Signature` against your auth token (`TWILIO_WEBHOOK_SECRET`, else `TWILIO_AUTH_TOKEN`), including JSON bodies signed by `bodySHA256`. The Twilio SMS and WhatsApp providers take `status_callback` (`TWILIO_STATUS_CALLBACK`) to say where receipts go. `poll()` still works with nothing set up.
+- `receive()` takes PureSMS's delivery receipts and inbound messages with `{ provider: "puresms" }`, verified by its HMAC-SHA256 signature (`PURESMS_WEBHOOK_SECRET`). Message ids keep all 64 bits.
+- `receive(request, { url })` names the URL the provider called, for a provider that signs it (Twilio) when a proxy or tunnel changed the request's own.
+- A `resubscribed` event for a START or UNSTOP texted back, and `keyword` (`"stop"`, `"start"` or `"help"`) on the events an inbound text produces. `sms_keyword(text)`, `OPT_IN_KEYWORDS` and `HELP_KEYWORDS` are exported from the package root beside `is_opt_out`.
+
+### Changed
+
+- Every inbound SMS is now an event. The Twilio poll and The SMS Works used to read replies for STOP and drop the rest; now anything that isn't STOP or START is `received`, with the words in `body.text`, as WhatsApp replies already were. A HELP is a `received` with `keyword: "help"`. A handler that switches on `type` sees new events and nothing it already handled changes.
+- On WhatsApp via Meta, a START is now `resubscribed` rather than `received`.
+
+### Fixed
+
+- A personalized batch (`to` plus `data`) through a provider with no batch endpoint gave every recipient the batch's `idempotency_key`, so a provider that deduplicates on it (Lettermint, Loops, AhaSend, JetEmail, Primitive and others) could treat everyone after the first as a replay and deliver nothing to them. Each recipient's request now carries `<key>:<index>`, as the Postboi provider's native batch already did.
+- Resend's batch request now sends the batch's `idempotency_key`, so a keyed batch is retried after a 5xx like a single send.
+- A 5xx or a dropped connection on a read (a `GET`) is no longer `outcome_unknown`: a read can't have sent anything.
+- The Twilio SMS provider no longer sends `idempotency_key` as `I-Twilio-Idempotency-Token`. That is a header Twilio puts on webhooks it sends you, and Twilio documents no idempotency control for creating a message, so it never made a retried text safe.
+
 ## 0.68.1
 
 ### Fixed

@@ -962,7 +962,16 @@ export const SMS_PROVIDERS = [
 		note: "UK-native flat-rate pay-as-you-go, hosted in the EU, with signed delivery webhooks",
 		price: "2.8p",
 		verified: "2026-09-01",
-		fields: [{ env: "PURESMS_API_KEY", arg: "api_key", label: "API key", secret: true }],
+		fields: [
+			{ env: "PURESMS_API_KEY", arg: "api_key", label: "API key", secret: true },
+			{
+				env: "PURESMS_WEBHOOK_SECRET",
+				arg: "webhook_secret",
+				label: "Webhook secret (optional; the one set on the endpoint under Settings → Webhooks)",
+				secret: true,
+				default: "",
+			},
+		],
 	},
 	{
 		key: "twilio",
@@ -994,6 +1003,161 @@ export const SMS_PROVIDERS = [
 				arg: "messaging_service_sid",
 				label: "Messaging Service SID (optional; required to schedule)",
 				default: "",
+			},
+			{
+				env: "TWILIO_STATUS_CALLBACK",
+				arg: "status_callback",
+				label: "Status callback URL (optional; where Twilio posts delivery receipts)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "telnyx",
+		name: "Telnyx",
+		import: "postboi/telnyx",
+		class: "Telnyx",
+		url: "https://portal.telnyx.com/#/api-keys",
+		regions: ["global"],
+		note: "Global, on its own carrier network, and usually the cheapest US route",
+		fields: [
+			// Ambient: set by anyone using Telnyx Voice or Verify, so it isn't intent to text.
+			{ env: "TELNYX_API_KEY", arg: "api_key", label: "API key", secret: true, ambient: true },
+			{
+				env: "TELNYX_MESSAGING_PROFILE_ID",
+				arg: "messaging_profile_id",
+				label: "Messaging profile id (optional; needed for a number pool or alphanumeric sender)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "vonage",
+		name: "Vonage",
+		import: "postboi/vonage",
+		class: "Vonage",
+		url: "https://dashboard.nexmo.com/settings",
+		regions: ["global"],
+		note: "Global, through the Messages API; an API key and secret, or an application",
+		fields: [
+			// Required either way: an application belongs to the account the key names. Ambient,
+			// like Twilio's pair, because Vonage's Voice and Verify users set it too.
+			{ env: "VONAGE_API_KEY", arg: "api_key", label: "API key", secret: true, ambient: true },
+			{
+				env: "VONAGE_API_SECRET",
+				arg: "api_secret",
+				label: "API secret (or the application id and private key below)",
+				secret: true,
+				default: "",
+			},
+			{
+				env: "VONAGE_APPLICATION_ID",
+				arg: "application_id",
+				label:
+					"Application id (optional; use it instead of the key when the number is linked to one)",
+				default: "",
+			},
+			{
+				env: "VONAGE_PRIVATE_KEY",
+				arg: "private_key",
+				label: "Application private key (PEM, with the application id)",
+				secret: true,
+				default: "",
+			},
+			{
+				env: "VONAGE_REGION",
+				arg: "region",
+				label: "API region (optional; api, api-eu, api-us or api-ap)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "plivo",
+		name: "Plivo",
+		import: "postboi/plivo",
+		class: "Plivo",
+		url: "https://console.plivo.com/dashboard/",
+		regions: ["global"],
+		note: "Global, with MMS in the US and Canada and Powerpack number pools",
+		fields: [
+			// The Plivo SDK's own zero-argument defaults, set by its Voice users too.
+			{ env: "PLIVO_AUTH_ID", arg: "auth_id", label: "Auth ID", secret: true, ambient: true },
+			{
+				env: "PLIVO_AUTH_TOKEN",
+				arg: "auth_token",
+				label: "Auth token",
+				secret: true,
+				ambient: true,
+			},
+			{
+				env: "PLIVO_POWERPACK_UUID",
+				arg: "powerpack_uuid",
+				label: "Powerpack UUID (optional; sends from its number pool instead of a from)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "sinch",
+		name: "Sinch",
+		import: "postboi/sinch",
+		class: "Sinch",
+		url: "https://dashboard.sinch.com/sms/api/rest",
+		regions: ["global"],
+		note: "Global, a carrier-grade route, with scheduling and batches of up to 1000",
+		fields: [
+			{ env: "SINCH_SERVICE_PLAN_ID", arg: "service_plan_id", label: "Service plan ID" },
+			{ env: "SINCH_API_TOKEN", arg: "api_token", label: "API token", secret: true },
+			{
+				env: "SINCH_REGION",
+				arg: "region",
+				label: "Region (optional; us, eu, au, br or ca)",
+				default: "",
+			},
+			{
+				env: "SINCH_CALLBACK_URL",
+				arg: "callback_url",
+				label: "Callback URL (optional; where Sinch posts delivery reports)",
+				default: "",
+			},
+		],
+	},
+	{
+		key: "bandwidth",
+		name: "Bandwidth",
+		import: "postboi/bandwidth",
+		class: "Bandwidth",
+		url: "https://app.bandwidth.com",
+		regions: ["US"],
+		note: "US carrier-owned network, with MMS",
+		fields: [
+			// Account and API user are shared with Bandwidth's Voice users; the messaging
+			// application is what says a text is meant.
+			{
+				env: "BANDWIDTH_ACCOUNT_ID",
+				arg: "account_id",
+				label: "Account ID",
+				ambient: true,
+			},
+			{
+				env: "BANDWIDTH_USERNAME",
+				arg: "username",
+				label: "API username",
+				secret: true,
+				ambient: true,
+			},
+			{
+				env: "BANDWIDTH_PASSWORD",
+				arg: "password",
+				label: "API password",
+				secret: true,
+				ambient: true,
+			},
+			{
+				env: "BANDWIDTH_MESSAGING_APPLICATION_ID",
+				arg: "application_id",
+				label: "Messaging application ID",
 			},
 		],
 	},
@@ -1304,6 +1468,12 @@ export const WHATSAPP_PROVIDERS = [
 				label: "Messaging Service SID (optional; supplies the WhatsApp sender)",
 				default: "",
 			},
+			{
+				env: "TWILIO_STATUS_CALLBACK",
+				arg: "status_callback",
+				label: "Status callback URL (optional; where Twilio posts delivery receipts)",
+				default: "",
+			},
 		],
 	},
 	{
@@ -1432,14 +1602,34 @@ export function infer_channel_provider(
  *
  * The rule: options belong to the provider the section names. A section naming nothing
  * keeps the old behaviour, because unscoped options can only have been written for
- * whatever ends up running.
+ * whatever ends up running. A section naming a chain (`["twilio", "puresms"]`) gives them
+ * to the first provider only, for the same reason: one flat bag can't say which of two
+ * providers sharing an `arg` it was written for, so the ones after it read env alone.
  */
 export function scoped_options(
-	section: { provider?: string; options?: Record<string, string> } | undefined,
+	section:
+		| { provider?: string | ReadonlyArray<string>; options?: Record<string, string> }
+		| undefined,
 	key: string
 ): Record<string, string> | undefined {
-	if (section?.provider !== undefined && section.provider !== key) return undefined
+	const primary = provider_keys(section?.provider)?.[0]
+	if (primary !== undefined && primary !== key) return undefined
 	return section?.options
+}
+
+/**
+ * The provider keys a setting names, in order: a comma-separated string
+ * (`POSTBOI_SMS_PROVIDER=twilio,puresms`) or a list from the config file. Undefined when
+ * it names none, so `??` falls through to the next place a provider could be named.
+ */
+export function provider_keys(
+	value: string | ReadonlyArray<string> | undefined
+): Array<string> | undefined {
+	if (value === undefined) return undefined
+	const keys = (typeof value === "string" ? value.split(",") : [...value])
+		.map((key) => key.trim())
+		.filter(Boolean)
+	return keys.length > 0 ? keys : undefined
 }
 
 /**

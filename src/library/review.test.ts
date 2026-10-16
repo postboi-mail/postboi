@@ -201,9 +201,22 @@ describe("a config file's options never reach another provider", () => {
 
 		// SMS joined the exploitable set when PureSMS arrived: like The SMS Works it takes a
 		// lone `api_key`, so each one's bag satisfies the other. The send above covers it.
+		// Telnyx and Vonage each require only an `api_key` too, so all four satisfy each other.
+		// Vonage's secret or application is optional to the registry (either will do), which
+		// is why it counts; the scoping above is what keeps every one of these pairs closed.
 		expect(reachable(registry.SMS_PROVIDERS as never)).toEqual([
 			"smsworks -> puresms",
+			"smsworks -> telnyx",
+			"smsworks -> vonage",
 			"puresms -> smsworks",
+			"puresms -> telnyx",
+			"puresms -> vonage",
+			"telnyx -> smsworks",
+			"telnyx -> puresms",
+			"telnyx -> vonage",
+			"vonage -> smsworks",
+			"vonage -> puresms",
+			"vonage -> telnyx",
 		])
 		expect(reachable(registry.PUSH_PROVIDERS as never)).toEqual([])
 		expect(reachable(registry.WHATSAPP_PROVIDERS as never)).toEqual([])
@@ -333,6 +346,10 @@ describe("provider inference reads intent, not ambience", () => {
 			"AWS_ACCESS_KEY_ID",
 			"AWS_REGION",
 			"AWS_SECRET_ACCESS_KEY",
+			// Bandwidth's account and API user: its Voice users set them too.
+			"BANDWIDTH_ACCOUNT_ID",
+			"BANDWIDTH_PASSWORD",
+			"BANDWIDTH_USERNAME",
 			// Wherever wrangler has run.
 			"CLOUDFLARE_ACCOUNT_ID",
 			"CLOUDFLARE_API_TOKEN",
@@ -347,6 +364,9 @@ describe("provider inference reads intent, not ambience", () => {
 			// Mailjet's own SDK default pair.
 			"MJ_APIKEY_PRIVATE",
 			"MJ_APIKEY_PUBLIC",
+			// The Plivo SDK's zero-argument defaults, like Twilio's.
+			"PLIVO_AUTH_ID",
+			"PLIVO_AUTH_TOKEN",
 			// Somebody else's bounce mailbox.
 			"POP3_HOST",
 			"POP3_PASS",
@@ -362,9 +382,12 @@ describe("provider inference reads intent, not ambience", () => {
 			"SMTP_USER",
 			"TEAMS_WEBHOOK_URL",
 			"TELEGRAM_BOT_TOKEN",
+			// Telnyx's and Vonage's API keys: their Voice and Verify users set them too.
+			"TELNYX_API_KEY",
 			// The Twilio SDK's zero-argument defaults — Voice and Verify set these too.
 			"TWILIO_ACCOUNT_SID",
 			"TWILIO_AUTH_TOKEN",
+			"VONAGE_API_KEY",
 		])
 	})
 
@@ -385,8 +408,10 @@ describe("provider inference reads intent, not ambience", () => {
 		// `infers: false` means neither channel consults them — but a wrong mark here
 		// would be invisible until some future policy did.
 		expect(keys("whatsapp")).toEqual(["meta"])
-		// PureSMS joins it for the same reason: PURESMS_API_KEY is set for nothing else.
-		expect(keys("sms")).toEqual(["smsworks", "puresms"])
+		// PureSMS joins it for the same reason: PURESMS_API_KEY is set for nothing else, and so
+		// does Sinch, whose service plan is an SMS thing. Plivo's pair is its SDK's default and
+		// Bandwidth's account is its Voice users' too, so both stay out, like Twilio's.
+		expect(keys("sms")).toEqual(["smsworks", "puresms", "sinch"])
 		// Chat is down to bluesky. SLACK_WEBHOOK_URL, DISCORD_WEBHOOK_URL, TEAMS_WEBHOOK_URL
 		// and TELEGRAM_BOT_TOKEN are what every CI notification action already sets, so a
 		// build-notification hook would have made send()'s chat leg post application

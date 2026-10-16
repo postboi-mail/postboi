@@ -93,7 +93,7 @@ Every provider's payload normalizes to a `WebhookEvent`:
 ```typescript
 interface WebhookEvent {
 	type: 'sent' | 'delivered' | 'delayed' | 'bounced' | 'complained'
-	    | 'opened' | 'clicked' | 'unsubscribed' | 'failed' | 'received'
+	    | 'opened' | 'clicked' | 'unsubscribed' | 'resubscribed' | 'failed' | 'received'
 	    | 'test_received' | 'test_completed'  // Postboi hosted testing, see below
 	    | 'viewed' | 'view_viewed'            // Postboi web versions, see below
 	provider: string      // "resend", "postmark", …
@@ -109,6 +109,7 @@ interface WebhookEvent {
 	client?: EmailClient  // opened/clicked, see below
 	ip?: string
 	body?: { html?: string; text?: string }  // received events: the message
+	keyword?: 'stop' | 'start' | 'help'      // sms/whatsapp: the keyword an inbound text was
 	form?: { id: string; name: string }      // Postboi: the form a submission was filed under
 	fields?: Array<[string, string]>         // Postboi: the submission's fields, in order
 	test?: TestingRun                        // test_* events: the test run
@@ -206,9 +207,15 @@ reads `event.email` is never handed a phone number. A text that reached the hand
 the provider. **The SMS Works** pushes account-wide delivery reports, so it is a
 `receive()` provider like any of the email ones: `provider: 'smsworks'`, verified with
 `SMSWORKS_WEBHOOK_SECRET` as `?token=…` (see the [table below](#verification)).
-**Twilio** sets its callbacks per message, so it is [polled](#providers-that-dont-push-poll).
-Both read an inbound reply for one thing: a reply that is an
-[opt-out keyword](/sms#opt-outs) is an `unsubscribed` event for the number that sent it.
+**PureSMS** pushes signed receipts (`provider: 'puresms'`). **Twilio** does either: it
+pushes signed status callbacks to `receive()` when a send says where
+([`status_callback`](/sms#delivery-receipts)), and can be
+[polled](#providers-that-dont-push-poll) with nothing set up.
+
+All of them read what people text back the same way, through the
+[keyword rules](/sms#opt-outs): STOP is `unsubscribed` and START `resubscribed` for the
+number that sent it, and anything else is `received`, with their words in `body.text`
+and `keyword: 'help'` on a HELP.
 
 ## Who opened it, and on what
 
@@ -256,6 +263,10 @@ Providers fall into three camps:
 | Customer.io | Signed (HMAC timestamp+body, 5-minute replay window) | `CUSTOMERIO_WEBHOOK_SECRET`, the reporting webhook's signing key |
 | SocketLabs | Secret key in the body | `SOCKETLABS_WEBHOOK_SECRET`, the endpoint's secret key. Set it before pressing Validate, since the `Validation` handshake is verified like any other request and then echoed back by `webhook()` for you |
 | Postmark, Brevo, SparkPost, Mailjet, ZeptoMail, Elastic Email, Plunk, SMTP2GO, Postal, Infobip, SendPulse | Shared secret | `<PROVIDER>_WEBHOOK_SECRET`, a token you make up; put the same value in the webhook URL as `?token=…` (or the provider's auth-header option) |
+| Twilio (SMS, WhatsApp) | Signed (`X-Twilio-Signature`, HMAC-SHA1 of the URL and the POST parameters) | `TWILIO_WEBHOOK_SECRET`, or else `TWILIO_AUTH_TOKEN` as it is: Twilio signs with the auth token. The URL is signed, so behind a proxy or a tunnel pass `receive(request, { url })` with the one Twilio calls, query string included. `webhook()` answers with empty TwiML, as Twilio's inbound webhook expects |
+| Telnyx (SMS) | Signed (Ed25519 of timestamp and body, 5-minute replay window) | `TELNYX_WEBHOOK_SECRET`, the account's public key from Mission Control (Keys & Credentials) |
+| Vonage (SMS) | Signed (HS256 JWT in `Authorization`, with `payload_hash` over the body) | `VONAGE_WEBHOOK_SECRET`, the signature secret from the dashboard's settings |
+| PureSMS (SMS) | Signed (HMAC-SHA256 of timestamp and body). The timestamp's age isn't checked, because PureSMS retries for up to a day | `PURESMS_WEBHOOK_SECRET`, the secret you set on the endpoint (Settings → Webhooks). PureSMS treats it as optional; `receive()` doesn't |
 | The SMS Works (SMS) | Shared secret | `SMSWORKS_WEBHOOK_SECRET`, a token you make up, as `?token=…` on the delivery-report URL (Delivery Reports → Webhook Configuration), or the basic-auth password on a reply-number webhook |
 | Amazon SES, Scaleway | Shared secret over SNS | `SES_WEBHOOK_SECRET` / `SCALEWAY_WEBHOOK_SECRET` as `?token=…` on the subscription URL; SNS subscription handshakes confirm automatically |
 | Azure Communication Services | Shared secret over Event Grid | `AZURE_WEBHOOK_SECRET` as `?token=…` on the subscription's endpoint URL (Event Grid keeps the query string secret); the subscription validation handshake is completed automatically. Engagement reports name the message but not the recipient, so opens and clicks carry `message_id` and no `email` |
@@ -325,7 +336,7 @@ Credentials resolve like sending: explicit `options`, else the provider's env va
 | -------- | ---------------------- | --------------------------------- |
 | Microsoft 365 | The Graph [message-trace API](https://learn.microsoft.com/graph/api/resources/exchangemessagetrace) | Grant the app registration the **ExchangeMessageTrace.Read.All** application permission (admin consent) and provision a service principal for Microsoft app id `8bd644d1-64a1-4d4b-ae52-2e0cbf64e373`. `send()` mints the internet Message-ID it returns, and trace events carry the same id, so events correlate to sends. Tenant rate limit: 100 trace queries per 5 minutes. |
 | Cloudflare | A [Queue](https://developers.cloudflare.com/queues/) fed by an Email Sending event subscription, pulled over HTTP | The first poll auto-creates a `postboi-email-events` queue with an HTTP-pull consumer (the API token needs Queues edit access). Add the event subscription once (Queues → the queue → Subscriptions → Email Sending) and the poll self-heals when the first event lands; or provision everything yourself and set `CLOUDFLARE_QUEUE_ID`. Give that queue no other consumer. |
-| Twilio (SMS + WhatsApp) | The [Message resource](https://www.twilio.com/docs/messaging/api/message-resource), listed over the last 24 hours | Nothing. `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are the send credentials. One row covers both channels: `event.channel` is `"sms"` or `"whatsapp"` and the number is in `event.phone`, never `event.email`. WhatsApp's read receipt arrives as `opened`; an undeliverable message is `failed` with the carrier's code in `bounce.detail` (a text message has no bounce *classification*, since there's no mailbox to be unavailable). The window is trailing rather than incremental, because Twilio filters by `DateSent` while what changes is the status: the cursor remembers the last status per message and emits only on a change. Inbound replies are read for one thing: a reply that is an [opt-out keyword](/sms#opt-outs) (`STOP` and friends) is an `unsubscribed` event for the number that sent it. |
+| Twilio (SMS + WhatsApp) | The [Message resource](https://www.twilio.com/docs/messaging/api/message-resource), listed over the last 24 hours | Nothing. `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are the send credentials. One row covers both channels: `event.channel` is `"sms"` or `"whatsapp"` and the number is in `event.phone`, never `event.email`. WhatsApp's read receipt arrives as `opened`; an undeliverable message is `failed` with the carrier's code in `bounce.detail` (a text message has no bounce *classification*, since there's no mailbox to be unavailable). The window is trailing rather than incremental, because Twilio filters by `DateSent` while what changes is the status: the cursor remembers the last status per message and emits only on a change. Inbound replies go through the [keyword rules](/sms#opt-outs): STOP is `unsubscribed`, START `resubscribed`, anything else `received`. To be told instead of asking, use the `twilio` webhook adapter. |
 | SMTP | The return-path's bounce mailbox, read over POP3, parsing RFC 3464 delivery status notifications | Set `POP3_HOST`, `POP3_USER`, `POP3_PASS` (and `POP3_PORT`/`POP3_SECURE` if not 995/implicit TLS) for the mailbox your bounce address delivers to. Messages are left on the server by default; pass `{ options: { delete: '1' } }` to remove processed mail. `parse_dsn` is exported on its own too, if bounces already reach you some other way (an inbound route, for instance). |
 
 Two honest caveats. Cloudflare pulls are acked in-call, and SMTP deletion is

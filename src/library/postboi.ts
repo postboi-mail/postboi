@@ -13,7 +13,16 @@ export type { HostedTest } from "./inspect/hosted.js"
 // The zero-config `sms()` — same shape as `mail()`, on the SMS channel.
 export { sms } from "./sms/send.js"
 // Is a texted reply an opt-out? For anyone reading inbound messages themselves.
-export { is_opt_out, OPT_OUT_KEYWORDS } from "./sms/opt_out.js"
+export {
+	is_opt_out,
+	sms_keyword,
+	OPT_OUT_KEYWORDS,
+	OPT_IN_KEYWORDS,
+	HELP_KEYWORDS,
+	type SmsKeyword,
+} from "./sms/opt_out.js"
+// Mask phone numbers in text for logs; `sms.redact` does it to SMS errors and hooks.
+export { mask_phone, redact_phones } from "./sms/phone.js"
 // The chat channel's per-platform functions. There's deliberately no generic `chat()`
 // export: you always know which platform you're posting to, so the platform is the name.
 // The channel-generic resolver still exists internally as `send()`'s chat leg.

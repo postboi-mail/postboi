@@ -242,6 +242,16 @@ export function is_gsm7(text: string): boolean {
 	return true
 }
 
+/** The distinct characters in `text` that GSM 03.38 can't carry, in the order they appear. */
+export function gsm7_breakers(text: string): Array<string> {
+	const out: Array<string> = []
+	for (const char of text) {
+		if (!GSM_BASIC.includes(char) && !GSM_EXTENDED.includes(char) && !out.includes(char))
+			out.push(char)
+	}
+	return out
+}
+
 /**
  * How many SMS segments `text` costs, and the encoding it forces.
  *
@@ -264,4 +274,64 @@ export function segments(text: string): {
 	const units = text.length
 	const count = units <= 70 ? 1 : Math.ceil(units / 67)
 	return { count: Math.max(count, 1), encoding: "ucs2", units }
+}
+
+/**
+ * A run of digits long enough to be a phone number, with the separators people write: a
+ * `+`, or `%2B` where it was URL-encoded. It has to stand on its own: digits inside an
+ * identifier (a Twilio `SM…` sid, a UUID's all-digit group, a time after a date) are part
+ * of that identifier, and masking them would leave a message id nobody can look up.
+ */
+const PHONE_LIKE = /(?<![\w-])(?:\+|%2[Bb])?\d[\d\s().-]{5,}\d(?!\w|-\w|:\d)/g
+
+/**
+ * A phone number with all but its country code's first digit and its last two hidden:
+ * `+447700900123` → `+4*********23`. Separators are dropped first, so the mask's length is
+ * the number's. Four digits or fewer are hidden whole.
+ */
+export function mask_phone(phone: string): string {
+	const value = phone.replace(/[^\d+]/g, "")
+	if (value.length <= 4) return "*".repeat(value.length)
+	const keep = value.startsWith("+") ? 2 : 1
+	return `${value.slice(0, keep)}${"*".repeat(value.length - keep - 2)}${value.slice(-2)}`
+}
+
+/**
+ * `text` with every run that looks like a phone number masked by {@link mask_phone}, for
+ * logs and error trackers. Seven digits or more counts, so a provider's error code or a
+ * four-digit one-time code is left alone, and a long reference number is masked too:
+ * being wrong in that direction costs a log line, never a number. An ISO date is kept.
+ */
+export function redact_phones(text: string): string {
+	return text.replace(PHONE_LIKE, (found) => {
+		const match = found.replace(/^%2b/i, "+")
+		// Fewer than seven digits is a code or a price written with spaces, and an ISO date is
+		// what every provider's timestamps are made of. Neither is anybody's number.
+		return match.replace(/\D/g, "").length < 7 || /^\d{4}-\d{2}-\d{2}$/.test(match)
+			? found
+			: mask_phone(match)
+	})
+}
+
+/**
+ * A copy of `value` with {@link redact_phones} applied to every string in it, through plain
+ * objects and arrays. Anything else (a Date, a Response, a class instance) is kept as it
+ * is, and so is a reference already visited, so a cycle ends.
+ */
+export function redact_deep<T>(value: T, seen = new WeakMap<object, unknown>()): T {
+	if (typeof value === "string") return redact_phones(value) as T
+	if (value === null || typeof value !== "object") return value
+	if (seen.has(value)) return seen.get(value) as T
+	if (Array.isArray(value)) {
+		const out: Array<unknown> = []
+		seen.set(value, out)
+		for (const item of value) out.push(redact_deep(item, seen))
+		return out as T
+	}
+	const proto = Object.getPrototypeOf(value)
+	if (proto !== Object.prototype && proto !== null) return value
+	const out: Record<string, unknown> = {}
+	seen.set(value, out)
+	for (const [key, item] of Object.entries(value)) out[key] = redact_deep(item, seen)
+	return out as T
 }

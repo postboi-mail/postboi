@@ -246,6 +246,26 @@
 			"types": "./dist/sms/puresms.d.ts",
 			"default": "./dist/sms/puresms.js"
 		},
+		"./telnyx": {
+			"types": "./dist/sms/telnyx.d.ts",
+			"default": "./dist/sms/telnyx.js"
+		},
+		"./vonage": {
+			"types": "./dist/sms/vonage.d.ts",
+			"default": "./dist/sms/vonage.js"
+		},
+		"./plivo": {
+			"types": "./dist/sms/plivo.d.ts",
+			"default": "./dist/sms/plivo.js"
+		},
+		"./sinch": {
+			"types": "./dist/sms/sinch.d.ts",
+			"default": "./dist/sms/sinch.js"
+		},
+		"./bandwidth": {
+			"types": "./dist/sms/bandwidth.d.ts",
+			"default": "./dist/sms/bandwidth.js"
+		},
 		"./sns": {
 			"types": "./dist/sms/sns.d.ts",
 			"default": "./dist/sms/sns.js"

@@ -72,8 +72,9 @@ guessed at, because a template's content is fixed at approval time.
 | Twilio | `postboi/whatsapp-twilio` | Content SIDs (`HX…`), or their names |
 | Meta Cloud API | `postboi/whatsapp-meta` | Approved names + language code |
 
-**Name your provider.** Like [SMS](/sms#providers), WhatsApp never infers one from
-credentials, because a wrong guess is a billable message to a real handset and Twilio's
+**Name your provider**, or several to [fail over between](/sms#failing-over)
+(`POSTBOI_WHATSAPP_PROVIDER=twilio,meta`) as SMS does. Like [SMS](/sms#providers), WhatsApp
+never infers one from credentials, because a wrong guess is a billable message to a real handset and Twilio's
 credentials are shared with every other Twilio product you might be using:
 
 ```bash
@@ -234,9 +235,14 @@ as email: `channel` is `"whatsapp"`, the number is in `phone` (never `email`), a
 receipt is `opened` because it is the same fact as an email open, and a message Meta or
 Twilio couldn't deliver is `failed` with the provider's code and words in `bounce.detail`.
 
-**Twilio** is polled, because its status callbacks are set per message at send time.
+**Twilio** pushes or is polled. Construct the provider with `status_callback` (or set
+`TWILIO_STATUS_CALLBACK`) and point the number's "A message comes in" at the same
+endpoint, and `receive()` with `{ provider: "twilio" }` verifies both against your auth
+token; a reply to one of your messages names it in `message_id`. With nothing set up,
 `poll({ provider: "twilio" })` covers SMS and WhatsApp in one row and needs no public
-endpoint. See [polling](/webhooks#providers-that-dont-push-poll).
+endpoint. See [polling](/webhooks#providers-that-dont-push-poll). Either way, what people
+write back goes through the same [keyword rules](/sms#opt-outs) as a text: STOP is
+`unsubscribed`, START `resubscribed`, anything else `received`.
 
 **Meta** pushes a real webhook, so it's [`receive()`](/webhooks) like an email provider.
 Two values from the app dashboard make it work: the **app secret** (Basic Settings) signs

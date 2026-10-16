@@ -89,8 +89,13 @@ export interface PostboiConfig {
 	options?: Record<string, string>
 	/** Per-request timeout in milliseconds. */
 	timeout?: number
-	/** Retries on network / 429 / 5xx errors. */
+	/**
+	 * Retries. A 429 is always retried; a 5xx, a timeout or a network error only when the
+	 * send carries an `idempotency_key` the provider honours, or with `retry_unknown`.
+	 */
 	retries?: number
+	/** Retry a 5xx, a timeout or a network error without an idempotency key, risking a duplicate. */
+	retry_unknown?: boolean
 	/** Base retry backoff in milliseconds (doubles each attempt). */
 	retry_delay?: number
 	/** Derive a plain-text body from the HTML body when `text` is omitted. On by default. */
@@ -106,10 +111,19 @@ export interface PostboiConfig {
 	 * anything here, the same way they do for email.
 	 */
 	sms?: {
-		/** Provider key (`twilio`, `smsworks`, …). `POSTBOI_SMS_PROVIDER` wins. */
-		provider?: SmsProviderKey | "mock"
+		/**
+		 * Provider key (`twilio`, `smsworks`, …), or several in order to fail over between
+		 * (`["twilio", "puresms"]`): the next is tried only when one refuses for a reason
+		 * that is about that provider. `POSTBOI_SMS_PROVIDER` wins, comma-separated for a chain.
+		 */
+		provider?: SmsProviderKey | "mock" | ReadonlyArray<SmsProviderKey>
 		/** Default fields applied to every text — sender, recipients, country. */
 		default?: SmsDefaults
+		/**
+		 * Mask phone numbers in SMS errors and in what `after.send` and `on.error` hooks are
+		 * shown, for logs and error trackers. `POSTBOI_SMS_REDACT=1` does the same.
+		 */
+		redact?: boolean
 		/**
 		 * Non-secret SMS provider constructor options, keyed by the provider's option name.
 		 * Keep secrets in the environment.
@@ -133,8 +147,8 @@ export interface PostboiConfig {
 	 * API. `POSTBOI_WHATSAPP_*` env vars win over anything here.
 	 */
 	whatsapp?: {
-		/** Provider key (`twilio`, `meta`). */
-		provider?: WhatsappProviderKey | "mock"
+		/** Provider key (`twilio`, `meta`), or several in order to fail over between. */
+		provider?: WhatsappProviderKey | "mock" | ReadonlyArray<WhatsappProviderKey>
 		/** Default sender, recipient, country and template language. */
 		default?: WhatsappDefaults
 		/** Non-secret constructor options. Access tokens are secrets — keep them in env. */

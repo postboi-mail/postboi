@@ -15,6 +15,7 @@ export interface SendParams {
 	sendAtUtc?: string
 	/** Echoed on the delivery receipt, so a webhook can correlate. */
 	clientReference?: string
+	[option: string]: unknown
 }
 
 /** `kind` says which endpoint `cancel` needs; `count` only comes back from a batch. */
@@ -39,6 +40,13 @@ export default class PureSms extends SmsProvider<SendResponse> {
 	// `sendAtUtc` sits on the message for a single send and on the batch for bulk, and
 	// `cancel` undoes either while it's still pending.
 	protected override readonly supports_scheduling = true
+	protected override readonly reserved_options = [
+		"sender",
+		"recipient",
+		"content",
+		"sendAtUtc",
+		"clientReference",
+	]
 	#api_key: string
 	#host = "https://connect-api.divergent.cloud"
 
@@ -58,6 +66,7 @@ export default class PureSms extends SmsProvider<SendResponse> {
 			content: message.message,
 			sendAtUtc,
 			clientReference: message.tags?.[0],
+			...message.provider_options,
 		}
 	}
 
@@ -98,6 +107,8 @@ export default class PureSms extends SmsProvider<SendResponse> {
 			return {
 				message: `puresms rejected ${e.errors.length} message(s): ${rejected}`,
 				code: "partial_batch",
+				// The rest went: resending the batch would send them twice.
+				partial: true,
 			}
 		}
 		if ("id" in e || "batchId" in e) return undefined

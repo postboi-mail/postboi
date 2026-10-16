@@ -4,6 +4,8 @@ import { PostboiError } from "../errors.js"
 import { MockRecorder, type MockRecorderOptions } from "../mock_recorder.js"
 import { segments } from "./phone.js"
 
+export type { MockFailure } from "../mock_recorder.js"
+
 /** A normalized snapshot of a text captured by the mock provider. */
 export interface SentSms {
 	to: Array<string>
@@ -16,6 +18,10 @@ export interface SentSms {
 	 * captures it: "sent" and "queued for Tuesday" are otherwise indistinguishable.
 	 */
 	scheduled_at?: Date
+	/** MMS media URLs, when the send carried any. */
+	media?: Array<string>
+	/** Seconds the provider would keep trying, when the send set it. */
+	validity?: number
 }
 
 /** Options for the SMS mock constructor. */
@@ -44,6 +50,11 @@ export default class MockSms extends SmsProvider<SendResponse> {
 	protected readonly provider = "mock"
 	protected override readonly requires_from = false
 	protected override readonly supports_scheduling = true
+	// The mock stands in for whichever provider is configured, so it refuses nothing a real
+	// one might take: the real provider is where a too-long list or a reserved name is caught.
+	protected override readonly max_media = Number.POSITIVE_INFINITY
+	protected override readonly validity_range = [1, Number.MAX_SAFE_INTEGER] as const
+	protected override readonly reserved_options = []
 	#recorder: MockRecorder<SentSms>
 
 	constructor({ fail, log, sink, ...options }: Options = {}) {
@@ -75,6 +86,8 @@ export default class MockSms extends SmsProvider<SendResponse> {
 			message: message.message,
 			segments: segments(message.message),
 			scheduled_at: message.scheduled_at,
+			media: message.media,
+			validity: message.validity,
 		})
 	}
 

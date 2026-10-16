@@ -711,7 +711,16 @@ function warn_unbundled_config(): void {
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/\/\/.*$/gm, "")
 		.replace(/\b\w+\s*:\s*\{\s*\}\s*,?/g, "")
-	const runtime = ["default", "hooks", "options", "timeout", "retries", "retry_delay", "auto_text"]
+	const runtime = [
+		"default",
+		"hooks",
+		"options",
+		"timeout",
+		"retries",
+		"retry_delay",
+		"retry_unknown",
+		"auto_text",
+	]
 	const used = runtime.filter((key) => new RegExp(`\\b${key}\\s*:`).test(live))
 	if (used.length === 0) return
 
@@ -1475,7 +1484,9 @@ const CHANNEL_INIT = {
 				...SMS_COUNTRIES,
 				{ label: "Somewhere else / several countries", value: "" },
 			])
-			const ranked = [...SMS_PROVIDERS].sort((a, b) => {
+			// Read through the declared shape: `price` and `verified` are optional, and a provider
+			// without them (no verified figure yet) drops them from the literal-typed union.
+			const ranked = [...(SMS_PROVIDERS as ReadonlyArray<CliSmsProvider>)].sort((a, b) => {
 				const score = (p: CliSmsProvider) =>
 					country && p.regions.includes(country) ? 0 : p.regions.includes("global") ? 1 : 2
 				return score(a) - score(b)
@@ -2063,7 +2074,7 @@ async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = fals
 				{
 					label: "SMS",
 					value: "sms",
-					hint: "The SMS Works, PureSMS, Twilio, Amazon SNS",
+					hint: "The SMS Works, PureSMS, Twilio, Telnyx, Vonage, Plivo, Sinch, Bandwidth, Amazon SNS",
 				},
 				{
 					label: "Push notifications",

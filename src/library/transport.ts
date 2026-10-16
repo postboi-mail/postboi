@@ -9,11 +9,31 @@
  *
  * Internal: the package root re-exports everything here that's public.
  */
-import { PostboiError, SkipSendError, type Channel } from "./errors.js"
+import {
+	PostboiError,
+	SkipSendError,
+	type Channel,
+	type ProviderError,
+	type RejectionReason,
+} from "./errors.js"
 import { get_config, merge_hooks } from "./config.js"
 import { pooled_map } from "./utils.js"
 
 export type { Channel, ProviderError } from "./errors.js"
+
+/** Methods HTTP defines as idempotent, which are safe to send again whatever came back. */
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"])
+
+/**
+ * Methods that change nothing, so a failure on one can't have sent anything: an unknown
+ * outcome is only ever a question about a request that could have.
+ */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
+
+/** Could a request with this method have sent or changed something? */
+function changes(method: string | undefined): boolean {
+	return !SAFE_METHODS.has((method ?? "POST").toUpperCase())
+}
 
 /** A provider-agnostic description of the HTTP request to send. */
 export type RequestSpec = {
@@ -22,6 +42,14 @@ export type RequestSpec = {
 	headers: Record<string, string>
 	/** Omit for bodyless requests (GET/DELETE). */
 	body?: BodyInit
+	/**
+	 * The request carries a key the provider documents honouring (an `Idempotency-Key`
+	 * header, a `sendId`, an `Operation-Id`), so sending it twice can't send twice. Only
+	 * then is a 5xx, a timeout or a network error retried: without it nothing proves the
+	 * first attempt didn't land. GET, HEAD, PUT, DELETE and OPTIONS are idempotent by
+	 * definition and need no flag.
+	 */
+	idempotent?: boolean
 }
 
 /** The per-message outcome of a bulk send. */
@@ -112,11 +140,18 @@ export type TransportOptions<TPrepared = unknown> = {
 	/** Per-request timeout in milliseconds. Defaults to 30000. */
 	timeout?: number
 	/**
-	 * Number of retries on network errors and 429/5xx responses. Defaults to 0.
-	 * Retries are opt-in because retrying a send that already reached the provider can
-	 * deliver a duplicate message — pair this with `idempotency_key` where supported.
+	 * Number of retries. Defaults to 0. A 429 is always retried, since the provider refused
+	 * the request. A 5xx, a timeout or a network error leaves the outcome unknown, so those
+	 * are retried only when the request carries an `idempotency_key` the provider honours
+	 * (or with `retry_unknown`).
 	 */
 	retries?: number
+	/**
+	 * Retry a 5xx, a timeout or a network error even without an idempotency key the
+	 * provider honours. The first attempt may already have been sent, so this trades a
+	 * possible duplicate for a possible drop. Defaults to false.
+	 */
+	retry_unknown?: boolean
 	/** Base backoff delay in milliseconds between retries (doubles each attempt). Defaults to 500. */
 	retry_delay?: number
 	/** Lifecycle hooks run around every send. */
@@ -141,6 +176,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	#timeout: number
 	#retries: number
 	#retry_delay: number
+	#retry_unknown: boolean
 	#hooks: TransportHooks<TPrepared>
 
 	constructor(options: TransportOptions<TPrepared> = {}) {
@@ -154,6 +190,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		this.#timeout = options.timeout ?? s.timeout ?? 30000
 		this.#retries = options.retries ?? s.retries ?? 0
 		this.#retry_delay = options.retry_delay ?? s.retry_delay ?? 500
+		this.#retry_unknown = options.retry_unknown ?? s.retry_unknown ?? false
 		// Global hooks are declared over every channel's message union; this provider only
 		// ever hands them its own TPrepared, so the narrowing is safe inbound. A hook that
 		// *returns* another channel's shape is undefined behaviour — which is exactly what
@@ -174,10 +211,19 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	 * Recognise a provider error in the response body and return normalized fields.
 	 * Return undefined to fall back to HTTP status handling. Override per provider.
 	 */
-	protected parse_error(
-		_response: Response,
-		_data: unknown
-	): { message: string; code?: string | number } | undefined {
+	protected parse_error(_response: Response, _data: unknown): ProviderError | undefined {
+		return undefined
+	}
+
+	/**
+	 * Why a refusal happened, when the provider's own code didn't say: the HTTP status is
+	 * the one thing every provider shares. A 5xx is no refusal at all, so it has no reason.
+	 */
+	protected reason_for(status: number): RejectionReason | undefined {
+		if (status === 401 || status === 403) return "auth"
+		if (status === 402) return "account"
+		if (status === 429) return "rate_limited"
+		if (status >= 400 && status < 500) return "request"
 		return undefined
 	}
 
@@ -185,10 +231,24 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	protected async deliver(message: TPrepared): Promise<TResponse> {
 		const spec = await this.build_request(message)
 		const response = await this.request(spec)
-		const data = await this.read_json(response)
+		const data = await this.read_reply(response)
 		const error = this.error_for(response, data, "request")
 		if (error) throw error
-		return this.parse_response(response, data)
+		try {
+			return this.parse_response(response, data)
+		} catch (cause) {
+			// A provider that recognises a refusal in its answer throws one of ours; anything
+			// else here is our reading of a 2xx failing, and the provider took the message.
+			if (cause instanceof PostboiError) throw cause
+			throw new PostboiError({
+				provider: this.provider,
+				channel: this.channel,
+				status: response.status,
+				message: `${this.provider} accepted the request but its answer could not be read: ${cause instanceof Error ? cause.message : String(cause)}`,
+				raw: data,
+				outcome_unknown: true,
+			})
+		}
 	}
 
 	/**
@@ -199,8 +259,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	 */
 	protected async call(spec: RequestSpec, kind: string): Promise<unknown> {
 		const response = await this.request(spec)
-		const data = await this.read_json(response)
-		const error = this.error_for(response, data, kind)
+		const data = await this.read_reply(response, spec.method)
+		const error = this.error_for(response, data, kind, spec.method)
 		if (error) throw error
 		return data
 	}
@@ -208,8 +268,15 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	/**
 	 * Map a response into a {@link PostboiError} if the provider flags it as a failure
 	 * (via `parse_error`) or the HTTP status is not ok. Returns undefined on success.
+	 * `method` is the request's: a 5xx on a GET is a failed read, never an unknown send.
 	 */
-	protected error_for(response: Response, data: unknown, kind: string): PostboiError | undefined {
+	protected error_for(
+		response: Response,
+		data: unknown,
+		kind: string,
+		method?: string
+	): PostboiError | undefined {
+		const may_have_sent = changes(method)
 		const error = this.parse_error(response, data)
 		if (error) {
 			return new PostboiError({
@@ -219,6 +286,11 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: error.message,
 				code: error.code,
 				raw: data,
+				outcome_unknown: may_have_sent && (response.status >= 500 || error.partial === true),
+				reason:
+					response.status >= 500 || error.partial
+						? undefined
+						: (error.reason ?? this.reason_for(response.status) ?? "request"),
 			})
 		}
 		if (!response.ok) {
@@ -228,6 +300,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				status: response.status,
 				message: `${this.provider} ${kind} failed with status ${response.status}`,
 				raw: data,
+				outcome_unknown: may_have_sent && response.status >= 500,
+				reason: this.reason_for(response.status),
 			})
 		}
 		return undefined
@@ -286,8 +360,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				this.#hooks.after?.send?.({
 					provider: this.provider,
 					channel: this.channel,
-					message,
-					response,
+					message: this.observable(message),
+					response: this.observable(response),
 					duration_ms: this.#since(start),
 				})
 			)
@@ -321,12 +395,22 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 			this.#hooks.on?.error?.({
 				provider: this.provider,
 				channel: this.channel,
-				message,
+				message: message === undefined ? undefined : this.observable(message),
 				error: e,
 				duration_ms: this.#since(start),
 			})
 		)
 		return e
+	}
+
+	/**
+	 * What an observer (`after.send`, `on.error`) is shown of a message or a response. The
+	 * value itself by default; a channel that can hide personal data in them (SMS, with
+	 * `redact`) returns a scrubbed copy. Never applied to `before.send`, whose return value
+	 * becomes the message that is sent.
+	 */
+	protected observable<T>(value: T): T {
+		return value
 	}
 
 	/** Run an observability hook, swallowing any error it throws (hooks are best-effort). */
@@ -389,20 +473,33 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		return fetch(url, init)
 	}
 
-	/** Perform the HTTP request with a timeout and opt-in retry/backoff. */
+	/**
+	 * Perform the HTTP request with a timeout and opt-in retry/backoff.
+	 *
+	 * What may be retried is decided by what the failure proves. A 429 proves the provider
+	 * refused the request. A 5xx, a timeout or a dropped connection proves nothing: the
+	 * provider may have queued the message before answering badly or not at all, and a
+	 * second attempt is then a second message in somebody's inbox. Those are retried only
+	 * when the request is {@link RequestSpec.idempotent}, or the caller said `retry_unknown`.
+	 */
 	protected async request(spec: RequestSpec): Promise<Response> {
+		const method = spec.method ?? "POST"
 		const init: RequestInit = {
-			method: spec.method ?? "POST",
+			method,
 			headers: spec.headers,
 			body: spec.body,
 		}
+		const replayable =
+			this.#retry_unknown ||
+			spec.idempotent === true ||
+			IDEMPOTENT_METHODS.has(method.toUpperCase())
 
 		for (let attempt = 0; ; attempt++) {
 			const controller = new AbortController()
 			const timer = setTimeout(() => controller.abort(), this.#timeout)
 			try {
 				const response = await this.send_request(spec.url, { ...init, signal: controller.signal })
-				if (this.#should_retry(response.status) && attempt < this.#retries) {
+				if (this.#should_retry(response.status, replayable) && attempt < this.#retries) {
 					const delay = this.#backoff(attempt + 1, response)
 					await this.observe(() =>
 						this.#hooks.on?.retry?.({
@@ -418,7 +515,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				}
 				return response
 			} catch (cause) {
-				if (attempt < this.#retries) {
+				if (replayable && attempt < this.#retries) {
 					const delay = this.#backoff(attempt + 1)
 					await this.observe(() =>
 						this.#hooks.on?.retry?.({
@@ -438,6 +535,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 					channel: this.channel,
 					message: `${this.provider} request failed: ${reason}`,
 					raw: cause,
+					outcome_unknown: changes(method),
 				})
 			} finally {
 				clearTimeout(timer)
@@ -445,8 +543,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		}
 	}
 
-	#should_retry(status: number): boolean {
-		return status === 429 || status >= 500
+	#should_retry(status: number, replayable: boolean): boolean {
+		return status === 429 || (replayable && status >= 500)
 	}
 
 	#backoff(attempt: number, response?: Response): number {
@@ -461,6 +559,30 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 
 	#sleep(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms))
+	}
+
+	/**
+	 * {@link read_json} for the answer to a request that was made. The status has already
+	 * arrived, so a body that drops halfway is not a refusal: after a 2xx the provider took
+	 * the message, and after a 5xx nothing proves it didn't, so the error says
+	 * `outcome_unknown` rather than leaving a bare stream error to read as "not sent".
+	 */
+	protected async read_reply(response: Response, method?: string): Promise<unknown> {
+		try {
+			return await this.read_json(response)
+		} catch (cause) {
+			const reason = cause instanceof Error ? cause.message : String(cause)
+			throw new PostboiError({
+				provider: this.provider,
+				channel: this.channel,
+				status: response.status,
+				message: `${this.provider} answered ${response.status} but its body could not be read: ${reason}`,
+				raw: cause,
+				outcome_unknown: changes(method) && (response.ok || response.status >= 500),
+				// A 4xx is still a refusal whatever its body said, so it keeps the status's reason.
+				reason: response.ok ? undefined : this.reason_for(response.status),
+			})
+		}
 	}
 
 	/** Read a Response body as JSON, tolerating empty bodies (e.g. 202 responses). */

@@ -1105,7 +1105,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 			})
 			if (!response.ok) {
 				const data = await this.read_json(response)
-				const error = this.error_for(response, data, "/exports/download")
+				const error = this.error_for(response, data, "/exports/download", "GET")
 				if (error) throw error
 			}
 			const bytes = new Uint8Array(await response.arrayBuffer())
@@ -1239,6 +1239,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 				...(message.idempotency_key ? { "Idempotency-Key": message.idempotency_key } : {}),
 			},
 			body: JSON.stringify(await this.#params(message)),
+			idempotent: Boolean(message.idempotency_key),
 		}
 	}
 
@@ -1262,6 +1263,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 					)
 				)
 			),
+			// Each item replays on its own key, so the batch is safe to resend only when every
+			// item has one.
+			idempotent: recipients.every((r) => Boolean(r.message.idempotency_key)),
 		}
 	}
 
