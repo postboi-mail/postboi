@@ -127,7 +127,11 @@ export default class Twilio extends SmsProvider<SendResponse> {
 		if (message.validity !== undefined) body.set("ValidityPeriod", String(message.validity))
 		if (this.#status_callback) body.set("StatusCallback", this.#status_callback)
 		for (const [name, value] of Object.entries(message.provider_options ?? {})) {
-			body.set(name, typeof value === "string" ? value : JSON.stringify(value))
+			// A list parameter (`PersistentAction`, say) is the name repeated, as `MediaUrl` is.
+			body.delete(name)
+			for (const item of Array.isArray(value) ? value : [value]) {
+				body.append(name, typeof item === "string" ? item : JSON.stringify(item))
+			}
 		}
 		if (message.scheduled_at) {
 			if (!this.#messaging_service_sid) {

@@ -8,9 +8,9 @@
  * **Verification is a JWT** in `Authorization: Bearer …`, HS256, signed with the account's
  * signature secret (Dashboard → Settings → Signature secret), set as
  * `VONAGE_WEBHOOK_SECRET`. Only HS256 is accepted, whatever the token's header says, so a
- * token can't talk its way into another algorithm. When the claims carry `payload_hash`, it
- * must be the hex SHA-256 of the body exactly as delivered, which is what binds the token
- * to this body rather than any body. Vonage documents no freshness window for `iat`, and a
+ * token can't talk its way into another algorithm. The claims must carry `payload_hash`,
+ * the hex SHA-256 of the body exactly as delivered, which is what binds the token to this
+ * body rather than any body; a token without one is refused. Vonage documents no freshness window for `iat`, and a
  * redelivery may reuse a token, so none is enforced: deduplicate on `message_uuid` and
  * `type`.
  *
@@ -106,11 +106,13 @@ const adapter: WebhookAdapter = {
 		const expected = to_base64url(await hmac_sha256(ctx.secret, `${header_part}.${payload_part}`))
 		if (!timing_safe_equal(expected, signature_part))
 			refuse("vonage webhook signature did not match")
-		if (claims.payload_hash !== undefined) {
-			const actual = await sha256_hex(ctx.body)
-			if (!timing_safe_equal(actual, String(claims.payload_hash).toLowerCase())) {
-				refuse("vonage webhook body does not match the token's payload_hash")
-			}
+		// Vonage puts `payload_hash` on every signed Messages webhook, and it is the only thing
+		// tying the token to this body. Without it a token lifted from one request would carry
+		// any body, for ever, since nothing here bounds `iat` either.
+		if (claims.payload_hash === undefined) refuse("vonage webhook token carries no payload_hash")
+		const actual = await sha256_hex(ctx.body)
+		if (!timing_safe_equal(actual, String(claims.payload_hash).toLowerCase())) {
+			refuse("vonage webhook body does not match the token's payload_hash")
 		}
 	},
 

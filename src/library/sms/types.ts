@@ -121,6 +121,14 @@ export interface SmsCheck {
 export type SmsProviderOptions = TransportOptions<PreparedSms> & {
 	/** Default field values applied when a send omits them. */
 	default?: SmsDefaults
+	/**
+	 * Mask phone numbers in what leaves a send for somewhere else: a thrown error's message,
+	 * stack and `raw`, and the message and response `after.send` and `on.error` are shown.
+	 * `+447700900123` becomes `+4*********23`. Off by default; `sms.redact` in the config or
+	 * `POSTBOI_SMS_REDACT=1` turns it on for every SMS provider. The text that is sent, and
+	 * `before.send`, are never touched.
+	 */
+	redact?: boolean
 }
 
 /** Options for SMS providers that authenticate with a single API key or token. */

@@ -97,10 +97,24 @@ export default class Plivo extends SmsProvider<SendResponse> {
 		return { message_uuid: d?.message_uuid ?? [], api_id: d?.api_id }
 	}
 
-	/** Errors carry `{ api_id, error }`; the text is all there is. */
+	/**
+	 * Errors carry `{ api_id, error }`; the text is all there is. A send to several numbers
+	 * that Plivo took only some of answers 202 with the rest in `invalid_number`: that is a
+	 * partial send, not a success, or the numbers it dropped would go unnoticed.
+	 */
 	protected parse_error(_response: Response, data: unknown): ProviderError | undefined {
 		if (data === null || typeof data !== "object") return undefined
 		const e = data as Record<string, unknown>
+		if (Array.isArray(e.invalid_number) && e.invalid_number.length > 0) {
+			const went = Array.isArray(e.message_uuid) && e.message_uuid.length > 0
+			return {
+				message: `plivo refused ${e.invalid_number.length} number(s) as invalid: ${e.invalid_number.join(", ")}`,
+				code: "invalid_number",
+				// The rest went: sending the whole request again would send them twice.
+				partial: went,
+				reason: went ? undefined : "recipient",
+			}
+		}
 		if ("message_uuid" in e) return undefined
 		if (typeof e.error === "string") return { message: e.error }
 		return undefined

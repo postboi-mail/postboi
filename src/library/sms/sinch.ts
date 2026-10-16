@@ -92,6 +92,9 @@ export default class Sinch extends SmsProvider<SendResponse> {
 					: undefined,
 			client_reference: message.tags?.[0],
 			callback_url: this.#callback_url,
+			// Sinch posts no delivery report at all unless asked for one ("none" is its default),
+			// so a callback URL alone would never be called.
+			delivery_report: this.#callback_url ? "per_recipient" : undefined,
 			...message.provider_options,
 		}
 		return {

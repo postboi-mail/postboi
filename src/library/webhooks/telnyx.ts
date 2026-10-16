@@ -100,11 +100,21 @@ const adapter: WebhookAdapter = {
 				data: `${timestamp}|${ctx.body}`,
 			})
 		} catch (cause) {
+			// Only a missing algorithm is the runtime's fault. A key or a signature that isn't
+			// base64, or a key of the wrong length, is a request (or a setting) that doesn't verify.
+			if (cause instanceof Error && cause.name === "NotSupportedError") {
+				throw new WebhookVerificationError({
+					provider: "telnyx",
+					message:
+						"This runtime's WebCrypto does not support Ed25519, which Telnyx webhook signatures require.",
+					code: "unsupported_runtime",
+					raw: cause,
+				})
+			}
 			throw new WebhookVerificationError({
 				provider: "telnyx",
-				message:
-					"This runtime's WebCrypto does not support Ed25519, which Telnyx webhook signatures require.",
-				code: "unsupported_runtime",
+				message: `telnyx webhook signature could not be checked: ${cause instanceof Error ? cause.message : String(cause)}. Check that TELNYX_WEBHOOK_SECRET is the account's base64 public key.`,
+				code: "invalid_signature",
 				raw: cause,
 			})
 		}

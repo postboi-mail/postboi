@@ -5,11 +5,11 @@
  * Mirrors `EmailProvider` in shape, so a provider here implements the same three hooks
  * (`build_request`, `parse_response`, optionally `parse_error`) as an email one.
  */
-import { PostboiError, type Channel } from "../errors.js"
+import { PostboiError, SkipSendError, type Channel } from "../errors.js"
 import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
-import { ensure_env_loaded } from "../env.js"
-import { gsm7_breakers, phone_e164, segments } from "./phone.js"
+import { ensure_env_loaded, read_env } from "../env.js"
+import { gsm7_breakers, phone_e164, redact_deep, redact_phones, segments } from "./phone.js"
 import type {
 	Phone,
 	PreparedSms,
@@ -73,11 +73,43 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 
 	protected defaults: SmsDefaults
 
+	#redact?: boolean
+
 	constructor(options: SmsProviderOptions = {}) {
 		super(options)
 		// Global config sits underneath per-instance options, so explicit arguments win.
 		const s = get_config()
 		this.defaults = { ...s.sms?.default, ...options.default }
+		this.#redact = options.redact
+	}
+
+	/**
+	 * Whether phone numbers are masked on the way out. Read per use rather than at
+	 * construction, because the environment may not be loaded until the first send.
+	 */
+	protected get redacting(): boolean {
+		if (this.#redact !== undefined) return this.#redact
+		const env = read_env("POSTBOI_SMS_REDACT")
+		if (env !== undefined) return env === "1" || env.toLowerCase() === "true"
+		return get_config().sms?.redact === true
+	}
+
+	protected override observable<T>(value: T): T {
+		return this.redacting ? redact_deep(value) : value
+	}
+
+	/**
+	 * The error a send throws, with its numbers masked when redacting. Masked in place, so a
+	 * subclass and its `instanceof` survive, and the stack too, since it opens with the
+	 * message. An intentional skip is not a failure and is left alone.
+	 */
+	protected override normalize_error(error: unknown): PostboiError {
+		const e = super.normalize_error(error)
+		if (!this.redacting || e instanceof SkipSendError) return e
+		e.message = redact_phones(e.message)
+		if (e.stack) e.stack = redact_phones(e.stack)
+		Object.defineProperty(e, "raw", { value: redact_deep(e.raw), enumerable: true })
+		return e
 	}
 
 	/** Send one text. Throws a {@link PostboiError} on any failure. */
@@ -99,15 +131,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 
 	/** Normalise one-or-many recipients, accepting a comma-separated string like `to` does. */
 	protected parse_phones(phones: Array<Phone> | Phone, country?: string): Array<string> {
-		if (Array.isArray(phones)) return phones.map((p) => phone_e164(p, country))
-		if (typeof phones === "string" && phones.includes(",")) {
-			return phones
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean)
-				.map((p) => phone_e164(p, country))
-		}
-		return [phone_e164(phones, country)]
+		return phone_list(phones).map((p) => phone_e164(p, country))
 	}
 
 	/**
@@ -340,18 +364,19 @@ function phone_list(phones: Array<Phone> | Phone): Array<Phone> {
 
 /**
  * What's wrong with a sender, if anything a carrier would refuse: an alphanumeric ID longer
- * than 11 characters or carrying anything but letters, digits and spaces. A number, short
+ * than 11 characters or carrying anything but letters, digits, spaces and `+ - _ &` (the
+ * set Twilio and the networks behind it take, so "Co-op" and "M&S" pass). A number, short
  * code or `+`-prefixed sender is left to the provider, which knows what it registered.
  */
-function sender_problem(from: string): string | undefined {
+export function sender_problem(from: string): string | undefined {
 	const sender = from.trim()
 	if (/^\+?\d+$/.test(sender)) return undefined
 	if (!/[A-Za-z]/.test(sender)) return undefined
 	if (sender.length > 11) {
 		return `Alphanumeric sender "${sender}" is ${sender.length} characters; carriers allow 11.`
 	}
-	if (!/^[A-Za-z0-9 ]+$/.test(sender)) {
-		return `Alphanumeric sender "${sender}" may only use letters, digits and spaces.`
+	if (!/^[A-Za-z0-9 +\-_&]+$/.test(sender)) {
+		return `Alphanumeric sender "${sender}" may only use letters, digits, spaces and + - _ &.`
 	}
 	return undefined
 }

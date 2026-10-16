@@ -102,6 +102,15 @@ describe("plivo", () => {
 		expect(error).toMatchObject({ message: "authentication failed", reason: "auth" })
 	})
 
+	it("says so when it took only some of the numbers", async () => {
+		stub(202, { message_uuid: ["u1"], invalid_number: ["4477"], api_id: "a" })
+		const error = (await plivo()
+			.send({ to: ["+447700900001", "+447700900002"], message: "hi" })
+			.catch((e) => e)) as PostboiError
+		expect(error).toMatchObject({ code: "invalid_number", outcome_unknown: true })
+		expect(error.reason).toBeUndefined()
+	})
+
 	it("refuses what it can't carry", async () => {
 		vi.stubGlobal("fetch", vi.fn())
 		expect(await refused(plivo(), { scheduled_at: new Date(Date.now() + 60_000) })).toBe(
@@ -163,6 +172,7 @@ describe("sinch", () => {
 			send_at: "2030-01-01T09:00:00.000Z",
 			expire_at: "2030-01-01T10:00:00.000Z",
 			callback_url: "https://example.com/dlr",
+			delivery_report: "per_recipient",
 		})
 	})
 
