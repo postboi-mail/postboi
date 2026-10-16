@@ -55,7 +55,11 @@ export const HELP: Array<HelpSection> = [
 				command: "doctor",
 				summary:
 					"Is this project wired? Install, token, provider, from address, webhooks, captcha key, SMS, skill",
-				details: ["--json · exit 1 on a failure"],
+				details: [
+					"--json · exit 1 on a failure",
+					'--sms-text "…" previews a text\'s encoding and segments',
+					"--sms-live --to <n> --confirm-to <n> --confirm-from <sender> sends one real text",
+				],
 			},
 			{
 				command: "skill",
