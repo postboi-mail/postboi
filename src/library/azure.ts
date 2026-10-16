@@ -162,6 +162,12 @@ export default class Azure extends ProviderBase<SendResponse> {
 			new Uint8Array(await crypto.subtle.sign("HMAC", await this.#key(), encoder.encode(to_sign)))
 		)
 
+		// Azure only takes a UUID as an Operation-Id; any other key isn't sent.
+		const operation_id =
+			message.idempotency_key && UUID.test(message.idempotency_key)
+				? message.idempotency_key
+				: undefined
+
 		return {
 			url: url.href,
 			headers: {
@@ -169,11 +175,10 @@ export default class Azure extends ProviderBase<SendResponse> {
 				"x-ms-content-sha256": content_hash,
 				Authorization: `HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature=${signature}`,
 				"Content-Type": "application/json",
-				...(message.idempotency_key && UUID.test(message.idempotency_key)
-					? { "Operation-Id": message.idempotency_key }
-					: {}),
+				...(operation_id ? { "Operation-Id": operation_id } : {}),
 			},
 			body,
+			idempotent: Boolean(operation_id),
 		}
 	}
 

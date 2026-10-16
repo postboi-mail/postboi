@@ -10,6 +10,18 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- `retries` no longer resends after a 5xx, a timeout or a network error unless the send carries an `idempotency_key` the provider honours. None of those failures proves the message wasn't sent, so a retry could deliver it twice. A 429 is still always retried. This covers every POST a provider makes, not only sends: a cancel, a list subscribe or a contact upsert that gets a 5xx is no longer retried either. GET, HEAD, PUT, DELETE and OPTIONS requests still are. Set `retry_unknown: true` (per provider or in `postboi.config`) to get the old behaviour back.
+
+### Added
+
+- `PostboiError.outcome_unknown` is `true` when the message may have been sent despite the error (a 5xx, a timeout, a dropped connection), and `false` when the provider refused it or nothing was sent.
+
+### Fixed
+
+- The Twilio SMS provider no longer sends `idempotency_key` as `I-Twilio-Idempotency-Token`. That is a header Twilio puts on webhooks it sends you, and Twilio documents no idempotency control for creating a message, so it never made a retried text safe.
+
 ## 0.68.1
 
 ### Fixed

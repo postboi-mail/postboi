@@ -43,7 +43,11 @@ export interface SmsOptions {
 	scheduled_at?: Date | string | Duration
 	/** Tags for analytics and filtering, where the provider supports them. */
 	tags?: Array<string>
-	/** Idempotency key, so a retried request does not send a duplicate text. */
+	/**
+	 * Idempotency key. None of the SMS providers here documents one for sending (Twilio,
+	 * SNS, The SMS Works and PureSMS alike), so it is not forwarded and does not make a
+	 * retry safe: a send that fails with `outcome_unknown` may already have gone out.
+	 */
 	idempotency_key?: string
 	/** Override the default country for national-format numbers in this send. */
 	country?: string

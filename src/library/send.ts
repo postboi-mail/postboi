@@ -287,6 +287,7 @@ function normalize(error: unknown, channel: Channel): PostboiError {
 			code: error.code,
 			message: error.message,
 			raw: error.raw,
+			outcome_unknown: error.outcome_unknown,
 		})
 	}
 	return new PostboiError({

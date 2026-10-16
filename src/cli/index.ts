@@ -711,7 +711,16 @@ function warn_unbundled_config(): void {
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/\/\/.*$/gm, "")
 		.replace(/\b\w+\s*:\s*\{\s*\}\s*,?/g, "")
-	const runtime = ["default", "hooks", "options", "timeout", "retries", "retry_delay", "auto_text"]
+	const runtime = [
+		"default",
+		"hooks",
+		"options",
+		"timeout",
+		"retries",
+		"retry_delay",
+		"retry_unknown",
+		"auto_text",
+	]
 	const used = runtime.filter((key) => new RegExp(`\\b${key}\\s*:`).test(live))
 	if (used.length === 0) return
 
