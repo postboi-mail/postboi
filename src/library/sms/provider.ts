@@ -236,7 +236,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 			if (this.max_media === 0) {
 				fail(
 					"media_not_supported",
-					`${this.provider} can't send MMS. Remove media, or use a provider that can (Twilio, Telnyx).`
+					`${this.provider} can't send MMS. Remove media, or use a provider that can (Twilio, Telnyx, Plivo, Bandwidth).`
 				)
 			} else if (media.length > this.max_media) {
 				fail(
@@ -255,7 +255,7 @@ export abstract class SmsProvider<TResponse = unknown> extends Transport<TRespon
 			if (!range) {
 				fail(
 					"validity_not_supported",
-					`${this.provider} can't limit how long it tries. Remove validity, or use a provider that can (Twilio, Vonage).`
+					`${this.provider} can't limit how long it tries. Remove validity, or use a provider that can (Twilio, Vonage, Plivo, Sinch).`
 				)
 			} else if (
 				!Number.isInteger(options.validity) ||

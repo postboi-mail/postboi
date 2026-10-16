@@ -194,8 +194,8 @@ await sms({
 
 | Option | Carried by | Refused elsewhere as |
 | ------ | ---------- | -------------------- |
-| `media`, public http(s) URLs | Twilio and Telnyx, up to 10 | `media_not_supported` |
-| `validity`, seconds the provider keeps trying | Twilio (1 to 36000), Vonage (20 to 604800) | `validity_not_supported` |
+| `media`, public http(s) URLs | Twilio, Telnyx, Plivo and Bandwidth, up to 10 | `media_not_supported` |
+| `validity`, seconds the provider keeps trying | Twilio (1 to 36000), Vonage (20 to 604800), Plivo (5 to 10799), Sinch (up to three days) | `validity_not_supported` |
 | `provider_options` | Every provider but Amazon SNS | `provider_options_not_supported` |
 
 `validity` is for the text that's worthless late, such as a one-time code. `provider_options`
@@ -228,6 +228,9 @@ for (const result of results) {
 | Twilio | `postboi/twilio` | Global, and automatic RCS upgrade via a Messaging Service |
 | Telnyx | `postboi/telnyx` | Global on its own carrier network, usually the cheapest US route |
 | Vonage | `postboi/vonage` | Global, through the Messages API |
+| Plivo | `postboi/plivo` | Global, with MMS in the US and Canada and Powerpack number pools |
+| Sinch | `postboi/sinch` | Global, scheduling, and up to 1000 recipients a request |
+| Bandwidth | `postboi/bandwidth` | US, on its own carrier network, with MMS |
 | Amazon SNS | `postboi/sns` | Already on AWS |
 
 **SMS always names its provider**. There is no inferring it from credentials:
@@ -253,6 +256,18 @@ and `VONAGE_PRIVATE_KEY` (Vonage refuses the key and secret for those), plus
 is refused rather than sent now. Both send one recipient per request, as Twilio does: pass
 an array of sends to reach several people. Their receipts and replies arrive at `receive()`; see
 [delivery receipts](#delivery-receipts).
+
+**Plivo** takes `PLIVO_AUTH_ID` and `PLIVO_AUTH_TOKEN`, and `PLIVO_POWERPACK_UUID` to send from
+a Powerpack's number pool instead of a fixed `from`. Several recipients go in one request.
+**Sinch** takes `SINCH_SERVICE_PLAN_ID` and `SINCH_API_TOKEN`, `SINCH_REGION` outside the US
+(`eu`, `au`, `br` or `ca`), and `SINCH_CALLBACK_URL` for where its delivery reports go. It
+schedules, and the first of a send's `tags` rides along as Sinch's `client_reference`.
+**Bandwidth** takes `BANDWIDTH_ACCOUNT_ID`, `BANDWIDTH_USERNAME`, `BANDWIDTH_PASSWORD` and
+`BANDWIDTH_MESSAGING_APPLICATION_ID`. Several numbers in one Bandwidth request make a group
+message where everyone sees everyone, so a send carries one recipient. Bandwidth documents no
+limit on how long a text is tried, so `validity` is refused there; pass
+`provider_options: { expiration }` to set it yourself. Plivo and Bandwidth can't schedule.
+Receipts from these three aren't read by `receive()` yet; point them at your own handler.
 
 Construct one directly instead of using the environment, exactly like an email provider:
 

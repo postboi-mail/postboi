@@ -346,6 +346,10 @@ describe("provider inference reads intent, not ambience", () => {
 			"AWS_ACCESS_KEY_ID",
 			"AWS_REGION",
 			"AWS_SECRET_ACCESS_KEY",
+			// Bandwidth's account and API user: its Voice users set them too.
+			"BANDWIDTH_ACCOUNT_ID",
+			"BANDWIDTH_PASSWORD",
+			"BANDWIDTH_USERNAME",
 			// Wherever wrangler has run.
 			"CLOUDFLARE_ACCOUNT_ID",
 			"CLOUDFLARE_API_TOKEN",
@@ -360,6 +364,9 @@ describe("provider inference reads intent, not ambience", () => {
 			// Mailjet's own SDK default pair.
 			"MJ_APIKEY_PRIVATE",
 			"MJ_APIKEY_PUBLIC",
+			// The Plivo SDK's zero-argument defaults, like Twilio's.
+			"PLIVO_AUTH_ID",
+			"PLIVO_AUTH_TOKEN",
 			// Somebody else's bounce mailbox.
 			"POP3_HOST",
 			"POP3_PASS",
@@ -401,8 +408,10 @@ describe("provider inference reads intent, not ambience", () => {
 		// `infers: false` means neither channel consults them — but a wrong mark here
 		// would be invisible until some future policy did.
 		expect(keys("whatsapp")).toEqual(["meta"])
-		// PureSMS joins it for the same reason: PURESMS_API_KEY is set for nothing else.
-		expect(keys("sms")).toEqual(["smsworks", "puresms"])
+		// PureSMS joins it for the same reason: PURESMS_API_KEY is set for nothing else, and so
+		// does Sinch, whose service plan is an SMS thing. Plivo's pair is its SDK's default and
+		// Bandwidth's account is its Voice users' too, so both stay out, like Twilio's.
+		expect(keys("sms")).toEqual(["smsworks", "puresms", "sinch"])
 		// Chat is down to bluesky. SLACK_WEBHOOK_URL, DISCORD_WEBHOOK_URL, TEAMS_WEBHOOK_URL
 		// and TELEGRAM_BOT_TOKEN are what every CI notification action already sets, so a
 		// build-notification hook would have made send()'s chat leg post application
