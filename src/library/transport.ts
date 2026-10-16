@@ -9,7 +9,13 @@
  *
  * Internal: the package root re-exports everything here that's public.
  */
-import { PostboiError, SkipSendError, type Channel } from "./errors.js"
+import {
+	PostboiError,
+	SkipSendError,
+	type Channel,
+	type ProviderError,
+	type RejectionReason,
+} from "./errors.js"
 import { get_config, merge_hooks } from "./config.js"
 import { pooled_map } from "./utils.js"
 
@@ -194,10 +200,19 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 	 * Recognise a provider error in the response body and return normalized fields.
 	 * Return undefined to fall back to HTTP status handling. Override per provider.
 	 */
-	protected parse_error(
-		_response: Response,
-		_data: unknown
-	): { message: string; code?: string | number } | undefined {
+	protected parse_error(_response: Response, _data: unknown): ProviderError | undefined {
+		return undefined
+	}
+
+	/**
+	 * Why a refusal happened, when the provider's own code didn't say: the HTTP status is
+	 * the one thing every provider shares. A 5xx is no refusal at all, so it has no reason.
+	 */
+	protected reason_for(status: number): RejectionReason | undefined {
+		if (status === 401 || status === 403) return "auth"
+		if (status === 402) return "account"
+		if (status === 429) return "rate_limited"
+		if (status >= 400 && status < 500) return "request"
 		return undefined
 	}
 
@@ -208,7 +223,21 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		const data = await this.read_reply(response)
 		const error = this.error_for(response, data, "request")
 		if (error) throw error
-		return this.parse_response(response, data)
+		try {
+			return this.parse_response(response, data)
+		} catch (cause) {
+			// A provider that recognises a refusal in its answer throws one of ours; anything
+			// else here is our reading of a 2xx failing, and the provider took the message.
+			if (cause instanceof PostboiError) throw cause
+			throw new PostboiError({
+				provider: this.provider,
+				channel: this.channel,
+				status: response.status,
+				message: `${this.provider} accepted the request but its answer could not be read: ${cause instanceof Error ? cause.message : String(cause)}`,
+				raw: data,
+				outcome_unknown: true,
+			})
+		}
 	}
 
 	/**
@@ -239,7 +268,11 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: error.message,
 				code: error.code,
 				raw: data,
-				outcome_unknown: response.status >= 500,
+				outcome_unknown: response.status >= 500 || error.partial === true,
+				reason:
+					response.status >= 500 || error.partial
+						? undefined
+						: (error.reason ?? this.reason_for(response.status) ?? "request"),
 			})
 		}
 		if (!response.ok) {
@@ -250,6 +283,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: `${this.provider} ${kind} failed with status ${response.status}`,
 				raw: data,
 				outcome_unknown: response.status >= 500,
+				reason: this.reason_for(response.status),
 			})
 		}
 		return undefined
@@ -517,6 +551,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				message: `${this.provider} answered ${response.status} but its body could not be read: ${reason}`,
 				raw: cause,
 				outcome_unknown: response.ok || response.status >= 500,
+				// A 4xx is still a refusal whatever its body said, so it keeps the status's reason.
+				reason: response.ok ? undefined : this.reason_for(response.status),
 			})
 		}
 	}

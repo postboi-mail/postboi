@@ -98,6 +98,8 @@ export default class PureSms extends SmsProvider<SendResponse> {
 			return {
 				message: `puresms rejected ${e.errors.length} message(s): ${rejected}`,
 				code: "partial_batch",
+				// The rest went: resending the batch would send them twice.
+				partial: true,
 			}
 		}
 		if ("id" in e || "batchId" in e) return undefined

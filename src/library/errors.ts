@@ -11,8 +11,52 @@
  */
 export type Channel = "email" | "sms" | "push" | "chat" | "whatsapp"
 
+/**
+ * Why a provider refused a message, normalized across providers. Only ever set on a
+ * refusal the provider proved; a timeout or a 5xx is `outcome_unknown` instead.
+ *
+ * - `auth`: the credentials were wrong or lack permission.
+ * - `rate_limited`: too many requests; the provider says to come back later.
+ * - `sender`: the From can't send this (unregistered, not SMS-capable, wrong pairing).
+ * - `account`: the account can't send this (no balance, region off, a trial limit).
+ * - `recipient`: the To isn't a number this can reach (invalid, a landline).
+ * - `compliance`: the person opted out, or the content was blocked.
+ * - `request`: anything else about the request itself.
+ *
+ * The first four are about *this* provider, so another might accept the same message:
+ * those are the ones a provider chain fails over on (see {@link FAILOVER_REASONS}). The
+ * last three would be refused anywhere.
+ */
+export type RejectionReason =
+	| "auth"
+	| "rate_limited"
+	| "sender"
+	| "account"
+	| "recipient"
+	| "compliance"
+	| "request"
+
+/** The reasons another provider might not share, so a chain moves on for them. */
+export const FAILOVER_REASONS: ReadonlySet<RejectionReason> = new Set([
+	"auth",
+	"rate_limited",
+	"sender",
+	"account",
+])
+
 /** Normalized error fields a provider extracts from a failed response body. */
-export type ProviderError = { message: string; code?: string | number }
+export type ProviderError = {
+	message: string
+	code?: string | number
+	/** Why, where the provider's code says. Left out, the HTTP status decides. */
+	reason?: RejectionReason
+	/**
+	 * Part of the request went through: a batch the provider accepted some of. Not a
+	 * refusal, so it carries no reason, and the error is `outcome_unknown` because sending
+	 * the whole request again would send the accepted part twice.
+	 */
+	partial?: boolean
+}
 
 /**
  * A normalized error thrown by every provider, so error handling is the same no matter
@@ -44,6 +88,12 @@ export class PostboiError extends Error {
 	 * refused outright and everything caught before a request was made.
 	 */
 	readonly outcome_unknown: boolean
+	/**
+	 * Why the provider refused, normalized: see {@link RejectionReason}. Set on refusals a
+	 * provider answered (from its error code where it has one, else the HTTP status), and
+	 * unset on everything else, an unknown outcome above all.
+	 */
+	readonly reason?: RejectionReason
 
 	constructor(args: {
 		provider: string
@@ -53,6 +103,7 @@ export class PostboiError extends Error {
 		code?: string | number
 		raw?: unknown
 		outcome_unknown?: boolean
+		reason?: RejectionReason
 	}) {
 		super(args.message)
 		this.name = "PostboiError"
@@ -62,7 +113,52 @@ export class PostboiError extends Error {
 		this.code = args.code
 		this.raw = args.raw
 		this.outcome_unknown = args.outcome_unknown ?? false
+		this.reason = args.reason
 	}
+}
+
+/**
+ * Thrown when a provider chain (`POSTBOI_SMS_PROVIDER=twilio,puresms`) failed over and the
+ * message still didn't go. `errors` is every provider's error, in the order they were tried;
+ * everything else — `provider`, `status`, `code`, `reason`, `outcome_unknown` — is the last
+ * one's, since that is the answer the chain ended on. Catching `PostboiError` still catches it.
+ */
+export class FailoverError extends PostboiError {
+	readonly errors: ReadonlyArray<PostboiError>
+
+	constructor(errors: ReadonlyArray<PostboiError>) {
+		const last = errors[errors.length - 1]
+		super({
+			provider: last.provider,
+			channel: last.channel,
+			status: last.status,
+			code: last.code,
+			raw: last.raw,
+			outcome_unknown: last.outcome_unknown,
+			reason: last.reason,
+			message: errors
+				.map((e) => `${e.provider}: ${e.message}${e.reason ? ` (${e.reason})` : ""}`)
+				.join("; "),
+		})
+		this.name = "FailoverError"
+		this.errors = errors
+	}
+}
+
+/**
+ * Would another provider in a chain be worth trying after this error? Only for a refusal
+ * the provider proved, for a reason that is about that provider (see {@link FAILOVER_REASONS}).
+ * Never after an unknown outcome — the message may already be on its way — and never for an
+ * intentional skip.
+ */
+export function fails_over(error: unknown): boolean {
+	return (
+		error instanceof PostboiError &&
+		!(error instanceof SkipSendError) &&
+		!error.outcome_unknown &&
+		error.reason !== undefined &&
+		FAILOVER_REASONS.has(error.reason)
+	)
 }
 
 /**

@@ -11,7 +11,7 @@ import type { SmsOptions, Phone } from "./sms/types.js"
 import type { ChatOptions } from "./chat/types.js"
 import type { PushOptions, PushTarget } from "./push/types.js"
 import type { WhatsappOptions } from "./whatsapp/types.js"
-import { PostboiError, SkipSendError, type Channel } from "./errors.js"
+import { FailoverError, PostboiError, SkipSendError, type Channel } from "./errors.js"
 
 /**
  * Default channel order for `channels: "cheapest"`.
@@ -272,11 +272,11 @@ function normalize(error: unknown, channel: Channel): PostboiError {
 	if (error instanceof PostboiError) {
 		// A channel entry point can throw before a provider exists (nothing configured), in
 		// which case the error has no channel yet — fill it in so a caller reading results
-		// never has to guess which leg this came from. Skips (and their subclasses) keep
-		// their identity: a caller checking `instanceof SkipSendError` must still see one,
-		// so annotate in place rather than re-wrapping.
+		// never has to guess which leg this came from. Skips (and their subclasses) and a
+		// chain's FailoverError keep their identity: a caller checking `instanceof` must still
+		// see one, and `errors` must survive, so annotate in place rather than re-wrapping.
 		if (error.channel) return error
-		if (error instanceof SkipSendError) {
+		if (error instanceof SkipSendError || error instanceof FailoverError) {
 			error.channel = channel
 			return error
 		}
@@ -288,6 +288,7 @@ function normalize(error: unknown, channel: Channel): PostboiError {
 			message: error.message,
 			raw: error.raw,
 			outcome_unknown: error.outcome_unknown,
+			reason: error.reason,
 		})
 	}
 	return new PostboiError({

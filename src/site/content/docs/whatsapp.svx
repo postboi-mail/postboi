@@ -72,8 +72,9 @@ guessed at, because a template's content is fixed at approval time.
 | Twilio | `postboi/whatsapp-twilio` | Content SIDs (`HX…`), or their names |
 | Meta Cloud API | `postboi/whatsapp-meta` | Approved names + language code |
 
-**Name your provider.** Like [SMS](/sms#providers), WhatsApp never infers one from
-credentials, because a wrong guess is a billable message to a real handset and Twilio's
+**Name your provider**, or several to [fail over between](/sms#failing-over)
+(`POSTBOI_WHATSAPP_PROVIDER=twilio,meta`) as SMS does. Like [SMS](/sms#providers), WhatsApp
+never infers one from credentials, because a wrong guess is a billable message to a real handset and Twilio's
 credentials are shared with every other Twilio product you might be using:
 
 ```bash

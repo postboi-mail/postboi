@@ -5,7 +5,7 @@ import {
 	type WhatsappProviderOptions,
 } from "./provider.js"
 import type { RequestSpec } from "../transport.js"
-import type { ProviderError } from "../errors.js"
+import type { ProviderError, RejectionReason } from "../errors.js"
 
 /** Options for the Meta Cloud API provider constructor. */
 type Options = WhatsappProviderOptions & {
@@ -30,6 +30,29 @@ type SendResponse = { id: string }
  * window ("re-engagement message").
  */
 const OUTSIDE_WINDOW = 131047
+
+/**
+ * Meta's error codes, by what they say about the refusal. The Graph API answers most of
+ * them, its throttles included, with a 400, so without this a rate limit or an unpaid
+ * account would read as a bad request and a provider chain would never move past Meta.
+ * https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes
+ */
+const REASONS: Record<number, RejectionReason> = {
+	0: "auth", // AuthException
+	3: "auth", // API method not permitted for this app
+	10: "auth", // Permission denied
+	190: "auth", // Access token expired or invalid
+	200: "auth", // Permission not granted
+	4: "rate_limited", // Too many calls for the app
+	80007: "rate_limited", // The WhatsApp Business Account's rate limit
+	130429: "rate_limited", // Cloud API throughput reached
+	131048: "rate_limited", // Spam rate limit on this number
+	131031: "account", // Business account locked
+	131042: "account", // A payment problem on the business account
+	133010: "sender", // The phone number isn't registered
+	131026: "recipient", // Message undeliverable to this number
+	131050: "compliance", // The person stopped marketing messages
+}
 
 /**
  * WhatsApp via Meta's Cloud API —
@@ -119,7 +142,11 @@ export default class Meta extends WhatsappProvider<SendResponse> {
 				code: "outside_window",
 			}
 		}
-		return { message: e.message, code: e.code }
+		return {
+			message: e.message,
+			code: e.code,
+			reason: typeof e.code === "number" ? REASONS[e.code] : undefined,
+		}
 	}
 }
 

@@ -199,6 +199,74 @@ const text = new Twilio({
 await text.send({ to: "+447788223344", message: "…" })
 ```
 
+## Failing over
+
+Name more than one provider and `sms()` tries them in order:
+
+```bash
+POSTBOI_SMS_PROVIDER=twilio,puresms
+```
+
+```typescript
+// or in postboi.config.ts
+export default config({ sms: { provider: ["twilio", "puresms"] } })
+```
+
+Each text goes to the first. It moves to the next only when the first **refused it for
+a reason that is about that provider**, which every error now says in `reason`:
+
+| `reason` | Means | Fails over |
+| -------- | ----- | ---------- |
+| `auth` | Bad credentials, or no permission | Yes |
+| `rate_limited` | Too many requests, after any `retries` | Yes |
+| `sender` | The From can't send this (unregistered, not SMS-capable) | Yes |
+| `account` | No balance, a region switched off, a trial account's limits | Yes |
+| `recipient` | Not a number anyone can reach | No |
+| `compliance` | They opted out, or the content was blocked | No |
+| `request` | Anything else wrong with the request | No |
+
+It **never** fails over after a timeout, a dropped connection or a 5xx. Those are
+`outcome_unknown`: the first provider may already have sent the text, and the second would
+send it again. When every provider refuses, the error is a `FailoverError` whose `errors`
+holds each one's answer in order; everything else on it is the last provider's. A batch
+fails over message by message, so only the texts the first provider refused go to the
+second.
+
+- **Every provider in the chain needs its credentials**, or the send fails with
+  `missing_env` naming the one that is missing. A backup you find out is broken at the moment
+  you need it is not a backup.
+- **`options` in the config file belong to the first provider.** The others read env only,
+  because one flat bag can't say which of two providers sharing an option name it was for.
+- **The chain shares one sender** (`POSTBOI_SMS_FROM`, or `from` on the send), and a number
+  registered with Twilio can't be sent from through PureSMS. An alphanumeric sender both
+  accept works; so does a Twilio Messaging Service, which picks its own number. Where each
+  provider needs a different number, build the chain yourself, below.
+- **Receipts come from each provider separately**, so a chain needs each one's
+  [webhook](#delivery-receipts) set up, each naming its provider.
+
+`fails_over(error)` from the package root is the same test, for a chain of your own:
+
+```typescript
+import { fails_over } from "postboi"
+import Twilio from "postboi/twilio"
+import PureSms from "postboi/puresms"
+
+const chain = [
+	new Twilio({ account_sid, auth_token, default: { from: "+15550001111" } }),
+	new PureSms({ api_key, default: { from: "ACME" } }),
+]
+
+async function text(message: { to: string; message: string }) {
+	for (const [i, provider] of chain.entries()) {
+		try {
+			return await provider.send(message)
+		} catch (error) {
+			if (i === chain.length - 1 || !fails_over(error)) throw error
+		}
+	}
+}
+```
+
 ## RCS: an upgrade, not a channel
 
 RCS is the carrier-native successor to SMS: branded sender, delivery receipts, long

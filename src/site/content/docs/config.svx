@@ -41,7 +41,7 @@ It auto-loads on the first send (Node/Bun): `mail()`, `sms()`, or any other chan
 | `views`    | per [web version](/views), by slug: the sender, `context` file, public `params` and `feed` fields `postboi views publish` uses (only the CLI reads it) |
 | `testing`  | `assets`: the one directory root-relative image paths resolve against for [`postboi testing run`](/email-testing#local-images-and-fonts) and [`postboi views publish`](/views#images-and-fonts), when the automatic search picks the wrong one (only the CLI reads it) |
 | `dev`      | development behaviour: the [inbox](/dev-inbox), and the [SMS](/sms#development-sends-nothing)/[WhatsApp](/whatsapp#development-sends-nothing) interception opt-outs |
-| _behaviour_ | `retries`, `retry_delay`, `timeout`, `auto_text`                                  |
+| _behaviour_ | `retries`, `retry_unknown`, `retry_delay`, `timeout`, `auto_text`                 |
 
 Keep **secrets out of this file**: API keys and tokens belong in the environment. To vary
 the provider per environment, see [Per-environment config](/manual-setup#per-environment-config).

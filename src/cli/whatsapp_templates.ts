@@ -15,7 +15,7 @@
 import { read_env } from "../library/env.js"
 import { load_config } from "../library/config.js"
 import { resolve_fields } from "../library/channels.js"
-import { WHATSAPP_PROVIDERS } from "../library/registry.js"
+import { WHATSAPP_PROVIDERS, provider_keys } from "../library/registry.js"
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -156,7 +156,33 @@ export async function fetch_whatsapp_templates(
 	fetch_fn: FetchLike = fetch
 ): Promise<WhatsappTemplates> {
 	const config = await load_config()
-	const key = read_env("POSTBOI_WHATSAPP_PROVIDER") ?? config.whatsapp?.provider
+	const keys =
+		provider_keys(read_env("POSTBOI_WHATSAPP_PROVIDER")) ??
+		provider_keys(config.whatsapp?.provider) ??
+		[]
+	// A chain's names and variables are its first provider's, the one its friendly names
+	// were written against. Its Content SIDs come from whichever Twilio it holds, though:
+	// a chain that fails over from Meta to Twilio sends Twilio the friendly name, and only
+	// the synced SID turns that into something Twilio will take.
+	// A backup that can't be listed costs the chain its SIDs, never the first's sync.
+	const [first, ...rest] = await Promise.all(
+		keys.map((key, i) =>
+			i === 0
+				? templates_for(key, config, fetch_fn)
+				: templates_for(key, config, fetch_fn).catch(() => NO_TEMPLATES)
+		)
+	)
+	if (!first) return NO_TEMPLATES
+	const sids = Object.assign({}, ...rest.map((t) => t.sids), first.sids)
+	return { ...first, sids }
+}
+
+/** One provider's templates, or none when it isn't one that lists them or isn't set up. */
+async function templates_for(
+	key: string,
+	config: Awaited<ReturnType<typeof load_config>>,
+	fetch_fn: FetchLike
+): Promise<WhatsappTemplates> {
 	const meta = WHATSAPP_PROVIDERS.find((p) => p.key === key)
 	if (!meta) return NO_TEMPLATES
 
