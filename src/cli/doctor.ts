@@ -412,7 +412,7 @@ export function sms_check(sms: SmsFacts | undefined): Check | undefined {
 	return {
 		name: "sms",
 		level: "ok",
-		detail: `${chain}, credentials set${sms.from ? `, from ${sms.from}` : ""}${sms.redact ? "" : ", numbers shown in errors (POSTBOI_SMS_REDACT is off)"}`,
+		detail: `${chain}, credentials set${sms.from ? `, from ${sms.from}` : ""}${sms.redact ? "" : ", numbers and text shown in errors (POSTBOI_SMS_REDACT is off)"}`,
 	}
 }
 

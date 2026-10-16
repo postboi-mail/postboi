@@ -121,8 +121,8 @@ export interface PostboiConfig {
 		/** Default fields applied to every text — sender, recipients, country. */
 		default?: SmsDefaults
 		/**
-		 * Mask phone numbers in SMS errors and in what `after.send` and `on.error` hooks are
-		 * shown, for logs and error trackers. On by default; `false` (or
+		 * Mask phone numbers and withhold the text in SMS errors and in what `after.send` and
+		 * `on.error` hooks are shown, for logs and error trackers. On by default; `false` (or
 		 * `POSTBOI_SMS_REDACT=0`) shows them.
 		 */
 		redact?: boolean

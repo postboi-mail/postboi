@@ -314,24 +314,52 @@ export function redact_phones(text: string): string {
 }
 
 /**
- * A copy of `value` with {@link redact_phones} applied to every string in it, through plain
- * objects and arrays. Anything else (a Date, a Response, a class instance) is kept as it
- * is, and so is a reference already visited, so a cycle ends.
+ * What stands in for a text that isn't shown: how long it was, and nothing it said.
+ * Characters are counted as a person would, so an emoji is one.
  */
-export function redact_deep<T>(value: T, seen = new WeakMap<object, unknown>()): T {
-	if (typeof value === "string") return redact_phones(value) as T
+export function withheld_text(text: string): string {
+	return `[text withheld, ${[...text].length} characters]`
+}
+
+/**
+ * Below this many characters a text is only hidden where a string is the whole of it. A
+ * short text ("ok", "yes") is also a common word, and hiding it inside every other string
+ * would mangle the error around it; a short text is rarely the secret, either.
+ */
+const WITHHOLD_INSIDE = 8
+
+/**
+ * `value` with `text` replaced by {@link withheld_text}: the whole string when it is the
+ * text, and every occurrence inside it when the text is long enough to be told apart.
+ */
+export function withhold_text(value: string, text: string): string {
+	if (text === "") return value
+	if (value === text) return withheld_text(text)
+	return text.length >= WITHHOLD_INSIDE ? value.split(text).join(withheld_text(text)) : value
+}
+
+/**
+ * A copy of `value` with {@link redact_phones} applied to every string in it, through plain
+ * objects and arrays, and with `text` (the message being sent) withheld wherever it
+ * appears, before the numbers are looked for. Anything else (a Date, a Response, a class
+ * instance) is kept as it is, and so is a reference already visited, so a cycle ends.
+ */
+export function redact_deep<T>(value: T, text?: string, seen = new WeakMap<object, unknown>()): T {
+	if (typeof value === "string") {
+		return redact_phones(text ? withhold_text(value, text) : value) as T
+	}
 	if (value === null || typeof value !== "object") return value
 	if (seen.has(value)) return seen.get(value) as T
 	if (Array.isArray(value)) {
 		const out: Array<unknown> = []
 		seen.set(value, out)
-		for (const item of value) out.push(redact_deep(item, seen))
+		for (const item of value) out.push(redact_deep(item, text, seen))
 		return out as T
 	}
 	const proto = Object.getPrototypeOf(value)
 	if (proto !== Object.prototype && proto !== null) return value
 	const out: Record<string, unknown> = {}
 	seen.set(value, out)
-	for (const [key, item] of Object.entries(value)) out[key] = redact_deep(item, seen)
+	for (const [key, item] of Object.entries(value)) out[key] = redact_deep(item, text, seen)
 	return out as T
 }
