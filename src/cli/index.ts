@@ -1484,7 +1484,9 @@ const CHANNEL_INIT = {
 				...SMS_COUNTRIES,
 				{ label: "Somewhere else / several countries", value: "" },
 			])
-			const ranked = [...SMS_PROVIDERS].sort((a, b) => {
+			// Read through the declared shape: `price` and `verified` are optional, and a provider
+			// without them (no verified figure yet) drops them from the literal-typed union.
+			const ranked = [...(SMS_PROVIDERS as ReadonlyArray<CliSmsProvider>)].sort((a, b) => {
 				const score = (p: CliSmsProvider) =>
 					country && p.regions.includes(country) ? 0 : p.regions.includes("global") ? 1 : 2
 				return score(a) - score(b)
@@ -2072,7 +2074,7 @@ async function init(channel?: "sms" | "chat" | "push" | "whatsapp", agent = fals
 				{
 					label: "SMS",
 					value: "sms",
-					hint: "The SMS Works, PureSMS, Twilio, Amazon SNS",
+					hint: "The SMS Works, PureSMS, Twilio, Telnyx, Vonage, Amazon SNS",
 				},
 				{
 					label: "Push notifications",

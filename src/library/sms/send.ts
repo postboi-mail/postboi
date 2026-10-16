@@ -16,6 +16,8 @@ const LOADERS: ChannelResolution<SmsProvider<unknown>>["loaders"] = {
 	puresms: () => import("./puresms.js").then((m) => m.default as unknown as SmsConstructor),
 	twilio: () => import("./twilio.js").then((m) => m.default as unknown as SmsConstructor),
 	sns: () => import("./sns.js").then((m) => m.default as unknown as SmsConstructor),
+	telnyx: () => import("./telnyx.js").then((m) => m.default as unknown as SmsConstructor),
+	vonage: () => import("./vonage.js").then((m) => m.default as unknown as SmsConstructor),
 	// Credential-free no-op, and the development fallback.
 	mock: () => import("./mock.js").then((m) => m.default as unknown as SmsConstructor),
 }

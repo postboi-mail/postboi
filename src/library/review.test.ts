@@ -201,9 +201,22 @@ describe("a config file's options never reach another provider", () => {
 
 		// SMS joined the exploitable set when PureSMS arrived: like The SMS Works it takes a
 		// lone `api_key`, so each one's bag satisfies the other. The send above covers it.
+		// Telnyx and Vonage each require only an `api_key` too, so all four satisfy each other.
+		// Vonage's secret or application is optional to the registry (either will do), which
+		// is why it counts; the scoping above is what keeps every one of these pairs closed.
 		expect(reachable(registry.SMS_PROVIDERS as never)).toEqual([
 			"smsworks -> puresms",
+			"smsworks -> telnyx",
+			"smsworks -> vonage",
 			"puresms -> smsworks",
+			"puresms -> telnyx",
+			"puresms -> vonage",
+			"telnyx -> smsworks",
+			"telnyx -> puresms",
+			"telnyx -> vonage",
+			"vonage -> smsworks",
+			"vonage -> puresms",
+			"vonage -> telnyx",
 		])
 		expect(reachable(registry.PUSH_PROVIDERS as never)).toEqual([])
 		expect(reachable(registry.WHATSAPP_PROVIDERS as never)).toEqual([])
@@ -362,9 +375,12 @@ describe("provider inference reads intent, not ambience", () => {
 			"SMTP_USER",
 			"TEAMS_WEBHOOK_URL",
 			"TELEGRAM_BOT_TOKEN",
+			// Telnyx's and Vonage's API keys: their Voice and Verify users set them too.
+			"TELNYX_API_KEY",
 			// The Twilio SDK's zero-argument defaults — Voice and Verify set these too.
 			"TWILIO_ACCOUNT_SID",
 			"TWILIO_AUTH_TOKEN",
+			"VONAGE_API_KEY",
 		])
 	})
 
