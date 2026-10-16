@@ -10,6 +10,14 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- An SMS's text is now withheld, like its numbers, from errors (message, stack and `raw`) and from what `after.send` and `on.error` are shown: `message` reads `[text withheld, 24 characters]`, and so does anywhere a provider echoes the text back. A sign-in code in an error tracker is as good as a password. `sms: { redact: false }` or `POSTBOI_SMS_REDACT=0` shows both again; `before.send` and what is sent are unchanged.
+
+### Fixed
+
+- Installing `postboi` no longer installs two font packages (`@fontsource-variable/archivo` and `@fontsource-variable/golos-text`). They're for the docs site and were listed as runtime dependencies by mistake; the package has none again.
+
 ## 0.71.0
 
 ### Breaking

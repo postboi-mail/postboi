@@ -442,6 +442,8 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "10.0.1",
+		"@fontsource-variable/archivo": "5.3.0",
+		"@fontsource-variable/golos-text": "5.3.0",
 		"@fontsource/archivo": "5.3.0",
 		"@fontsource/golos-text": "5.3.0",
 		"@fontsource/monaspace-neon": "5.3.0",
@@ -510,9 +512,5 @@
 		"typescript",
 		"sveltekit",
 		"svelte"
-	],
-	"dependencies": {
-		"@fontsource-variable/archivo": "5.3.0",
-		"@fontsource-variable/golos-text": "5.3.0"
-	}
+	]
 }
