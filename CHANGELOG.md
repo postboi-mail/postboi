@@ -10,6 +10,11 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `receive()` checks Sinch's HMAC-signed callbacks: with HMAC on for the service plan, `x-sinch-webhook-signature` is verified against `SINCH_WEBHOOK_SECRET` over the body, nonce and timestamp, and one more than five minutes old is refused. A callback without it is still checked against the Basic credentials in the URL.
+- A text blocked as spam is `bounce.category: "filtered"` on Sinch (15, 62), Plivo (30) and Bandwidth (4470, 4770) too, beside Twilio, Telnyx and Vonage.
+
 ## 0.70.0
 
 ### Added
