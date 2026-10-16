@@ -2,7 +2,15 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { diagnose, doctor_command, gather, magic_link_check, type DoctorFacts } from "./doctor.js"
+import {
+	diagnose,
+	doctor_command,
+	gather,
+	magic_link_check,
+	sms_check,
+	sms_facts,
+	type DoctorFacts,
+} from "./doctor.js"
 
 afterEach(() => {
 	vi.restoreAllMocks()
@@ -398,5 +406,71 @@ export const auth = betterAuth({ plugins: [magicLink({ sendMagicLink })] })`
 
 	it("says nothing without BetterAuth's plugin", () => {
 		expect(magic_link_check(app({ "src/app.ts": "export const x = 1" }))).toBeUndefined()
+	})
+})
+
+describe("sms", () => {
+	const env =
+		(vars: Record<string, string>) =>
+		(name: string): string | undefined =>
+			vars[name]
+
+	it("says nothing when no SMS provider is named", () => {
+		expect(sms_facts(env({}))).toBeUndefined()
+		expect(by_name(diagnose(wired)).sms).toBeUndefined()
+	})
+
+	it("passes a chain whose credentials are all set", () => {
+		const sms = sms_facts(
+			env({
+				POSTBOI_SMS_PROVIDER: "twilio, puresms",
+				TWILIO_ACCOUNT_SID: "AC1",
+				TWILIO_AUTH_TOKEN: "t",
+				PURESMS_API_KEY: "k",
+				POSTBOI_SMS_FROM: "ACME",
+				POSTBOI_SMS_REDACT: "1",
+			})
+		)
+		expect(by_name(diagnose({ ...wired, sms })).sms).toEqual({
+			name: "sms",
+			level: "ok",
+			detail: "twilio → puresms, credentials set, from ACME, numbers redacted",
+		})
+	})
+
+	it("fails a provider that isn't one, and a secret that's missing", () => {
+		const unknown = sms_check(sms_facts(env({ POSTBOI_SMS_PROVIDER: "twillio" })))
+		expect(unknown).toMatchObject({ level: "fail" })
+		expect(unknown?.detail).toContain("twillio")
+		expect(unknown?.fix).toContain("twilio")
+
+		const missing = sms_check(
+			sms_facts(env({ POSTBOI_SMS_PROVIDER: "twilio,puresms", TWILIO_ACCOUNT_SID: "AC1" }))
+		)
+		expect(missing).toMatchObject({
+			level: "fail",
+			detail: "twilio needs TWILIO_AUTH_TOKEN, not set in the environment",
+		})
+	})
+
+	it("fails a sender a carrier would refuse", () => {
+		const check = sms_check(
+			sms_facts(env({ POSTBOI_SMS_PROVIDER: "mock", POSTBOI_SMS_FROM: "ACME NOTIFICATIONS" }))
+		)
+		expect(check).toMatchObject({ level: "fail" })
+		expect(check?.detail).toContain("11")
+	})
+
+	it("only warns about a setting that may live in the config instead", () => {
+		const check = sms_check(sms_facts(env({ POSTBOI_SMS_PROVIDER: "sinch", SINCH_API_TOKEN: "t" })))
+		expect(check).toMatchObject({
+			level: "warn",
+			detail: "sinch needs SINCH_SERVICE_PLAN_ID, not set in the environment",
+		})
+	})
+
+	it("is checked when another email provider is in use too", () => {
+		const sms = sms_facts(env({ POSTBOI_SMS_PROVIDER: "mock" }))
+		expect(by_name(diagnose({ ...wired, provider: "resend", sms })).sms?.level).toBe("ok")
 	})
 })

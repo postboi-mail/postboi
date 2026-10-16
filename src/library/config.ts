@@ -120,6 +120,11 @@ export interface PostboiConfig {
 		/** Default fields applied to every text — sender, recipients, country. */
 		default?: SmsDefaults
 		/**
+		 * Mask phone numbers in SMS errors and in what `after.send` and `on.error` hooks are
+		 * shown, for logs and error trackers. `POSTBOI_SMS_REDACT=1` does the same.
+		 */
+		redact?: boolean
+		/**
 		 * Non-secret SMS provider constructor options, keyed by the provider's option name.
 		 * Keep secrets in the environment.
 		 */

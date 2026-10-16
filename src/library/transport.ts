@@ -360,8 +360,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				this.#hooks.after?.send?.({
 					provider: this.provider,
 					channel: this.channel,
-					message,
-					response,
+					message: this.observable(message),
+					response: this.observable(response),
 					duration_ms: this.#since(start),
 				})
 			)
@@ -395,12 +395,22 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 			this.#hooks.on?.error?.({
 				provider: this.provider,
 				channel: this.channel,
-				message,
+				message: message === undefined ? undefined : this.observable(message),
 				error: e,
 				duration_ms: this.#since(start),
 			})
 		)
 		return e
+	}
+
+	/**
+	 * What an observer (`after.send`, `on.error`) is shown of a message or a response. The
+	 * value itself by default; a channel that can hide personal data in them (SMS, with
+	 * `redact`) returns a scrubbed copy. Never applied to `before.send`, whose return value
+	 * becomes the message that is sent.
+	 */
+	protected observable<T>(value: T): T {
+		return value
 	}
 
 	/** Run an observability hook, swallowing any error it throws (hooks are best-effort). */

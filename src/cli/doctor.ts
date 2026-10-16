@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { cwd, exit } from "node:process"
 import { ensure_env_loaded, read_env } from "../library/env.js"
+import { provider_keys, SMS_PROVIDERS } from "../library/registry.js"
+import { sender_problem } from "../library/sms/provider.js"
 import { api, ApiCommandError } from "./api.js"
 import { cloud_base, fetch_domains, type PostboiDomain } from "./postboi.js"
 import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
@@ -71,6 +73,60 @@ export interface DoctorFacts {
 	webhooks?: number
 	webhook_secret: boolean
 	skill: "missing" | "linked" | "current" | "stale"
+	/** The SMS setup, when `POSTBOI_SMS_PROVIDER` names one. */
+	sms?: SmsFacts
+}
+
+export interface SmsFacts {
+	/** The providers `POSTBOI_SMS_PROVIDER` names, in failover order. */
+	providers: Array<string>
+	/** Names that aren't an SMS provider. */
+	unknown: Array<string>
+	/** Each provider's required variables that aren't set, secret or not. */
+	missing: Array<{ provider: string; env: Array<string>; secret: boolean }>
+	from?: string
+	/** What a carrier would refuse about `from`, if anything. */
+	from_problem?: string
+	redact: boolean
+}
+
+/**
+ * What `sms()` would find, read the way it reads it: the chain, every provider's required
+ * fields (one without a default), and the sender. Nothing is sent and nothing is asked of a
+ * provider, so a wrong token still reads as set; only a send can say otherwise.
+ */
+export function sms_facts(read: (env: string) => string | undefined): SmsFacts | undefined {
+	const providers = provider_keys(read("POSTBOI_SMS_PROVIDER"))
+	if (!providers) return undefined
+	const unknown: Array<string> = []
+	const missing: SmsFacts["missing"] = []
+	for (const key of providers) {
+		if (key === "mock") continue
+		const meta = SMS_PROVIDERS.find((p) => p.key === key)
+		if (!meta) {
+			unknown.push(key)
+			continue
+		}
+		const fields = (
+			meta.fields as ReadonlyArray<{ env: string; default?: string; secret?: boolean }>
+		).filter((f) => f.default === undefined && !read(f.env))
+		if (fields.length)
+			missing.push({
+				provider: key,
+				env: fields.map((f) => f.env),
+				secret: fields.some((f) => f.secret),
+			})
+	}
+	const from = read("POSTBOI_SMS_FROM")
+	const redact = read("POSTBOI_SMS_REDACT")
+	return {
+		providers,
+		unknown,
+		missing,
+		from,
+		from_problem: from ? sender_problem(from) : undefined,
+		redact: redact === "1" || redact?.toLowerCase() === "true",
+	}
 }
 
 export type Level = "ok" | "warn" | "fail" | "skip"
@@ -134,6 +190,9 @@ export function diagnose(facts: DoctorFacts): Array<Check> {
 						detail: `${facts.config_file}: provider ${facts.provider ?? "postboi"}${facts.default_from ? `, from ${facts.default_from}` : ""}`,
 					}
 	)
+
+	const sms = sms_check(facts.sms)
+	if (sms) checks.push(sms)
 
 	if (!hosted) {
 		checks.push({
@@ -294,6 +353,55 @@ function captcha_check(facts: DoctorFacts): Check | undefined {
 	return { name: "captcha", level: "ok", detail: `<Captcha /> has ${want}` }
 }
 
+/**
+ * Can `sms()` send? Said only when `POSTBOI_SMS_PROVIDER` names a provider, since SMS
+ * always names one and a project that never texts has nothing to be told.
+ */
+export function sms_check(sms: SmsFacts | undefined): Check | undefined {
+	if (!sms) return undefined
+	const chain = sms.providers.join(" → ")
+	if (sms.unknown.length) {
+		return {
+			name: "sms",
+			level: "fail",
+			detail: `POSTBOI_SMS_PROVIDER names ${sms.unknown.join(", ")}, which ${sms.unknown.length === 1 ? "isn't an SMS provider" : "aren't SMS providers"}`,
+			fix: `use one of ${[...SMS_PROVIDERS.map((p) => p.key), "mock"].join(", ")}`,
+		}
+	}
+	const secret = sms.missing.find((m) => m.secret)
+	if (secret) {
+		return {
+			name: "sms",
+			level: "fail",
+			detail: `${secret.provider} needs ${secret.env.join(", ")}, not set in the environment`,
+			fix: "set it in .env, or run bunx postboi init --sms",
+		}
+	}
+	if (sms.from_problem) {
+		return {
+			name: "sms",
+			level: "fail",
+			detail: `POSTBOI_SMS_FROM: ${sms.from_problem}`,
+			fix: "use a number in E.164 (+447700900123) or an ID of up to 11 letters, digits and spaces",
+		}
+	}
+	// A setting that isn't a secret may be committed under `sms.options` instead.
+	const plain = sms.missing[0]
+	if (plain) {
+		return {
+			name: "sms",
+			level: "warn",
+			detail: `${plain.provider} needs ${plain.env.join(", ")}, not set in the environment`,
+			fix: "fine if postboi.config sets it under sms.options; otherwise set it in .env",
+		}
+	}
+	return {
+		name: "sms",
+		level: "ok",
+		detail: `${chain}, credentials set${sms.from ? `, from ${sms.from}` : ""}${sms.redact ? ", numbers redacted" : ""}`,
+	}
+}
+
 function skill_check(state: DoctorFacts["skill"]): Omit<Check, "name"> {
 	switch (state) {
 		case "linked":
@@ -375,6 +483,7 @@ export async function gather(dir = cwd(), sources = project_sources(dir)): Promi
 		token: Boolean(token),
 		webhook_secret: Boolean(read_env("POSTBOI_WEBHOOK_SECRET")),
 		skill: skill_state(`${dir}/.claude/skills/postboi/SKILL.md`),
+		sms: sms_facts(read_env),
 	}
 	if (!token || (provider && provider !== "postboi")) return facts
 

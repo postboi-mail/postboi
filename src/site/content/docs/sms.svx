@@ -70,6 +70,24 @@ await sms({ to: "7788223344", message: "…" })
 A wrong guess texts a stranger, so there isn't a silent fallback. **Pass `+`-prefixed
 strings and none of this applies.**
 
+### Keeping numbers out of your logs
+
+A phone number is personal data, and an error tracker is the place it most often leaks to:
+a provider's refusal names the number it refused, and an `on.error` hook forwards it. Turn
+on `redact` and SMS keeps numbers out of everything that leaves a send for somewhere else:
+
+```typescript
+export default config({ sms: { redact: true } }) // or POSTBOI_SMS_REDACT=1
+```
+
+A thrown error's message, stack and `raw` are masked (`+447700900123` becomes
+`+4*********23`), and so is the message and response that `after.send` and `on.error` are
+shown. The class, `code`, `status` and `reason` are untouched, so handling an error works
+the same, and the text itself still goes to the real number. `before.send` sees the real
+message, since what it returns is what gets sent. `redact: true` on one provider's
+constructor does it for that provider alone. For your own logging, `redact_phones(text)`
+masks every run of seven digits or more in a string, and `mask_phone(number)` masks one.
+
 ## Development sends nothing
 
 In development, texts are **captured and logged, never sent**, even with a fully
@@ -239,7 +257,10 @@ for (const result of results) {
 POSTBOI_SMS_PROVIDER=twilio
 ```
 
-`bunx postboi init --sms` writes that line for you. The reason it isn't optional is the same
+`bunx postboi init --sms` writes that line for you, and `bunx postboi doctor` checks it:
+that each provider it names is one, that their credentials are set, and that
+`POSTBOI_SMS_FROM` is a sender carriers take. Nothing is sent, so a wrong token still
+passes; only a send can find that out. The reason it isn't optional is the same
 one behind [development interception](#development-sends-nothing): a text costs money and reaches a real
 handset, and the credentials that would do the guessing aren't evidence you meant to send
 one. `AWS_ACCESS_KEY_ID` is set by anything near AWS; `TWILIO_ACCOUNT_SID` and
