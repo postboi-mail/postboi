@@ -36,7 +36,14 @@ import type {
 } from "./index.js"
 import { WebhookVerificationError, type WebhookVerificationCode } from "./errors.js"
 import { base64_encode, hmac_sha256, timing_safe_equal } from "./crypto.js"
-import { basic_auth_verify, inbound_event, parse_json, plus_e164, to_date } from "./shared.js"
+import {
+	assert_fresh_timestamp,
+	basic_auth_verify,
+	inbound_event,
+	parse_json,
+	plus_e164,
+	to_date,
+} from "./shared.js"
 
 /** A status → normalized event. `Queued` and `Unknown` say nothing new. */
 const TYPES: Record<string, WebhookEventType> = {
@@ -88,11 +95,9 @@ async function hmac_verify(ctx: VerifyContext, signature: string) {
 	if (algorithm && algorithm.toLowerCase() !== "hmacsha256") {
 		fail(`sinch webhook is signed with ${algorithm}, which postboi doesn't check`)
 	}
-	// Seconds since the epoch. A timestamp that isn't one is still signed; it just can't be aged.
-	const seconds = Number(timestamp)
-	if (Number.isFinite(seconds) && Math.abs(Date.now() / 1000 - seconds) > TOLERANCE_SECONDS) {
-		fail("sinch webhook timestamp is too old or in the future", "stale_timestamp")
-	}
+	// Seconds since the epoch. One that can't be aged is refused rather than let through
+	// without replay protection.
+	assert_fresh_timestamp("sinch", timestamp, TOLERANCE_SECONDS)
 	const expected = await sinch_signature(ctx.secret, ctx.body, nonce, timestamp)
 	if (!timing_safe_equal(expected, signature)) {
 		fail(

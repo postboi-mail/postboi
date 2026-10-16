@@ -438,7 +438,7 @@ describe("sms", () => {
 			name: "sms",
 			level: "ok",
 			detail:
-				"twilio → puresms, credentials set, from ACME, numbers shown in errors (POSTBOI_SMS_REDACT=0)",
+				"twilio → puresms, credentials set, from ACME, numbers shown in errors (POSTBOI_SMS_REDACT is off)",
 		})
 	})
 

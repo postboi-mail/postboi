@@ -8,7 +8,7 @@
 import { PostboiError, SkipSendError, type Channel } from "../errors.js"
 import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
-import { ensure_env_loaded, read_env } from "../env.js"
+import { ensure_env_loaded, read_flag } from "../env.js"
 import { send_once, type IdempotencyStore } from "../idempotency.js"
 import { gsm7_breakers, phone_e164, redact_deep, redact_phones, segments } from "./phone.js"
 import type {
@@ -114,9 +114,7 @@ export abstract class SmsProvider<TResponse extends SmsReceipt = SmsReceipt> ext
 	 */
 	protected get redacting(): boolean {
 		if (this.#redact !== undefined) return this.#redact
-		const env = read_env("POSTBOI_SMS_REDACT")
-		if (env !== undefined && env !== "") return !/^(0|false|off|no)$/i.test(env.trim())
-		return get_config().sms?.redact !== false
+		return read_flag("POSTBOI_SMS_REDACT") ?? get_config().sms?.redact !== false
 	}
 
 	protected override observable<T>(value: T): T {

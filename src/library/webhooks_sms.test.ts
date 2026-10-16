@@ -653,6 +653,8 @@ describe("receive — sinch (HMAC-signed callbacks)", () => {
 		)
 		const old = String(Math.floor(Date.now() / 1000) - 3600)
 		await refused(await signed(report, { timestamp: old }), "stale_timestamp")
+		// A timestamp that can't be aged is refused, never let through without replay protection.
+		await refused(await signed(report, { timestamp: "soon" }), "stale_timestamp")
 		await refused(
 			await signed(report, {}, { "x-sinch-webhook-signature-nonce": "" }),
 			"invalid_signature"
