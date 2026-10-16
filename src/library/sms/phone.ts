@@ -242,6 +242,16 @@ export function is_gsm7(text: string): boolean {
 	return true
 }
 
+/** The distinct characters in `text` that GSM 03.38 can't carry, in the order they appear. */
+export function gsm7_breakers(text: string): Array<string> {
+	const out: Array<string> = []
+	for (const char of text) {
+		if (!GSM_BASIC.includes(char) && !GSM_EXTENDED.includes(char) && !out.includes(char))
+			out.push(char)
+	}
+	return out
+}
+
 /**
  * How many SMS segments `text` costs, and the encoding it forces.
  *

@@ -54,6 +54,7 @@ type SendResponse = TwilioSendResponse
 export default class Twilio extends SmsProvider<SendResponse> {
 	protected readonly provider = "twilio"
 	protected override readonly supports_scheduling = true
+	protected override readonly single_recipient = true
 	#account_sid: string
 	#auth_token: string
 	#messaging_service_sid?: string
@@ -75,6 +76,18 @@ export default class Twilio extends SmsProvider<SendResponse> {
 		// without this, the base class's no_sender guard rejects the standard
 		// MessagingServiceSid-only setup before build_request's optional-From path can run.
 		if (this.#messaging_service_sid) this.requires_from = false
+	}
+
+	protected override check(message: PreparedSms) {
+		const issues = super.check(message)
+		if (message.scheduled_at && !this.#messaging_service_sid) {
+			issues.push({
+				code: "scheduling_needs_service",
+				message:
+					"Twilio can only schedule through a Messaging Service. Construct the provider with { messaging_service_sid }.",
+			})
+		}
+		return issues
 	}
 
 	protected build_request(message: PreparedSms): RequestSpec {
