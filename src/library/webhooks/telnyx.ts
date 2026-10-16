@@ -60,6 +60,12 @@ const FINAL: Record<string, WebhookEventType> = {
 	expired: "failed",
 }
 
+/**
+ * Telnyx's codes for a text blocked as spam, from its messaging error catalog: blocked as
+ * spam (temporary and permanent), its own spam filter, and AT&T's spam rejection.
+ */
+const FILTERED = new Set(["40002", "40003", "40015", "40017"])
+
 /** What went wrong, in one line, from Telnyx's `errors`. */
 function failure_detail(payload: MessagePayload): string | undefined {
 	const error = payload.errors?.[0]
@@ -173,7 +179,14 @@ const adapter: WebhookAdapter = {
 			tags: payload.tags?.length ? payload.tags : undefined,
 			// A text has no bounce classification; the carrier's code is the detail.
 			bounce:
-				type === "failed" ? { category: "unknown", detail: failure_detail(payload) } : undefined,
+				type === "failed"
+					? {
+							category: FILTERED.has(String(payload.errors?.[0]?.code ?? ""))
+								? "filtered"
+								: "unknown",
+							detail: failure_detail(payload),
+						}
+					: undefined,
 			raw: envelope,
 		}
 		return [event]

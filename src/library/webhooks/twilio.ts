@@ -34,7 +34,7 @@ import type { SmsKeyword } from "../sms/opt_out.js"
 import { WebhookVerificationError } from "./errors.js"
 import { base64_encode, hex_encode, hmac_sha1, timing_safe_equal } from "./crypto.js"
 import { inbound_event } from "./shared.js"
-import { address, TYPES } from "./poll_twilio.js"
+import { address, text_category, TYPES } from "./poll_twilio.js"
 
 /** The parameters a request carried, in the order they arrived. */
 type Params = Array<[string, string]>
@@ -125,7 +125,7 @@ function normalize_status(f: Record<string, string>, sid: string, status: string
 		message_id: sid,
 		// As in the poll: a text has no bounce classification, so the carrier's code goes
 		// in `detail`. A callback carries the code and not Twilio's words for it.
-		bounce: type === "failed" ? { category: "unknown", detail: code } : undefined,
+		bounce: type === "failed" ? { category: text_category(code), detail: code } : undefined,
 		raw: f,
 	} satisfies WebhookEvent
 }

@@ -76,6 +76,20 @@ describe("poll — provider handling", () => {
 		expect(result.cursor).toBe("fresh")
 	})
 
+	it("keys every polled event for deduplication", async () => {
+		const adapter: PollAdapter = {
+			provider: "custom",
+			poll: async () => ({
+				events: [
+					{ type: "delivered", provider: "custom", message_id: "m1", phone: "+1", raw: {} },
+					{ type: "delivered", provider: "custom", raw: {} },
+				],
+			}),
+		}
+		const { events } = await poll({ provider: adapter })
+		expect(events.map((e) => e.dedupe_key)).toEqual(["custom:m1:delivered:+1", undefined])
+	})
+
 	it("passes explicit options through, beating the environment", async () => {
 		vi.stubEnv("MS365_TENANT_ID", "env-tenant")
 		const seen: Array<Record<string, string>> = []

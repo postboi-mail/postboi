@@ -126,8 +126,12 @@ export interface ViewViewed {
 
 /** Why a message bounced, normalized across providers. */
 export interface BounceDetail {
-	/** Hard bounces are permanent (bad address); soft are transient (full mailbox, …). */
-	category: "hard" | "soft" | "suppressed" | "unknown"
+	/**
+	 * Hard bounces are permanent (bad address); soft are transient (full mailbox, …).
+	 * `filtered` is a text a carrier or the provider blocked as spam: the number is fine and
+	 * the message or the sender is the problem, so sending it again as it is won't help.
+	 */
+	category: "hard" | "soft" | "suppressed" | "filtered" | "unknown"
 	/** The provider's own description, when it gives one. */
 	detail?: string
 }
@@ -201,8 +205,36 @@ export interface WebhookEvent {
 	test?: TestingRun
 	/** The view and its reader, as Postboi sent them. `view_viewed` events only. */
 	view?: ViewViewed
+	/**
+	 * The same for a repeat of this event and different for any other, to deduplicate on:
+	 * providers redeliver, and several (Plivo, Sinch, Bandwidth, Twilio) sign nothing that
+	 * would tell a replay apart. Built from the provider, the message, the type and the
+	 * recipient, plus the time and link for an open or a click, which happen more than once.
+	 * Set by `receive()` and `poll()` on every event that names a message.
+	 */
+	dedupe_key?: string
 	/** The untouched provider payload for this event — the escape hatch. */
 	raw: unknown
+}
+
+/** {@link WebhookEvent.dedupe_key} for an event, or undefined for one that names no message. */
+export function dedupe_key(event: WebhookEvent): string | undefined {
+	if (!event.message_id) return undefined
+	const repeats = event.type === "opened" || event.type === "clicked"
+	return [
+		event.provider,
+		event.message_id,
+		event.type,
+		event.phone ?? event.email ?? "",
+		...(repeats ? [event.timestamp?.toISOString() ?? "", event.url ?? ""] : []),
+	].join(":")
+}
+
+/** Every event with its {@link WebhookEvent.dedupe_key}, keeping one an adapter set. */
+export function with_dedupe_keys(events: Array<WebhookEvent>): Array<WebhookEvent> {
+	return events.map((event) =>
+		event.dedupe_key !== undefined ? event : { ...event, dedupe_key: dedupe_key(event) }
+	)
 }
 
 /** What an adapter's `verify` sees: the raw request parts plus the resolved secret. */
@@ -484,7 +516,7 @@ export async function receive(
 		}
 	}
 
-	return adapter.normalize(body, { headers: request.headers, url })
+	return with_dedupe_keys(await adapter.normalize(body, { headers: request.headers, url }))
 }
 
 /**
