@@ -55,6 +55,19 @@ export default class Twilio extends SmsProvider<SendResponse> {
 	protected readonly provider = "twilio"
 	protected override readonly supports_scheduling = true
 	protected override readonly single_recipient = true
+	protected override readonly max_media = 10
+	protected override readonly validity_range = [1, 36000] as const
+	protected override readonly reserved_options = [
+		"To",
+		"From",
+		"MessagingServiceSid",
+		"Body",
+		"MediaUrl",
+		"StatusCallback",
+		"ValidityPeriod",
+		"SendAt",
+		"ScheduleType",
+	]
 	#account_sid: string
 	#auth_token: string
 	#messaging_service_sid?: string
@@ -110,7 +123,12 @@ export default class Twilio extends SmsProvider<SendResponse> {
 		if (this.#messaging_service_sid) body.set("MessagingServiceSid", this.#messaging_service_sid)
 		if (message.from) body.set("From", message.from)
 		body.set("Body", message.message)
+		for (const url of message.media ?? []) body.append("MediaUrl", url)
+		if (message.validity !== undefined) body.set("ValidityPeriod", String(message.validity))
 		if (this.#status_callback) body.set("StatusCallback", this.#status_callback)
+		for (const [name, value] of Object.entries(message.provider_options ?? {})) {
+			body.set(name, typeof value === "string" ? value : JSON.stringify(value))
+		}
 		if (message.scheduled_at) {
 			if (!this.#messaging_service_sid) {
 				throw new PostboiError({
