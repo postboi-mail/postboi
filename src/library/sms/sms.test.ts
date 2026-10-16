@@ -141,7 +141,14 @@ describe("twilio", () => {
 		})
 		const result = await text.send({ to: "07788223344", message: "hi" })
 
-		expect(result).toEqual({ sid: "SM1", status: "queued" })
+		expect(result).toEqual({
+			sid: "SM1",
+			status: "queued",
+			id: "SM1",
+			ids: ["SM1"],
+			provider: "twilio",
+			delivery: "queued",
+		})
 		const [url, init] = fetch.mock.calls[0]
 		expect(url).toBe("https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json")
 		expect(init.headers["Content-Type"]).toBe("application/x-www-form-urlencoded")
@@ -291,7 +298,13 @@ describe("puresms", () => {
 		const text = new PureSms({ api_key: "key", default: { from: "POSTBOI", country: "GB" } })
 		const result = await text.send({ to: "07788223344", message: "hi", tags: ["otp"] })
 
-		expect(result).toEqual({ id: "12345", kind: "message" })
+		expect(result).toEqual({
+			id: "12345",
+			ids: ["12345"],
+			provider: "puresms",
+			delivery: "queued",
+			kind: "message",
+		})
 		const [url, init] = fetch.mock.calls[0]
 		expect(url).toBe("https://connect-api.divergent.cloud/sms/send")
 		expect(init.headers["X-Api-Key"]).toBe("key")
@@ -322,7 +335,14 @@ describe("puresms", () => {
 		expect(body.messages).toHaveLength(2)
 		expect(body.messages[1]).toMatchObject({ recipient: "+447700900123" })
 		expect(body.messages[1]).not.toHaveProperty("sendAtUtc")
-		expect(result).toEqual({ id: "b1", kind: "batch", count: 2 })
+		expect(result).toEqual({
+			id: "b1",
+			ids: ["b1"],
+			provider: "puresms",
+			delivery: "scheduled",
+			kind: "batch",
+			count: 2,
+		})
 	})
 
 	it("fails a batch that was only partly accepted, keeping what did go out on raw", async () => {

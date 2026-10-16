@@ -51,7 +51,13 @@ describe("telnyx", () => {
 			to: "+447700900123",
 			message: "Your code is 4291",
 		})
-		expect(result).toEqual({ id: "msg-1", status: "queued" })
+		expect(result).toEqual({
+			id: "msg-1",
+			ids: ["msg-1"],
+			provider: "telnyx",
+			delivery: "queued",
+			status: "queued",
+		})
 		const { url, headers, body } = sent(fetch)
 		expect(url).toBe("https://api.telnyx.com/v2/messages")
 		expect(headers.Authorization).toBe("Bearer KEY")
@@ -122,7 +128,13 @@ describe("vonage", () => {
 	it("posts the Messages API's SMS shape, numbers without their +", async () => {
 		const fetch = stub(202, { message_uuid: "aaaaaaaa-bbbb" })
 		const result = await vonage().send({ to: "+447700900123", message: "hi", tags: ["otp"] })
-		expect(result).toEqual({ message_uuid: "aaaaaaaa-bbbb" })
+		expect(result).toEqual({
+			message_uuid: "aaaaaaaa-bbbb",
+			id: "aaaaaaaa-bbbb",
+			ids: ["aaaaaaaa-bbbb"],
+			provider: "vonage",
+			delivery: "queued",
+		})
 		const { url, headers, body } = sent(fetch)
 		expect(url).toBe("https://api.nexmo.com/v1/messages")
 		expect(headers.Authorization).toBe(`Basic ${btoa("k:s")}`)

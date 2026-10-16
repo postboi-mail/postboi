@@ -1,4 +1,9 @@
-import { SmsProvider, type PreparedSms, type SmsApiKeyOptions } from "./provider.js"
+import {
+	SmsProvider,
+	type PreparedSms,
+	type SmsReceipt,
+	type SmsApiKeyOptions,
+} from "./provider.js"
 import type { RequestSpec } from "../transport.js"
 import type { ProviderError } from "../errors.js"
 
@@ -18,7 +23,7 @@ export interface SendParams {
 	[option: string]: unknown
 }
 
-type SendResponse = { messageid: string; status: string; credits?: number }
+type SendResponse = { messageid: string; status: string; credits?: number } & SmsReceipt
 
 /**
  * The SMS Works — https://thesmsworks.co.uk/developers
@@ -95,9 +100,11 @@ export default class SmsWorks extends SmsProvider<SendResponse> {
 		const d = data as Record<string, unknown> | null
 		// The batch endpoint answers with { batchid }, the single send with { messageid }.
 		const id = (d?.messageid ?? d?.batchid) as string | undefined
+		const status = (d?.status as string) ?? "sent"
 		return {
+			...this.receipt([id], status),
 			messageid: id ?? "",
-			status: (d?.status as string) ?? "sent",
+			status,
 			credits: d?.credits as number,
 		}
 	}

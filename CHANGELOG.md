@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- Every SMS send now resolves with the same four fields, whichever provider sent it: `id` (the provider's id, the one its receipts name), `ids` (one per recipient where the provider makes several), `provider` and `delivery` (`queued`, `scheduled`, `sent`, `delivered` or `unknown`). The provider's own fields are still there beside them, and `sms()` is typed to return `SmsReceipt`, so a failover chain or a change of provider reads the result the same way.
+
 ## 0.69.0
 
 ### Breaking

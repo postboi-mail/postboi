@@ -44,6 +44,8 @@ export type {
 	SmsApiKeyOptions,
 	SmsCheck,
 	SmsIssue,
+	SmsDelivery,
+	SmsReceipt,
 } from "./sms/types.js"
 
 // The chat channel's public types.
