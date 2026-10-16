@@ -431,13 +431,14 @@ describe("sms", () => {
 				TWILIO_AUTH_TOKEN: "t",
 				PURESMS_API_KEY: "k",
 				POSTBOI_SMS_FROM: "ACME",
-				POSTBOI_SMS_REDACT: "1",
+				POSTBOI_SMS_REDACT: "0",
 			})
 		)
 		expect(by_name(diagnose({ ...wired, sms })).sms).toEqual({
 			name: "sms",
 			level: "ok",
-			detail: "twilio → puresms, credentials set, from ACME, numbers redacted",
+			detail:
+				"twilio → puresms, credentials set, from ACME, numbers shown in errors (POSTBOI_SMS_REDACT is off)",
 		})
 	})
 

@@ -207,7 +207,7 @@ export interface WebhookEvent {
 	view?: ViewViewed
 	/**
 	 * The same for a repeat of this event and different for any other, to deduplicate on:
-	 * providers redeliver, and several (Plivo, Sinch, Bandwidth, Twilio) sign nothing that
+	 * providers redeliver, and several (Plivo, Bandwidth, Twilio, Sinch without HMAC) sign nothing that
 	 * would tell a replay apart. Built from the provider, the message, the type and the
 	 * recipient, plus the time and link for an open, a click or a delay, which happen more
 	 * than once.
@@ -357,9 +357,9 @@ export const MODULES: Record<string, () => Promise<AdapterModule>> = {
 	scaleway: () => import("./scaleway.js"),
 	// The channel providers that push, keyed like `sms()`'s and `whatsapp()`'s. Twilio
 	// pushes when it is given somewhere to (and can be polled when it isn't); Meta's Cloud
-	// API, PureSMS, Telnyx, Vonage and Plivo push signed requests, Sinch and Bandwidth
-	// authenticate with the Basic credentials you set, and The SMS Works an account-wide
-	// report.
+	// API, PureSMS, Telnyx, Vonage and Plivo push signed requests, Sinch signed ones or ones
+	// with the Basic credentials you set, Bandwidth those credentials, and The SMS Works an
+	// account-wide report.
 	meta: () => import("./meta.js"),
 	smsworks: () => import("./smsworks.js"),
 	twilio: () => import("./twilio.js"),

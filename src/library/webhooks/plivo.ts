@@ -21,7 +21,8 @@
  *
  * **Events**: an inbound message carries `Text` and goes through `inbound_event`. A status is
  * `sent`, `delivered`, or `failed` for `failed`, `undelivered` and `rejected`, with Plivo's
- * `ErrorCode` in `bounce.detail`; `queued` says nothing new and is dropped. Numbers arrive
+ * `ErrorCode` in `bounce.detail` and `bounce.category: "filtered"` for 30, its code for a
+ * text blocked as spam; `queued` says nothing new and is dropped. Numbers arrive
  * without their `+`, which is put back.
  */
 import { PostboiError } from "../index.js"
@@ -38,6 +39,12 @@ const TYPES: Record<string, WebhookEventType> = {
 	undelivered: "failed",
 	rejected: "failed",
 }
+
+/**
+ * Plivo's code for a text blocked as spam: 30, "Spam Detected". 960 isn't here: it also
+ * covers a sending limit.
+ */
+const FILTERED_CODE = "30"
 
 /** The URL Plivo signs: everything but the query string and the fragment. */
 function signed_url(url: URL): string {
@@ -118,7 +125,10 @@ const adapter: WebhookAdapter = {
 			channel: "sms",
 			phone: plus_e164(f.To),
 			message_id: id,
-			bounce: type === "failed" ? { category: "unknown", detail: code } : undefined,
+			bounce:
+				type === "failed"
+					? { category: code === FILTERED_CODE ? "filtered" : "unknown", detail: code }
+					: undefined,
 			raw: f,
 		}
 		return [event]

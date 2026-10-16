@@ -14,7 +14,8 @@
  *
  * **Events**: `message-received` goes through `inbound_event`. `message-delivered` is
  * `delivered` and `message-failed` is `failed`, with Bandwidth's `errorCode` and
- * `description` in `bounce.detail`. `message-sending` (an MMS on its way) says nothing new
+ * `description` in `bounce.detail`, and `bounce.category: "filtered"` for its spam blocks
+ * (4470, Bandwidth's own filter; 4770, the carrier's). `message-sending` (an MMS on its way) says nothing new
  * and is dropped. `message_id` is the id a send answered with, and the send's tag comes back
  * in `tags`.
  */
@@ -27,6 +28,9 @@ const TYPES: Record<string, WebhookEventType> = {
 	"message-delivered": "delivered",
 	"message-failed": "failed",
 }
+
+/** Bandwidth's codes for a text rejected as spam: 4470 by Bandwidth, 4770 by the carrier. */
+const FILTERED = new Set(["4470", "4770"])
 
 interface Callback {
 	type?: string
@@ -73,7 +77,13 @@ function event_of(callback: Callback): WebhookEvent | undefined {
 		message_id: message.id,
 		timestamp,
 		tags: message.tag ? [message.tag] : undefined,
-		bounce: type === "failed" ? { category: "unknown", detail } : undefined,
+		bounce:
+			type === "failed"
+				? {
+						category: FILTERED.has(String(callback.errorCode ?? "")) ? "filtered" : "unknown",
+						detail,
+					}
+				: undefined,
 		raw: callback,
 	}
 }

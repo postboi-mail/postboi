@@ -212,7 +212,7 @@ reads `event.email` is never handed a phone number. A text that reached the hand
 `delivered`; one the carrier gave up on is `failed`, with the carrier's code in
 `bounce.detail`; one it is still retrying is `delayed`. A `failed` text a carrier blocked
 as spam has `bounce.category: 'filtered'` (Twilio's 30007, Telnyx's spam codes, Vonage's
-1210): the number is fine and the message or the sender is the problem, so resending it
+1210, Sinch's 15 and 62, Plivo's 30, Bandwidth's 4470 and 4770): the number is fine and the message or the sender is the problem, so resending it
 unchanged won't help. Which way they arrive depends on
 the provider. **The SMS Works** pushes account-wide delivery reports, so it is a
 `receive()` provider like any of the email ones: `provider: 'smsworks'`, verified with
@@ -277,7 +277,7 @@ Providers fall into three camps:
 | Telnyx (SMS) | Signed (Ed25519 of timestamp and body, 5-minute replay window) | `TELNYX_WEBHOOK_SECRET`, the account's public key from Mission Control (Keys & Credentials) |
 | Vonage (SMS) | Signed (HS256 JWT in `Authorization`, with `payload_hash` over the body) | `VONAGE_WEBHOOK_SECRET`, the signature secret from the dashboard's settings |
 | Plivo (SMS) | Signed (V2: HMAC-SHA256 of the URL and a nonce, not the body) | `PLIVO_WEBHOOK_SECRET`, or `PLIVO_AUTH_TOKEN` |
-| Sinch (SMS) | Basic credentials in the callback URL (Sinch doesn't sign SMS callbacks) | `SINCH_WEBHOOK_SECRET`, the `username:password` in the URL |
+| Sinch (SMS) | HMAC-SHA256 over the body, nonce and timestamp when the plan has HMAC on, else Basic credentials in the callback URL | `SINCH_WEBHOOK_SECRET`, the HMAC secret or the `username:password` in the URL |
 | Bandwidth (SMS) | Basic credentials on the application's callback (Bandwidth doesn't sign) | `BANDWIDTH_WEBHOOK_SECRET`, the application's `username:password` |
 | PureSMS (SMS) | Signed (HMAC-SHA256 of timestamp and body). The timestamp's age isn't checked, because PureSMS retries for up to a day | `PURESMS_WEBHOOK_SECRET`, the secret you set on the endpoint (Settings → Webhooks). PureSMS treats it as optional; `receive()` doesn't |
 | The SMS Works (SMS) | Shared secret | `SMSWORKS_WEBHOOK_SECRET`, a token you make up, as `?token=…` on the delivery-report URL (Delivery Reports → Webhook Configuration), or the basic-auth password on a reply-number webhook |

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { cwd, exit } from "node:process"
-import { ensure_env_loaded, read_env } from "../library/env.js"
+import { ensure_env_loaded, parse_flag, read_env } from "../library/env.js"
 import { provider_keys, SMS_PROVIDERS } from "../library/registry.js"
 import { sender_problem } from "../library/sms/provider.js"
 import { gsm7_breakers, segments } from "../library/sms/phone.js"
@@ -137,7 +137,9 @@ export function sms_facts(read: (env: string) => string | undefined): SmsFacts |
 		missing,
 		from,
 		from_problem: from ? sender_problem(from) : undefined,
-		redact: redact === "1" || redact?.toLowerCase() === "true",
+		// On unless turned off, as `sms()` reads it. The config's `sms.redact: false` isn't
+		// visible from here, so only the environment can say "shown".
+		redact: parse_flag(redact) !== false,
 	}
 }
 
@@ -410,7 +412,7 @@ export function sms_check(sms: SmsFacts | undefined): Check | undefined {
 	return {
 		name: "sms",
 		level: "ok",
-		detail: `${chain}, credentials set${sms.from ? `, from ${sms.from}` : ""}${sms.redact ? ", numbers redacted" : ""}`,
+		detail: `${chain}, credentials set${sms.from ? `, from ${sms.from}` : ""}${sms.redact ? "" : ", numbers shown in errors (POSTBOI_SMS_REDACT is off)"}`,
 	}
 }
 

@@ -122,7 +122,8 @@ export interface PostboiConfig {
 		default?: SmsDefaults
 		/**
 		 * Mask phone numbers in SMS errors and in what `after.send` and `on.error` hooks are
-		 * shown, for logs and error trackers. `POSTBOI_SMS_REDACT=1` does the same.
+		 * shown, for logs and error trackers. On by default; `false` (or
+		 * `POSTBOI_SMS_REDACT=0`) shows them.
 		 */
 		redact?: boolean
 		/**

@@ -11,6 +11,7 @@ import { twilio_signature } from "$library/webhooks/twilio.js"
 import { puresms_signature } from "$library/webhooks/puresms.js"
 import { vonage_token } from "$library/webhooks/vonage.js"
 import { plivo_signature } from "$library/webhooks/plivo.js"
+import { sinch_signature } from "$library/webhooks/sinch.js"
 import { hex_encode } from "$library/webhooks/crypto.js"
 
 /** A form-encoded Twilio request to `url`, signed with `token` over `signed_url`. */
@@ -590,6 +591,95 @@ describe("receive — sinch (Basic credentials on the callback URL)", () => {
 	})
 })
 
+describe("receive — sinch (HMAC-signed callbacks)", () => {
+	/** A Sinch callback signed with `secret`, at `timestamp` (seconds), as Sinch sends one. */
+	async function signed(
+		body: string,
+		{ secret = "shh", nonce = "n1", timestamp = String(Math.floor(Date.now() / 1000)) } = {},
+		headers: Record<string, string> = {}
+	) {
+		return new Request("https://example.com/hooks/sinch", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				"x-sinch-webhook-signature-algorithm": "HmacSHA256",
+				"x-sinch-webhook-signature-nonce": nonce,
+				"x-sinch-webhook-signature-timestamp": timestamp,
+				"x-sinch-webhook-signature": await sinch_signature(secret, body, nonce, timestamp),
+				...headers,
+			},
+			body,
+		})
+	}
+	const report = JSON.stringify({
+		type: "recipient_delivery_report_sms",
+		batch_id: "b1",
+		recipient: "447700900001",
+		code: 0,
+		status: "Delivered",
+	})
+
+	it("signs the body, the nonce and the timestamp, joined by dots", async () => {
+		// Worked independently: base64(HMAC-SHA256("shh", '{"type":"x"}.n1.1700000000')).
+		expect(await sinch_signature("shh", '{"type":"x"}', "n1", "1700000000")).toBe(
+			"fqDt43bYQRu/aifM7LkfGlrDsyKRomAbFU+asfjXxHE="
+		)
+	})
+
+	it("takes a signed callback, and the mock signs one with an hmac: secret", async () => {
+		expect(await receive(await signed(report), { provider: "sinch", secret: "shh" })).toMatchObject(
+			[{ type: "delivered", message_id: "b1", phone: "+447700900001" }]
+		)
+		const mocked = await mock_request({ provider: "sinch", type: "delivered", secret: "hmac:shh" })
+		expect(mocked.request.headers.get("authorization")).toBeNull()
+		expect(await receive(mocked.request, { provider: "sinch", secret: "shh" })).toMatchObject([
+			{ type: "delivered" },
+		])
+	})
+
+	it("refuses another secret, a changed body, a stale timestamp and a missing nonce", async () => {
+		const refused = async (request: Request, code = "invalid_signature") =>
+			expect(receive(request, { provider: "sinch", secret: "shh" })).rejects.toMatchObject({
+				code,
+			})
+		await refused(await signed(report, { secret: "other" }))
+		const tampered = await signed(report)
+		await refused(
+			new Request(tampered.url, {
+				method: "POST",
+				headers: tampered.headers,
+				body: report.replace("Delivered", "Failed"),
+			})
+		)
+		const old = String(Math.floor(Date.now() / 1000) - 3600)
+		await refused(await signed(report, { timestamp: old }), "stale_timestamp")
+		// A timestamp that can't be aged is refused, never let through without replay protection.
+		await refused(await signed(report, { timestamp: "soon" }), "stale_timestamp")
+		await refused(
+			await signed(report, {}, { "x-sinch-webhook-signature-nonce": "" }),
+			"invalid_signature"
+		)
+		await refused(
+			await signed(report, {}, { "x-sinch-webhook-signature-algorithm": "HmacSHA1" }),
+			"invalid_signature"
+		)
+		await expect(receive(await signed(report), { provider: "sinch" })).rejects.toMatchObject({
+			code: "missing_secret",
+		})
+	})
+
+	it("doesn't fall back to Basic credentials when a signature is there and wrong", async () => {
+		const request = await signed(
+			report,
+			{ secret: "other" },
+			{ authorization: `Basic ${btoa("u:shh")}` }
+		)
+		await expect(receive(request, { provider: "sinch", secret: "shh" })).rejects.toBeInstanceOf(
+			WebhookVerificationError
+		)
+	})
+})
+
 describe("receive — bandwidth (Basic credentials on the application)", () => {
 	it("maps delivered, failed and an inbound text, with the send's tag", async () => {
 		const delivered = await mock_request({
@@ -675,7 +765,7 @@ describe("dedupe_key and filtered texts", () => {
 		expect(new Set(events.map((e) => e.dedupe_key)).size).toBe(2)
 	})
 
-	it("calls a carrier's spam block filtered, on Twilio, Telnyx and Vonage", async () => {
+	it("calls a spam block filtered, on Twilio, Telnyx, Vonage, Sinch, Plivo and Bandwidth", async () => {
 		const twilio = post(
 			new URLSearchParams({
 				MessageSid: "SM1",
@@ -715,6 +805,63 @@ describe("dedupe_key and filtered texts", () => {
 		expect((await receive(vonage, { provider: "vonage", verify: false }))[0].bounce).toMatchObject({
 			category: "filtered",
 		})
+		const sinch = (code: number) =>
+			post(
+				JSON.stringify({
+					type: "recipient_delivery_report_sms",
+					batch_id: "b1",
+					recipient: "447700900123",
+					code,
+					status: "Rejected",
+				})
+			)
+		for (const code of [15, 62]) {
+			expect((await receive(sinch(code), { provider: "sinch", verify: false }))[0].bounce).toEqual({
+				category: "filtered",
+				detail: `Rejected ${code}`,
+			})
+		}
+		expect(
+			(await receive(sinch(255), { provider: "sinch", verify: false }))[0].bounce?.category
+		).toBe("unknown")
+		const plivo = (code: string) =>
+			post(
+				new URLSearchParams({
+					MessageUUID: "u1",
+					Status: "failed",
+					ErrorCode: code,
+					To: "15557770006",
+				}).toString(),
+				"application/x-www-form-urlencoded"
+			)
+		expect((await receive(plivo("30"), { provider: "plivo", verify: false }))[0].bounce).toEqual({
+			category: "filtered",
+			detail: "30",
+		})
+		expect(
+			(await receive(plivo("960"), { provider: "plivo", verify: false }))[0].bounce?.category
+		).toBe("unknown")
+		const bandwidth = (code: number, description: string) =>
+			post(
+				JSON.stringify([
+					{
+						type: "message-failed",
+						to: "+15557770006",
+						errorCode: code,
+						description,
+						message: { id: "m1" },
+					},
+				])
+			)
+		for (const [code, description] of [
+			[4470, "rejected-spam-detected"],
+			[4770, "destination-spam-detected"],
+		] as const) {
+			expect(
+				(await receive(bandwidth(code, description), { provider: "bandwidth", verify: false }))[0]
+					.bounce
+			).toEqual({ category: "filtered", detail: `${code} ${description}` })
+		}
 		// Any other failure is still unknown.
 		const other = await mock_request({ provider: "vonage", type: "failed", secret: "s" })
 		expect(
