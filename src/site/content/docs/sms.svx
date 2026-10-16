@@ -423,6 +423,45 @@ const flaky = new MockSms({ fail: { outcome_unknown: true } }) // never fails ov
 
 The same `fail` works on the WhatsApp, push and chat mocks.
 
+## Testing a provider of your own
+
+`postboi/testing` has what postboi's own providers are tested with. `mock_fetch()` answers
+requests from a script and records them, so a provider runs end to end with no network:
+
+```typescript
+import { mock_fetch } from "postboi/testing"
+
+const fetch = mock_fetch([{ status: 201, json: { sid: "SM1", status: "queued" } }])
+const restore = fetch.install()
+await sms({ to: "+447788223344", message: "hi" })
+fetch.calls[0].form().get("Body") // "hi"
+restore()
+```
+
+If you write your own `SmsProvider`, `sms_contract_cases()` holds it to what every provider
+here promises:
+
+- one request per send, answered with `id`, `ids`, `provider` and `delivery`
+- `validate()` asks the provider nothing
+- a scheduled send is scheduled, or refused before any request
+- a 400 is a refusal with a `reason`, a 401 is `auth` and a 429 `rate_limited`
+- a 5xx or a dropped connection is `outcome_unknown` and isn't retried
+- `provider_options` can't overwrite a field the send sets
+
+Each case runs in any test framework, and `run_sms_contract()` reports instead of throwing.
+Every provider postboi ships passes it:
+
+```typescript
+import { sms_contract_cases } from "postboi/testing"
+
+const cases = sms_contract_cases(() => new MyProvider({ api_key: "k", default: { from: "ACME" } }), {
+	to: "+447788223344",
+	accepted: { status: 200, json: { id: "m1" } }, // your API's answer to a send
+	reserved: "to", // a field of your request the send sets
+})
+for (const c of cases) it(c.name, c.run)
+```
+
 `fails_over(error)` from the package root is the same test, for a chain of your own:
 
 ```typescript
