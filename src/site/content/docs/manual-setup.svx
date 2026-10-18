@@ -95,14 +95,14 @@ Local dev (nothing set) uses `mock`; production (env set) uses Resend. `POSTBOI_
 always wins over the file.
 
 **2. Use SvelteKit's `dev` flag in a hook.** The config file is imported directly by
-Node, so it can't read `$app/environment`. Configure from SvelteKit's
+Node, so it can't read `$app/env`. Configure from SvelteKit's
 [`init` hook](https://svelte.dev/docs/kit/hooks#Shared-hooks-init) instead, where the flag
 is available: it runs once at startup and works on every adapter, including Workers:
 
 ```ts
 // src/hooks.server.ts
-import type { ServerInit } from '@sveltejs/kit'
-import { dev } from '$app/environment'
+import type { ServerInit } from '@sveltejs/kit/hooks'
+import { dev } from '$app/env'
 import { configure } from 'postboi'
 
 export const init: ServerInit = () => {
@@ -110,8 +110,8 @@ export const init: ServerInit = () => {
 }
 ```
 
-On SvelteKit 3 the flag comes from `$app/env` and the type from `@sveltejs/kit/hooks`; the
-hook itself is unchanged.
+On SvelteKit 2 the flag comes from `$app/environment` and the type from `@sveltejs/kit`;
+the hook itself is the same.
 
 > Avoid `process.env.NODE_ENV` in the config file: a self-hosted Node deploy that
 > forgets to set it falls into the wrong branch silently. Prefer the two patterns above.

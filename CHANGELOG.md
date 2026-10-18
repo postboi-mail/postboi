@@ -10,9 +10,9 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
-### Changed
+### Fixed
 
-- `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) is now read off SvelteKit's own `form` rather than naming `RemoteForm` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`. Its fields and result are typed as before.
+- `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) types on SvelteKit 3. The shipped declarations named `RemoteForm` and `RemoteFormInput` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`, so they failed to resolve and every field read as `any` (an error instead, without `skipLibCheck`). They are now read off SvelteKit's own `form`, and the fields and result are typed as `Input` says.
 - `postboi init` reads `files.serviceWorker` off the `sveltekit()` call in `vite.config.*` on a SvelteKit 3 project, which has no `svelte.config`, so a custom worker source is found rather than a second worker written beside it.
 
 ### Fixed
