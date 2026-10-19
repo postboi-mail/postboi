@@ -41,9 +41,15 @@ Every send is `Effect<SendResponse, PostboiError | SkipSend | Spam>`:
 
 | Tag            | When                                                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `PostboiError` | The provider or the transport failed. Same fields as the [class on the root](/errors): `provider`, `channel`, `status`, `code`, `raw`. |
+| `PostboiError` | The provider or the transport failed. Same fields as the [class on the root](/errors): `provider`, `channel`, `status`, `code`, `raw`, `outcome_unknown` and `reason`. |
 | `SkipSend`     | A `before.send` [hook](/hooks) cancelled the send. `code` is what the hook threw with, `skipped` by default.                           |
 | `Spam`         | A `FormData` body tripped the [honeypot](/spam).                                                                                      |
+
+A [failover chain](/sms)'s `FailoverError` is a `PostboiError` here too, as it is on the
+root: the fields are the last provider's, and `errors` holds every provider's error in
+the order they were tried. `reason` says why a provider refused, and
+`outcome_unknown: true` says nothing proves the message wasn't sent, so sending it again
+can deliver it twice.
 
 A skip and a spam verdict have their own tags rather than a `code` on `PostboiError`,
 because a program usually lets them through where it would retry or report a failure.
@@ -112,17 +118,20 @@ it.effect('welcomes a new member', () =>
 ## The other channels
 
 One function per channel, each wrapping the zero-config function of the same name on
-the root: `send_sms`, `send_push`, `send_whatsapp`, and `send_slack`, `send_discord`,
+the root: `send_sms` (which answers the `SmsReceipt` every SMS provider answers),
+`send_push`, `send_whatsapp`, and `send_slack`, `send_discord`,
 `send_teams`, `send_telegram` and `send_bluesky` for chat (the platform is the name, as
 on the root). `send(options)` is the [multi-channel `send()`](/send); its per-channel
 outcomes stay in the result, and only a send that could not be attempted at all fails.
-`cancel_mail(id)` cancels a [scheduled](/scheduling) email.
+`cancel_mail(id)` cancels a [scheduled](/scheduling) email, and `validate_sms(options)` is
+`sms.validate()`: it checks a text against the configured provider without sending it.
 
 ## A request to send, over the wire
 
 `SendRequest` is a `Schema` for the subset of `SendOptions` a server can accept from a
 form post or a JSON body: `to`, `from`, `reply_to`, `cc`, `bcc`, `subject`, `text`,
-`html`, `headers` and `tags`, with at least one of `html` and `text`. It is deliberately
+`html`, `headers`, `tags`, `idempotency_key` and `in_reply_to`, with at least one of
+`html` and `text`. It is deliberately
 not the whole of `SendOptions`, which carries functions, `FormData` and promises that have
 no wire form.
 
@@ -145,21 +154,28 @@ string body is HTML to every provider.
 
 ## Retrying
 
-`with_retry(effect, { times, base })` retries a `PostboiError` whose status is 429 or 5xx,
-with exponential backoff from `base` (500 milliseconds by default) and at most `times`
-more attempts (2 by default). A 4xx, a skip and a spam verdict fail at once, and so does
-an error with no status: a refusal before the request and a request that never got an
-answer arrive the same way, and only the transport can tell them apart.
+`with_retry(effect, { times, base })` retries the failures the transport's own
+[retry rule](/errors#retries) would: a 429 always, and a 5xx only when it proves nothing
+was sent (`outcome_unknown: false`). Backoff is exponential from `base` (500 milliseconds
+by default), with at most `times` more attempts (2 by default). A 4xx, a skip and a spam
+verdict fail at once, and so does an error with no status: a refusal before the request
+arrives that way.
+
+A failure with `outcome_unknown: true` (a 5xx, a timeout or a dropped connection on a send)
+is retried only with `retry_unknown: true`, because the provider may already have the
+message. Pass it when the send carries an `idempotency_key` the provider deduplicates on.
 
 ```typescript
 import { send_mail, with_retry } from 'postboi/effect'
 
-const send = with_retry(send_mail({ to, subject, body }), { times: 3, base: '1 second' })
+const send = with_retry(send_mail({ to, subject, body, idempotency_key: `welcome-${id}` }), {
+	times: 3,
+	base: '1 second',
+	retry_unknown: true
+})
 ```
 
-This overlaps the transport's own [retry rule](/errors#retries), so pick one. The
-provider's `retries` option retries the HTTP request inside the send, before hooks see an
-error, and it also retries a network failure, which `with_retry` cannot see; `with_retry`
-retries the whole Effect, hooks included.
-Setting both stacks them: a `retries: 2` provider inside a `with_retry` of 2 makes up to
-nine requests.
+This overlaps the provider's `retries` option, so pick one. That option retries the HTTP
+request inside the send, before hooks see an error; `with_retry` retries the whole Effect,
+hooks included. Setting both stacks them: a `retries: 2` provider inside a `with_retry` of
+2 makes up to nine requests.

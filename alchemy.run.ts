@@ -44,8 +44,9 @@ export default Alchemy.Stack(
 			compatibility: { date: "2026-06-14", flags: ["nodejs_compat"] },
 			observability: { enabled: true },
 			// The stable workers.dev URL is what a preview is reached on; production keeps it
-			// too, as wrangler.jsonc's `workers_dev: true` does.
-			workersDev: true,
+			// too, with version preview URLs, as wrangler.jsonc's `workers_dev` and
+			// `preview_urls` do.
+			workersDev: { enabled: true, previewsEnabled: true },
 			// The custom domain is production's alone. The zone (postboi.app) already exists in
 			// the account; alchemy manages the DNS record and the edge certificate.
 			domain: production ? { name: DOCS_DOMAIN } : null,

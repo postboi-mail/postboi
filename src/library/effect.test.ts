@@ -2,7 +2,12 @@ import { describe, it, expect, vi, afterEach } from "@effect/vitest"
 import { Cause, ConfigProvider, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import Mock from "./mock.js"
-import { PostboiError as PostboiErrorClass, SkipSendError, SpamError } from "./errors.js"
+import {
+	FailoverError,
+	PostboiError as PostboiErrorClass,
+	SkipSendError,
+	SpamError,
+} from "./errors.js"
 import {
 	Mailer,
 	PostboiError,
@@ -14,7 +19,9 @@ import {
 	retryable,
 	send_mail,
 	send_options,
+	send_sms,
 	tried,
+	validate_sms,
 	with_retry,
 } from "./effect.js"
 import type { FromAddress } from "./index.js"
@@ -130,6 +137,46 @@ describe("from_error", () => {
 		})
 	)
 
+	it.effect("carries an unknown outcome and a refusal's reason across", () =>
+		Effect.gen(function* () {
+			const unknown = yield* Effect.flip(
+				from_error(
+					new PostboiErrorClass({ provider: "twilio", message: "timeout", outcome_unknown: true })
+				)
+			)
+			expect(unknown).toMatchObject({ outcome_unknown: true, reason: undefined })
+			const refused = yield* Effect.flip(
+				from_error(
+					new PostboiErrorClass({ provider: "twilio", message: "no", status: 401, reason: "auth" })
+				)
+			)
+			expect(refused).toMatchObject({ outcome_unknown: false, reason: "auth" })
+		})
+	)
+
+	it.effect("maps a failover chain's FailoverError with every provider's error", () =>
+		Effect.gen(function* () {
+			const chain = new FailoverError([
+				new PostboiErrorClass({ provider: "twilio", message: "no", status: 401, reason: "auth" }),
+				new PostboiErrorClass({
+					provider: "puresms",
+					message: "down",
+					status: 503,
+					outcome_unknown: true,
+				}),
+			])
+			const error = yield* Effect.flip(from_error(chain))
+			expect(error._tag).toBe("PostboiError")
+			if (error._tag !== "PostboiError") return
+			expect(error).toMatchObject({ provider: "puresms", status: 503, outcome_unknown: true })
+			expect(error.errors?.map((e) => [e.provider, e.reason])).toEqual([
+				["twilio", "auth"],
+				["puresms", undefined],
+			])
+			expect(error.errors?.[0]).toBeInstanceOf(PostboiError)
+		})
+	)
+
 	it.effect("maps a SkipSendError onto SkipSend, keeping its code", () =>
 		Effect.gen(function* () {
 			const thrown = new SkipSendError("Unsubscribed", "unsubscribed")
@@ -181,6 +228,34 @@ describe("from_error", () => {
 	)
 })
 
+describe("send_sms and validate_sms", () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+		vi.unstubAllEnvs()
+	})
+
+	it.effect("send through the configured SMS provider and answer its receipt", () =>
+		Effect.gen(function* () {
+			vi.spyOn(console, "log").mockImplementation(() => {})
+			vi.stubEnv("POSTBOI_SMS_PROVIDER", "mock")
+			const receipt = yield* send_sms({ to: "+447700900123", from: "ACME", message: "Hi" })
+			expect(receipt).toMatchObject({ id: expect.any(String), provider: "mock" })
+			const check = yield* validate_sms({
+				to: "07700 900123",
+				from: "ACME",
+				message: "Hi",
+				country: "GB",
+			})
+			expect(check).toMatchObject({
+				ok: true,
+				to: ["+447700900123"],
+				encoding: "gsm7",
+				segments: 1,
+			})
+		})
+	)
+})
+
 describe("SendRequest", () => {
 	it.effect("decodes a request to send and turns it into send options", () =>
 		Effect.gen(function* () {
@@ -193,6 +268,8 @@ describe("SendRequest", () => {
 				reply_to: "support@acme.example",
 				headers: { "X-Campaign": "welcome" },
 				tags: ["onboarding"],
+				idempotency_key: "welcome-42",
+				in_reply_to: "in_123",
 			})
 			expect(request.to).toEqual(["ada@example.com", "Lin <lin@example.com>"])
 			const options = send_options(request)
@@ -205,6 +282,8 @@ describe("SendRequest", () => {
 				subject: "Welcome",
 				headers: { "X-Campaign": "welcome" },
 				tags: ["onboarding"],
+				idempotency_key: "welcome-42",
+				in_reply_to: "in_123",
 			})
 			// What was handed in isn't what goes out: a caller may keep mutating their own.
 			expect(options.tags).not.toBe(request.tags)
@@ -300,6 +379,44 @@ describe("with_retry", () => {
 			const error = yield* Effect.flip(with_retry(effect, { times: 3 }))
 			expect(error.status).toBe(400)
 			expect(attempts()).toBe(1)
+		})
+	)
+
+	it.effect("retries an unknown outcome only when told it is safe", () =>
+		Effect.gen(function* () {
+			let attempts = 0
+			const unknown = Effect.suspend(() => {
+				attempts += 1
+				return attempts === 1
+					? Effect.fail(
+							new PostboiError({
+								provider: "t",
+								message: "HTTP 503",
+								status: 503,
+								outcome_unknown: true,
+							})
+						)
+					: Effect.succeed({ id: "msg_2" })
+			})
+			yield* Effect.flip(with_retry(unknown, { times: 3 }))
+			expect(attempts).toBe(1)
+
+			attempts = 0
+			const fiber = yield* Effect.forkChild(with_retry(unknown, { times: 3, retry_unknown: true }))
+			yield* TestClock.adjust("500 millis")
+			expect(yield* Fiber.join(fiber)).toEqual({ id: "msg_2" })
+			expect(attempts).toBe(2)
+
+			const dropped = new PostboiError({ provider: "t", message: "socket", outcome_unknown: true })
+			expect(retryable(dropped)).toBe(false)
+			expect(retryable(dropped, true)).toBe(true)
+			const limited = new PostboiError({
+				provider: "t",
+				message: "",
+				status: 429,
+				outcome_unknown: true,
+			})
+			expect(retryable(limited)).toBe(true)
 		})
 	)
 

@@ -22,12 +22,18 @@ import {
 	type Duration,
 } from "effect"
 import type { CancelResponse, ProviderBase, SendOptions, FromAddress } from "./index.js"
-import type { SmsOptions } from "./sms/types.js"
+import type { SmsCheck, SmsOptions, SmsReceipt } from "./sms/types.js"
 import type { PushOptions } from "./push/types.js"
 import type { WhatsappOptions } from "./whatsapp/types.js"
 import type { ChatOptions } from "./chat/types.js"
 import type Mock from "./mock.js"
-import { is_error, is_spam, SkipSendError } from "./errors.js"
+import {
+	FailoverError,
+	is_error,
+	is_spam,
+	SkipSendError,
+	type PostboiError as RootPostboiError,
+} from "./errors.js"
 import { mail, cancel, resolve_provider, with_remoteip } from "./mail.js"
 import { escape_lines } from "./utils.js"
 import { sms } from "./sms/send.js"
@@ -40,10 +46,22 @@ import { send as fan_out, type FanOutOptions, type SendResult } from "./send.js"
 
 const ChannelSchema = Schema.Literals(["email", "sms", "push", "chat", "whatsapp"])
 
+const ReasonSchema = Schema.Literals([
+	"auth",
+	"rate_limited",
+	"sender",
+	"account",
+	"recipient",
+	"compliance",
+	"request",
+])
+
 /**
  * The normalised error every provider throws, as a tagged error. Same fields as the
- * class on the package root (`provider`, `channel`, `status`, `code`, `raw`), so a
- * handler written against one reads the other; `_tag` is what `Effect.catchTag` keys on.
+ * class on the package root (`provider`, `channel`, `status`, `code`, `raw`,
+ * `outcome_unknown`, `reason`), so a handler written against one reads the other; `_tag`
+ * is what `Effect.catchTag` keys on. A failover chain's `FailoverError` is one of these
+ * too, with every provider's error in `errors`, as on the root.
  */
 export class PostboiError extends Schema.TaggedError<PostboiError>()("PostboiError", {
 	message: Schema.String,
@@ -57,6 +75,17 @@ export class PostboiError extends Schema.TaggedError<PostboiError>()("PostboiErr
 	code: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
 	/** The original provider error payload (parsed body or thrown cause). */
 	raw: Schema.optional(Schema.Unknown),
+	/**
+	 * Nothing proves the message wasn't sent: a timeout, a dropped connection or a 5xx.
+	 * Sending it again can deliver it twice; see {@link retryable}.
+	 */
+	outcome_unknown: Schema.Boolean.pipe(Schema.withConstructorDefault(Effect.succeed(false))),
+	/** Why the provider refused, normalized. Unset on everything but a proven refusal. */
+	reason: Schema.optional(ReasonSchema),
+	/** A failover chain's errors, one per provider in the order they were tried. */
+	errors: Schema.optional(
+		Schema.Array(Schema.suspend((): Schema.Codec<PostboiError, unknown> => PostboiError))
+	),
 }) {}
 
 /**
@@ -98,19 +127,23 @@ export function from_error(error: unknown): Effect.Effect<never, SendError> {
 			})
 		)
 	}
-	if (is_error(error)) {
-		return Effect.fail(
-			new PostboiError({
-				message: error.message,
-				provider: error.provider,
-				channel: error.channel,
-				status: error.status,
-				code: error.code,
-				raw: error.raw,
-			})
-		)
-	}
+	if (is_error(error)) return Effect.fail(tagged(error))
 	return Effect.die(error)
+}
+
+/** The root's error as the tagged one, a chain's errors included. */
+function tagged(error: RootPostboiError): PostboiError {
+	return new PostboiError({
+		message: error.message,
+		provider: error.provider,
+		channel: error.channel,
+		status: error.status,
+		code: error.code,
+		raw: error.raw,
+		outcome_unknown: error.outcome_unknown,
+		reason: error.reason,
+		errors: error instanceof FailoverError ? error.errors.map(tagged) : undefined,
+	})
 }
 
 /**
@@ -142,9 +175,21 @@ export const cancel_mail = Effect.fn("postboi.cancel_mail")((id: string) =>
 	tried<CancelResponse>(() => cancel(id))
 )
 
-/** Send a text through the configured SMS provider. */
+/**
+ * Send a text through the configured SMS provider, or down its failover chain. Every SMS
+ * provider answers the same `SmsReceipt` (`id`, `ids`, `provider`, `delivery`).
+ */
 export const send_sms = Effect.fn("postboi.send_sms")((options: SmsOptions) =>
-	tried<SendResponse>(() => sms(options))
+	tried<SmsReceipt>(() => sms(options))
+)
+
+/**
+ * Check a text against the configured SMS provider without sending it, as
+ * `sms.validate()` does: numbers, encoding, segments and every problem a send would
+ * refuse it for. Fails only when no provider can be resolved.
+ */
+export const validate_sms = Effect.fn("postboi.validate_sms")((options: SmsOptions) =>
+	tried<SmsCheck>(() => sms.validate(options))
 )
 
 /** Send a push notification through the configured push provider. */
@@ -297,7 +342,8 @@ function service_over(provider: ProviderBase<unknown>): Mailer["Service"] {
 
 // ─── Wire shapes ─────────────────────────────────────────────────────────────
 
-const Address = Schema.String.pipe(Schema.check(Schema.isNonEmpty()))
+const NonEmpty = Schema.String.pipe(Schema.check(Schema.isNonEmpty()))
+const Address = NonEmpty
 // A list of addresses has to hold one: `to: []` is a send to nobody, and refusing it at
 // the door says so in the request's own words rather than in a provider's.
 const Addresses = Schema.Union([
@@ -313,7 +359,9 @@ const Addresses = Schema.Union([
  *
  * An address here is a non-empty string in whatever form `mail()` accepts
  * (`ada@example.com`, `Ada <ada@example.com>`, or a comma-separated list); the provider
- * parses and rejects it as it would any other send.
+ * parses and rejects it as it would any other send. `idempotency_key` and `in_reply_to`
+ * are passed through as they are: a key for the providers that deduplicate on one, and
+ * the `in_…` id of a received message the send answers.
  */
 export const SendRequest = Schema.Struct({
 	to: Schema.optionalKey(Addresses),
@@ -326,6 +374,8 @@ export const SendRequest = Schema.Struct({
 	html: Schema.optionalKey(Schema.String),
 	headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 	tags: Schema.optionalKey(Schema.Array(Schema.String)),
+	idempotency_key: Schema.optionalKey(NonEmpty),
+	in_reply_to: Schema.optionalKey(NonEmpty),
 }).pipe(
 	Schema.check(
 		Schema.makeFilter((request) =>
@@ -360,6 +410,8 @@ export function send_options(request: SendRequest): SendOptions {
 	if (request.text !== undefined) options.text = request.text
 	if (request.headers !== undefined) options.headers = { ...request.headers }
 	if (request.tags !== undefined) options.tags = [...request.tags]
+	if (request.idempotency_key !== undefined) options.idempotency_key = request.idempotency_key
+	if (request.in_reply_to !== undefined) options.in_reply_to = request.in_reply_to
 	return options
 }
 
@@ -372,19 +424,24 @@ function plural(value: string | ReadonlyArray<string>): string | Array<string> {
 
 /**
  * Is this a failure worth trying again? The transport's response rule, restated for the
- * error channel: a {@link PostboiError} whose `status` is 429 or 5xx. A 4xx is the
- * request's fault and comes back the same way; a skip or a spam verdict was asked for;
- * and an error with no status is not retried here, because a refusal before the request
- * (`no_provider`, a missing credential) and a request that never got an answer (a
- * timeout, a dropped connection) arrive the same way, and only the transport, which saw
- * the request, can tell them apart. Its `retries` option is what retries those.
+ * error channel. A 429 always is: the provider refused and said to come back. A 5xx, a
+ * timeout or a dropped connection is only when it proves nothing went out, which is what
+ * `outcome_unknown: false` says (a read, say); with `outcome_unknown: true` the provider
+ * may already have the message, and sending again can deliver it twice, so those are
+ * retried only when `retry_unknown` says so, as the transport's option of the same name
+ * does. Pass it when the send carries an `idempotency_key` the provider deduplicates on.
+ *
+ * A 4xx is the request's fault and comes back the same way; a skip or a spam verdict was
+ * asked for; and an error with no status and no unknown outcome is not retried here,
+ * because a refusal before any request (`no_provider`, a missing credential) arrives that
+ * way, and so does a read whose connection dropped, which only the transport can tell
+ * apart. Its `retries` option is what retries those.
  */
-export function retryable(error: unknown): boolean {
-	return (
-		error instanceof PostboiError &&
-		error.status !== undefined &&
-		(error.status === 429 || error.status >= 500)
-	)
+export function retryable(error: unknown, retry_unknown = false): boolean {
+	if (!(error instanceof PostboiError)) return false
+	if (error.status === 429) return true
+	if (error.outcome_unknown) return retry_unknown
+	return error.status !== undefined && error.status >= 500
 }
 
 /** What {@link with_retry} takes. */
@@ -393,26 +450,32 @@ export interface RetryOptions {
 	times?: number
 	/** The first delay; each one after it doubles. Defaults to 500 milliseconds. */
 	base?: Duration.Input
+	/**
+	 * Retry a failure whose outcome is unknown too (a 5xx, a timeout or a dropped
+	 * connection on a send). Only safe when the send carries an `idempotency_key` the
+	 * provider deduplicates on; see {@link retryable}. Defaults to false.
+	 */
+	retry_unknown?: boolean
 }
 
 /**
- * Retry a send on the failures a provider might answer differently next time: a 429, or
- * a 5xx. Exponential backoff from `base`, at most `times` more attempts, and any other
- * failure fails at once.
+ * Retry a send on the failures a provider might answer differently next time: a 429, a
+ * 5xx that proves nothing was sent, and with `retry_unknown` an unknown outcome as well.
+ * Exponential backoff from `base`, at most `times` more attempts, and any other failure
+ * fails at once.
  *
  * This and the provider's own `retries` option overlap, so pick one. The provider retries
- * the HTTP request inside the send, before hooks see an error, and it also retries a
- * network failure, which this cannot see (see {@link retryable}); this retries the whole
+ * the HTTP request inside the send, before hooks see an error; this retries the whole
  * Effect, hooks included. Setting both stacks them, so a `retries: 2` provider inside a
  * `with_retry` of 2 makes up to nine requests.
  */
 export function with_retry<A, E, R>(
 	effect: Effect.Effect<A, E, R>,
-	{ times = 2, base = "500 millis" }: RetryOptions = {}
+	{ times = 2, base = "500 millis", retry_unknown = false }: RetryOptions = {}
 ): Effect.Effect<A, E, R> {
 	return effect.pipe(
 		Effect.retry({
-			while: retryable,
+			while: (error) => retryable(error, retry_unknown),
 			schedule: Schedule.max([Schedule.exponential(base), Schedule.recurs(times)]),
 		})
 	)

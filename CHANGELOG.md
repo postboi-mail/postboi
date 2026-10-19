@@ -12,7 +12,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
-- `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with tagged `PostboiError`, a `Mailer` service with config and mock layers, `SendRequest` schema and `with_retry`. `effect` is an optional peer dependency; nothing else in the package imports it.
+- `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with a tagged `PostboiError` (carrying `outcome_unknown`, `reason` and a failover chain's `errors`), `validate_sms`, a `Mailer` service with config and mock layers, a `SendRequest` schema and `with_retry`, which retries an unknown outcome only with `retry_unknown`. `effect` is an optional peer dependency; nothing else in the package imports it.
 
 ### Fixed
 
