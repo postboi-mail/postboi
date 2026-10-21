@@ -7,8 +7,10 @@ tempboi.email, the one that goes.
 
 **Status: Phases 0 and 1 built, October 2026.** `agentboi.email` is registered. The
 mailbox that receives, reads, replies and sends is in both repos on
-`claude/agent-mailboxes-planning-y0p3hu`; the held queue, jev's mailbox rubric and MCP are
-still to come. [Built so far](#built-so-far) says what shipped and where it parted from the
+`claude/agent-mailboxes-planning-y0p3hu`. A second round on
+`claude/postboi-agent-mail-gaps-8n9qvh` added folders, labels, search, drafts, review,
+forward, attachments and a local `postboi mcp`; jev's mailbox rubric and the hosted MCP
+server are still to come. [Built so far](#built-so-far) says what shipped and where it parted from the
 plan below, and [Before launch](#before-launch) lists the zone and SES steps that only a
 person with the Cloudflare and AWS consoles can take. This document is the source of truth
 for the mailbox work in both repos: read it before starting a phase, and update it when a
@@ -87,10 +89,47 @@ written.
 - **Deleting a team retires its agentboi.email addresses** (migration 0092), so an
   address that was one agent's is never another team's, even once the rows are gone.
 - **"support" is reserved** on the shared namespace, so the examples say `orders`.
-- **Not built in Phase 1**: folders, labels and read state (`mailbox_threads`), the
-  Members → Agents view, Admin → Mailboxes, the claim page on agentboi.email (the existing
+- **Not built in Phase 1**: the Members → Agents view, Admin → Mailboxes, the claim page on agentboi.email (the existing
   claim link is used), `init --agent --mailbox`, `sync` typing mailbox names, and the
   disclosure footer.
+
+### Round two: folders, drafts, review and MCP
+
+Measured against Resend's Inboxes (folders, read state, labels, search, drafts, forward and an
+MCP server), which agentboi had none of. Both repos, branch
+`claude/postboi-agent-mail-gaps-8n9qvh`.
+
+- **Threads have a folder, a read state and labels.** `inbox`, `archive`, `spam`, `trash`,
+  and `sent` for a conversation the mailbox started that nobody has answered. New mail marks
+  a thread unread and brings it back from the archive or `sent`, and leaves spam and trash
+  where a person put them. `GET …/threads` filters on `folder`, `label`, `unread` and `q`
+  (subject, sender, recipients and text); `PATCH …/threads/:thread` moves, marks and labels.
+  Labels are per mailbox (50, five colours), and naming one that doesn't exist makes it.
+- **Review replaces the held queue's policy object, for now.** A mailbox's `review` is
+  `none`, `new` or `all`, set only with the team's key. Under `new` a reply to the person who
+  wrote, adding nobody, goes; everything else from the mailbox's own key is saved as a draft
+  and answered 202 `{ status: "draft" }`. The team's key is never held. Approve-by-reply and
+  `allow` lists are not built.
+- **Drafts** are the held queue's rows and the hand-off Phase 5 described: written by the
+  agent (`POST …/drafts`) or made by a held send, sent from the dashboard or with
+  `…/drafts/:id/send` (the mailbox key is refused `review_required` for a draft review would
+  hold). The team hears through the `drafts` notification and the `mailbox.draft.created`
+  and `mailbox.draft.sent` webhooks.
+- **Forward and attachments.** `…/messages/:id/forward` sends `Fwd:` with a note and the
+  original's kept files; sends, replies and drafts take base64 attachments, 20 files and
+  10 MB in all.
+- **SDK**: `postboi/mailbox` has all of it (`threads` filters, `update_thread`, `archive`,
+  `trash`, `mark_read`, the label calls, the draft calls, `forward`, `attachments`, `review`
+  and `set_review`), and every send resolves to `sent` or `draft`. The CLI gained `archive`,
+  `trash`, `move`, `mark`, `label`, `labels`, `drafts`, `draft`, `forward` and `review`.
+  `receive()` reads the two draft events.
+- **`postboi mcp`** is the local half of Phase 4: stdio, JSON-RPC by hand rather than
+  `@modelcontextprotocol/sdk`, because the package has no runtime dependencies and stdio is a
+  few methods. Twenty tools: the mailbox ones, `temp_inbox_create`, `temp_inbox_wait` and
+  `email_send`. A mailbox key opens its own mailbox only; the team's key takes a `mailbox`
+  argument. Every result carrying a stranger's words wraps them in `<email trust="…">` after
+  a line saying they are data, and a sender's own `</email>` is escaped so it can't close the
+  block. The hosted `mcp.postboi.app` is still to come.
 
 ## Before launch
 

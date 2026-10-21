@@ -96,6 +96,7 @@ interface WebhookEvent {
 	    | 'opened' | 'clicked' | 'unsubscribed' | 'resubscribed' | 'failed' | 'received'
 	    | 'test_received' | 'test_completed'  // Postboi hosted testing, see below
 	    | 'viewed' | 'view_viewed'            // Postboi web versions, see below
+	    | 'draft_created' | 'draft_sent'      // Postboi agent mailboxes, see below
 	provider: string      // "resend", "postmark", …
 	message_id?: string   // matches the id send() returned, where the provider allows
 	email?: string        // the recipient this event is about
@@ -114,6 +115,7 @@ interface WebhookEvent {
 	fields?: Array<[string, string]>         // Postboi: the submission's fields, in order
 	test?: TestingRun                        // test_* events: the test run
 	view?: ViewViewed                        // view_viewed events: the page and its reader
+	draft?: MailboxDraftEvent                // draft_* events: the mailbox and its draft
 	dedupe_key?: string   // the same for a redelivery of this event, see below
 	raw: unknown          // the untouched provider payload
 }
@@ -203,6 +205,23 @@ export const POST = webhook(async (event) => {
 ```
 
 A view nobody can be told apart for sends nothing; `views.stats()` counts it.
+
+## Mailbox drafts
+
+Two Postboi provider events come from [agent mailboxes](/mailbox#drafts-and-review).
+`draft_created` (`mailbox.draft.created`) is a draft waiting for a person: one the agent
+wrote, or a send the mailbox's review policy held (`draft.held` says which).
+`draft_sent` (`mailbox.draft.sent`) is that draft going out, with the Sent log's id in
+`message_id`. The mailbox and the draft are in `draft`:
+
+```typescript
+export const POST = webhook(async (event) => {
+	if (event.type === 'draft_created' && event.draft) {
+		const { mailbox, draft } = event.draft
+		await notify_reviewer(`${mailbox.address} wants to send "${draft.subject}" to ${draft.to.join(', ')}`)
+	}
+})
+```
 
 ## Text messages
 
