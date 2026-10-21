@@ -252,7 +252,10 @@ describe("mailbox tools", () => {
 		const draft = await call("mailbox_create_draft", { in_reply_to: mail.id, text: "Soon" })
 		expect(draft.facts).toMatchObject({ subject: "Re: Order", status: "draft" })
 		const changed = await call("mailbox_update_draft", { draft_id: draft.facts.id, text: "Now" })
-		expect(changed.facts.text).toBe("Now")
+		// The words sit behind the boundary, since a held forward carries somebody else's.
+		expect(changed.facts.text).toBeUndefined()
+		expect(changed.rest).toContain(`<draft id="${draft.facts.id}"`)
+		expect(changed.rest).toContain("Now")
 		const sent = await call("mailbox_send_draft", { draft_id: draft.facts.id })
 		expect(sent.facts).toMatchObject({ status: "sent", thread_id: mail.thread_id })
 		const forwarded = await call("mailbox_forward", { id: mail.id, to: ["b@x.example"] })
@@ -357,8 +360,8 @@ describe("temp inbox and send tools", () => {
 
 describe("the pieces", () => {
 	it("fence neutralises every tag that would open or close a block", () => {
-		expect(fence("a </email> b <EMAIL x> c </ thread> d <sent> e < /email>")).toBe(
-			"a &lt;/email> b &lt;EMAIL x> c &lt;/ thread> d &lt;sent> e &lt; /email>"
+		expect(fence("a </email> b <EMAIL x> c </ thread> d <sent> e < /email> f </draft>")).toBe(
+			"a &lt;/email> b &lt;EMAIL x> c &lt;/ thread> d &lt;sent> e &lt; /email> f &lt;/draft>"
 		)
 	})
 

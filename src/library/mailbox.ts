@@ -390,6 +390,8 @@ export interface ForwardOptions {
 	html?: string
 	/** Carry the original's files that were kept. Default true. */
 	attachments?: boolean
+	/** A retried call with the same key sends once. */
+	idempotency_key?: string
 }
 
 /**
@@ -822,10 +824,11 @@ export class Mailbox {
 		after: number,
 		wait: number,
 		query: Record<string, string>,
-		signal: AbortSignal | undefined
+		signal: AbortSignal | undefined,
+		limit?: number
 	): Promise<WirePage> {
 		const response = await this.request("/messages", {
-			query: { ...query, after, wait },
+			query: { ...query, after, wait, limit },
 			signal: with_deadline(signal, wait * 1000 + GRACE_MS),
 		})
 		const page = (await response.json()) as WirePage
@@ -835,7 +838,8 @@ export class Mailbox {
 
 	/** Mail in the mailbox, oldest first, up to 100 after `after`. Partial: no `html`. */
 	async list(filter: MailboxFilter & { after?: number } = {}): Promise<Array<MailboxMail>> {
-		const page = await this.#page(filter.after ?? 0, 0, server_filter(filter), undefined)
+		// The server's own page is 50; this promises up to 100.
+		const page = await this.#page(filter.after ?? 0, 0, server_filter(filter), undefined, 100)
 		return page.data
 			.map((wire) => new MailboxMail(this, wire))
 			.filter((mail) => passes(mail, filter))
@@ -937,6 +941,7 @@ export class Mailbox {
 			text: options.text,
 			html: options.html,
 			attachments: options.attachments,
+			idempotency_key: options.idempotency_key,
 		})
 		return send_result(response)
 	}
