@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { basename, dirname, extname, join } from "node:path"
 import { spawn } from "node:child_process"
 import { env as process_env, stderr, stdout } from "node:process"
 import {
@@ -9,7 +9,14 @@ import {
 	MailboxError,
 	MailboxTimeoutError,
 	MAILBOX_URL,
+	type Draft,
+	type Folder,
+	type LabelColour,
+	type MailboxAttachment,
 	type MailboxMail,
+	type MailboxThread,
+	type Review,
+	type SendResult,
 	type Trust,
 } from "../library/mailbox.js"
 import { EXIT, parse_match } from "./inbox.js"
@@ -51,9 +58,23 @@ const VALUE_FLAGS = new Set([
 	"to",
 	"cc",
 	"bcc",
+	"mailbox",
+	"folder",
+	"label",
+	"q",
+	"limit",
+	"before",
+	"status",
+	"colour",
+	"color",
+	"in-reply-to",
+	"attach",
 ])
 
 const TRUSTS: ReadonlyArray<Trust> = ["owner", "thread", "stranger", "suspect"]
+const FOLDERS: ReadonlyArray<Folder | "all"> = ["inbox", "archive", "spam", "trash", "sent", "all"]
+const REVIEWS: ReadonlyArray<Review> = ["none", "new", "all"]
+const COLOURS: ReadonlyArray<LabelColour> = ["grey", "amber", "red", "green", "blue"]
 
 export interface MailboxArgs {
 	sub: string | undefined
@@ -241,7 +262,7 @@ function trust_flag(ctx: Context): Trust | undefined {
 }
 
 async function open(ctx: Context, address?: string): Promise<Mailbox> {
-	const picked = pick_mailbox(read_saved(ctx.path), ctx.env, address)
+	const picked = pick_mailbox(read_saved(ctx.path), ctx.env, flag(ctx, "mailbox") ?? address)
 	if ("error" in picked) throw new MailboxCommandError(picked.error, picked.code)
 	const box = await open_or_make
 		.open({ key: picked.key, base: picked.base, fetch: ctx.fetch })
@@ -430,8 +451,9 @@ async function reply(ctx: Context): Promise<number> {
 		cc: list_flag(ctx, "cc"),
 		bcc: list_flag(ctx, "bcc"),
 		subject: flag(ctx, "subject"),
+		attachments: attachments_flag(ctx),
 	})
-	ctx.out(ctx.json ? JSON.stringify(sent) : sent.id)
+	say_sent(ctx, sent)
 	return EXIT.ok
 }
 
@@ -450,27 +472,353 @@ async function send(ctx: Context): Promise<number> {
 		...body_of(ctx),
 		cc: list_flag(ctx, "cc"),
 		bcc: list_flag(ctx, "bcc"),
+		in_reply_to: flag(ctx, "in-reply-to"),
+		attachments: attachments_flag(ctx),
 	})
-	ctx.out(ctx.json ? JSON.stringify(sent) : sent.id)
+	say_sent(ctx, sent)
 	return EXIT.ok
 }
 
+/**
+ * What a send came to. A held one prints its draft's id on stdout, so a script that keeps
+ * the id still has the right one, and says on stderr that it waits for a person.
+ */
+function say_sent(ctx: Context, sent: SendResult): void {
+	if (ctx.json) return ctx.out(JSON.stringify(sent))
+	if (sent.status === "sent") return ctx.out(sent.id)
+	ctx.out(sent.draft_id)
+	ctx.err(
+		`${yellow("Held for review, not sent.")} ${sent.message} ${dim("A person on the team sends it from the dashboard; don't send it again.")}`
+	)
+}
+
+const TYPES: Record<string, string> = {
+	".pdf": "application/pdf",
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".webp": "image/webp",
+	".svg": "image/svg+xml",
+	".txt": "text/plain",
+	".md": "text/markdown",
+	".csv": "text/csv",
+	".html": "text/html",
+	".json": "application/json",
+	".ics": "text/calendar",
+	".zip": "application/zip",
+}
+
+/** `--attach a.pdf,b.png`: the files' bytes, named as they are on disk. */
+function attachments_flag(ctx: Context): Array<MailboxAttachment> | undefined {
+	const paths = list_flag(ctx, "attach")
+	if (!paths) return undefined
+	return paths.map((path) => {
+		let content: Uint8Array
+		try {
+			content = readFileSync(path)
+		} catch (error) {
+			throw new MailboxCommandError(
+				`Can't read ${path}: ${error instanceof Error ? error.message : String(error)}`,
+				"invalid_args"
+			)
+		}
+		const type = TYPES[extname(path).toLowerCase()]
+		return { filename: basename(path), content, ...(type ? { type } : {}) }
+	})
+}
+
+function thread_line(thread: MailboxThread): string {
+	const who =
+		thread.from_name || thread.from || (thread.to.length ? `to ${thread.to.join(", ")}` : "")
+	const parts = [
+		thread.unread ? cyan("●") : " ",
+		dim(thread.thread_id),
+		thread.trust ? TRUST_COLOUR[thread.trust](thread.trust) : dim("sent"),
+		who,
+		bold(thread.subject || "(no subject)"),
+		dim(`${thread.messages} ${thread.messages === 1 ? "message" : "messages"}`),
+	]
+	if (thread.folder !== "inbox") parts.splice(2, 0, yellow(thread.folder))
+	if (thread.labels.length) parts.push(thread.labels.map((label) => `#${label.name}`).join(" "))
+	return parts.join(dim(" · "))
+}
+
+function choice<T extends string>(
+	ctx: Context,
+	name: string,
+	options: ReadonlyArray<T>
+): T | undefined {
+	const value = flag(ctx, name)
+	if (value === undefined) return undefined
+	if (!options.includes(value as T))
+		throw new MailboxCommandError(`--${name} is one of ${options.join(", ")}`, "invalid_args")
+	return value as T
+}
+
 async function threads(ctx: Context): Promise<number> {
+	const { flags } = ctx.args
 	const box = await open(ctx, ctx.args.positional[0])
-	const rows = await box.threads()
+	const limit = flag(ctx, "limit")
+	const folder = choice(ctx, "folder", FOLDERS)
+	const rows = await box.threads({
+		folder,
+		label: flag(ctx, "label"),
+		unread: flags.unread ? true : flags.read ? false : undefined,
+		q: flag(ctx, "q"),
+		limit: limit === undefined ? undefined : Number(limit),
+		before: flag(ctx, "before"),
+	})
 	if (ctx.json) ctx.out(JSON.stringify(rows))
-	else if (!rows.length) ctx.err(dim(`No conversations in ${box.address} yet.`))
+	else if (!rows.length)
+		ctx.err(dim(`Nothing in ${box.address}'s ${folder ?? "inbox"} that matches.`))
+	else for (const thread of rows) ctx.out(thread_line(thread))
+	return EXIT.ok
+}
+
+function thread_arg(ctx: Context, usage: string): string {
+	const id = ctx.args.positional[0]
+	if (!id)
+		throw new MailboxCommandError(`Say which thread: \`postboi mailbox ${usage}\``, "invalid_args")
+	return id
+}
+
+function moved(ctx: Context, thread: MailboxThread): number {
+	ctx.out(ctx.json ? JSON.stringify(thread) : thread_line(thread))
+	return EXIT.ok
+}
+
+async function archive(ctx: Context): Promise<number> {
+	const id = thread_arg(ctx, "archive <thread>")
+	const box = await open(ctx, ctx.args.positional[1])
+	return moved(ctx, await box.archive(id))
+}
+
+async function trash(ctx: Context): Promise<number> {
+	const id = thread_arg(ctx, "trash <thread>")
+	const box = await open(ctx, ctx.args.positional[1])
+	return moved(ctx, await box.trash(id))
+}
+
+async function move(ctx: Context): Promise<number> {
+	const [id, folder, address] = ctx.args.positional
+	const settable = ["inbox", "archive", "spam", "trash"] as const
+	if (!id || !settable.includes(folder as (typeof settable)[number]))
+		throw new MailboxCommandError(
+			"Say which thread and where: `postboi mailbox move <thread> <inbox, archive, spam or trash>`",
+			"invalid_args"
+		)
+	const box = await open(ctx, address)
+	return moved(ctx, await box.update_thread(id, { folder: folder as (typeof settable)[number] }))
+}
+
+async function mark(ctx: Context): Promise<number> {
+	const id = thread_arg(ctx, "mark <thread> [--unread]")
+	const box = await open(ctx, ctx.args.positional[1])
+	return moved(ctx, await box.mark_read(id, !ctx.args.flags.unread))
+}
+
+async function label(ctx: Context): Promise<number> {
+	const [id, ...names] = ctx.args.positional
+	if (!id || !names.length)
+		throw new MailboxCommandError(
+			"Say which thread and which labels: `postboi mailbox label <thread> <name…> [--remove]`",
+			"invalid_args"
+		)
+	const box = await open(ctx)
+	const thread = await box.update_thread(
+		id,
+		ctx.args.flags.remove ? { remove_labels: names } : { add_labels: names }
+	)
+	return moved(ctx, thread)
+}
+
+async function labels(ctx: Context): Promise<number> {
+	const [action, name, address] = ctx.args.positional
+	if (action === "add" || action === "rm" || action === "delete") {
+		if (!name)
+			throw new MailboxCommandError(
+				`Say which label: \`postboi mailbox labels ${action} <name>\``,
+				"invalid_args"
+			)
+		const box = await open(ctx, address)
+		if (action === "add") {
+			const made = await box.create_label(
+				name,
+				choice(ctx, "colour", COLOURS) ?? choice(ctx, "color", COLOURS)
+			)
+			ctx.out(ctx.json ? JSON.stringify(made) : made.id)
+		} else {
+			await box.delete_label(name)
+			if (ctx.json) ctx.out(JSON.stringify({ deleted: name }))
+			else ctx.err(dim(`Deleted the label ${name}; it came off every thread.`))
+		}
+		return EXIT.ok
+	}
+	const box = await open(ctx, action)
+	const rows = await box.labels()
+	if (ctx.json) ctx.out(JSON.stringify(rows))
+	else if (!rows.length)
+		ctx.err(dim("No labels yet. `postboi mailbox label <thread> <name>` makes one as it labels."))
 	else
-		for (const thread of rows)
+		for (const row of rows)
 			ctx.out(
 				[
-					dim(thread.thread_id),
-					TRUST_COLOUR[thread.trust](thread.trust),
-					thread.from_name || thread.from,
-					bold(thread.subject),
-					dim(`${thread.messages} ${thread.messages === 1 ? "message" : "messages"}`),
+					bold(row.name),
+					dim(row.colour),
+					dim(`${row.threads} ${row.threads === 1 ? "thread" : "threads"}`),
+					dim(row.id),
 				].join(dim(" · "))
 			)
+	return EXIT.ok
+}
+
+function draft_line(draft: Draft): string {
+	return [
+		dim(draft.id),
+		draft.status === "sent" ? green("sent") : draft.held ? yellow("held") : cyan("draft"),
+		draft.to.join(", ") || dim("(nobody yet)"),
+		bold(draft.subject || "(no subject)"),
+		dim(`by ${draft.created_by}`),
+	].join(dim(" · "))
+}
+
+async function drafts(ctx: Context): Promise<number> {
+	const box = await open(ctx, ctx.args.positional[0])
+	const rows = await box.drafts({ status: choice(ctx, "status", ["draft", "sent", "all"]) })
+	if (ctx.json) ctx.out(JSON.stringify(rows))
+	else if (!rows.length) ctx.err(dim(`No drafts waiting in ${box.address}.`))
+	else for (const draft of rows) ctx.out(draft_line(draft))
+	return EXIT.ok
+}
+
+function draft_fields(ctx: Context) {
+	return {
+		to: list_flag(ctx, "to"),
+		cc: list_flag(ctx, "cc"),
+		bcc: list_flag(ctx, "bcc"),
+		subject: flag(ctx, "subject"),
+		text: flag(ctx, "text"),
+		html: flag(ctx, "html"),
+		attachments: attachments_flag(ctx),
+	}
+}
+
+/** `draft new|edit|send|rm`, and `draft <id>` to show one. */
+async function draft(ctx: Context): Promise<number> {
+	const [action, ...rest] = ctx.args.positional
+	if (action === "new") {
+		const box = await open(ctx, rest[0])
+		const made = await box.create_draft({
+			...draft_fields(ctx),
+			in_reply_to: flag(ctx, "in-reply-to"),
+		})
+		ctx.out(ctx.json ? JSON.stringify(made) : made.id)
+		if (!ctx.json) ctx.err(dim("Saved as a draft. Nothing was sent; the team has been told."))
+		return EXIT.ok
+	}
+	const [id, address] = rest
+	if (action === "edit" || action === "send" || action === "rm" || action === "delete") {
+		if (!id)
+			throw new MailboxCommandError(
+				`Say which draft: \`postboi mailbox draft ${action} <id>\``,
+				"invalid_args"
+			)
+		const box = await open(ctx, address)
+		if (action === "edit") {
+			const changed = await box.update_draft(id, draft_fields(ctx))
+			ctx.out(ctx.json ? JSON.stringify(changed) : draft_line(changed))
+		} else if (action === "send") {
+			const sent = await box.send_draft(id)
+			ctx.out(ctx.json ? JSON.stringify(sent) : sent.id)
+		} else {
+			await box.delete_draft(id)
+			if (ctx.json) ctx.out(JSON.stringify({ deleted: id }))
+			else ctx.err(dim(`Deleted ${id}`))
+		}
+		return EXIT.ok
+	}
+	if (!action)
+		throw new MailboxCommandError(
+			"Say what to do: `postboi mailbox draft new|edit|send|rm` or `draft <id>`",
+			"invalid_args"
+		)
+	const box = await open(ctx, rest[0])
+	const shown = await box.draft(action)
+	if (ctx.json) ctx.out(JSON.stringify(shown))
+	else {
+		ctx.out(draft_line(shown))
+		if (shown.cc.length) ctx.out(`${dim("Cc:")} ${shown.cc.join(", ")}`)
+		ctx.out("")
+		ctx.out(shown.text ?? shown.html ?? dim("(empty)"))
+	}
+	return EXIT.ok
+}
+
+async function forward(ctx: Context): Promise<number> {
+	const [id, address] = ctx.args.positional
+	const to = list_flag(ctx, "to")
+	if (!id || !to?.length)
+		throw new MailboxCommandError(
+			'Say which mail and who to: `postboi mailbox forward <id> --to a@b.com [--text "…"]`',
+			"invalid_args"
+		)
+	const box = await open(ctx, address)
+	const sent = await box.forward(id, {
+		to,
+		cc: list_flag(ctx, "cc"),
+		bcc: list_flag(ctx, "bcc"),
+		text: flag(ctx, "text"),
+		html: flag(ctx, "html"),
+		attachments: ctx.args.flags["no-attachments"] ? false : undefined,
+	})
+	say_sent(ctx, sent)
+	return EXIT.ok
+}
+
+/**
+ * `review [none|new|all]`. Reading it needs any key; changing it needs the team's, since an
+ * agent can't loosen its own leash. With POSTBOI_TOKEN the mailbox is opened as the team.
+ */
+async function review(ctx: Context): Promise<number> {
+	const [wanted, address] = ctx.args.positional
+	if (wanted !== undefined && !REVIEWS.includes(wanted as Review))
+		throw new MailboxCommandError(`Review is one of ${REVIEWS.join(", ")}`, "invalid_args")
+	const token = ctx.env.POSTBOI_TOKEN
+	let box: Mailbox
+	if (wanted && token) {
+		// The team's key opens a mailbox by its address, so learn that first when none was named.
+		const target = flag(ctx, "mailbox") ?? address ?? (await open(ctx)).address
+		box = await open_or_make.open({
+			token,
+			address: target,
+			base: ctx.env.POSTBOI_MAILBOX_URL || undefined,
+			fetch: ctx.fetch,
+		})
+	} else box = await open(ctx, address)
+	if (wanted) {
+		try {
+			await box.set_review(wanted as Review)
+		} catch (error) {
+			if (error instanceof MailboxError && error.code === "team_key_required")
+				throw new MailboxError({
+					message: `Only the team changes who reviews ${box.address}: set POSTBOI_TOKEN to your team's API key, or change it on the dashboard's Mailboxes page.`,
+					code: error.code,
+					status: error.status,
+				})
+			throw error
+		}
+	} else await box.info()
+	if (ctx.json) ctx.out(JSON.stringify({ address: box.address, review: box.review }))
+	else {
+		ctx.out(box.review)
+		const says: Record<Review, string> = {
+			none: "Everything it sends goes out.",
+			new: "Replies go out; a new conversation waits for a person as a draft.",
+			all: "Everything it sends waits for a person as a draft.",
+		}
+		ctx.err(dim(says[box.review]))
+	}
 	return EXIT.ok
 }
 
@@ -529,6 +877,16 @@ const COMMANDS: Record<string, (ctx: Context) => Promise<number>> = {
 	reply,
 	send,
 	threads,
+	archive,
+	trash,
+	move,
+	mark,
+	label,
+	labels,
+	drafts,
+	draft,
+	forward,
+	review,
 	key: rotate,
 	ls: list,
 	list,
@@ -577,7 +935,7 @@ export async function mailbox_command(
 		if (!run) {
 			report(
 				ctx,
-				`Unknown mailbox command: ${parsed.sub}. Try new, watch, wait, read, reply, send, threads, key, ls or rm.`,
+				`Unknown mailbox command: ${parsed.sub}. Try new, watch, wait, read, reply, send, forward, threads, archive, label, labels, drafts, draft, review, key, ls or rm.`,
 				"invalid_args"
 			)
 			return EXIT.error

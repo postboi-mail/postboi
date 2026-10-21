@@ -111,6 +111,7 @@ import { detect_domains, hostname_of, type DomainHint } from "./domain_hint.js"
 import { api_command, ApiCommandError, error_json } from "./api.js"
 import { inbox_command } from "./inbox.js"
 import { mailbox_command } from "./mailbox.js"
+import { mcp_command } from "./mcp.js"
 import { CONFIG_FILES, doctor, imports_config } from "./doctor.js"
 import { help_text } from "./help.js"
 import { dev_command } from "./dev.js"
@@ -2191,6 +2192,11 @@ async function main(): Promise<void> {
 	// Likewise a mailbox: without a token it is one of its own, waiting to be claimed.
 	if (command === "mailbox") {
 		process.exitCode = await mailbox_command(argv.slice(3))
+		return
+	}
+	// An MCP server for agents: stdout is the protocol from here on, so nothing else prints.
+	if (command === "mcp") {
+		process.exitCode = await mcp_command(argv.slice(3), { version: version() })
 		return
 	}
 	if (command && (await api_command(command, argv.slice(3)))) return

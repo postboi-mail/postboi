@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { mkdtempSync, statSync } from "node:fs"
+import { mkdtempSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
@@ -167,5 +167,118 @@ describe("postboi mailbox", () => {
 		remember(path, { address: "a@agentboi.email", key: "mb_a", base: "x" })
 		remember(path, { address: "b@agentboi.email", key: "mb_b", base: "x" })
 		expect(read_saved(path).map((e) => e.address)).toEqual(["b@agentboi.email", "a@agentboi.email"])
+	})
+
+	it("threads filters by folder, label, unread and search, and archive moves one", async () => {
+		const { run, out, server } = harness()
+		await run("new")
+		const address = out[0]
+		const mail = server.deliver(address, { subject: "Refund please" })
+		server.deliver(address, { subject: "Lunch?" })
+		expect(await run("threads", "--q", "refund", "--unread")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.query).toMatchObject({ q: "refund", unread: "true" })
+		expect(out.at(-1)).toContain("Refund please")
+		expect(await run("archive", mail.thread_id)).toBe(EXIT.ok)
+		expect(out.at(-1)).toContain("archive")
+		await run("threads", "--folder", "archive", "--json")
+		expect(JSON.parse(out.at(-1)!).map((t: { subject: string }) => t.subject)).toEqual([
+			"Refund please",
+		])
+		expect(await run("threads", "--folder", "nowhere")).toBe(EXIT.error)
+	})
+
+	it("label adds and removes by name, and labels lists them", async () => {
+		const { run, out, server } = harness()
+		await run("new")
+		const mail = server.deliver(out[0])
+		expect(await run("label", mail.thread_id, "billing", "urgent")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.body).toEqual({ add_labels: ["billing", "urgent"] })
+		expect(out.at(-1)).toContain("#billing #urgent")
+		await run("label", mail.thread_id, "urgent", "--remove")
+		expect(server.requests.at(-1)?.body).toEqual({ remove_labels: ["urgent"] })
+		await run("labels", "--json")
+		expect(JSON.parse(out.at(-1)!)).toMatchObject([
+			{ name: "billing", threads: 1 },
+			{ name: "urgent", threads: 0 },
+		])
+		expect(await run("labels", "add", "vip", "--colour", "amber")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.body).toEqual({ name: "vip", colour: "amber" })
+		expect(await run("labels", "add", "x", "--colour", "purple")).toBe(EXIT.error)
+	})
+
+	it("draft new, edit, send and rm", async () => {
+		const { run, out, err, server } = harness()
+		await run("new")
+		server.claim(out[0])
+		const mail = server.deliver(out[0], { subject: "Order" })
+		expect(await run("draft", "new", "--in-reply-to", mail.id, "--text", "Soon")).toBe(EXIT.ok)
+		const id = out.at(-1)!
+		expect(id).toMatch(/^drf_/)
+		expect(err.at(-1)).toContain("Nothing was sent")
+		await run("draft", "edit", id, "--text", "Today")
+		expect(server.requests.at(-1)).toMatchObject({ method: "PATCH", body: { text: "Today" } })
+		await run("drafts")
+		expect(out.at(-1)).toContain("Re: Order")
+		expect(await run("draft", "send", id)).toBe(EXIT.ok)
+		expect(out.at(-1)).toMatch(/^msg_/)
+		await run("draft", "new", "--to", "a@x.example")
+		const other = out.at(-1)!
+		expect(await run("draft", "rm", other)).toBe(EXIT.ok)
+		await run("drafts", "--json")
+		expect(JSON.parse(out.at(-1)!)).toEqual([])
+	})
+
+	it("send and reply say plainly when review held them, and print the draft's id", async () => {
+		const { run, out, err, server } = harness()
+		await run("new")
+		server.claim(out[0])
+		server.review(out[0], "all")
+		const mail = server.deliver(out[0])
+		expect(await run("reply", mail.id, "--text", "On it.")).toBe(EXIT.ok)
+		expect(out.at(-1)).toMatch(/^drf_/)
+		expect(err.at(-1)).toContain("Held for review, not sent.")
+		await run("send", "--to", "a@x.example", "--subject", "Hi", "--text", "Hi", "--json")
+		expect(JSON.parse(out.at(-1)!)).toMatchObject({ status: "draft", draft: { held: true } })
+	})
+
+	it("send --attach reads the files", async () => {
+		const { run, out, server } = harness()
+		await run("new")
+		server.claim(out[0])
+		const file = join(mkdtempSync(join(tmpdir(), "postboi-attach-")), "note.txt")
+		writeFileSync(file, "hello")
+		await run("send", "--to", "a@x.example", "--subject", "Hi", "--text", "Hi", "--attach", file)
+		expect(server.requests.at(-1)?.body?.attachments).toEqual([
+			{ filename: "note.txt", content: "aGVsbG8=", type: "text/plain" },
+		])
+		expect(
+			await run("send", "--to", "a@x.example", "--subject", "x", "--text", "x", "--attach", "/nope")
+		).toBe(EXIT.error)
+	})
+
+	it("forward needs --to, and carries the original's files unless told not to", async () => {
+		const { run, out, server } = harness()
+		await run("new")
+		server.claim(out[0])
+		const mail = server.deliver(out[0])
+		expect(await run("forward", mail.id)).toBe(EXIT.error)
+		expect(await run("forward", mail.id, "--to", "b@x.example", "--no-attachments")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.body).toMatchObject({ to: ["b@x.example"], attachments: false })
+	})
+
+	it("review reads with any key, and changes only with the team's", async () => {
+		const { run, out, err, server, env } = harness()
+		await run("new")
+		const address = out[0]
+		server.claim(address)
+		expect(await run("review")).toBe(EXIT.ok)
+		expect(out.at(-1)).toBe("none")
+		expect(await run("review", "all")).toBe(EXIT.error)
+		expect(err.at(-1)).toContain("POSTBOI_TOKEN")
+		Object.assign(env, { POSTBOI_TOKEN: TEAM_KEY })
+		expect(await run("review", "new")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.auth).toBe(TEAM_KEY)
+		expect(server.boxes.get(address)?.review).toBe("new")
+		expect(await run("review", "loose")).toBe(EXIT.error)
 	})
 })

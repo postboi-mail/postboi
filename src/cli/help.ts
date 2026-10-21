@@ -289,14 +289,58 @@ export const HELP: Array<HelpSection> = [
 			{
 				command: "mailbox reply",
 				summary: "Answer a mail in its thread",
-				details: ['<id> [address] --text "…" (or --html) --cc a,b --bcc c --subject "…"'],
+				details: [
+					'<id> [address] --text "…" (or --html) --cc a,b --bcc c --subject "…" --attach a.pdf,b.png',
+					"Under review it is saved as a draft for a person to send: the draft's id is printed, and stderr says so",
+				],
 			},
 			{
 				command: "mailbox send",
 				summary: "A new message from the mailbox",
-				details: ['[address] --to a@b.com,c@d.com --subject "…" --text "…"'],
+				details: [
+					'[address] --to a@b.com,c@d.com --subject "…" --text "…" --in-reply-to <id> --attach <files>',
+				],
 			},
-			{ command: "mailbox threads", summary: "Its conversations, newest activity first" },
+			{
+				command: "mailbox forward",
+				summary: "Send a mail on to somebody else, with a note above it",
+				details: ['<id> [address] --to a@b.com --text "…" --no-attachments'],
+			},
+			{
+				command: "mailbox threads",
+				summary: "Its conversations, newest activity first",
+				details: [
+					"[address] --folder <inbox, archive, spam, trash, sent or all> --label <name> --unread or --read --q <search> --limit <n>",
+					"archive <thread> · trash <thread> · move <thread> <folder> · mark <thread> [--unread]",
+				],
+			},
+			{
+				command: "mailbox label",
+				summary: "Label a thread; a name that isn't a label yet becomes one",
+				details: ["<thread> <name…> [--remove] [--mailbox <address>]"],
+			},
+			{
+				command: "mailbox labels",
+				summary: "Its labels, with how many threads carry each",
+				details: [
+					"[address] · add <name> [--colour <grey, amber, red, green or blue>] · rm <name>",
+				],
+			},
+			{
+				command: "mailbox drafts",
+				summary: "Drafts waiting for a person, newest first",
+				details: [
+					"[address] --status <draft, sent or all>",
+					'draft new --to --subject --text --in-reply-to <id> --attach · draft <id> · draft edit <id> --text "…" · draft send <id> · draft rm <id>',
+				],
+			},
+			{
+				command: "mailbox review",
+				summary: "Who has to look before it sends: none, new (new conversations) or all",
+				details: [
+					"[none, new or all] [address]: changing it needs your team's POSTBOI_TOKEN; with no value it prints the current one",
+				],
+			},
 			{
 				command: "mailbox ls",
 				summary: "Mailboxes on this machine",
@@ -306,6 +350,21 @@ export const HELP: Array<HelpSection> = [
 		footer: [
 			"The mailbox made or used last is the default; POSTBOI_MAILBOX_KEY overrides",
 			"it (the key alone finds its mailbox), POSTBOI_MAILBOX_URL moves the host.",
+			"--mailbox <address> names one on any command.",
+		],
+	},
+	{
+		title: "MCP",
+		note: "for agents: Claude Code, Cursor, Codex and any MCP client",
+		entries: [
+			{
+				command: "mcp",
+				summary: "Run an MCP server on stdio: mailboxes, temp inboxes and sending, as tools",
+				details: [
+					"POSTBOI_MAILBOX_KEY opens one mailbox; POSTBOI_TOKEN opens the team's and sends with email_send",
+					"claude mcp add postboi -- npx postboi mcp",
+				],
+			},
 		],
 	},
 	{
