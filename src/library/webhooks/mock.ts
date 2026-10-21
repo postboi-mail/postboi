@@ -8,7 +8,13 @@
  */
 import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
-import { MODULES, type ViewViewed, type WebhookEvent, type WebhookEventType } from "./index.js"
+import {
+	MODULES,
+	type MailboxDraftEvent,
+	type ViewViewed,
+	type WebhookEvent,
+	type WebhookEventType,
+} from "./index.js"
 import { POLL_MODULES, type PollResult } from "./poll.js"
 import { parse_user_agent } from "./ua.js"
 import { generate_svix_secret, generate_token } from "./crypto.js"
@@ -72,6 +78,13 @@ export function mock_event(
 		base.email = undefined
 		base.test = mock_run(type === "test_completed")
 	}
+	if (type === "draft_created" || type === "draft_sent") {
+		// A draft waiting for a person, then sent: nobody received anything until it went.
+		base.draft = mock_draft(type === "draft_sent")
+		base.email = undefined
+		base.subject = base.draft.draft.subject
+		base.message_id = base.draft.message_id
+	}
 	if (overrides.channel === "sms" || overrides.channel === "whatsapp") {
 		// A text-message event is about a number: never an address, and no subject line.
 		base.email = undefined
@@ -95,6 +108,34 @@ export function mock_view(): ViewViewed {
 		},
 		viewed_at: new Date().toISOString(),
 		user_agent: BROWSER,
+	}
+}
+
+/** A sample draft for the `mailbox.draft.*` mocks: held by review, then sent when `sent`. */
+export function mock_draft(sent: boolean): MailboxDraftEvent {
+	const now = new Date().toISOString()
+	return {
+		mailbox: { id: "mbx_mock", address: "orders-k3f9@agentboi.email" },
+		draft: {
+			id: "drf_mock",
+			status: sent ? "sent" : "draft",
+			to: ["ada@example.com"],
+			cc: [],
+			bcc: [],
+			subject: "Your order",
+			text: "It ships today.",
+			html: null,
+			in_reply_to: null,
+			thread_id: null,
+			attachments: [],
+			held: true,
+			created_by: "agent",
+			created: now,
+			updated: now,
+			sent_at: sent ? now : null,
+			message_id: sent ? "msg_mock" : null,
+		},
+		...(sent ? { message_id: "msg_mock" } : {}),
 	}
 }
 
