@@ -30,6 +30,18 @@ const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"])
  */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 
+/**
+ * The seconds a response's `Retry-After` asks for, in either of its forms (a number of
+ * seconds or an HTTP date), or undefined when it has none that reads.
+ */
+function retry_after_seconds(response: Response): number | undefined {
+	const value = response.headers?.get("retry-after")?.trim()
+	if (!value) return undefined
+	if (/^\d+$/.test(value)) return Number(value)
+	const at = Date.parse(value)
+	return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000))
+}
+
 /** Could a request with this method have sent or changed something? */
 function changes(method: string | undefined): boolean {
 	return !SAFE_METHODS.has((method ?? "POST").toUpperCase())
@@ -291,6 +303,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 					response.status >= 500 || error.partial
 						? undefined
 						: (error.reason ?? this.reason_for(response.status) ?? "request"),
+				retry_after: retry_after_seconds(response),
 			})
 		}
 		if (!response.ok) {
@@ -302,6 +315,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				raw: data,
 				outcome_unknown: may_have_sent && response.status >= 500,
 				reason: this.reason_for(response.status),
+				retry_after: retry_after_seconds(response),
 			})
 		}
 		return undefined
@@ -556,8 +570,8 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		// intermediary answering 429 with Retry-After: 86400 must not hang the caller (or a
 		// serverless handler) for a day. Past the cap, the provider is telling us to come
 		// back much later — that's a failed attempt, not a pause.
-		const retry_after = response ? Number(response.headers.get("retry-after")) : NaN
-		if (!Number.isNaN(retry_after) && retry_after > 0) return Math.min(retry_after, 60) * 1000
+		const retry_after = response && retry_after_seconds(response)
+		if (retry_after) return Math.min(retry_after, 60) * 1000
 		return this.#retry_delay * 2 ** (attempt - 1)
 	}
 

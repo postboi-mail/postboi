@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from "@effect/vitest"
 import { Cause, ConfigProvider, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import Mock from "./mock.js"
+import MockSms from "./sms/mock.js"
+import { MailboxTimeoutError } from "./mailbox.js"
 import {
 	FailoverError,
 	PostboiError as PostboiErrorClass,
@@ -163,17 +165,47 @@ describe("from_error", () => {
 					message: "down",
 					status: 503,
 					outcome_unknown: true,
+					retry_after: 9,
 				}),
 			])
 			const error = yield* Effect.flip(from_error(chain))
 			expect(error._tag).toBe("PostboiError")
 			if (error._tag !== "PostboiError") return
-			expect(error).toMatchObject({ provider: "puresms", status: 503, outcome_unknown: true })
+			expect(error).toMatchObject({
+				provider: "puresms",
+				status: 503,
+				outcome_unknown: true,
+				retry_after: 9,
+			})
 			expect(error.errors?.map((e) => [e.provider, e.reason])).toEqual([
 				["twilio", "auth"],
 				["puresms", undefined],
 			])
 			expect(error.errors?.[0]).toBeInstanceOf(PostboiError)
+		})
+	)
+
+	it.effect("carries Retry-After and a timed-out wait's cursor across", () =>
+		Effect.gen(function* () {
+			const limited = yield* Effect.flip(
+				from_error(
+					new PostboiErrorClass({
+						provider: "resend",
+						message: "slow down",
+						status: 429,
+						retry_after: 7,
+					})
+				)
+			)
+			expect(limited).toMatchObject({ status: 429, retry_after: 7, cursor: undefined })
+			const waited = yield* Effect.flip(from_error(new MailboxTimeoutError("No mail", 41)))
+			expect(waited).toMatchObject({
+				_tag: "PostboiError",
+				provider: "postboi",
+				code: "timeout",
+				status: 408,
+				cursor: 41,
+			})
 		})
 	)
 
@@ -417,6 +449,38 @@ describe("with_retry", () => {
 				outcome_unknown: true,
 			})
 			expect(retryable(limited)).toBe(true)
+		})
+	)
+
+	it.effect("waits out a 429's Retry-After instead of the backoff, up to a minute", () =>
+		Effect.gen(function* () {
+			const text = new MockSms({
+				default: { from: "ACME" },
+				fail: [{ status: 429, reason: "rate_limited", retry_after: 3 }, null],
+			})
+			const fiber = yield* Effect.forkChild(
+				with_retry(tried(() => text.send({ to: "+447700900123", message: "Hi" })))
+			)
+			yield* TestClock.adjust("2 seconds")
+			expect(text.sent).toHaveLength(0)
+			yield* TestClock.adjust("1 second")
+			yield* Fiber.join(fiber)
+			expect(text.sent).toHaveLength(1)
+
+			let attempts = 0
+			const for_an_hour = Effect.suspend(() => {
+				attempts += 1
+				return attempts === 1
+					? Effect.fail(
+							new PostboiError({ provider: "t", message: "", status: 429, retry_after: 3600 })
+						)
+					: Effect.succeed("sent")
+			})
+			const capped = yield* Effect.forkChild(with_retry(for_an_hour))
+			yield* TestClock.adjust("59 seconds")
+			expect(attempts).toBe(1)
+			yield* TestClock.adjust("1 second")
+			expect(yield* Fiber.join(capped)).toBe("sent")
 		})
 	)
 

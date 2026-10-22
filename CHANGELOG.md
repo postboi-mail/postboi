@@ -12,10 +12,12 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
-- `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with a tagged `PostboiError` (carrying `outcome_unknown`, `reason` and a failover chain's `errors`), `validate_sms`, a `Mailer` service with config and mock layers, a `SendRequest` schema and `with_retry`, which retries an unknown outcome only with `retry_unknown`. `effect` is an optional peer dependency; nothing else in the package imports it.
+- `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with a tagged `PostboiError` (carrying `outcome_unknown`, `reason`, `retry_after`, a failover chain's `errors` and a timed-out wait's `cursor`), `validate_sms`, a `Mailer` service with config and mock layers, a `SendRequest` schema and `with_retry`, which waits out a `Retry-After` and retries an unknown outcome only with `retry_unknown`. `effect` is an optional peer dependency; nothing else in the package imports it.
+- `PostboiError` has `retry_after`: the seconds a provider's `Retry-After` asked for, when it answered with one. A channel mock's scripted failure (`fail: { status: 429, retry_after: 30 }`) can say it too.
 
 ### Fixed
 
+- Retries honour a `Retry-After` given as an HTTP date, not only as a number of seconds.
 - `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) types on SvelteKit 3. The shipped declarations named `RemoteForm` and `RemoteFormInput` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`, so they failed to resolve and every field read as `any` (an error instead, without `skipLibCheck`). Both now come from `$app/server`, and `RemoteFormInput` is exported from `postboi/kit`, so the fields and result are typed as `Input` says.
 - `postboi init` reads `files.serviceWorker` off the `sveltekit()` call in `vite.config.*` on a SvelteKit 3 project, which has no `svelte.config`, so a custom worker source is found rather than a second worker written beside it.
 - `postboi init` suggests the domain a SvelteKit 3 project names in `paths.origin` on the `sveltekit()` call in `vite.config.*`, as it did from `svelte.config` on SvelteKit 2. Vite's own `server.origin` is not read as one.

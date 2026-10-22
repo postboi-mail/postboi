@@ -59,9 +59,10 @@ const ReasonSchema = Schema.Literals([
 /**
  * The normalised error every provider throws, as a tagged error. Same fields as the
  * class on the package root (`provider`, `channel`, `status`, `code`, `raw`,
- * `outcome_unknown`, `reason`), so a handler written against one reads the other; `_tag`
- * is what `Effect.catchTag` keys on. A failover chain's `FailoverError` is one of these
- * too, with every provider's error in `errors`, as on the root.
+ * `outcome_unknown`, `reason`, `retry_after`), so a handler written against one reads the
+ * other; `_tag` is what `Effect.catchTag` keys on. A failover chain's `FailoverError` is
+ * one of these too, with every provider's error in `errors`, and so is an inbox's or a
+ * mailbox's `wait()` running out, with its `cursor`, as on the root.
  */
 export class PostboiError extends Schema.TaggedError<PostboiError>()("PostboiError", {
 	message: Schema.String,
@@ -82,6 +83,13 @@ export class PostboiError extends Schema.TaggedError<PostboiError>()("PostboiErr
 	outcome_unknown: Schema.Boolean.pipe(Schema.withConstructorDefault(Effect.succeed(false))),
 	/** Why the provider refused, normalized. Unset on everything but a proven refusal. */
 	reason: Schema.optional(ReasonSchema),
+	/** Seconds the provider's `Retry-After` asked for, when it answered with one. */
+	retry_after: Schema.optional(Schema.Number),
+	/**
+	 * Where an inbox or a mailbox stood when its `wait()` ran out (`code: "timeout"`): pass
+	 * it as `after` to wait on from there.
+	 */
+	cursor: Schema.optional(Schema.Number),
 	/** A failover chain's errors, one per provider in the order they were tried. */
 	errors: Schema.optional(
 		Schema.Array(Schema.suspend((): Schema.Codec<PostboiError, unknown> => PostboiError))
@@ -142,6 +150,8 @@ function tagged(error: RootPostboiError): PostboiError {
 		raw: error.raw,
 		outcome_unknown: error.outcome_unknown,
 		reason: error.reason,
+		retry_after: error.retry_after,
+		cursor: "cursor" in error && typeof error.cursor === "number" ? error.cursor : undefined,
 		errors: error instanceof FailoverError ? error.errors.map(tagged) : undefined,
 	})
 }
@@ -458,11 +468,15 @@ export interface RetryOptions {
 	retry_unknown?: boolean
 }
 
+/** The longest a `Retry-After` is waited out, as the transport caps it. */
+const RETRY_AFTER_CAP_SECONDS = 60
+
 /**
  * Retry a send on the failures a provider might answer differently next time: a 429, a
  * 5xx that proves nothing was sent, and with `retry_unknown` an unknown outcome as well.
  * Exponential backoff from `base`, at most `times` more attempts, and any other failure
- * fails at once.
+ * fails at once. When the provider answered with a `Retry-After`, the next attempt waits
+ * that long instead (at most a minute, as the transport waits).
  *
  * This and the provider's own `retries` option overlap, so pick one. The provider retries
  * the HTTP request inside the send, before hooks see an error; this retries the whole
@@ -476,7 +490,15 @@ export function with_retry<A, E, R>(
 	return effect.pipe(
 		Effect.retry({
 			while: (error) => retryable(error, retry_unknown),
-			schedule: Schedule.max([Schedule.exponential(base), Schedule.recurs(times)]),
+			schedule: Schedule.max([Schedule.exponential(base), Schedule.recurs(times)]).pipe(
+				Schedule.modifyDelay(({ input, duration }) =>
+					Effect.succeed<Duration.Input>(
+						input instanceof PostboiError && input.retry_after !== undefined
+							? `${Math.min(input.retry_after, RETRY_AFTER_CAP_SECONDS)} seconds`
+							: duration
+					)
+				)
+			),
 		})
 	)
 }

@@ -1185,6 +1185,24 @@ describe("resilience (shared base)", () => {
 		expect(fetch).toHaveBeenCalledTimes(2)
 	})
 
+	it("says on the error how long a 429's Retry-After asked for, in either form", async () => {
+		fetch.mockResolvedValueOnce(
+			respond({ ok: false, status: 429, headers: { "retry-after": "12" } })
+		)
+		const seconds = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(seconds).toMatchObject({ status: 429, reason: "rate_limited", retry_after: 12 })
+
+		const at = new Date(Date.now() + 30_000).toUTCString()
+		fetch.mockResolvedValueOnce(respond({ ok: false, status: 429, headers: { "retry-after": at } }))
+		const date = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(date.retry_after).toBeGreaterThanOrEqual(29)
+		expect(date.retry_after).toBeLessThanOrEqual(30)
+
+		fetch.mockResolvedValueOnce(respond({ ok: false, status: 429 }))
+		const none = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(none.retry_after).toBeUndefined()
+	})
+
 	it("gives up after exhausting retries", async () => {
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 503, json: { message: "down", name: "x" } })
