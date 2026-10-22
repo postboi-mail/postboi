@@ -103,6 +103,44 @@ export type WebhookEventType =
 	 * Unidentified views are only counted (`views.stats()`). Postboi provider only.
 	 */
 	| "view_viewed"
+	/**
+	 * An agent mailbox has a draft waiting for a person (`mailbox.draft.created`): one it
+	 * wrote, or a send its review policy held. Then that draft was sent (`mailbox.draft.sent`),
+	 * with the Sent log's id in `message_id`. The mailbox and the draft are in `draft`;
+	 * `email` stays unset, since nobody has been sent anything yet. Postboi provider only.
+	 */
+	| "draft_created"
+	| "draft_sent"
+
+/**
+ * A mailbox's draft as Postboi sends it on `draft_created` and `draft_sent`: the wire's own
+ * words, dates as ISO strings.
+ */
+export interface MailboxDraftEvent {
+	mailbox: { id: string; address: string }
+	draft: {
+		id: string
+		status: "draft" | "sent"
+		to: Array<string>
+		cc: Array<string>
+		bcc: Array<string>
+		subject: string
+		text: string | null
+		html: string | null
+		in_reply_to: string | null
+		thread_id: string | null
+		attachments: Array<{ filename: string; type: string; size: number }>
+		/** Made by a send the review policy held, rather than written as a draft. */
+		held: boolean
+		created_by: "agent" | "team"
+		created: string
+		updated: string
+		sent_at: string | null
+		message_id: string | null
+	}
+	/** `draft_sent` only: the Sent log's row. */
+	message_id?: string
+}
 
 /** A published view's page opened by a reader Postboi could identify (`view_viewed`). */
 export interface ViewViewed {
@@ -205,6 +243,8 @@ export interface WebhookEvent {
 	test?: TestingRun
 	/** The view and its reader, as Postboi sent them. `view_viewed` events only. */
 	view?: ViewViewed
+	/** The mailbox and its draft. `draft_created` and `draft_sent` events only. */
+	draft?: MailboxDraftEvent
 	/**
 	 * The same for a repeat of this event and different for any other, to deduplicate on:
 	 * providers redeliver, and several (Plivo, Bandwidth, Twilio, Sinch without HMAC) sign nothing that

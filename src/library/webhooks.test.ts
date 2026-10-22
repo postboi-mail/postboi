@@ -378,6 +378,28 @@ describe("receive — postboi", () => {
 		expect(fake.view?.reader).toEqual({ kind: "param", id: "user_9" })
 	})
 
+	it("carries a mailbox's draft on mailbox.draft.created and .sent, with nobody as the recipient", async () => {
+		const created = await mock_request({ provider: "postboi", type: "draft_created" })
+		const [event] = await receive(created.request, { provider: "postboi", secret: created.secret })
+		expect(event.type).toBe("draft_created")
+		expect((event.raw as { type: string }).type).toBe("mailbox.draft.created")
+		expect(event.email).toBeUndefined()
+		expect(event.message_id).toBeUndefined()
+		expect(event.draft).toMatchObject({
+			mailbox: { address: "orders-k3f9@agentboi.email" },
+			draft: { id: "drf_mock", status: "draft", held: true },
+		})
+		expect(event.dedupe_key).toBe("postboi:drf_mock:draft_created")
+
+		const sent = await mock_request({ provider: "postboi", type: "draft_sent" })
+		const [done] = await receive(sent.request, { provider: "postboi", secret: sent.secret })
+		expect(done).toMatchObject({ type: "draft_sent", message_id: "msg_mock" })
+		expect((done.raw as { type: string }).type).toBe("mailbox.draft.sent")
+		expect(done.draft?.draft.status).toBe("sent")
+
+		expect(mock_event("draft_sent").draft?.message_id).toBe("msg_mock")
+	})
+
 	it("accepts a space/comma-separated secret list — any candidate verifies", async () => {
 		const { request, secret } = await mock_request({ provider: "postboi", type: "opened" })
 		// The real secret buried among decoys, both separators in play — rotation and

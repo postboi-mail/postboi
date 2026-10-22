@@ -1,4 +1,6 @@
+import { base64_encode } from "./encoding.js"
 import { ensure_env_loaded, read_env } from "./env.js"
+import { drop, keep, names_address, recall } from "./mailbox_store.js"
 import { PostboiError } from "./errors.js"
 import {
 	aborted,
@@ -41,6 +43,30 @@ export type Duration = number | string
  */
 export type Trust = "owner" | "thread" | "stranger" | "suspect"
 
+/**
+ * Who has to look at the mailbox's mail before it goes, set by the team:
+ * - `none`: everything goes (the default)
+ * - `new`: a reply to the person who wrote goes; a new conversation waits for a person
+ * - `all`: everything waits
+ *
+ * Only a send made with the mailbox's own key waits. The team's key is the team, so its
+ * sends go out.
+ */
+export type Review = "none" | "new" | "all"
+
+/** Where a thread is. `sent` is one the mailbox started that nobody has answered yet. */
+export type Folder = "inbox" | "archive" | "spam" | "trash" | "sent"
+
+export type LabelColour = "grey" | "amber" | "red" | "green" | "blue"
+
+/** A label on the mailbox's threads. Labels belong to one mailbox. */
+export interface Label {
+	/** `lbl_…`. Anywhere a label is asked for, its name works too. */
+	id: string
+	name: string
+	colour: LabelColour
+}
+
 /** Failure talking to the mailbox API. `code` is the server's (`not_found`, `unclaimed`, …). */
 export class MailboxError extends PostboiError {
 	constructor(args: { message: string; status?: number; code?: string; raw?: unknown }) {
@@ -74,7 +100,16 @@ interface WireMailbox {
 	created: string
 	count: number
 	cursor: number
-	urls: { messages: string; wait: string; threads: string; send: string }
+	review?: Review
+	drafts_waiting?: number
+	urls: {
+		messages: string
+		wait: string
+		threads: string
+		send: string
+		drafts?: string
+		labels?: string
+	}
 }
 
 interface WireMail {
@@ -113,11 +148,51 @@ interface WireSent {
 	id: string
 	from: string
 	to: Array<string>
+	cc?: Array<string>
 	subject: string
 	text: string | null
 	status: string
 	sent: string
 }
+
+interface WireThread {
+	thread_id: string
+	subject: string
+	from: string | null
+	from_name: string | null
+	to?: Array<string>
+	messages: number
+	last_at: string
+	trust: Trust | null
+	folder?: Folder
+	unread?: boolean
+	labels?: Array<Label>
+}
+
+interface WireDraft {
+	id: string
+	status: "draft" | "sent"
+	to: Array<string>
+	cc: Array<string>
+	bcc: Array<string>
+	subject: string
+	text: string | null
+	html: string | null
+	in_reply_to: string | null
+	thread_id: string | null
+	attachments: Array<{ filename: string; type: string; size: number }>
+	held: boolean
+	created_by: "agent" | "team"
+	created: string
+	updated: string
+	sent_at: string | null
+	message_id: string | null
+}
+
+/** What every send answers: 201 when it went, 202 when the review policy held it. */
+type WireSendResult =
+	| { status?: "sent"; id: string; thread_id?: string; idempotent_replay?: boolean }
+	| { status: "draft"; draft_id: string; draft: WireDraft; message?: string }
 
 // ---------------------------------------------------------------------------------------
 
@@ -203,6 +278,11 @@ export class MailboxMail {
 		return this.#mailbox.reply(this, options)
 	}
 
+	/** Send it on to somebody else, with a note above it. */
+	forward(options: ForwardOptions): Promise<SendResult> {
+		return this.#mailbox.forward(this, options)
+	}
+
 	/** The whole message as it arrived: the bytes of the `.eml`. */
 	async raw(): Promise<Uint8Array> {
 		const response = await this.#mailbox.request(`/messages/${encodeURIComponent(this.id)}/raw`)
@@ -272,6 +352,17 @@ export interface WatchOptions extends MailboxFilter {
 /** An address, or a list of them. */
 export type Recipients = string | Array<string>
 
+/**
+ * A file to send. `content` is the file's bytes; a string is taken as base64 already, the
+ * way most mail APIs take one. At most 20 files and 10 MB in all a message.
+ */
+export interface MailboxAttachment {
+	filename: string
+	content: string | Uint8Array | ArrayBuffer | Blob
+	/** Its media type, e.g. `application/pdf`. The server guesses from the name without it. */
+	type?: string
+}
+
 export interface ReplyOptions {
 	text?: string
 	html?: string
@@ -279,6 +370,7 @@ export interface ReplyOptions {
 	bcc?: Recipients
 	/** Replaces the "Re: …" the reply would otherwise have. */
 	subject?: string
+	attachments?: Array<MailboxAttachment>
 	/** A retried call with the same key sends once. */
 	idempotency_key?: string
 }
@@ -290,30 +382,143 @@ export interface SendOptions extends Omit<ReplyOptions, "subject"> {
 	in_reply_to?: string
 }
 
-export interface SendResult {
-	/** `msg_…`: the Sent log's row. */
-	id: string
-	thread_id?: string
-	/** True when an idempotency key matched an earlier send, which this is. */
-	idempotent_replay?: boolean
+export interface ForwardOptions {
+	to: Recipients
+	cc?: Recipients
+	bcc?: Recipients
+	/** A note above the forwarded message. */
+	text?: string
+	html?: string
+	/** Carry the original's files that were kept. Default true. */
+	attachments?: boolean
+	/** A retried call with the same key sends once. */
+	idempotency_key?: string
 }
 
+/**
+ * A message the mailbox hasn't sent: written for a person to send, or made by a send the
+ * review policy held.
+ */
+export interface Draft {
+	/** `drf_…` */
+	id: string
+	status: "draft" | "sent"
+	to: Array<string>
+	cc: Array<string>
+	bcc: Array<string>
+	/** May be "" while it is a draft. */
+	subject: string
+	text: string | null
+	html: string | null
+	/** The received message it answers, when it answers one. */
+	in_reply_to: string | null
+	thread_id: string | null
+	attachments: Array<{ filename: string; type: string; size: number }>
+	/** True when a send the review policy held made it, false when it was written as a draft. */
+	held: boolean
+	created_by: "agent" | "team"
+	created: Date
+	updated: Date
+	sent_at: Date | null
+	/** The Sent log's row (`msg_…`), once it is sent. */
+	message_id: string | null
+}
+
+export interface DraftOptions {
+	to?: Recipients
+	cc?: Recipients
+	bcc?: Recipients
+	subject?: string
+	text?: string
+	html?: string
+	/**
+	 * A message this mailbox received: the draft threads like a reply, and `to` and
+	 * `subject` default from it.
+	 */
+	in_reply_to?: MailboxMail | string
+	/** On an update, this replaces the draft's files. */
+	attachments?: Array<MailboxAttachment>
+}
+
+/**
+ * What a send, a reply or a forward comes back as. `sent` went out; `draft` was held by
+ * the mailbox's {@link Review} policy and saved as a draft, which a person on the team
+ * sends. Don't send a held message again: it is already waiting.
+ */
+export type SendResult =
+	| {
+			status: "sent"
+			/** `msg_…`: the Sent log's row. */
+			id: string
+			/** The conversation it is in. A new conversation's id is its own message id. */
+			thread_id: string
+			/** True when an idempotency key matched an earlier send, which this is. */
+			idempotent_replay?: boolean
+	  }
+	| {
+			status: "draft"
+			draft_id: string
+			draft: Draft
+			/** The server's sentence about why it waits. */
+			message: string
+	  }
+
 /** One of the mailbox's own sends, as a thread shows it. */
-export interface SentMail extends Omit<WireSent, "sent"> {
+export interface SentMail extends Omit<WireSent, "sent" | "cc"> {
+	cc: Array<string>
 	sent: Date
 }
 
 export interface MailboxThread {
 	thread_id: string
 	subject: string
-	from: string
+	/** The newest received message's sender. Null in a thread nobody has answered. */
+	from: string | null
 	from_name: string | null
+	/** Who the mailbox wrote to in it. Empty when it never wrote. */
+	to: Array<string>
 	/** Received and sent together. */
 	messages: number
 	last_at: Date
-	/** The newest received message's trust. */
-	trust: Trust
+	/** The newest received message's trust. Null when nothing was received. */
+	trust: Trust | null
+	folder: Folder
+	/** True when mail has arrived since it was last marked read. */
+	unread: boolean
+	labels: Array<Label>
 }
+
+export interface ThreadsOptions {
+	/** Default `inbox`. `all` is every folder. */
+	folder?: Folder | "all"
+	/** A label's id or name. */
+	label?: string
+	/** Only unread threads (true) or only read ones (false). */
+	unread?: boolean
+	/** Search the subject, sender, recipients and text: a case-insensitive substring. */
+	q?: string
+	/** 1 to 100, default 50. */
+	limit?: number
+	/** Page back: threads whose last activity is before this (a `last_at`). */
+	before?: Date | string
+}
+
+/** A change to a thread. At least one field. Labels are named by id or by name. */
+export interface ThreadUpdate {
+	/** `sent` isn't settable: it is where a thread nobody answered waits. */
+	folder?: Exclude<Folder, "sent">
+	/** False marks it unread. */
+	read?: boolean
+	/** Replaces the set; [] clears. A name that isn't a label yet is made one. */
+	labels?: Array<string>
+	/** A name that isn't a label yet is made one. */
+	add_labels?: Array<string>
+	/** Names it doesn't know are ignored. */
+	remove_labels?: Array<string>
+}
+
+/** A thread, or anything that names one (a mail, a thread summary). */
+export type ThreadRef = string | { thread_id: string }
 
 export interface MailboxOptions {
 	/** The mailbox's own key (`mb_…`). Default `POSTBOI_MAILBOX_KEY`. */
@@ -332,6 +537,12 @@ export interface MailboxOptions {
 	/** Default `POSTBOI_MAILBOX_URL`, then https://agentboi.email. */
 	base?: string
 	fetch?: typeof fetch
+	/**
+	 * Remember a mailbox made without the team's key on this machine (in the file the CLI
+	 * keeps), so the next `mailbox()` from the same directory opens it rather than making
+	 * another. Default true; it does nothing where there is no filesystem.
+	 */
+	remember?: boolean
 }
 
 function base_url(base: string | undefined): string {
@@ -341,6 +552,96 @@ function base_url(base: string | undefined): string {
 function list_of(value: Recipients | undefined): Array<string> | undefined {
 	if (value === undefined) return undefined
 	return Array.isArray(value) ? value : [value]
+}
+
+function thread_id_of(thread: ThreadRef): string {
+	return typeof thread === "string" ? thread : thread.thread_id
+}
+
+/** Files for the wire: bytes become base64, a string is taken as base64 already. */
+async function encode_attachments(
+	files: Array<MailboxAttachment> | undefined
+): Promise<Array<{ filename: string; content: string; type?: string }> | undefined> {
+	if (files === undefined) return undefined
+	return Promise.all(
+		files.map(async (file) => {
+			const { filename, content } = file
+			let type = file.type
+			let encoded: string
+			if (typeof content === "string") encoded = content
+			else if (content instanceof Uint8Array) encoded = base64_encode(content)
+			else if (content instanceof ArrayBuffer) encoded = base64_encode(new Uint8Array(content))
+			else {
+				encoded = base64_encode(new Uint8Array(await content.arrayBuffer()))
+				type ??= content.type || undefined
+			}
+			return { filename, content: encoded, ...(type ? { type } : {}) }
+		})
+	)
+}
+
+function draft_of(wire: WireDraft): Draft {
+	return {
+		id: wire.id,
+		status: wire.status,
+		to: wire.to ?? [],
+		cc: wire.cc ?? [],
+		bcc: wire.bcc ?? [],
+		subject: wire.subject ?? "",
+		text: wire.text ?? null,
+		html: wire.html ?? null,
+		in_reply_to: wire.in_reply_to ?? null,
+		thread_id: wire.thread_id ?? null,
+		attachments: wire.attachments ?? [],
+		held: wire.held ?? false,
+		created_by: wire.created_by,
+		created: new Date(wire.created),
+		updated: new Date(wire.updated ?? wire.created),
+		sent_at: wire.sent_at ? new Date(wire.sent_at) : null,
+		message_id: wire.message_id ?? null,
+	}
+}
+
+function thread_of(wire: WireThread): MailboxThread {
+	return {
+		thread_id: wire.thread_id,
+		subject: wire.subject,
+		from: wire.from ?? null,
+		from_name: wire.from_name ?? null,
+		to: wire.to ?? [],
+		messages: wire.messages,
+		last_at: new Date(wire.last_at),
+		trust: wire.trust ?? null,
+		folder: wire.folder ?? "inbox",
+		unread: wire.unread ?? false,
+		labels: wire.labels ?? [],
+	}
+}
+
+/**
+ * A send's answer, whichever way it went. A server from before review answers 201 with
+ * only an id, which is a send that went.
+ */
+async function send_result(response: Response): Promise<SendResult> {
+	const body = (await response.json()) as WireSendResult
+	if (body.status === "draft" || response.status === 202) {
+		const held = body as Extract<WireSendResult, { status: "draft" }>
+		return {
+			status: "draft",
+			draft_id: held.draft_id,
+			draft: draft_of(held.draft),
+			message:
+				held.message ??
+				"This mailbox's sends wait for a person on the team. It is saved as a draft.",
+		}
+	}
+	const sent = body as Exclude<WireSendResult, { status: "draft" }>
+	return {
+		status: "sent",
+		id: sent.id,
+		thread_id: sent.thread_id ?? sent.id,
+		...(sent.idempotent_replay ? { idempotent_replay: true } : {}),
+	}
 }
 
 /** Does a mail pass the parts of a filter the server can't apply (RegExps)? */
@@ -409,6 +710,10 @@ export class Mailbox {
 	count: number
 	/** The highest `seq` filed when last asked: pass it as `after` to insist on new mail. */
 	cursor: number
+	/** Who has to look before it sends. See {@link Review}. Changed with {@link Mailbox.set_review}. */
+	review: Review
+	/** Drafts waiting to be sent, when last asked. */
+	drafts_waiting: number
 	readonly base: string
 	#credential: string
 	readonly #fetch: typeof fetch
@@ -425,6 +730,8 @@ export class Mailbox {
 		this.created = new Date(wire.created)
 		this.count = wire.count ?? 0
 		this.cursor = wire.cursor ?? 0
+		this.review = wire.review ?? "none"
+		this.drafts_waiting = wire.drafts_waiting ?? 0
 		this.base = base
 		this.#credential = wire.key ?? credential
 		this.#fetch = fetcher
@@ -435,6 +742,8 @@ export class Mailbox {
 		this.claimed = wire.claimed
 		this.count = wire.count ?? this.count
 		this.cursor = Math.max(this.cursor, wire.cursor ?? 0)
+		this.review = wire.review ?? this.review
+		this.drafts_waiting = wire.drafts_waiting ?? this.drafts_waiting
 	}
 
 	/** The address with a plus-tag: `tag("order-1041")` → `orders-k3f9+order-1041@agentboi.email`. */
@@ -461,9 +770,9 @@ export class Mailbox {
 		return response
 	}
 
-	async #post(path: string, body: unknown): Promise<Response> {
+	async #post(path: string, body: unknown, method = "POST"): Promise<Response> {
 		return this.request(path, {
-			method: "POST",
+			method,
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body),
 		})
@@ -522,10 +831,11 @@ export class Mailbox {
 		after: number,
 		wait: number,
 		query: Record<string, string>,
-		signal: AbortSignal | undefined
+		signal: AbortSignal | undefined,
+		limit?: number
 	): Promise<WirePage> {
 		const response = await this.request("/messages", {
-			query: { ...query, after, wait },
+			query: { ...query, after, wait, limit },
 			signal: with_deadline(signal, wait * 1000 + GRACE_MS),
 		})
 		const page = (await response.json()) as WirePage
@@ -535,7 +845,8 @@ export class Mailbox {
 
 	/** Mail in the mailbox, oldest first, up to 100 after `after`. Partial: no `html`. */
 	async list(filter: MailboxFilter & { after?: number } = {}): Promise<Array<MailboxMail>> {
-		const page = await this.#page(filter.after ?? 0, 0, server_filter(filter), undefined)
+		// The server's own page is 50; this promises up to 100.
+		const page = await this.#page(filter.after ?? 0, 0, server_filter(filter), undefined, 100)
 		return page.data
 			.map((wire) => new MailboxMail(this, wire))
 			.filter((mail) => passes(mail, filter))
@@ -590,7 +901,8 @@ export class Mailbox {
 	/**
 	 * Answer a mail in its thread. Who it goes to, its subject and the headers that keep it
 	 * in the conversation come from the mail being answered. Throws a MailboxError with
-	 * code `unclaimed` while nobody has claimed the mailbox.
+	 * code `unclaimed` while nobody has claimed the mailbox. Resolves to a `draft` when the
+	 * review policy holds it (see {@link SendResult}).
 	 */
 	async reply(mail: MailboxMail | string, options: ReplyOptions): Promise<SendResult> {
 		const id = typeof mail === "string" ? mail : mail.id
@@ -600,12 +912,13 @@ export class Mailbox {
 			cc: list_of(options.cc),
 			bcc: list_of(options.bcc),
 			subject: options.subject,
+			attachments: await encode_attachments(options.attachments),
 			idempotency_key: options.idempotency_key,
 		})
-		return (await response.json()) as SendResult
+		return send_result(response)
 	}
 
-	/** A new message from the mailbox's own address. */
+	/** A new message from the mailbox's own address. Under review it may come back a `draft`. */
 	async send(options: SendOptions): Promise<SendResult> {
 		const response = await this.#post("/send", {
 			to: list_of(options.to),
@@ -615,47 +928,206 @@ export class Mailbox {
 			text: options.text,
 			html: options.html,
 			in_reply_to: options.in_reply_to,
+			attachments: await encode_attachments(options.attachments),
 			idempotency_key: options.idempotency_key,
 		})
-		return (await response.json()) as SendResult
+		return send_result(response)
 	}
 
-	/** The conversations it is in, newest activity first. Page back with `before`. */
-	async threads(
-		options: { limit?: number; before?: Date | string } = {}
-	): Promise<Array<MailboxThread>> {
+	/**
+	 * Send a received mail on to somebody else as `Fwd: <subject>`, with `text` or `html` as
+	 * a note above it and the original's files attached unless `attachments` is false. A
+	 * forward is a new conversation, so a mailbox under `new` review holds it.
+	 */
+	async forward(mail: MailboxMail | string, options: ForwardOptions): Promise<SendResult> {
+		const id = typeof mail === "string" ? mail : mail.id
+		const response = await this.#post(`/messages/${encodeURIComponent(id)}/forward`, {
+			to: list_of(options.to),
+			cc: list_of(options.cc),
+			bcc: list_of(options.bcc),
+			text: options.text,
+			html: options.html,
+			attachments: options.attachments,
+			idempotency_key: options.idempotency_key,
+		})
+		return send_result(response)
+	}
+
+	/**
+	 * The conversations it is in, newest activity first: the inbox unless `folder` says
+	 * otherwise. Page back with `before` set to the last one's `last_at`.
+	 */
+	async threads(options: ThreadsOptions = {}): Promise<Array<MailboxThread>> {
 		const before = options.before instanceof Date ? options.before.toISOString() : options.before
-		const response = await this.request("/threads", { query: { limit: options.limit, before } })
-		const body = (await response.json()) as {
-			data: Array<Omit<MailboxThread, "last_at"> & { last_at: string }>
-		}
-		return body.data.map((thread) => ({ ...thread, last_at: new Date(thread.last_at) }))
+		const response = await this.request("/threads", {
+			query: {
+				folder: options.folder,
+				label: options.label,
+				unread: options.unread === undefined ? undefined : String(options.unread),
+				q: options.q,
+				limit: options.limit,
+				before,
+			},
+		})
+		const body = (await response.json()) as { data: Array<WireThread> }
+		return body.data.map(thread_of)
 	}
 
 	/** One conversation, oldest first: what it received and what it sent. */
-	async thread(thread_id: string): Promise<{
+	async thread(thread: ThreadRef): Promise<{
 		thread_id: string
 		subject: string
+		folder: Folder
+		unread: boolean
+		labels: Array<Label>
 		messages: Array<{ direction: "received"; mail: MailboxMail } | SentMail>
 	}> {
-		const response = await this.request(`/threads/${encodeURIComponent(thread_id)}`)
+		const response = await this.request(`/threads/${encodeURIComponent(thread_id_of(thread))}`)
 		const body = (await response.json()) as {
 			thread_id: string
 			subject: string
+			folder?: Folder
+			unread?: boolean
+			labels?: Array<Label>
 			messages: Array<(WireMail & { direction: "received" }) | WireSent>
 		}
 		return {
 			thread_id: body.thread_id,
 			subject: body.subject,
+			folder: body.folder ?? "inbox",
+			unread: body.unread ?? false,
+			labels: body.labels ?? [],
 			messages: body.messages.map((entry) =>
 				entry.direction === "received"
 					? { direction: "received" as const, mail: new MailboxMail(this, entry) }
-					: { ...entry, sent: new Date(entry.sent) }
+					: { ...entry, cc: entry.cc ?? [], sent: new Date(entry.sent) }
 			),
 		}
 	}
 
-	/** Refresh `count`, `cursor` and `claimed` from the server. */
+	/** Move a thread, mark it read or unread, or change its labels. */
+	async update_thread(thread: ThreadRef, update: ThreadUpdate): Promise<MailboxThread> {
+		const response = await this.#post(
+			`/threads/${encodeURIComponent(thread_id_of(thread))}`,
+			update,
+			"PATCH"
+		)
+		return thread_of((await response.json()) as WireThread)
+	}
+
+	/** Move a thread to the archive. New mail in it brings it back to the inbox. */
+	archive(thread: ThreadRef): Promise<MailboxThread> {
+		return this.update_thread(thread, { folder: "archive" })
+	}
+
+	/** Move a thread to the trash. New mail in it leaves it there. */
+	trash(thread: ThreadRef): Promise<MailboxThread> {
+		return this.update_thread(thread, { folder: "trash" })
+	}
+
+	/** Mark a thread read, or unread with `false`. */
+	mark_read(thread: ThreadRef, read = true): Promise<MailboxThread> {
+		return this.update_thread(thread, { read })
+	}
+
+	/** The mailbox's labels by name, each with how many threads carry it. */
+	async labels(): Promise<Array<Label & { threads: number }>> {
+		const response = await this.request("/labels")
+		return ((await response.json()) as { data: Array<Label & { threads: number }> }).data
+	}
+
+	/** A new label: 1 to 40 characters, unique in the mailbox ignoring case, 50 at most. */
+	async create_label(name: string, colour?: LabelColour): Promise<Label> {
+		const response = await this.#post("/labels", { name, colour })
+		return (await response.json()) as Label
+	}
+
+	/** Rename a label or change its colour. */
+	async update_label(
+		label: string,
+		changes: { name?: string; colour?: LabelColour }
+	): Promise<Label> {
+		const response = await this.#post(`/labels/${encodeURIComponent(label)}`, changes, "PATCH")
+		return (await response.json()) as Label
+	}
+
+	/** Delete a label. It comes off every thread. */
+	async delete_label(label: string): Promise<void> {
+		await this.request(`/labels/${encodeURIComponent(label)}`, { method: "DELETE" })
+	}
+
+	/** Drafts, newest first: waiting ones unless `status` says otherwise. Up to 100. */
+	async drafts(options: { status?: "draft" | "sent" | "all" } = {}): Promise<Array<Draft>> {
+		const response = await this.request("/drafts", { query: { status: options.status } })
+		return ((await response.json()) as { data: Array<WireDraft> }).data.map(draft_of)
+	}
+
+	async draft(id: string): Promise<Draft> {
+		const response = await this.request(`/drafts/${encodeURIComponent(id)}`)
+		return draft_of((await response.json()) as WireDraft)
+	}
+
+	/**
+	 * Write a draft for a person to send. Nothing is required; with `in_reply_to` it threads
+	 * like a reply. The team hears about it (the `drafts` notification and the
+	 * `mailbox.draft.created` webhook).
+	 */
+	async create_draft(options: DraftOptions = {}): Promise<Draft> {
+		const in_reply_to =
+			typeof options.in_reply_to === "object" ? options.in_reply_to.id : options.in_reply_to
+		const response = await this.#post("/drafts", {
+			...(await draft_body(options)),
+			in_reply_to,
+		})
+		return draft_of((await response.json()) as WireDraft)
+	}
+
+	/** Change a draft while it is one. `attachments` replaces its files. */
+	async update_draft(id: string, options: Omit<DraftOptions, "in_reply_to">): Promise<Draft> {
+		const response = await this.#post(
+			`/drafts/${encodeURIComponent(id)}`,
+			await draft_body(options),
+			"PATCH"
+		)
+		return draft_of((await response.json()) as WireDraft)
+	}
+
+	async delete_draft(id: string): Promise<void> {
+		await this.request(`/drafts/${encodeURIComponent(id)}`, { method: "DELETE" })
+	}
+
+	/**
+	 * Send a draft through every rule a send goes through. With the mailbox's own key, a
+	 * draft the review policy would hold is refused with `review_required`: only the team
+	 * sends it.
+	 */
+	async send_draft(
+		id: string
+	): Promise<{ status: "sent"; id: string; draft_id: string; thread_id: string }> {
+		const response = await this.request(`/drafts/${encodeURIComponent(id)}/send`, {
+			method: "POST",
+		})
+		const body = (await response.json()) as {
+			id: string
+			draft_id?: string
+			thread_id?: string
+		}
+		return {
+			status: "sent",
+			id: body.id,
+			draft_id: body.draft_id ?? id,
+			thread_id: body.thread_id ?? body.id,
+		}
+	}
+
+	/** Change who has to look before it sends. Needs the team's API key. */
+	async set_review(review: Review): Promise<this> {
+		const response = await this.#post("", { review }, "PATCH")
+		this.#update((await response.json()) as WireMailbox)
+		return this
+	}
+
+	/** Refresh `count`, `cursor`, `claimed`, `review` and `drafts_waiting` from the server. */
 	async info(): Promise<this> {
 		const response = await this.request("")
 		this.#update((await response.json()) as WireMailbox)
@@ -699,8 +1171,22 @@ export class Mailbox {
 			key: this.key,
 			claimed: this.claimed,
 			claim_url: this.claim_url,
+			review: this.review,
+			drafts_waiting: this.drafts_waiting,
 			base: this.base,
 		}
+	}
+}
+
+async function draft_body(options: Omit<DraftOptions, "in_reply_to">) {
+	return {
+		to: list_of(options.to),
+		cc: list_of(options.cc),
+		bcc: list_of(options.bcc),
+		subject: options.subject,
+		text: options.text,
+		html: options.html,
+		attachments: await encode_attachments(options.attachments),
 	}
 }
 
@@ -737,7 +1223,10 @@ async function open(options: MailboxOptions): Promise<Mailbox> {
 	await ensure_env_loaded()
 	const base = base_url(options.base)
 	const fetcher = options.fetch ?? globalThis.fetch
-	const key = options.key ?? read_env("POSTBOI_MAILBOX_KEY")
+	// A token passed with an address is a request to open it as the team, which a mailbox
+	// key in the environment mustn't quietly overrule (changing `review` needs the team).
+	const key =
+		options.key ?? (options.token && options.address ? undefined : read_env("POSTBOI_MAILBOX_KEY"))
 	if (key) {
 		// The key alone names its mailbox.
 		const response = await fetcher(`${base}/v1/mailboxes`, {
@@ -760,25 +1249,109 @@ async function open(options: MailboxOptions): Promise<Mailbox> {
 	})
 }
 
-async function resolve(options: MailboxOptions = {}): Promise<Mailbox> {
+/** A string is the address, or the name to ask for: `mailbox("support")`. */
+type MailboxCall = MailboxOptions | string
+
+function options_of(call: MailboxCall | undefined): MailboxOptions {
+	return typeof call === "string" ? { address: call } : (call ?? {})
+}
+
+/**
+ * The team's mailbox a call means, with the team's key: the one `address` names (the
+ * whole address, its id, or the name it was made with), or the team's only one. Undefined
+ * when there is none, so the caller can make it; a refusal when the team has several and
+ * nothing says which.
+ */
+async function find(call: MailboxCall = {}): Promise<Mailbox | undefined> {
+	const options = options_of(call)
+	await ensure_env_loaded()
+	const all = (await list(options)).filter(
+		(box) => !options.domain || box.domain === options.domain
+	)
+	const ref = options.address
+	if (ref) {
+		const hits = all.filter((box) => box.id === ref || names_address(box.address, ref))
+		// `support` on a team's own domain is `support@` exactly, and a `support-desk@` beside
+		// it only looks like agentboi's `support-k3f9`: the exact name wins.
+		const local = ref.trim().toLowerCase()
+		const exact = hits.filter((box) => box.address.toLowerCase().split("@")[0] === local)
+		const meant = exact.length ? exact : hits
+		if (meant.length <= 1) return meant[0]
+		throw ambiguous(meant)
+	}
+	// A domain or a name says which mailbox is wanted, so the team's only one on another
+	// domain, or under another name, isn't it.
+	const named = options.name
+		? all.filter((box) => box.name?.toLowerCase() === options.name!.trim().toLowerCase())
+		: all
+	if (named.length <= 1) return named[0]
+	throw ambiguous(named)
+}
+
+function ambiguous(boxes: Array<Mailbox>): MailboxError {
+	return new MailboxError({
+		message: `Your team has ${boxes.length} mailboxes that could be meant, so say which: ${boxes
+			.map((box) => `mailbox("${box.address}")`)
+			.join(", ")}`,
+		code: "ambiguous_mailbox",
+		raw: { mailboxes: boxes.map((box) => box.address) },
+	})
+}
+
+/**
+ * The one door `mailbox()` goes through. A mailbox key opens its own. The team's key
+ * (`POSTBOI_TOKEN`, which `postboi init` already wrote) opens the team's mailbox, making
+ * it the first time. With neither, the mailbox this directory made last time, or a new
+ * one that is then remembered. So nothing has to be copied into an env file for the same
+ * address to come back on the next run.
+ */
+async function resolve(call: MailboxCall = {}): Promise<Mailbox> {
+	const options = options_of(call)
 	await ensure_env_loaded()
 	if (options.key || read_env("POSTBOI_MAILBOX_KEY")) return open(options)
-	if (
-		options.address &&
-		(options.token || read_env("POSTBOI_TOKEN")) &&
-		options.address.includes("@")
-	)
-		return open(options)
-	return make(options)
+	const token = options.token ?? read_env("POSTBOI_TOKEN")
+	if (token) {
+		const found = await find({ ...options, token })
+		if (found) return found
+		// A whole address is one that exists or doesn't: the server says which, rather than
+		// a new mailbox at some other address quietly standing in for it.
+		if (options.address?.includes("@")) return open({ ...options, token })
+		return make({ ...options, token })
+	}
+	const base = base_url(options.base)
+	const remembering = options.remember !== false
+	if (remembering) {
+		const saved = await recall(base, options.address)
+		if (saved) {
+			try {
+				return await open({ key: saved.key, base, fetch: options.fetch })
+			} catch (error) {
+				// Rotated or deleted somewhere else: forget it and make another.
+				if (!(error instanceof MailboxError && error.status === 401)) throw error
+				await drop(saved.address)
+			}
+		}
+	}
+	const box = await make(options)
+	if (remembering && box.key)
+		await keep({
+			address: box.address,
+			key: box.key,
+			base: box.base,
+			...(box.claim_url ? { claim_url: box.claim_url } : {}),
+		})
+	return box
 }
 
 /**
  * An email address your agent keeps.
  *
- * With `POSTBOI_MAILBOX_KEY` (or `key`) it opens that mailbox. Without one it makes a new
- * one: your team's, if `POSTBOI_TOKEN` is set, or else one of its own that receives
- * straight away and sends once a person opens `claim_url`. A new mailbox's `key` is said
- * once; keep it.
+ * Nothing to set up. With the team's `POSTBOI_TOKEN` (which `postboi init` writes) it opens
+ * the team's mailbox, or the one `address` names (`mailbox("support")`), and makes it the
+ * first time. Without one it makes a mailbox of its own that receives straight away and
+ * sends once a person opens `claim_url`, and remembers it on this machine so the next run
+ * opens the same address. `POSTBOI_MAILBOX_KEY` (or `key`) is for an agent that should
+ * reach one mailbox and nothing else of the team's: it opens that mailbox alone.
  *
  * ```ts
  * const box = await mailbox()
@@ -789,14 +1362,24 @@ async function resolve(options: MailboxOptions = {}): Promise<Mailbox> {
  * ```
  */
 export const mailbox: {
-	(options?: MailboxOptions): Promise<Mailbox>
+	(options?: MailboxOptions | string): Promise<Mailbox>
 	/** Always make a new mailbox. */
-	create(options?: MailboxOptions): Promise<Mailbox>
+	create(options?: MailboxOptions | string): Promise<Mailbox>
 	/** Open an existing one: by its key, or by its address with the team's API key. */
 	open(options?: MailboxOptions): Promise<Mailbox>
+	/**
+	 * The team's mailbox `address` names, or the team's only one, with the team's API key.
+	 * Undefined when there isn't one; never makes one.
+	 */
+	find(options?: MailboxOptions | string): Promise<Mailbox | undefined>
 	/** Every mailbox the team has, with the team's API key. */
 	list(options?: Pick<MailboxOptions, "token" | "base" | "fetch">): Promise<Array<Mailbox>>
-} = Object.assign(resolve, { create: make, open, list })
+} = Object.assign(resolve, {
+	create: (call?: MailboxCall) => make(options_of(call)),
+	open,
+	find,
+	list,
+})
 
 async function list(
 	options: Pick<MailboxOptions, "token" | "base" | "fetch"> = {}

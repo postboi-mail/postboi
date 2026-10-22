@@ -14,6 +14,7 @@ and none of them needs a person to sign in first.
 | Send email from the app it's building   | `bunx postboi init --agent`, `mail()`  | No, a claimable sandbox is made for it |
 | Sign up for something and read the code | [Tempboi](/temp-inbox)                 | No                |
 | Have an address of its own that stays   | [Agent mailboxes](/mailbox)            | No to make one; a person claims it before it sends |
+| Reach all of this as MCP tools          | [`postboi mcp`](/mailbox#over-mcp)     | No: a mailbox key, or the project's token for sending |
 | Test a sign-up flow end to end          | `temp()` from `postboi/inbox`          | No                |
 | See what the app sent while developing  | The [dev inbox](/dev-inbox)            | No                |
 | Read replies to mail the app sent       | [Receiving](/provider#replies), `/v1/inbound` | Yes, the project's token |
@@ -84,6 +85,26 @@ for await (const mail of box.watch()) {
 
 With no account, `curl -X POST agentboi.email` makes one that receives at once and sends
 once a person claims it. Put its claim link in your summary for them.
+
+A team can ask for a person to look before the mailbox sends (`review: "new"` or `"all"`):
+then a send comes back as a draft waiting for them, and the agent should say so rather than
+send it again. The mailbox also files threads in folders and labels, and can write a draft on
+purpose when the agent would rather a person checked it.
+
+## Over MCP
+
+`postboi mcp` is an MCP server on stdio with the mailbox, Tempboi and sending as tools, for
+Claude Code, Cursor, Codex or any other client:
+
+```bash
+claude mcp add postboi -- npx postboi mcp
+```
+
+It reads the project's `.env`, so the key `postboi init` wrote is all it needs.
+
+Every tool result that carries somebody else's words wraps them in an `<email>` block naming
+their `trust`, so a stranger's text never reads as the user's. The tools and the config for
+each client are on [the mailbox page](/mailbox#over-mcp).
 
 ## Test the flow it built
 

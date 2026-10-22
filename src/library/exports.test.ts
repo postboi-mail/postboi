@@ -65,6 +65,7 @@ describe("package exports", () => {
 			"register.ts", // generated-types placeholder, reached via the root export
 			"inbox.ts", // dev inbox discovery, reached via mail.ts (and patched by postboi/vite)
 			"long_poll.ts", // waiting on a long poll, shared by postboi/inbox and postboi/mailbox
+			"mailbox_store.ts", // the machine's memory of mailboxes, shared by postboi/mailbox, the CLI and postboi mcp
 			"inbox_server.ts", // dev inbox HTTP surface, mounted by postboi/vite and the CLI
 			"inbox_ui.ts", // the dev inbox document, served by inbox_server.ts
 			"inbox_sounds.ts", // the dev inbox's audio, served by inbox_server.ts

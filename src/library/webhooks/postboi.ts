@@ -3,6 +3,7 @@ import type {
 	WebhookEventType,
 	BounceDetail,
 	AdapterModule,
+	MailboxDraftEvent,
 	ViewViewed,
 } from "./index.js"
 import type { Channel } from "../errors.js"
@@ -66,6 +67,8 @@ const TYPES: Record<string, WebhookEventType> = {
 	"testing.received": "test_received",
 	"testing.completed": "test_completed",
 	"view.viewed": "view_viewed",
+	"mailbox.draft.created": "draft_created",
+	"mailbox.draft.sent": "draft_sent",
 }
 
 /**
@@ -139,6 +142,28 @@ const adapter: WebhookAdapter = {
 			]
 		}
 
+		// A mailbox's draft, not a send (yet): the mailbox and the draft are the point.
+		if (type === "draft_created" || type === "draft_sent") {
+			const draft = payload.data as unknown as MailboxDraftEvent
+			const message_id = type === "draft_sent" ? draft?.message_id : undefined
+			return [
+				{
+					type,
+					provider: "postboi",
+					message_id,
+					timestamp: to_date(
+						(type === "draft_sent" ? draft?.draft?.sent_at : draft?.draft?.created) ??
+							payload.created_at
+					),
+					subject: draft?.draft?.subject,
+					draft,
+					// One draft is created once and sent once, so its id and the type say which.
+					dedupe_key: draft?.draft?.id ? `postboi:${draft.draft.id}:${type}` : undefined,
+					raw: payload,
+				},
+			]
+		}
+
 		const data = payload.data ?? {}
 		const channel = channel_of(payload.type)
 		return [
@@ -180,13 +205,16 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 	// Two wire types now share most normalized types, so the reverse lookup is scoped
 	// by channel; without one, email is what a sample is about.
 	const test = type === "test_received" || type === "test_completed"
+	const drafted = type === "draft_created" || type === "draft_sent"
 	const prefix = test
 		? "testing"
 		: type === "view_viewed"
 			? "view"
-			: channel === "sms" || channel === "whatsapp"
-				? channel
-				: "email"
+			: drafted
+				? "mailbox"
+				: channel === "sms" || channel === "whatsapp"
+					? channel
+					: "email"
 	const postboi_type =
 		Object.entries(TYPES).find(([wire, t]) => t === type && wire.startsWith(`${prefix}.`))?.[0] ??
 		`${prefix}.delivered`
@@ -226,7 +254,9 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 			? (await import("./mock.js")).mock_run(type === "test_completed")
 			: prefix === "view"
 				? (await import("./mock.js")).mock_view()
-				: data,
+				: drafted
+					? (await import("./mock.js")).mock_draft(type === "draft_sent")
+					: data,
 	})
 	const id = "whmsg_mock"
 	const timestamp = String(Math.floor(Date.now() / 1000))

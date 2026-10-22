@@ -5,6 +5,13 @@
  */
 
 type Trust = "owner" | "thread" | "stranger" | "suspect"
+type Folder = "inbox" | "archive" | "spam" | "trash" | "sent"
+type Review = "none" | "new" | "all"
+
+const COLOURS = ["grey", "amber", "red", "green", "blue"]
+const FOLDERS: ReadonlyArray<string> = ["inbox", "archive", "spam", "trash"]
+const MAX_ATTACHMENTS = 20
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 interface FakeMail {
 	id: string
@@ -33,11 +40,47 @@ interface FakeMail {
 
 interface FakeSent {
 	id: string
-	thread_id: string | null
+	thread_id: string
 	to: Array<string>
+	cc: Array<string>
 	subject: string
 	text: string | null
 	sent: string
+	attachments: Array<{ filename: string; type: string; size: number }>
+}
+
+interface FakeThreadState {
+	folder: Folder
+	unread: boolean
+	labels: Set<string>
+}
+
+interface FakeLabel {
+	id: string
+	name: string
+	colour: string
+}
+
+interface FakeDraft {
+	id: string
+	status: "draft" | "sent"
+	to: Array<string>
+	cc: Array<string>
+	bcc: Array<string>
+	subject: string
+	text: string | null
+	html: string | null
+	in_reply_to: string | null
+	thread_id: string | null
+	attachments: Array<{ filename: string; type: string; size: number }>
+	held: boolean
+	created_by: "agent" | "team"
+	created: string
+	updated: string
+	sent_at: string | null
+	message_id: string | null
+	/** Whether the review policy would hold it, worked out when it was written. */
+	needs_review: boolean
 }
 
 interface FakeMailbox {
@@ -52,6 +95,12 @@ interface FakeMailbox {
 	seq: number
 	deleted: boolean
 	listeners: Set<() => void>
+	review: Review
+	threads: Map<string, FakeThreadState>
+	labels: Array<FakeLabel>
+	drafts: Array<FakeDraft>
+	/** Answers by idempotency key, so a replay answers what the first call did. */
+	replays: Map<string, string>
 }
 
 export interface FakeMailboxRequest {
@@ -97,13 +146,195 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			created: box.created,
 			count: box.mail.length,
 			cursor: box.seq,
+			review: box.review,
+			drafts_waiting: box.drafts.filter((draft) => draft.status === "draft").length,
 			urls: {
 				messages: `${path}/messages`,
 				wait: `${path}/wait`,
 				threads: `${path}/threads`,
 				send: `${path}/send`,
+				drafts: `${path}/drafts`,
+				labels: `${path}/labels`,
 			},
 		}
+	}
+
+	function state(box: FakeMailbox, thread_id: string): FakeThreadState {
+		let found = box.threads.get(thread_id)
+		if (!found) {
+			found = { folder: "inbox", unread: false, labels: new Set() }
+			box.threads.set(thread_id, found)
+		}
+		return found
+	}
+
+	function label_wire(label: FakeLabel) {
+		return { id: label.id, name: label.name, colour: label.colour }
+	}
+
+	function find_label(box: FakeMailbox, ref: string): FakeLabel | undefined {
+		const lower = ref.trim().toLowerCase()
+		return box.labels.find((label) => label.id === ref || label.name.toLowerCase() === lower)
+	}
+
+	function make_label(box: FakeMailbox, name: string, colour = "grey"): FakeLabel | Response {
+		const trimmed = name.trim()
+		if (!trimmed || trimmed.length > 40)
+			return refuse(400, "invalid_request", "A label's name is 1 to 40 characters.")
+		if (!COLOURS.includes(colour)) return refuse(400, "invalid_request", "Unknown colour.")
+		if (find_label(box, trimmed)) return refuse(409, "label_exists", "That label exists.")
+		if (box.labels.length >= 50) return refuse(400, "too_many_labels", "50 labels a mailbox.")
+		counter += 1
+		const label = { id: `lbl_${counter}`, name: trimmed, colour }
+		box.labels.push(label)
+		return label
+	}
+
+	/** Every thread the mailbox is in: the ones mail started and the ones it started itself. */
+	function thread_ids(box: FakeMailbox): Array<string> {
+		return [
+			...new Set([...box.mail.map((mail) => mail.thread_id), ...box.sent.map((s) => s.thread_id)]),
+		]
+	}
+
+	function thread_wire(box: FakeMailbox, thread_id: string) {
+		const mail = box.mail.filter((candidate) => candidate.thread_id === thread_id)
+		const sent = box.sent.filter((candidate) => candidate.thread_id === thread_id)
+		const newest = mail.at(-1)
+		const times = [...mail.map((m) => m.received), ...sent.map((s) => s.sent)].sort()
+		const own = state(box, thread_id)
+		return {
+			thread_id,
+			subject: mail[0]?.subject ?? sent[0]?.subject ?? "",
+			from: newest?.from ?? null,
+			from_name: newest?.from_name ?? null,
+			to: sent[0]?.to ?? [],
+			messages: mail.length + sent.length,
+			last_at: times.at(-1) ?? new Date().toISOString(),
+			trust: newest?.trust ?? null,
+			folder: own.folder,
+			unread: own.unread,
+			labels: box.labels.filter((label) => own.labels.has(label.id)).map(label_wire),
+		}
+	}
+
+	function draft_wire(draft: FakeDraft) {
+		const { needs_review: _needs, ...rest } = draft
+		return rest
+	}
+
+	type Files = Array<{ filename: string; type: string; size: number }>
+
+	/** The contract's attachment rules: a shape, at most 20, at most 10 MB decoded. */
+	function files(body: Record<string, unknown> | undefined): Files | Response {
+		const list = body?.attachments
+		if (list === undefined) return []
+		if (!Array.isArray(list)) return refuse(400, "invalid_request", "attachments is a list.")
+		if (list.length > MAX_ATTACHMENTS)
+			return refuse(400, "invalid_request", "At most 20 attachments.")
+		let total = 0
+		const out: Files = []
+		for (const file of list as Array<Record<string, unknown>>) {
+			if (typeof file?.filename !== "string" || typeof file.content !== "string")
+				return refuse(400, "invalid_request", "An attachment needs a filename and content.")
+			let size: number
+			try {
+				size = atob(file.content).length
+			} catch {
+				return refuse(400, "invalid_request", "An attachment's content is base64.")
+			}
+			total += size
+			out.push({
+				filename: file.filename,
+				type: typeof file.type === "string" ? file.type : "application/octet-stream",
+				size,
+			})
+		}
+		if (total > MAX_ATTACHMENT_BYTES)
+			return refuse(413, "attachments_too_large", "At most 10 MB of attachments.")
+		return out
+	}
+
+	function list(value: unknown): Array<string> {
+		return Array.isArray(value) ? (value as Array<string>) : []
+	}
+
+	/**
+	 * Would review hold this? `new` lets a reply through only when it goes to the person who
+	 * wrote and adds nobody; the team's key is never held.
+	 */
+	function holds(
+		box: FakeMailbox,
+		auth: string | null,
+		send: { answering?: FakeMail; to: Array<string>; cc: Array<string>; bcc: Array<string> }
+	): boolean {
+		if (!auth?.startsWith("mb_") || box.review === "none") return false
+		if (box.review === "all") return true
+		const writer = send.answering ? (send.answering.reply_to ?? send.answering.from) : undefined
+		const reply =
+			!!writer &&
+			send.to.length === 1 &&
+			send.to[0].toLowerCase() === writer.toLowerCase() &&
+			!send.cc.length &&
+			!send.bcc.length
+		return !reply
+	}
+
+	function record_send(
+		box: FakeMailbox,
+		fields: {
+			thread_id: string | null
+			to: Array<string>
+			cc: Array<string>
+			subject: string
+			text: string | null
+			attachments: Files
+		}
+	): FakeSent {
+		counter += 1
+		const id = `msg_${counter}`
+		const sent: FakeSent = {
+			...fields,
+			id,
+			thread_id: fields.thread_id ?? id,
+			sent: new Date().toISOString(),
+		}
+		box.sent.push(sent)
+		// A thread the mailbox started waits in `sent` until somebody answers it.
+		if (!box.threads.has(sent.thread_id))
+			box.threads.set(sent.thread_id, { folder: "sent", unread: false, labels: new Set() })
+		return sent
+	}
+
+	function new_draft(
+		box: FakeMailbox,
+		fields: Partial<FakeDraft> & { needs_review: boolean },
+		auth: string | null
+	): FakeDraft {
+		counter += 1
+		const now = new Date().toISOString()
+		const draft: FakeDraft = {
+			id: `drf_${counter}`,
+			status: "draft",
+			to: [],
+			cc: [],
+			bcc: [],
+			subject: "",
+			text: null,
+			html: null,
+			in_reply_to: null,
+			thread_id: null,
+			attachments: [],
+			held: false,
+			created_by: auth?.startsWith("mb_") ? "agent" : "team",
+			created: now,
+			updated: now,
+			sent_at: null,
+			message_id: null,
+			...fields,
+		}
+		box.drafts.push(draft)
+		return draft
 	}
 
 	function summary(mail: FakeMail) {
@@ -155,8 +386,12 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 		return box
 	}
 
-	/** Mail arriving, as Postboi would have filed and read it. */
-	function deliver(address: string, partial: Partial<FakeMail> = {}): FakeMail {
+	/** Mail arriving, as Postboi would have filed and read it. `junk` starts its thread in spam. */
+	function deliver(
+		address: string,
+		partial: Partial<FakeMail> = {},
+		options: { junk?: boolean } = {}
+	): FakeMail {
 		const [local, domain] = address.split("@")
 		const [stem, ...tag] = local.split("+")
 		const box = boxes.get(`${stem}@${domain}`)
@@ -190,6 +425,19 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			...partial,
 		}
 		box.mail.push(mail)
+		// New mail marks its thread unread and brings it back from the archive or `sent`;
+		// spam and trash stay where a person put them.
+		const known = box.threads.get(mail.thread_id)
+		if (!known)
+			box.threads.set(mail.thread_id, {
+				folder: options.junk ? "spam" : "inbox",
+				unread: true,
+				labels: new Set(),
+			})
+		else {
+			known.unread = true
+			if (known.folder === "archive" || known.folder === "sent") known.folder = "inbox"
+		}
 		for (const listener of [...box.listeners]) listener()
 		return mail
 	}
@@ -225,6 +473,11 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 				seq: 0,
 				deleted: false,
 				listeners: new Set(),
+				review: "none",
+				threads: new Map(),
+				labels: [],
+				drafts: [],
+				replays: new Map(),
 			}
 			boxes.set(box.address, box)
 			return json(201, wire(box, box.key))
@@ -249,7 +502,14 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 		if (rest.length === 0) {
 			if (method === "GET") return json(200, wire(box))
 			if (method === "PATCH") {
-				box.name = (body?.name as string | null) ?? null
+				if (body && "review" in body) {
+					if (auth?.startsWith("mb_"))
+						return refuse(403, "team_key_required", "Only the team changes who reviews.")
+					if (!["none", "new", "all"].includes(body.review as string))
+						return refuse(400, "invalid_request", "review is none, new or all.")
+					box.review = body.review as Review
+				}
+				if (body && "name" in body) box.name = (body.name as string | null) ?? null
 				return json(200, wire(box))
 			}
 			if (method === "DELETE") {
@@ -298,13 +558,17 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			const mail = box.mail.find((candidate) => candidate.id === rest[1])
 			return mail ? json(200, mail) : refuse(404, "not_found", "No such message.")
 		}
-		if ((rest[0] === "messages" && rest[2] === "reply") || rest[0] === "send") {
+		const sending =
+			(rest[0] === "messages" && (rest[2] === "reply" || rest[2] === "forward")) ||
+			rest[0] === "send"
+		if (sending && method === "POST") {
 			if (!box.team)
 				return refuse(
 					403,
 					"unclaimed",
 					`This mailbox receives until a person claims it at ${base}/claim/${box.id}.`
 				)
+			const forward = rest[2] === "forward"
 			const answering =
 				rest[0] === "messages"
 					? box.mail.find((mail) => mail.id === rest[1])
@@ -313,53 +577,307 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 						: undefined
 			if ((rest[0] === "messages" || body?.in_reply_to) && !answering)
 				return refuse(404, "not_found", "No such message in this mailbox.")
-			counter += 1
-			const sent: FakeSent = {
-				id: `msg_${counter}`,
-				thread_id: answering?.thread_id ?? null,
-				to: answering
-					? [answering.reply_to ?? answering.from]
-					: ((body?.to as Array<string>) ?? []),
-				subject:
-					(body?.subject as string | undefined) ?? (answering ? `Re: ${answering.subject}` : ""),
-				text: (body?.text as string | undefined) ?? null,
-				sent: new Date().toISOString(),
+			if (forward && !list(body?.to).length)
+				return refuse(400, "invalid_request", "to is required.")
+			const key = typeof body?.idempotency_key === "string" ? body.idempotency_key : undefined
+			const replayed = key ? box.replays.get(key) : undefined
+			if (replayed) {
+				const earlier = box.sent.find((sent) => sent.id === replayed)!
+				return json(200, {
+					status: "sent",
+					id: earlier.id,
+					thread_id: earlier.thread_id,
+					idempotent_replay: true,
+				})
 			}
-			box.sent.push(sent)
-			return json(201, { id: sent.id, ...(sent.thread_id ? { thread_id: sent.thread_id } : {}) })
+			// A forward's `attachments` is a switch for the original's files, not files of its own.
+			const attached = forward ? [] : files(body)
+			if (attached instanceof Response) return attached
+			if (forward && body?.attachments !== undefined && typeof body.attachments !== "boolean")
+				return refuse(400, "invalid_request", "A forward's attachments is true or false.")
+			const carried = forward && body?.attachments !== false ? (answering?.attachments ?? []) : []
+			const to =
+				answering && !forward
+					? body?.to
+						? list(body.to)
+						: [answering.reply_to ?? answering.from]
+					: list(body?.to)
+			const cc = list(body?.cc)
+			const bcc = list(body?.bcc)
+			const subject =
+				(body?.subject as string | undefined) ??
+				(answering ? `${forward ? "Fwd" : "Re"}: ${answering.subject}` : "")
+			const thread_id = answering && !forward ? answering.thread_id : null
+			const text = (body?.text as string | undefined) ?? null
+			if (holds(box, auth, { answering: forward ? undefined : answering, to, cc, bcc })) {
+				const draft = new_draft(
+					box,
+					{
+						to,
+						cc,
+						bcc,
+						subject,
+						text,
+						html: (body?.html as string | undefined) ?? null,
+						in_reply_to: forward ? null : (answering?.id ?? null),
+						thread_id,
+						attachments: [
+							...attached,
+							...carried.map(({ filename, type, size }) => ({ filename, type, size })),
+						],
+						held: true,
+						needs_review: true,
+					},
+					auth
+				)
+				return json(202, {
+					status: "draft",
+					draft_id: draft.id,
+					draft: draft_wire(draft),
+					message: "This mailbox's sends wait for a person on the team. It is saved as a draft.",
+				})
+			}
+			const sent = record_send(box, {
+				thread_id,
+				to,
+				cc,
+				subject,
+				text,
+				attachments: [
+					...attached,
+					...carried.map(({ filename, type, size }) => ({ filename, type, size })),
+				],
+			})
+			if (key) box.replays.set(key, sent.id)
+			return json(201, { status: "sent", id: sent.id, thread_id: sent.thread_id })
 		}
 		if (rest[0] === "threads" && rest.length === 1) {
-			const ids = [...new Set(box.mail.map((mail) => mail.thread_id))]
+			const folder = query.folder ?? "inbox"
+			const label = query.label ? find_label(box, query.label) : undefined
+			if (query.label && !label) return json(200, { data: [], before: null })
+			const q = query.q?.toLowerCase()
+			const limit = Math.min(100, Math.max(1, Number(query.limit ?? 50)))
+			const rows = thread_ids(box)
+				.map((thread_id) => thread_wire(box, thread_id))
+				.filter((thread) => folder === "all" || thread.folder === folder)
+				.filter((thread) => !label || thread.labels.some((l) => l.id === label.id))
+				.filter((thread) => query.unread === undefined || String(thread.unread) === query.unread)
+				.filter((thread) => !query.before || thread.last_at < query.before)
+				.filter((thread) => {
+					if (!q) return true
+					const mail = box.mail.filter((m) => m.thread_id === thread.thread_id)
+					const sent = box.sent.filter((m) => m.thread_id === thread.thread_id)
+					return [
+						thread.subject,
+						...mail.flatMap((m) => [m.from, m.from_name ?? "", m.text ?? ""]),
+						...sent.flatMap((m) => [...m.to, m.text ?? ""]),
+					].some((value) => value.toLowerCase().includes(q))
+				})
+				.sort((a, b) => (a.last_at < b.last_at ? 1 : -1))
+			const page = rows.slice(0, limit)
 			return json(200, {
-				data: ids.map((thread_id) => {
-					const mail = box.mail.filter((candidate) => candidate.thread_id === thread_id)
-					const newest = mail.at(-1)!
-					return {
-						thread_id,
-						subject: mail[0].subject,
-						from: newest.from,
-						from_name: newest.from_name,
-						messages: mail.length + box.sent.filter((sent) => sent.thread_id === thread_id).length,
-						last_at: newest.received,
-						trust: newest.trust,
-					}
-				}),
-				before: null,
+				data: page,
+				before: rows.length > limit ? (page.at(-1)?.last_at ?? null) : null,
 			})
 		}
 		if (rest[0] === "threads" && rest.length === 2) {
+			if (!thread_ids(box).includes(rest[1])) return refuse(404, "not_found", "No such thread.")
+			const own = state(box, rest[1])
+			if (method === "PATCH") {
+				const change = body ?? {}
+				if (!["folder", "read", "labels", "add_labels", "remove_labels"].some((f) => f in change))
+					return refuse(400, "invalid_request", "Say what to change.")
+				if (change.folder !== undefined) {
+					if (!FOLDERS.includes(change.folder as string))
+						return refuse(400, "invalid_request", "folder is inbox, archive, spam or trash.")
+					own.folder = change.folder as Folder
+				}
+				if (change.read !== undefined) own.unread = change.read === false
+				const named = (names: Array<string>, create: boolean): Array<string> | Response => {
+					const ids: Array<string> = []
+					for (const name of names) {
+						const found = find_label(box, name)
+						if (found) ids.push(found.id)
+						else if (create) {
+							const made = make_label(box, name)
+							if (made instanceof Response) return made
+							ids.push(made.id)
+						}
+					}
+					return ids
+				}
+				if (change.labels !== undefined) {
+					const ids = named(list(change.labels), true)
+					if (ids instanceof Response) return ids
+					own.labels = new Set(ids)
+				}
+				if (change.add_labels !== undefined) {
+					const ids = named(list(change.add_labels), true)
+					if (ids instanceof Response) return ids
+					for (const id of ids) own.labels.add(id)
+				}
+				if (change.remove_labels !== undefined) {
+					const ids = named(list(change.remove_labels), false)
+					if (ids instanceof Response) return ids
+					for (const id of ids) own.labels.delete(id)
+				}
+				return json(200, thread_wire(box, rest[1]))
+			}
 			const received = box.mail.filter((mail) => mail.thread_id === rest[1])
-			if (!received.length) return refuse(404, "not_found", "No such thread.")
+			const summary_of = thread_wire(box, rest[1])
 			return json(200, {
 				thread_id: rest[1],
-				subject: received[0].subject,
+				subject: summary_of.subject,
+				folder: own.folder,
+				unread: own.unread,
+				labels: summary_of.labels,
 				messages: [
 					...received.map((mail) => ({ direction: "received", ...summary(mail) })),
 					...box.sent
 						.filter((sent) => sent.thread_id === rest[1])
-						.map((sent) => ({ direction: "sent", from: box.address, status: "sent", ...sent })),
+						.map(({ attachments: _files, ...sent }) => ({
+							direction: "sent",
+							from: box.address,
+							status: "sent",
+							...sent,
+						})),
 				],
 			})
+		}
+		if (rest[0] === "labels") {
+			if (rest.length === 1 && method === "GET")
+				return json(200, {
+					data: [...box.labels]
+						.sort((a, b) => a.name.localeCompare(b.name))
+						.map((label) => ({
+							...label_wire(label),
+							threads: [...box.threads.values()].filter((t) => t.labels.has(label.id)).length,
+						})),
+				})
+			if (rest.length === 1 && method === "POST") {
+				const made = make_label(
+					box,
+					String(body?.name ?? ""),
+					(body?.colour as string | undefined) ?? "grey"
+				)
+				return made instanceof Response ? made : json(201, label_wire(made))
+			}
+			const label = find_label(box, rest[1] ?? "")
+			if (!label) return refuse(404, "not_found", "No such label.")
+			if (method === "PATCH") {
+				if (typeof body?.name === "string") {
+					const clash = find_label(box, body.name)
+					if (clash && clash !== label) return refuse(409, "label_exists", "That label exists.")
+					label.name = body.name.trim()
+				}
+				if (typeof body?.colour === "string") {
+					if (!COLOURS.includes(body.colour)) return refuse(400, "invalid_request", "Colour.")
+					label.colour = body.colour
+				}
+				return json(200, label_wire(label))
+			}
+			if (method === "DELETE") {
+				box.labels = box.labels.filter((candidate) => candidate !== label)
+				for (const thread of box.threads.values()) thread.labels.delete(label.id)
+				return json(204, null)
+			}
+		}
+		if (rest[0] === "drafts") {
+			if (rest.length === 1 && method === "GET") {
+				const status = query.status ?? "draft"
+				return json(200, {
+					data: [...box.drafts]
+						.reverse()
+						.filter((draft) => status === "all" || draft.status === status)
+						.slice(0, 100)
+						.map(draft_wire),
+				})
+			}
+			if (rest.length === 1 && method === "POST") {
+				const attached = files(body)
+				if (attached instanceof Response) return attached
+				const answering = body?.in_reply_to
+					? box.mail.find((mail) => mail.id === body.in_reply_to)
+					: undefined
+				if (body?.in_reply_to && !answering)
+					return refuse(404, "not_found", "No such message in this mailbox.")
+				const to = body?.to
+					? list(body.to)
+					: answering
+						? [answering.reply_to ?? answering.from]
+						: []
+				const cc = list(body?.cc)
+				const bcc = list(body?.bcc)
+				const draft = new_draft(
+					box,
+					{
+						to,
+						cc,
+						bcc,
+						subject:
+							(body?.subject as string | undefined) ??
+							(answering ? `Re: ${answering.subject}` : ""),
+						text: (body?.text as string | undefined) ?? null,
+						html: (body?.html as string | undefined) ?? null,
+						in_reply_to: answering?.id ?? null,
+						thread_id: answering?.thread_id ?? null,
+						attachments: attached,
+						needs_review: box.review !== "none",
+					},
+					auth
+				)
+				return json(201, draft_wire(draft))
+			}
+			const draft = box.drafts.find((candidate) => candidate.id === rest[1])
+			if (!draft) return refuse(404, "not_found", "No such draft.")
+			if (rest.length === 2 && method === "GET") return json(200, draft_wire(draft))
+			if (draft.status === "sent") return refuse(409, "already_sent", "That draft was sent.")
+			if (rest.length === 2 && method === "PATCH") {
+				const attached = body?.attachments === undefined ? undefined : files(body)
+				if (attached instanceof Response) return attached
+				for (const field of ["to", "cc", "bcc"] as const)
+					if (body?.[field] !== undefined) draft[field] = list(body[field])
+				for (const field of ["subject", "text", "html"] as const)
+					if (body?.[field] !== undefined) (draft[field] as unknown) = body[field]
+				if (attached) draft.attachments = attached
+				draft.updated = new Date().toISOString()
+				return json(200, draft_wire(draft))
+			}
+			if (rest.length === 2 && method === "DELETE") {
+				box.drafts = box.drafts.filter((candidate) => candidate !== draft)
+				return json(204, null)
+			}
+			if (rest[2] === "send" && method === "POST") {
+				if (!box.team) return refuse(403, "unclaimed", "This mailbox receives until claimed.")
+				const answering = draft.in_reply_to
+					? box.mail.find((mail) => mail.id === draft.in_reply_to)
+					: undefined
+				const held = holds(box, auth, {
+					answering,
+					to: draft.to,
+					cc: draft.cc,
+					bcc: draft.bcc,
+				})
+				if (held) return refuse(403, "review_required", "A person on the team sends this draft.")
+				if (!draft.to.length) return refuse(400, "invalid_request", "A draft needs a to.")
+				const sent = record_send(box, {
+					thread_id: draft.thread_id,
+					to: draft.to,
+					cc: draft.cc,
+					subject: draft.subject,
+					text: draft.text,
+					attachments: draft.attachments,
+				})
+				draft.status = "sent"
+				draft.sent_at = sent.sent
+				draft.message_id = sent.id
+				return json(201, {
+					status: "sent",
+					id: sent.id,
+					draft_id: draft.id,
+					thread_id: sent.thread_id,
+				})
+			}
 		}
 		return refuse(404, "not_found", "Not found")
 	}
@@ -374,6 +892,11 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 		claim(address: string) {
 			const box = boxes.get(address)
 			if (box) box.team = TEAM_KEY
+		},
+		/** Set who reviews a mailbox's sends, as the team would on the dashboard. */
+		review(address: string, review: Review) {
+			const box = boxes.get(address)
+			if (box) box.review = review
 		},
 	}
 }
