@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach, vi } from "vitest"
-import { find_worker, suggest_worker, wire_worker, page_snippet } from "./service_worker.js"
+import {
+	find_worker,
+	suggest_worker,
+	wire_worker,
+	page_snippet,
+	WORKER_TSCONFIG,
+} from "./service_worker.js"
 import { receive } from "../library/push/sw.js"
 import { fake_worker, fake_subscription, STORED, VAPID_KEY } from "../testing/worker.js"
 
@@ -18,6 +24,11 @@ describe("find_worker", () => {
 		})
 		expect(find_worker(has("static/sw.js"))).toMatchObject({ path: "static/sw.js", kind: "raw" })
 		expect(find_worker(has("src/service-worker.ts"))).toMatchObject({
+			url: "/service-worker.js",
+			kind: "bundled",
+		})
+		expect(find_worker(has("src/service-worker/index.ts"))).toMatchObject({
+			path: "src/service-worker/index.ts",
 			url: "/service-worker.js",
 			kind: "bundled",
 		})
@@ -85,12 +96,36 @@ describe("suggest_worker", () => {
 	 */
 	it("gives SvelteKit the bundled entry, in the project's language", () => {
 		expect(
-			suggest_worker([], { dependencies: { "@sveltejs/kit": "^2" } }, has("tsconfig.json"))
+			suggest_worker(
+				["svelte.config.js"],
+				{ dependencies: { "@sveltejs/kit": "^2" } },
+				has("tsconfig.json")
+			)
 		).toEqual({ path: "src/service-worker.ts", url: "/service-worker.js", kind: "bundled" })
 		expect(suggest_worker(["svelte.config.js"], undefined, none)).toMatchObject({
 			path: "src/service-worker.js",
 			kind: "bundled",
 		})
+	})
+
+	/** SvelteKit 3 has no svelte.config and checks a TypeScript worker as its own project. */
+	it("gives a SvelteKit 3 TypeScript project the worker directory and its tsconfig", () => {
+		expect(
+			suggest_worker(
+				["vite.config.ts"],
+				{ devDependencies: { "@sveltejs/kit": "^3.1.0" } },
+				has("tsconfig.json")
+			)
+		).toEqual({
+			path: "src/service-worker/index.ts",
+			url: "/service-worker.js",
+			kind: "bundled",
+			tsconfig: "src/service-worker/tsconfig.json",
+		})
+		expect(JSON.parse(WORKER_TSCONFIG)).toEqual({ extends: "$app/tsconfig/service-worker" })
+		expect(
+			suggest_worker(["vite.config.js"], { devDependencies: { "@sveltejs/kit": "^3.1.0" } }, none)
+		).toEqual({ path: "src/service-worker.js", url: "/service-worker.js", kind: "bundled" })
 	})
 
 	it("gives everything else a served-as-is file, in whichever static directory it has", () => {

@@ -15,6 +15,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 - `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) types on SvelteKit 3. The shipped declarations named `RemoteForm` and `RemoteFormInput` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`, so they failed to resolve and every field read as `any` (an error instead, without `skipLibCheck`). They are now read off SvelteKit's own `form`, and the fields and result are typed as `Input` says.
 - `postboi init` reads `files.serviceWorker` off the `sveltekit()` call in `vite.config.*` on a SvelteKit 3 project, which has no `svelte.config`, so a custom worker source is found rather than a second worker written beside it.
 - `postboi init` suggests the domain a SvelteKit 3 project names in `prerender.origin` on the `sveltekit()` call in `vite.config.*`, as it did from `svelte.config` on SvelteKit 2. Vite's own `server.origin` is not read as one.
+- `postboi init --push` writes a SvelteKit 3 TypeScript project's worker as `src/service-worker/index.ts` with a `tsconfig.json` extending `$app/tsconfig/service-worker`, the layout SvelteKit 3 checks a worker in, and finds one already kept there (or as `index.js`) instead of writing a second worker beside it. SvelteKit 2 projects keep `src/service-worker.ts`.
 
 ### Fixed
 

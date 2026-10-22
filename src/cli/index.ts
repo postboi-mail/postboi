@@ -61,6 +61,7 @@ import {
 	suggest_worker,
 	wire_worker,
 	page_snippet,
+	WORKER_TSCONFIG,
 	type WorkerTarget,
 } from "./service_worker.js"
 import {
@@ -1709,6 +1710,10 @@ async function offer_service_worker(
 	} else {
 		mkdirSync(dirname(target.path), { recursive: true })
 		writeFileSync(target.path, result.source)
+		if (target.tsconfig && !existsSync(target.tsconfig)) {
+			writeFileSync(target.tsconfig, WORKER_TSCONFIG)
+			console.log(`${green("✓")} created ${bold(target.tsconfig)}`)
+		}
 		const how =
 			target.kind === "bundled"
 				? dim(" (imports postboi/push/sw, which your bundler builds)")

@@ -29,7 +29,15 @@ export interface WorkerTarget {
 	 */
 	url: string
 	kind: WorkerKind
+	/**
+	 * The worker's own TypeScript project, written beside it when absent: SvelteKit 3 checks
+	 * a TypeScript worker apart from the app, against `$app/tsconfig/service-worker`.
+	 */
+	tsconfig?: string
 }
+
+/** What {@link WorkerTarget.tsconfig} holds. */
+export const WORKER_TSCONFIG = `{\n\t"extends": "$app/tsconfig/service-worker"\n}\n`
 
 /**
  * Where a worker might already be, most specific first.
@@ -40,6 +48,8 @@ export interface WorkerTarget {
 const CANDIDATES: ReadonlyArray<WorkerTarget> = [
 	{ path: "src/service-worker.ts", url: "/service-worker.js", kind: "bundled" },
 	{ path: "src/service-worker.js", url: "/service-worker.js", kind: "bundled" },
+	{ path: "src/service-worker/index.ts", url: "/service-worker.js", kind: "bundled" },
+	{ path: "src/service-worker/index.js", url: "/service-worker.js", kind: "bundled" },
 	{ path: "src/sw.ts", url: "/sw.js", kind: "bundled" },
 	{ path: "src/sw.js", url: "/sw.js", kind: "bundled" },
 	{ path: "static/sw.js", url: "/sw.js", kind: "raw" },
@@ -123,17 +133,23 @@ export function suggest_worker(
 	pkg: PackageJson | undefined,
 	exists: (path: string) => boolean
 ): WorkerTarget {
-	const sveltekit =
-		has_dependency(pkg, "@sveltejs/kit") ||
-		files.some((f) => /^svelte\.config\.(js|ts|mjs|mts)$/.test(f))
-	if (sveltekit) {
+	const svelte_config = files.some((f) => /^svelte\.config\.(js|ts|mjs|mts)$/.test(f))
+	if (has_dependency(pkg, "@sveltejs/kit") || svelte_config) {
 		// `svelte-kit sync` writes one or the other, so this is a reliable read of which
 		// language the project is in.
-		return {
-			path: exists("tsconfig.json") ? "src/service-worker.ts" : "src/service-worker.js",
-			url: "/service-worker.js",
-			kind: "bundled",
+		if (!exists("tsconfig.json")) {
+			return { path: "src/service-worker.js", url: "/service-worker.js", kind: "bundled" }
 		}
+		// SvelteKit 3 has no svelte.config, and gives a TypeScript worker a directory and a
+		// project of its own; SvelteKit 2 builds the single file.
+		return svelte_config
+			? { path: "src/service-worker.ts", url: "/service-worker.js", kind: "bundled" }
+			: {
+					path: "src/service-worker/index.ts",
+					url: "/service-worker.js",
+					kind: "bundled",
+					tsconfig: "src/service-worker/tsconfig.json",
+				}
 	}
 	// Everything else: a served-as-is file, in whichever static directory the project has.
 	// `static/` is SvelteKit's name for it, so it's checked second — a non-Kit project with

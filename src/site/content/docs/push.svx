@@ -130,7 +130,7 @@ onto it:
 // page
 const push = subscription({ register: "/push" })
 
-// src/service-worker.ts
+// src/service-worker/index.ts
 receive()
 ```
 
@@ -349,14 +349,14 @@ verbatim**, and that's a per-framework fact rather than a preference:
 
 | Framework | Worker file | Shape |
 | --- | --- | --- |
-| SvelteKit | `src/service-worker.ts` | Built: imports `postboi/push/sw` |
+| SvelteKit | `src/service-worker/index.ts` | Built: imports `postboi/push/sw` |
 | Next.js, Nuxt, Astro, Remix | `public/sw.js` | Served as-is: handlers written out |
 | Vite / webpack worker entry | your entry | Built: imports `postboi/push/sw` |
 
 A built worker is four lines:
 
 ```typescript
-// src/service-worker.ts
+// src/service-worker/index.ts
 import { receive } from "postboi/push/sw"
 
 receive({ register: "/push/subscriptions" })
