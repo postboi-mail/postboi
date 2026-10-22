@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.73.0
+
 ### Breaking
 
 - `postboi/mailbox`: `send()` and `reply()` resolve to `{ status: "sent", id, thread_id }` or, when the mailbox's review policy holds the send, `{ status: "draft", draft_id, draft, message }`. Code that read `result.id` checks `result.status === "sent"` first. `thread_id` is now always set; a new conversation's is its own message id.
