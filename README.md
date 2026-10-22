@@ -146,6 +146,10 @@ In development, texts and WhatsApp messages are logged, not sent.
 
 ## Development
 
+The repo builds and tests with [Bun](https://bun.sh) and Node 22.12+, 24 or 26+, the
+versions Vitest 5 runs on. `devEngines` in `package.json` holds that range, and the
+scripts that go through npm refuse any other Node.
+
 ```bash
 bun install
 bun run dev     # the docs site
