@@ -1,5 +1,5 @@
 import { error } from "@sveltejs/kit"
-import ImageResponse from "@takumi-rs/image-response"
+import { ImageResponse } from "takumi-js/response"
 import type { RequestHandler } from "./$types"
 import { brandLogoRaw, siteConfig } from "$site"
 import {
