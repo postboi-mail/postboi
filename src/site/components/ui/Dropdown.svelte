@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 	import ChevronSort from "carbon-icons-svelte/lib/ChevronSort.svelte"
 	import { resolve } from "$app/paths"
 	import { type Component } from "svelte"

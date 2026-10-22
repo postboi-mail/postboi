@@ -1,4 +1,4 @@
-import { parseContentSource } from "$site/content/frontmatter"
+import { parseContentSource } from "#site/content/frontmatter.js"
 import {
 	getContentSectionConfig,
 	getContentSectionHref,
@@ -8,7 +8,7 @@ import {
 	type ContentModule,
 	type ContentSectionId,
 	type ContentTocHeading,
-} from "$site/content/sections"
+} from "#site/content/sections.js"
 import GithubSlugger from "github-slugger"
 
 // Every page's own source: the compiled component, the Markdown behind it, the frontmatter

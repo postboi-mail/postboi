@@ -25,7 +25,7 @@ export {
 
 // Nav helpers only. The barrel is imported by the root layout, and the layout ships to the
 // Worker — so `content/sources` (every archived version's Markdown) is deliberately not
-// re-exported here. Import it from `$site/content/sources` in routes that prerender.
+// re-exported here. Import it from `#site/content/sources` in routes that prerender.
 export {
 	getContentSectionAdjacentItems,
 	getContentSectionByPathname,

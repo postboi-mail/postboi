@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ContentNavButton from "./ContentNavButton.svelte"
-	import { contentUiDefaults, type SectionUiConfig } from "$site/config/content-ui"
+	import { contentUiDefaults, type SectionUiConfig } from "#site/config/content-ui.js"
 
 	export type ContentNavLink = {
 		title: string

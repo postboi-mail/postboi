@@ -5,7 +5,7 @@ import Postboi, {
 	is_error,
 	PostboiError,
 	SkipSendError,
-} from "$library/postboi.js"
+} from "#library/postboi.js"
 
 const fetch = vi.fn()
 global.fetch = fetch

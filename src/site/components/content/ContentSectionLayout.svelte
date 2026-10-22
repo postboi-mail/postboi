@@ -3,13 +3,13 @@
 	import { beforeNavigate, afterNavigate } from "$app/navigation"
 	import { onMount, tick, type Snippet } from "svelte"
 	import { SvelteMap } from "svelte/reactivity"
-	import ContentSidebar from "$site/components/content/ContentSidebar.svelte"
-	import MobileSidebar from "$site/components/content/MobileSidebar.svelte"
-	import ScrollArea from "$site/components/ui/ScrollArea.svelte"
-	import { type SectionUiConfig } from "$site/config/content-ui"
-	import type { ContentItem, ContentSectionLink } from "$site/config/navigation"
-	import type { VersionItem } from "$site/components/content/ContentSidebar.svelte"
-	import { cn } from "$site/utils/cn"
+	import ContentSidebar from "#site/components/content/ContentSidebar.svelte"
+	import MobileSidebar from "#site/components/content/MobileSidebar.svelte"
+	import ScrollArea from "#site/components/ui/ScrollArea.svelte"
+	import { type SectionUiConfig } from "#site/config/content-ui.js"
+	import type { ContentItem, ContentSectionLink } from "#site/config/navigation.js"
+	import type { VersionItem } from "#site/components/content/ContentSidebar.svelte"
+	import { cn } from "#site/utils/cn.js"
 
 	type SidebarConfig = {
 		navigation: ContentItem[]

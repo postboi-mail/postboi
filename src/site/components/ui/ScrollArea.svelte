@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte"
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 	import type { Snippet } from "svelte"
 	import type { Attachment } from "svelte/attachments"
 

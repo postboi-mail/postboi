@@ -147,8 +147,8 @@ const markdownLayout = fileURLToPath(
 	new URL("./src/site/components/docs/MarkdownLayout.svelte", import.meta.url)
 )
 
-// SvelteKit 3 has no svelte.config.js: the preprocessors, the adapter and the aliases are
-// options of the sveltekit() plugin itself.
+// SvelteKit 3 has no svelte.config.js: the preprocessors and the adapter are options of the
+// sveltekit() plugin itself.
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
@@ -175,9 +175,6 @@ export default defineConfig({
 				vitePreprocess(),
 			],
 			adapter: adapter(),
-			// The library's tests import via `$library/*`; the docs site's own pieces live in
-			// `$site` — named so nobody has to remember which of lib/library meant what.
-			alias: { $library: "src/library", $site: "src/site" },
 		}),
 	],
 	optimizeDeps: { exclude: ["@rollup/browser"] },

@@ -1,15 +1,15 @@
 import { error } from "@sveltejs/kit"
 import { ImageResponse } from "takumi-js/response"
 import type { RequestHandler } from "./$types"
-import { brandLogoRaw, siteConfig } from "$site"
+import { brandLogoRaw, siteConfig } from "#site"
 import {
 	getContentSectionConfig,
 	getContentSectionItemBySlug,
 	getContentSectionHref,
 	getContentSectionManifest,
-} from "$site/content/sections"
-import { getContentSectionMetadata } from "$site/content/sources"
-import { contentSections } from "$site/config/navigation"
+} from "#site/content/sections.js"
+import { getContentSectionMetadata } from "#site/content/sources.js"
+import { contentSections } from "#site/config/navigation.js"
 // The static cuts, not the variable ones the site loads: the image renderer wants
 // a single instance per weight, and a variable file would arrive at whatever its
 // default axis happens to be.

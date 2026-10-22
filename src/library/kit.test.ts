@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url"
 import { fail } from "@sveltejs/kit"
 import * as v from "valibot"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
-import { action, mail, remote, remote_form_data, webhook } from "$library/kit.js"
-import Postboi from "$library/postboi_provider.js"
-import { mail as send } from "$library/mail.js"
-import Mock from "$library/mock.js"
+import { action, mail, remote, remote_form_data, webhook } from "#library/kit.js"
+import Postboi from "#library/postboi_provider.js"
+import { mail as send } from "#library/mail.js"
+import Mock from "#library/mock.js"
 
 // The request SvelteKit would be handling: `getRequestEvent()` answers with it inside one,
 // and throws outside, as the real one does.
@@ -260,7 +260,7 @@ describe("postboi/kit action() with a resolver", () => {
 	})
 
 	it("follows the configured honeypot, and leaves the post's own methods alone", async () => {
-		const { configure, reset_config } = await import("$library/config.js")
+		const { configure, reset_config } = await import("#library/config.js")
 		const provider = new Mock(defaults)
 		const resolver = vi.fn(({ data }: { data: FormData }) => ({ tags: [String(data.get("_hp"))] }))
 		try {
@@ -449,7 +449,7 @@ describe("postboi/kit webhook()", () => {
 	const kit_event = (request: Request) => ({ request }) as never
 
 	it("verifies, normalizes and calls the handler once per event", async () => {
-		const { mock_request } = await import("$library/webhooks/index.js")
+		const { mock_request } = await import("#library/webhooks/index.js")
 		const { request, secret } = await mock_request({ provider: "resend", type: "opened" })
 
 		const seen: Array<string> = []
@@ -467,7 +467,7 @@ describe("postboi/kit webhook()", () => {
 	})
 
 	it("returns 401 on a bad signature so the provider knows it was rejected", async () => {
-		const { mock_request } = await import("$library/webhooks/index.js")
+		const { mock_request } = await import("#library/webhooks/index.js")
 		const { request } = await mock_request({ provider: "resend", type: "delivered" })
 
 		const handler = webhook(() => {}, { provider: "resend", secret: "whsec_d3JvbmchIQ==" })
@@ -486,7 +486,7 @@ describe("postboi/kit webhook()", () => {
 	})
 
 	it("returns 500 when the handler throws, so the provider retries", async () => {
-		const { mock_request } = await import("$library/webhooks/index.js")
+		const { mock_request } = await import("#library/webhooks/index.js")
 		const { request, secret } = await mock_request({ provider: "resend", type: "delivered" })
 
 		const handler = webhook(

@@ -4,13 +4,13 @@ import {
 	getAllContentEntries,
 	getContentSectionUiConfig,
 	resolveSection,
-} from "$site/content/sections"
+} from "#site/content/sections.js"
 import {
 	getContentSectionMetadata,
 	getContentSectionModule,
 	getContentSectionTocHeadings,
-} from "$site/content/sources"
-import { resolveTocSelector } from "$site/config/content-ui"
+} from "#site/content/sources.js"
+import { resolveTocSelector } from "#site/config/content-ui.js"
 
 export const prerender = true
 

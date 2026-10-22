@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { cn } from "$site/utils/cn"
-	import { themeStore } from "$site/stores/theme.svelte"
+	import { cn } from "#site/utils/cn.js"
+	import { themeStore } from "#site/stores/theme.svelte.js"
 	import Sun from "carbon-icons-svelte/lib/Sun.svelte"
 	import Moon from "carbon-icons-svelte/lib/Moon.svelte"
 

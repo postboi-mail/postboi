@@ -1,5 +1,5 @@
 <script lang="ts">
-	import winkRaw from "$site/assets/wink.svg?raw"
+	import winkRaw from "#site/assets/wink.svg?raw"
 
 	// Stacks the brand face and a winking variant; hovering the logo swaps to the wink.
 	// Mirrors the postboi-app BrandMark. Pass wink={false} to keep a static face (e.g. error state).

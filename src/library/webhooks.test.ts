@@ -7,7 +7,7 @@ import {
 	mock_event,
 	mock_request,
 	handshake,
-} from "$library/webhooks/index.js"
+} from "#library/webhooks/index.js"
 import {
 	svix_verify,
 	timing_safe_equal,
@@ -17,7 +17,7 @@ import {
 	base64_decode,
 	verify_ecdsa_p256_sha256,
 	generate_svix_secret,
-} from "$library/webhooks/crypto.js"
+} from "#library/webhooks/crypto.js"
 
 describe("webhook crypto", () => {
 	it("timing_safe_equal compares correctly", () => {

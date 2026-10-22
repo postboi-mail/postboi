@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from "$app/paths"
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 
 	type ComponentProps = {
 		label: string

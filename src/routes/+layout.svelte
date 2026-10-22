@@ -10,8 +10,8 @@
 		resolveRepositoryFileUrl,
 		resolveTocSelector,
 		siteConfig,
-	} from "$site"
-	import ContentSectionLayout from "$site/components/content/ContentSectionLayout.svelte"
+	} from "#site"
+	import ContentSectionLayout from "#site/components/content/ContentSectionLayout.svelte"
 	import {
 		getContentSectionBasePath,
 		getContentSectionConfig,
@@ -21,16 +21,16 @@
 		getContentSectionManifest,
 		getContentSectionRawHref,
 		getContentSectionUiConfig,
-	} from "$site/content/sections"
-	import { contentSections } from "$site/config/navigation"
+	} from "#site/content/sections.js"
+	import { contentSections } from "#site/config/navigation.js"
 	import { page } from "$app/state"
-	import versions from "$site/config/versions.json"
+	import versions from "#site/config/versions.json"
 	// "Latest" names the published library, so it tracks package.json. `versions.latest`
 	// still marks which docs line is live, but that is now only read by the release
 	// process — a patch moves the package without moving the line, and this label has to
 	// follow the package.
 	import { version } from "../../package.json"
-	import type { SectionUiConfig } from "$site/config/content-ui"
+	import type { SectionUiConfig } from "#site/config/content-ui.js"
 	import type { LayoutData } from "./$types"
 	import type { Snippet } from "svelte"
 

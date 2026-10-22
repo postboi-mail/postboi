@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import Mock from "$library/mock.js"
-import Resend from "$library/resend.js"
-import { PostboiError, SkipSendError, type Hooks } from "$library/index.js"
+import Mock from "#library/mock.js"
+import Resend from "#library/resend.js"
+import { PostboiError, SkipSendError, type Hooks } from "#library/index.js"
 
 const fetch = vi.fn()
 global.fetch = fetch

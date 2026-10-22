@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { capitalize, title, escape_html, escape_lines, html_to_text } from "$library/utils.js"
+import { capitalize, title, escape_html, escape_lines, html_to_text } from "#library/utils.js"
 
 describe("capitalize", () => {
 	it("capitalises the first letter and lower-cases the rest", () => {

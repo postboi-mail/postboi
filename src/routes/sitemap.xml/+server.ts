@@ -1,7 +1,7 @@
 import type { RequestHandler } from "./$types"
-import { siteConfig } from "$site"
-import { contentSections } from "$site/config/navigation"
-import { getContentSectionHref, getContentSectionManifest } from "$site/content/sections"
+import { siteConfig } from "#site"
+import { contentSections } from "#site/config/navigation.js"
+import { getContentSectionHref, getContentSectionManifest } from "#site/content/sections.js"
 
 export const prerender = true
 

@@ -1,14 +1,14 @@
 import type { RequestHandler } from "./$types"
-import { siteConfig } from "$site"
-import { contentSections } from "$site/config/navigation"
+import { siteConfig } from "#site"
+import { contentSections } from "#site/config/navigation.js"
 import {
 	getContentSectionHref,
 	getContentSectionManifest,
 	getContentSectionRawHref,
 	type ContentSectionId,
-} from "$site/content/sections"
-import { getContentSectionMetadata } from "$site/content/sources"
-import { productParts, productSummary } from "$site/config/products"
+} from "#site/content/sections.js"
+import { getContentSectionMetadata } from "#site/content/sources.js"
+import { productParts, productSummary } from "#site/config/products.js"
 
 // Prerendered: it is a derivation of committed content against a fixed canonical origin,
 // so building it per request only means shipping every page's Markdown to the Worker.

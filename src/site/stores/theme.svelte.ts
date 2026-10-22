@@ -1,5 +1,5 @@
 import { browser } from "$app/env"
-import { contentUiDefaults } from "$site/config/content-ui"
+import { contentUiDefaults } from "#site/config/content-ui.js"
 
 export const themes = ["light", "dark"] as const
 export type Theme = (typeof themes)[number]

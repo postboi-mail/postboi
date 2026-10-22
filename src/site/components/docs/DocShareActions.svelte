@@ -5,8 +5,8 @@
 		contentUiDefaults,
 		resolveAssistantUrls,
 		type SectionUiConfig,
-	} from "$site/config/content-ui"
-	import { copyToClipboard } from "$site/utils/copy"
+	} from "#site/config/content-ui.js"
+	import { copyToClipboard } from "#site/utils/copy.js"
 	import Checkmark from "carbon-icons-svelte/lib/Checkmark.svelte"
 	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
 	import Launch from "carbon-icons-svelte/lib/Launch.svelte"

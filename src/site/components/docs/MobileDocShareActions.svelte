@@ -5,9 +5,9 @@
 		contentUiDefaults,
 		resolveAssistantUrls,
 		type SectionUiConfig,
-	} from "$site/config/content-ui"
-	import { portal } from "$site/utils/use-portal"
-	import { copyToClipboard } from "$site/utils/copy"
+	} from "#site/config/content-ui.js"
+	import { portal } from "#site/utils/use-portal.js"
+	import { copyToClipboard } from "#site/utils/copy.js"
 	import Checkmark from "carbon-icons-svelte/lib/Checkmark.svelte"
 	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
 	import OverflowMenuHorizontal from "carbon-icons-svelte/lib/OverflowMenuHorizontal.svelte"

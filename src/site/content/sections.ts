@@ -1,13 +1,13 @@
-import type { ContentItem, ContentSectionLink } from "$site/config/navigation"
-import { contentSections, type ContentSectionConfig } from "$site/config/navigation"
-import { mergeSectionUiConfig, type SectionUiConfig } from "$site/config/content-ui"
+import type { ContentItem, ContentSectionLink } from "#site/config/navigation.js"
+import { contentSections, type ContentSectionConfig } from "#site/config/navigation.js"
+import { mergeSectionUiConfig, type SectionUiConfig } from "#site/config/content-ui.js"
 import {
 	flattenNavigationToManifest,
 	getAdjacentItems,
 	getHref,
 	getItemBySlug,
-} from "$site/content/manifest"
-import versions from "$site/config/versions.json"
+} from "#site/content/manifest.js"
+import versions from "#site/config/versions.json"
 import type { Component } from "svelte"
 
 // Sections are nav data: which pages exist, where they live, what sits next to them.

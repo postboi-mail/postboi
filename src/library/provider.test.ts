@@ -4,7 +4,7 @@ import {
 	type SendOptions,
 	type MailAttachment,
 	type RequestSpec,
-} from "$library/index.js"
+} from "#library/index.js"
 
 /**
  * Minimal concrete provider that exposes the protected helpers of ProviderBase
@@ -326,7 +326,7 @@ describe("ProviderBase", () => {
 			form.append("message", 'Tom & Jerry <3 "quotes"')
 
 			const { options } = await provider.form(form)
-			const { html_to_text } = await import("$library/utils.js")
+			const { html_to_text } = await import("#library/utils.js")
 			expect(html_to_text(options.body as string)).toContain('Tom & Jerry <3 "quotes"')
 		})
 
@@ -356,7 +356,7 @@ describe("ProviderBase", () => {
 			form.append("message", "Line one\r\nLine two")
 
 			const { options } = await provider.form(form)
-			const { html_to_text } = await import("$library/utils.js")
+			const { html_to_text } = await import("#library/utils.js")
 			expect(html_to_text(options.body as string)).toContain("Line one\nLine two")
 		})
 

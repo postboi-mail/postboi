@@ -6,7 +6,7 @@ category: Getting started
 ---
 
 <script lang="ts">
-	import { InstallationTabs, Step, Steps } from '$site';
+	import { InstallationTabs, Step, Steps } from '#site';
 </script>
 
 The [Quick start](/quick-start) CLI does all of this for you. Prefer to wire it up by

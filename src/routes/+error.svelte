@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from "$app/state"
-	import nervous from "$site/assets/nervous.svg?url"
+	import nervous from "#site/assets/nervous.svg?url"
 	import { resolve } from "$app/paths"
 
 	const is_not_found = $derived(page.status === 404)

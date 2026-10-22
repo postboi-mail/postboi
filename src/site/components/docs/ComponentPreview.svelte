@@ -5,8 +5,8 @@
 <script lang="ts">
 	import type { Snippet } from "svelte"
 	import { SvelteMap } from "svelte/reactivity"
-	import { cn } from "$site/utils/cn"
-	import { highlight } from "$site/utils/highlight"
+	import { cn } from "#site/utils/cn.js"
+	import { highlight } from "#site/utils/highlight.js"
 	import ScrollArea from "../ui/ScrollArea.svelte"
 	import CodeBlock from "./CodeBlock.svelte"
 	import CopyCodeButton from "./markdown/CopyCodeButton.svelte"

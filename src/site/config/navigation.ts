@@ -1,4 +1,4 @@
-import type { DeepPartial, SectionUiConfig } from "$site/config/content-ui"
+import type { DeepPartial, SectionUiConfig } from "#site/config/content-ui.js"
 import Email from "carbon-icons-svelte/lib/Email.svelte"
 import type { Component } from "svelte"
 

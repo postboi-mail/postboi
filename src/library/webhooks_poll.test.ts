@@ -9,8 +9,8 @@ import {
 	parse_dsn,
 	receive,
 	type PollAdapter,
-} from "$library/webhooks/index.js"
-import { credential_env_keys } from "$library/registry.js"
+} from "#library/webhooks/index.js"
+import { credential_env_keys } from "#library/registry.js"
 
 const DSN_HARD = [
 	"From: MAILER-DAEMON@mail.example.com",

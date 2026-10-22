@@ -1,9 +1,9 @@
 import type { RequestHandler } from "./$types"
-import { siteConfig } from "$site"
-import { contentSections } from "$site/config/navigation"
-import { getContentSectionManifest } from "$site/content/sections"
-import { getContentSectionRawSource } from "$site/content/sources"
-import { productParts, productSummary } from "$site/config/products"
+import { siteConfig } from "#site"
+import { contentSections } from "#site/config/navigation.js"
+import { getContentSectionManifest } from "#site/content/sections.js"
+import { getContentSectionRawSource } from "#site/content/sources.js"
+import { productParts, productSummary } from "#site/config/products.js"
 
 // Prerendered: every page's Markdown concatenated is a build-time artefact, not something
 // worth assembling per request inside a Worker that would have to carry the whole corpus.

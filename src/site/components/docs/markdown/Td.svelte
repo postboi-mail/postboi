@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from "svelte"
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 
 	type ComponentProps = {
 		class?: string

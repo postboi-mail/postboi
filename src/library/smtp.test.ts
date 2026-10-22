@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest"
 import net from "node:net"
-import SMTP from "$library/smtp.js"
-import { PostboiError } from "$library/index.js"
+import SMTP from "#library/smtp.js"
+import { PostboiError } from "#library/index.js"
 
 /**
  * A throwaway plaintext SMTP server that walks the lock-step conversation and captures the
