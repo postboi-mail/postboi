@@ -116,17 +116,46 @@ async function disk(env?: Env): Promise<Disk | undefined> {
 			},
 			// Keys are credentials: the file is the owner's alone.
 			write(text) {
-				fs.mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-				fs.writeFileSync(path, text, { mode: 0o600 })
-				try {
-					fs.chmodSync(path, 0o600)
-				} catch {
-					// Windows, or a filesystem without modes.
-				}
+				write_atomically(fs, dirname(path), path, text)
 			},
 		}
 	} catch {
 		return undefined
+	}
+}
+
+/**
+ * Write the file whole or not at all: the library, the CLI and `postboi mcp` read it from
+ * separate processes, and a reader that caught it half-written would parse nothing and
+ * write back only its own entry, losing every other key. A rename is atomic on one
+ * filesystem, so a reader sees the old file or the new one.
+ */
+export function write_atomically(
+	fs: Pick<
+		typeof import("node:fs"),
+		"mkdirSync" | "writeFileSync" | "chmodSync" | "renameSync" | "rmSync"
+	>,
+	dir: string,
+	path: string,
+	text: string
+): void {
+	fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+	const temp = `${path}.${process.pid}.${Date.now().toString(36)}.tmp`
+	try {
+		fs.writeFileSync(temp, text, { mode: 0o600 })
+		try {
+			fs.chmodSync(temp, 0o600)
+		} catch {
+			// Windows, or a filesystem without modes.
+		}
+		fs.renameSync(temp, path)
+	} catch (error) {
+		try {
+			fs.rmSync(temp, { force: true })
+		} catch {
+			// Nothing to tidy.
+		}
+		throw error
 	}
 }
 

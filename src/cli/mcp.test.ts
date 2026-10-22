@@ -205,6 +205,28 @@ describe("mailbox tools", () => {
 		expect(nothing.facts).toMatchObject({ timed_out: true, cursor: 3 })
 	})
 
+	it("mailbox_wait finds the newest earlier code, not one from the oldest page", async () => {
+		const { agentboi, call, address } = await with_mailbox()
+		agentboi.deliver(address, { subject: "Old code", code: "111111" })
+		for (let i = 0; i < 120; i++) agentboi.deliver(address, { subject: `News ${i}` })
+		agentboi.deliver(address, { subject: "New code", code: "222222" })
+		agentboi.deliver(address, { subject: "More news" })
+		const got = await call("mailbox_wait", { code: true, timeout_seconds: 1 })
+		expect(got.facts).toMatchObject({ code: "222222" })
+	})
+
+	it("mailbox_list_messages pages on from after without stepping over anything", async () => {
+		const { agentboi, call, address } = await with_mailbox()
+		for (let i = 0; i < 5; i++) agentboi.deliver(address, { subject: `Mail ${i}` })
+		const first = await call("mailbox_list_messages", { after: 0, limit: 2 })
+		expect(first.facts.messages.map((m: { seq: number }) => m.seq)).toEqual([1, 2])
+		expect(first.facts.cursor).toBe(2)
+		const next = await call("mailbox_list_messages", { after: first.facts.cursor, limit: 2 })
+		expect(next.facts.messages.map((m: { seq: number }) => m.seq)).toEqual([3, 4])
+		const newest = await call("mailbox_list_messages", { limit: 2 })
+		expect(newest.facts.messages.map((m: { seq: number }) => m.seq)).toEqual([4, 5])
+	})
+
 	it("threads, update_thread and labels", async () => {
 		const { agentboi, call, address } = await with_mailbox()
 		const mail = agentboi.deliver(address, { subject: "Refund", from_name: "Bob" })
@@ -263,7 +285,10 @@ describe("mailbox tools", () => {
 		agentboi.claim(address)
 		const mail = agentboi.deliver(address, { subject: "Order" })
 		const draft = await call("mailbox_create_draft", { in_reply_to: mail.id, text: "Soon" })
-		expect(draft.facts).toMatchObject({ subject: "Re: Order", status: "draft" })
+		expect(draft.facts).toMatchObject({ status: "draft" })
+		// A held reply's subject quotes the sender's, so it is behind the boundary too.
+		expect(draft.facts.subject).toBeUndefined()
+		expect(draft.rest).toContain("Subject: Re: Order")
 		const changed = await call("mailbox_update_draft", { draft_id: draft.facts.id, text: "Now" })
 		// The words sit behind the boundary, since a held forward carries somebody else's.
 		expect(changed.facts.text).toBeUndefined()

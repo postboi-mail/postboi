@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, extname, join } from "node:path"
 import { spawn } from "node:child_process"
@@ -25,6 +25,7 @@ import {
 	serialise_saved,
 	store_path,
 	with_entry,
+	write_atomically,
 	type SavedMailbox,
 } from "../library/mailbox_store.js"
 import { EXIT, parse_match } from "./inbox.js"
@@ -125,13 +126,12 @@ export function read_saved(path: string): Array<SavedMailbox> {
 
 /** Keys are credentials: the file is the owner's alone. */
 function write_saved(path: string, entries: Array<SavedMailbox>): void {
-	mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-	writeFileSync(path, serialise_saved(entries), { mode: 0o600 })
-	try {
-		chmodSync(path, 0o600)
-	} catch {
-		// Windows, or a filesystem without modes.
-	}
+	write_atomically(
+		{ mkdirSync, writeFileSync, chmodSync, renameSync, rmSync },
+		dirname(path),
+		path,
+		serialise_saved(entries)
+	)
 }
 
 export function remember(path: string, entry: SavedMailbox): void {
@@ -795,7 +795,9 @@ async function forward(ctx: Context): Promise<number> {
  * agent can't loosen its own leash. With POSTBOI_TOKEN the mailbox is opened as the team.
  */
 async function review(ctx: Context): Promise<number> {
-	const [wanted, address] = ctx.args.positional
+	let [wanted, address]: Array<string | undefined> = ctx.args.positional
+	// `review orders-k3f9@agentboi.email` asks what it is, rather than setting it to an address.
+	if (address === undefined && wanted?.includes("@")) [wanted, address] = [undefined, wanted]
 	if (wanted !== undefined && !REVIEWS.includes(wanted as Review))
 		throw new MailboxCommandError(`Review is one of ${REVIEWS.join(", ")}`, "invalid_args")
 	const token = ctx.env.POSTBOI_TOKEN
@@ -803,12 +805,16 @@ async function review(ctx: Context): Promise<number> {
 	if (wanted && token) {
 		// The team's key opens a mailbox by its address, so learn that first when none was named.
 		const target = flag(ctx, "mailbox") ?? address ?? (await open(ctx)).address
-		box = await open_or_make.open({
+		// Found as every other command finds it, so a name (`support`) works here too.
+		const found = await open_or_make.find({
 			token,
 			address: target,
 			base: ctx.env.POSTBOI_MAILBOX_URL || undefined,
 			fetch: ctx.fetch,
 		})
+		if (!found)
+			throw new MailboxCommandError(`Your team has no mailbox ${target}.`, "unknown_mailbox")
+		box = found
 	} else box = await open(ctx, address)
 	if (wanted) {
 		try {

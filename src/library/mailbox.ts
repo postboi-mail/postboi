@@ -1265,19 +1265,27 @@ function options_of(call: MailboxCall | undefined): MailboxOptions {
 async function find(call: MailboxCall = {}): Promise<Mailbox | undefined> {
 	const options = options_of(call)
 	await ensure_env_loaded()
-	const all = await list(options)
+	const all = (await list(options)).filter(
+		(box) => !options.domain || box.domain === options.domain
+	)
 	const ref = options.address
 	if (ref) {
-		const hits = all.filter(
-			(box) =>
-				box.id === ref ||
-				(names_address(box.address, ref) && (!options.domain || box.domain === options.domain))
-		)
-		if (hits.length <= 1) return hits[0]
-		throw ambiguous(hits)
+		const hits = all.filter((box) => box.id === ref || names_address(box.address, ref))
+		// `support` on a team's own domain is `support@` exactly, and a `support-desk@` beside
+		// it only looks like agentboi's `support-k3f9`: the exact name wins.
+		const local = ref.trim().toLowerCase()
+		const exact = hits.filter((box) => box.address.toLowerCase().split("@")[0] === local)
+		const meant = exact.length ? exact : hits
+		if (meant.length <= 1) return meant[0]
+		throw ambiguous(meant)
 	}
-	if (all.length <= 1) return all[0]
-	throw ambiguous(all)
+	// A domain or a name says which mailbox is wanted, so the team's only one on another
+	// domain, or under another name, isn't it.
+	const named = options.name
+		? all.filter((box) => box.name?.toLowerCase() === options.name!.trim().toLowerCase())
+		: all
+	if (named.length <= 1) return named[0]
+	throw ambiguous(named)
 }
 
 function ambiguous(boxes: Array<Mailbox>): MailboxError {
@@ -1286,6 +1294,7 @@ function ambiguous(boxes: Array<Mailbox>): MailboxError {
 			.map((box) => `mailbox("${box.address}")`)
 			.join(", ")}`,
 		code: "ambiguous_mailbox",
+		raw: { mailboxes: boxes.map((box) => box.address) },
 	})
 }
 
