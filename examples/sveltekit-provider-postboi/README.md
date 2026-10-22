@@ -68,8 +68,8 @@ a remote function shipped by the library; SvelteKit generates the endpoint:
 ```
 
 Nested field names (`contact.name`) group in the email exactly like `contact→name`.
-Needs `kit.experimental.remoteFunctions: true` ([svelte.config.js](./svelte.config.js)) and
-`optimizeDeps: { exclude: ["postboi/remote"] }` ([vite.config.ts](./vite.config.ts)).
+Needs `experimental: { remoteFunctions: true }` on the `sveltekit()` call and
+`optimizeDeps: { exclude: ["postboi/remote"] }`, both in [vite.config.ts](./vite.config.ts).
 
 **3 — the top-level `mail()`**, when you'd rather build the message yourself:
 
