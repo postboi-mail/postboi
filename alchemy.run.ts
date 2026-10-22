@@ -1,16 +1,18 @@
 /**
  * The docs site (docs.postboi.app) on Cloudflare Workers, as an alchemy stack.
  *
- * This is the intended replacement for `wrangler.jsonc`: `Cloudflare.Website.SvelteKit`
- * builds the site with SvelteKit's own Vite pipeline and a wrangler-free in-memory
- * adapter, then deploys the server bundle as a Worker and the client output as its static
- * assets. No `@sveltejs/adapter-cloudflare`, no wrangler configuration. `_headers` and
- * `_redirects` in the project root still ride along as assets, exactly as they do today.
+ * `Cloudflare.Website.SvelteKit` builds the site with SvelteKit's own Vite pipeline and a
+ * wrangler-free in-memory adapter, then deploys the server bundle as a Worker and the
+ * client output as its static assets. `_headers` and `_redirects` in the project root
+ * ride along as assets, as they do with wrangler.
  *
- * `wrangler.jsonc` stays beside this file until a first `alchemy deploy --stage prod`
- * has adopted the existing Worker (`--adopt`, since the Worker and its custom domain
- * already exist); then it goes, along with `@sveltejs/adapter-cloudflare` and the
- * `adapter` line in `vite.config.ts`.
+ * The Worker's settings (its name, compatibility date and flags, observability, the
+ * workers.dev URL and preview URLs) are read from `wrangler.jsonc` with wrangler's own
+ * reader, so this stack and `wrangler deploy` cannot drift. wrangler.jsonc stays the
+ * working deploy until a first `alchemy deploy --stage prod --adopt` has taken the
+ * existing Worker and its custom domain over; after that only its `main` and `assets`
+ * lines go, with `@sveltejs/adapter-cloudflare` and the `adapter` line in
+ * `vite.config.ts`.
  *
  * Stages: `prod` is main, `pr-<n>` is a pull request's preview. `bun run infra:deploy`
  * is `alchemy deploy`, which defaults to a `live_<user>` stage for a deploy from a
@@ -24,9 +26,14 @@
 import { Effect } from "effect"
 import * as Alchemy from "alchemy"
 import * as Cloudflare from "alchemy/Cloudflare"
+import { unstable_readConfig } from "wrangler"
 
 /** The hostname the docs answer on. Only the `prod` stage takes it. */
 const DOCS_DOMAIN = "docs.postboi.app"
+
+const wrangler = unstable_readConfig({ config: "wrangler.jsonc" }, { hideWarnings: true })
+if (!wrangler.name) throw new Error("wrangler.jsonc names no Worker")
+const worker = wrangler.name
 
 export default Alchemy.Stack(
 	"postboi-docs",
@@ -36,22 +43,20 @@ export default Alchemy.Stack(
 		const production = stage === "prod"
 
 		const site = yield* Cloudflare.Website.SvelteKit("Docs", {
-			// The Worker wrangler.jsonc deploys is named `postboi`; previews get their own name
-			// so a pull request never redeploys production.
-			name: production ? "postboi" : `postboi-docs-${stage}`,
-			// Carried over from wrangler.jsonc. `nodejs_compat` is added for a SvelteKit server
-			// bundle regardless, but saying it keeps the two files readable side by side.
-			compatibility: { date: "2026-06-14", flags: ["nodejs_compat"] },
-			observability: { enabled: true },
-			// The stable workers.dev URL is what a preview is reached on; production keeps it
-			// too, with version preview URLs, as wrangler.jsonc's `workers_dev` and
-			// `preview_urls` do.
-			workersDev: { enabled: true, previewsEnabled: true },
+			// Production is wrangler.jsonc's Worker; previews get their own name so a pull
+			// request never redeploys it.
+			name: production ? worker : `${worker}-docs-${stage}`,
+			compatibility: { date: wrangler.compatibility_date, flags: wrangler.compatibility_flags },
+			observability: { enabled: wrangler.observability?.enabled ?? false },
+			workersDev: {
+				enabled: wrangler.workers_dev ?? true,
+				previewsEnabled: wrangler.preview_urls ?? true,
+			},
 			// The custom domain is production's alone. The zone (postboi.app) already exists in
 			// the account; alchemy manages the DNS record and the edge certificate.
 			domain: production ? { name: DOCS_DOMAIN } : null,
 			// What decides whether a rebuild is needed: the site and the package source (the
-			// docs import from `$library`), the static files, and the lockfile. `dist/`, the
+			// docs import from `#library`), the static files, and the lockfile. `dist/`, the
 			// examples and the Chrome extension do not change what is deployed.
 			memo: {
 				include: [
@@ -65,8 +70,6 @@ export default Alchemy.Stack(
 					"tsconfig.json",
 				],
 			},
-			// wrangler.jsonc also declares a `Text` module rule for `**/*.ttf`. Nothing under
-			// `src` imports a `.ttf` today; if a font import comes back, it belongs in `rules`.
 		})
 
 		return { url: site.url }

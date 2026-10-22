@@ -164,7 +164,9 @@ bun run build   # the package
 
 The docs are a SvelteKit site on Cloudflare Workers, described in `alchemy.run.ts` as an
 [alchemy](https://alchemy.run) stack: `Cloudflare.Website.SvelteKit` builds the site and
-deploys it with no wrangler configuration and no adapter.
+deploys it with no adapter. The Worker's settings (name, compatibility date and flags,
+observability, workers.dev and preview URLs) come from `wrangler.jsonc`, which the stack
+reads, so the two ways of deploying can't disagree.
 
 ```bash
 bun run infra:plan -- --stage prod       # what a deploy would change
