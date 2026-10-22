@@ -348,9 +348,9 @@ export const HELP: Array<HelpSection> = [
 			},
 		],
 		footer: [
-			"The mailbox made or used last is the default; POSTBOI_MAILBOX_KEY overrides",
-			"it (the key alone finds its mailbox), POSTBOI_MAILBOX_URL moves the host.",
-			"--mailbox <address> names one on any command.",
+			"The mailbox made or used last is the default, then the team's with POSTBOI_TOKEN;",
+			"POSTBOI_MAILBOX_KEY overrides both (the key alone finds its mailbox).",
+			"--mailbox <address> names one on any command; POSTBOI_MAILBOX_URL moves the host.",
 		],
 	},
 	{
@@ -361,7 +361,8 @@ export const HELP: Array<HelpSection> = [
 				command: "mcp",
 				summary: "Run an MCP server on stdio: mailboxes, temp inboxes and sending, as tools",
 				details: [
-					"POSTBOI_MAILBOX_KEY opens one mailbox; POSTBOI_TOKEN opens the team's and sends with email_send",
+					"Reads the project's .env: POSTBOI_TOKEN opens the team's mailboxes and sends with email_send",
+					"Without one, a mailbox it makes is kept on this machine for the next session",
 					"claude mcp add postboi -- npx postboi mcp",
 				],
 			},

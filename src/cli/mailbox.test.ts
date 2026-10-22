@@ -11,6 +11,7 @@ import {
 	remember,
 } from "./mailbox.js"
 import { EXIT } from "./inbox.js"
+import { mailbox } from "../library/mailbox.js"
 import { fake_agentboi, TEAM_KEY } from "../testing/fake_agentboi.js"
 
 function harness(extra: Record<string, string> = {}) {
@@ -54,6 +55,18 @@ describe("which mailbox a command means", () => {
 	it("says how to make one when there is none", () => {
 		expect(pick_mailbox([], {})).toMatchObject({ code: "no_mailbox" })
 	})
+
+	it("names a remembered one by the name it was asked for", () => {
+		expect(pick_mailbox(saved, {}, "b")).toMatchObject({ key: "mb_b" })
+	})
+
+	it("with nothing remembered, POSTBOI_TOKEN reaches the team's", () => {
+		expect(pick_mailbox([], { POSTBOI_TOKEN: "pb_team" })).toMatchObject({ token: "pb_team" })
+		expect(pick_mailbox(saved, { POSTBOI_TOKEN: "pb_team" }, "support")).toMatchObject({
+			token: "pb_team",
+			address: "support",
+		})
+	})
 })
 
 describe("postboi mailbox", () => {
@@ -71,6 +84,14 @@ describe("postboi mailbox", () => {
 		await run("new")
 		expect(server.requests[0].auth).toBe(TEAM_KEY)
 		expect(err.join("\n")).not.toContain("claim")
+	})
+
+	it("with POSTBOI_TOKEN, reaches a team mailbox this machine never saw", async () => {
+		const { run, out, server } = harness({ POSTBOI_TOKEN: TEAM_KEY })
+		const made = await mailbox.create({ token: TEAM_KEY, base: server.base, fetch: server.fetch })
+		expect(await run("threads", "--json")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.path).toContain(encodeURIComponent(made.address))
+		expect(out).toHaveLength(1)
 	})
 
 	it("new --env prints the export line", async () => {

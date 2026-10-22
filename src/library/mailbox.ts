@@ -1,5 +1,6 @@
 import { base64_encode } from "./encoding.js"
 import { ensure_env_loaded, read_env } from "./env.js"
+import { drop, keep, names_address, recall } from "./mailbox_store.js"
 import { PostboiError } from "./errors.js"
 import {
 	aborted,
@@ -536,6 +537,12 @@ export interface MailboxOptions {
 	/** Default `POSTBOI_MAILBOX_URL`, then https://agentboi.email. */
 	base?: string
 	fetch?: typeof fetch
+	/**
+	 * Remember a mailbox made without the team's key on this machine (in the file the CLI
+	 * keeps), so the next `mailbox()` from the same directory opens it rather than making
+	 * another. Default true; it does nothing where there is no filesystem.
+	 */
+	remember?: boolean
 }
 
 function base_url(base: string | undefined): string {
@@ -1242,25 +1249,100 @@ async function open(options: MailboxOptions): Promise<Mailbox> {
 	})
 }
 
-async function resolve(options: MailboxOptions = {}): Promise<Mailbox> {
+/** A string is the address, or the name to ask for: `mailbox("support")`. */
+type MailboxCall = MailboxOptions | string
+
+function options_of(call: MailboxCall | undefined): MailboxOptions {
+	return typeof call === "string" ? { address: call } : (call ?? {})
+}
+
+/**
+ * The team's mailbox a call means, with the team's key: the one `address` names (the
+ * whole address, its id, or the name it was made with), or the team's only one. Undefined
+ * when there is none, so the caller can make it; a refusal when the team has several and
+ * nothing says which.
+ */
+async function find(call: MailboxCall = {}): Promise<Mailbox | undefined> {
+	const options = options_of(call)
+	await ensure_env_loaded()
+	const all = await list(options)
+	const ref = options.address
+	if (ref) {
+		const hits = all.filter(
+			(box) =>
+				box.id === ref ||
+				(names_address(box.address, ref) && (!options.domain || box.domain === options.domain))
+		)
+		if (hits.length <= 1) return hits[0]
+		throw ambiguous(hits)
+	}
+	if (all.length <= 1) return all[0]
+	throw ambiguous(all)
+}
+
+function ambiguous(boxes: Array<Mailbox>): MailboxError {
+	return new MailboxError({
+		message: `Your team has ${boxes.length} mailboxes that could be meant, so say which: ${boxes
+			.map((box) => `mailbox("${box.address}")`)
+			.join(", ")}`,
+		code: "ambiguous_mailbox",
+	})
+}
+
+/**
+ * The one door `mailbox()` goes through. A mailbox key opens its own. The team's key
+ * (`POSTBOI_TOKEN`, which `postboi init` already wrote) opens the team's mailbox, making
+ * it the first time. With neither, the mailbox this directory made last time, or a new
+ * one that is then remembered. So nothing has to be copied into an env file for the same
+ * address to come back on the next run.
+ */
+async function resolve(call: MailboxCall = {}): Promise<Mailbox> {
+	const options = options_of(call)
 	await ensure_env_loaded()
 	if (options.key || read_env("POSTBOI_MAILBOX_KEY")) return open(options)
-	if (
-		options.address &&
-		(options.token || read_env("POSTBOI_TOKEN")) &&
-		options.address.includes("@")
-	)
-		return open(options)
-	return make(options)
+	const token = options.token ?? read_env("POSTBOI_TOKEN")
+	if (token) {
+		const found = await find({ ...options, token })
+		if (found) return found
+		// A whole address is one that exists or doesn't: the server says which, rather than
+		// a new mailbox at some other address quietly standing in for it.
+		if (options.address?.includes("@")) return open({ ...options, token })
+		return make({ ...options, token })
+	}
+	const base = base_url(options.base)
+	const remembering = options.remember !== false
+	if (remembering) {
+		const saved = await recall(base, options.address)
+		if (saved) {
+			try {
+				return await open({ key: saved.key, base, fetch: options.fetch })
+			} catch (error) {
+				// Rotated or deleted somewhere else: forget it and make another.
+				if (!(error instanceof MailboxError && error.status === 401)) throw error
+				await drop(saved.address)
+			}
+		}
+	}
+	const box = await make(options)
+	if (remembering && box.key)
+		await keep({
+			address: box.address,
+			key: box.key,
+			base: box.base,
+			...(box.claim_url ? { claim_url: box.claim_url } : {}),
+		})
+	return box
 }
 
 /**
  * An email address your agent keeps.
  *
- * With `POSTBOI_MAILBOX_KEY` (or `key`) it opens that mailbox. Without one it makes a new
- * one: your team's, if `POSTBOI_TOKEN` is set, or else one of its own that receives
- * straight away and sends once a person opens `claim_url`. A new mailbox's `key` is said
- * once; keep it.
+ * Nothing to set up. With the team's `POSTBOI_TOKEN` (which `postboi init` writes) it opens
+ * the team's mailbox, or the one `address` names (`mailbox("support")`), and makes it the
+ * first time. Without one it makes a mailbox of its own that receives straight away and
+ * sends once a person opens `claim_url`, and remembers it on this machine so the next run
+ * opens the same address. `POSTBOI_MAILBOX_KEY` (or `key`) is for an agent that should
+ * reach one mailbox and nothing else of the team's: it opens that mailbox alone.
  *
  * ```ts
  * const box = await mailbox()
@@ -1271,14 +1353,24 @@ async function resolve(options: MailboxOptions = {}): Promise<Mailbox> {
  * ```
  */
 export const mailbox: {
-	(options?: MailboxOptions): Promise<Mailbox>
+	(options?: MailboxOptions | string): Promise<Mailbox>
 	/** Always make a new mailbox. */
-	create(options?: MailboxOptions): Promise<Mailbox>
+	create(options?: MailboxOptions | string): Promise<Mailbox>
 	/** Open an existing one: by its key, or by its address with the team's API key. */
 	open(options?: MailboxOptions): Promise<Mailbox>
+	/**
+	 * The team's mailbox `address` names, or the team's only one, with the team's API key.
+	 * Undefined when there isn't one; never makes one.
+	 */
+	find(options?: MailboxOptions | string): Promise<Mailbox | undefined>
 	/** Every mailbox the team has, with the team's API key. */
 	list(options?: Pick<MailboxOptions, "token" | "base" | "fetch">): Promise<Array<Mailbox>>
-} = Object.assign(resolve, { create: make, open, list })
+} = Object.assign(resolve, {
+	create: (call?: MailboxCall) => make(options_of(call)),
+	open,
+	find,
+	list,
+})
 
 async function list(
 	options: Pick<MailboxOptions, "token" | "base" | "fetch"> = {}

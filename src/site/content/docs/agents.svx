@@ -97,8 +97,10 @@ purpose when the agent would rather a person checked it.
 Claude Code, Cursor, Codex or any other client:
 
 ```bash
-claude mcp add postboi --env POSTBOI_MAILBOX_KEY=mb_… -- npx postboi mcp
+claude mcp add postboi -- npx postboi mcp
 ```
+
+It reads the project's `.env`, so the key `postboi init` wrote is all it needs.
 
 Every tool result that carries somebody else's words wraps them in an `<email>` block naming
 their `trust`, so a stranger's text never reads as the user's. The tools and the config for

@@ -1,12 +1,19 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest"
+import { existsSync, mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { mailbox, Mailbox, MailboxError, MailboxTimeoutError } from "./mailbox.js"
 import { PostboiError } from "./errors.js"
 import { fake_agentboi, TEAM_KEY } from "../testing/fake_agentboi.js"
 
-const ENV = ["POSTBOI_MAILBOX_KEY", "POSTBOI_MAILBOX_URL", "POSTBOI_TOKEN"]
+const ENV = ["POSTBOI_MAILBOX_KEY", "POSTBOI_MAILBOX_URL", "POSTBOI_TOKEN", "XDG_CONFIG_HOME"]
 const saved = Object.fromEntries(ENV.map((key) => [key, process.env[key]]))
+let config: string
 beforeEach(() => {
 	for (const key of ENV) delete process.env[key]
+	// The machine's memory of mailboxes lives here for the test, never in the real ~/.config.
+	config = mkdtempSync(join(tmpdir(), "postboi-mailbox-"))
+	process.env.XDG_CONFIG_HOME = config
 })
 afterEach(() => {
 	for (const key of ENV) {
@@ -40,6 +47,65 @@ describe("making and opening a mailbox", () => {
 		expect(box.claimed).toBe(true)
 		expect(box.claim_url).toBeUndefined()
 		expect(server.requests[0].auth).toBe(TEAM_KEY)
+	})
+
+	it("with POSTBOI_TOKEN set, opens the team's mailbox rather than making another", async () => {
+		const { server, options } = setup()
+		process.env.POSTBOI_TOKEN = TEAM_KEY
+		const made = await mailbox(options)
+		const again = await mailbox(options)
+		expect(again.id).toBe(made.id)
+		expect(server.requests.filter((r) => r.method === "POST")).toHaveLength(1)
+	})
+
+	it("names one of the team's by what it was asked for, making it the first time", async () => {
+		const { options } = setup()
+		process.env.POSTBOI_TOKEN = TEAM_KEY
+		const support = await mailbox({ ...options, address: "support" })
+		const orders = await mailbox({ ...options, address: "orders" })
+		expect(support.address).toMatch(/^support-\d{4}@/)
+		expect(orders.id).not.toBe(support.id)
+		expect((await mailbox({ ...options, address: "support" })).id).toBe(support.id)
+		expect((await mailbox({ ...options, address: support.address })).id).toBe(support.id)
+		expect((await mailbox.find({ ...options, address: "orders" }))?.id).toBe(orders.id)
+	})
+
+	it("refuses to guess between several of the team's", async () => {
+		const { options } = setup()
+		process.env.POSTBOI_TOKEN = TEAM_KEY
+		await mailbox({ ...options, address: "support" })
+		await mailbox({ ...options, address: "orders" })
+		const error = await mailbox(options).catch((caught) => caught)
+		expect(error).toBeInstanceOf(MailboxError)
+		expect(error.code).toBe("ambiguous_mailbox")
+		expect(error.message).toContain('mailbox("support-')
+	})
+
+	it("with nothing set, remembers the one it made so the next run opens it", async () => {
+		const { server, options } = setup()
+		const made = await mailbox(options)
+		const again = await mailbox(options)
+		expect(again.id).toBe(made.id)
+		expect(again.key).toBe(made.key)
+		expect(server.requests.filter((r) => r.method === "POST")).toHaveLength(1)
+		const file = join(config, "postboi", "mailboxes.json")
+		const kept = JSON.parse(readFileSync(file, "utf8"))
+		expect(kept[0]).toMatchObject({ address: made.address, project: process.cwd() })
+	})
+
+	it("forgets a remembered key that stopped working, and makes another", async () => {
+		const { options } = setup()
+		const made = await mailbox(options)
+		await made.rotate()
+		const next = await mailbox(options)
+		expect(next.id).not.toBe(made.id)
+	})
+
+	it("keeps nothing with remember: false", async () => {
+		const { options } = setup()
+		const made = await mailbox({ ...options, remember: false })
+		expect((await mailbox({ ...options, remember: false })).id).not.toBe(made.id)
+		expect(existsSync(join(config, "postboi", "mailboxes.json"))).toBe(false)
 	})
 
 	it("with POSTBOI_MAILBOX_KEY set, opens that mailbox from the key alone", async () => {

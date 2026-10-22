@@ -88,15 +88,15 @@ agentboi.email; no POSTBOI_TOKEN needed to make one
 | `bunx postboi mailbox review`  | Who has to look before it sends: none, new (new conversations) or all: `[none, new or all] [address]: changing it needs your team's POSTBOI_TOKEN; with no value it prints the current one`                                                                               |
 | `bunx postboi mailbox ls`      | Mailboxes on this machine: `key [address]: a new key, the old one stops · rm [address]`                                                                                                                                                                                   |
 
-The mailbox made or used last is the default; POSTBOI_MAILBOX_KEY overrides it (the key alone finds its mailbox), POSTBOI_MAILBOX_URL moves the host. --mailbox <address> names one on any command.
+The mailbox made or used last is the default, then the team's with POSTBOI_TOKEN; POSTBOI_MAILBOX_KEY overrides both (the key alone finds its mailbox). --mailbox <address> names one on any command; POSTBOI_MAILBOX_URL moves the host.
 
 ## MCP
 
 for agents: Claude Code, Cursor, Codex and any MCP client
 
-| Command            | What it does                                                                                                                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bunx postboi mcp` | Run an MCP server on stdio: mailboxes, temp inboxes and sending, as tools: `POSTBOI_MAILBOX_KEY opens one mailbox; POSTBOI_TOKEN opens the team's and sends with email_send` · `claude mcp add postboi -- npx postboi mcp` |
+| Command            | What it does                                                                                                                                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bunx postboi mcp` | Run an MCP server on stdio: mailboxes, temp inboxes and sending, as tools: `Reads the project's .env: POSTBOI_TOKEN opens the team's mailboxes and sends with email_send` · `Without one, a mailbox it makes is kept on this machine for the next session` · `claude mcp add postboi -- npx postboi mcp` |
 
 ## For agents
 

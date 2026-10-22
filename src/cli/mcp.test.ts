@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { check_args, create_mcp_server, fence, PREAMBLE, type EmailSendInput } from "./mcp.js"
 import { fake_agentboi, TEAM_KEY } from "../testing/fake_agentboi.js"
 import { fake_tempboi } from "../testing/fake_tempboi.js"
+
+/** Somewhere for the machine's memory of mailboxes that isn't the real ~/.config. */
+function config_dir(): string {
+	return mkdtempSync(join(tmpdir(), "postboi-mcp-"))
+}
 
 /** Both fakes behind one fetch, routed by host, as the real server would reach both. */
 function harness(env: Record<string, string> = {}) {
@@ -13,7 +21,12 @@ function harness(env: Record<string, string> = {}) {
 	}) as typeof fetch
 	const sent: Array<{ input: EmailSendInput; token: string }> = []
 	const server = create_mcp_server({
-		env: { POSTBOI_MAILBOX_URL: agentboi.base, POSTBOI_INBOX_URL: tempboi.base, ...env },
+		env: {
+			XDG_CONFIG_HOME: config_dir(),
+			POSTBOI_MAILBOX_URL: agentboi.base,
+			POSTBOI_INBOX_URL: tempboi.base,
+			...env,
+		},
 		fetch: fetcher,
 		version: "9.9.9",
 		async send_email(input, token) {
@@ -284,7 +297,11 @@ describe("mailbox tools", () => {
 	it("with a mailbox key it opens that mailbox and refuses another", async () => {
 		const first = await with_mailbox()
 		const keyed = create_mcp_server({
-			env: { POSTBOI_MAILBOX_KEY: first.key, POSTBOI_MAILBOX_URL: first.agentboi.base },
+			env: {
+				XDG_CONFIG_HOME: config_dir(),
+				POSTBOI_MAILBOX_KEY: first.key,
+				POSTBOI_MAILBOX_URL: first.agentboi.base,
+			},
 			fetch: first.agentboi.fetch,
 		})
 		const answer = (await keyed.handle({
@@ -299,10 +316,34 @@ describe("mailbox tools", () => {
 		})
 	})
 
+	it("a mailbox made without a key opens again in the next session, with nothing to set", async () => {
+		const agentboi = fake_agentboi()
+		const env = { XDG_CONFIG_HOME: config_dir(), POSTBOI_MAILBOX_URL: agentboi.base }
+		async function info(server: ReturnType<typeof create_mcp_server>, name: string) {
+			const answer = (await server.handle({
+				jsonrpc: "2.0",
+				id: 1,
+				method: "tools/call",
+				params: { name, arguments: {} },
+			})) as { result: { content: Array<{ text: string }>; isError?: boolean } }
+			return answer.result
+		}
+		const first = create_mcp_server({ env, fetch: agentboi.fetch })
+		const made = JSON.parse((await info(first, "mailbox_create")).content[0].text)
+		const next = create_mcp_server({ env, fetch: agentboi.fetch })
+		const again = await info(next, "mailbox_info")
+		expect(again.isError).toBeUndefined()
+		expect(JSON.parse(again.content[0].text).address).toBe(made.address)
+	})
+
 	it("with the team's key and several mailboxes, it asks which", async () => {
 		const { call, agentboi } = harness({ POSTBOI_TOKEN: TEAM_KEY })
 		const fresh = create_mcp_server({
-			env: { POSTBOI_TOKEN: TEAM_KEY, POSTBOI_MAILBOX_URL: agentboi.base },
+			env: {
+				XDG_CONFIG_HOME: config_dir(),
+				POSTBOI_TOKEN: TEAM_KEY,
+				POSTBOI_MAILBOX_URL: agentboi.base,
+			},
 			fetch: agentboi.fetch,
 		})
 		await call("mailbox_create", { address: "a" })

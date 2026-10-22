@@ -13,15 +13,19 @@ Postboi, the same provider as the rest of these docs.
 
 ## Make one
 
-With your project's `POSTBOI_TOKEN`, the mailbox is your team's from the start and can send:
+There's nothing to set up. With the `POSTBOI_TOKEN` that `postboi init` wrote, the mailbox is
+your team's from the start and can send. The first call makes it, and every call after that
+opens the same one:
 
 ```ts
 import { mailbox } from "postboi/mailbox"
 
-const box = await mailbox({ address: "orders" })
-box.address // "orders-k3f9@agentboi.email"
-box.key // "mb_…", shown once: keep it as POSTBOI_MAILBOX_KEY
+const box = await mailbox("orders")
+box.address // "orders-k3f9@agentboi.email", today and on every run after
 ```
+
+`mailbox()` with no name opens the team's mailbox when it has one, and makes one when it has
+none. Once the team has several, name the one you mean.
 
 Without a token, an agent can make one on its own. It receives straight away and sends once
 a person opens its claim link and signs in, at which point it joins their team:
@@ -40,9 +44,22 @@ claim:  https://postboi.app/claim/…
 Put the claim link in your summary for the person you're working for: it's the one step only
 they can take. Nobody claims it, and it's deleted after 14 days.
 
-From the terminal it's `postboi mailbox new`, which keeps the key on your machine
-(`~/.config/postboi/mailboxes.json`, readable by you alone) so later commands can leave the
-address off.
+A mailbox made without a token is remembered on your machine
+(`~/.config/postboi/mailboxes.json`, readable by you alone) under the directory it was made
+from. So the next `mailbox()` there opens the same address rather than making another, and
+`postboi mailbox` and `postboi mcp` find it too. Pass `remember: false` to keep nothing.
+
+### A key for one mailbox
+
+Every mailbox also has a key of its own (`mb_…`, said once, when it is made). Your team's key
+opens all of them, so the mailbox key is for an agent you'd rather not hand that: it opens
+this one mailbox, and nothing else of your team's.
+
+```ts
+const box = await mailbox({ key: process.env.AGENT_MAILBOX_KEY })
+```
+
+`POSTBOI_MAILBOX_KEY` in the environment does the same thing with nothing passed.
 
 ### On agentboi.email, or on your own domain
 
@@ -60,7 +77,7 @@ await mailbox.create({ address: "support", domain: "reply.example.com" })
 ## Read its mail
 
 ```ts
-const box = await mailbox() // opens POSTBOI_MAILBOX_KEY
+const box = await mailbox("orders")
 
 for await (const mail of box.watch()) {
 	mail.trust // "owner" | "thread" | "stranger" | "suspect"
@@ -233,25 +250,19 @@ await mail({ to: "bob@example.com", subject: "Re: Your order", body: "…", in_r
 
 `postboi mcp` runs an [MCP](https://modelcontextprotocol.io) server on stdio, so an agent in
 Claude Code, Cursor, Codex or any other MCP client reaches its mailbox as tools. It needs
-nothing installed beyond the package, and the key goes in its environment:
+nothing installed beyond the package and nothing to configure. It reads the project's `.env`,
+so the `POSTBOI_TOKEN` that `postboi init` wrote is already enough:
 
 ```bash
-claude mcp add postboi --env POSTBOI_MAILBOX_KEY=mb_… -- npx postboi mcp
+claude mcp add postboi -- npx postboi mcp
 ```
-
-If the key is already in the environment Claude Code runs in, `claude mcp add postboi -- npx postboi mcp`
-is enough.
 
 For Cursor (`.cursor/mcp.json`), Claude Desktop and most other clients:
 
 ```json
 {
 	"mcpServers": {
-		"postboi": {
-			"command": "npx",
-			"args": ["postboi", "mcp"],
-			"env": { "POSTBOI_MAILBOX_KEY": "mb_…" }
-		}
+		"postboi": { "command": "npx", "args": ["postboi", "mcp"] }
 	}
 }
 ```
@@ -262,13 +273,14 @@ For Codex (`~/.codex/config.toml`):
 [mcp_servers.postboi]
 command = "npx"
 args = ["postboi", "mcp"]
-env = { POSTBOI_MAILBOX_KEY = "mb_…" }
 ```
 
-With `POSTBOI_MAILBOX_KEY` the server opens that mailbox and nothing else. With
-`POSTBOI_TOKEN` (your team's API key) it opens every mailbox the team has, each tool takes a
-`mailbox` to say which, and `email_send` sends the team's own mail. With neither, the agent can
-make a mailbox of its own with `mailbox_create` and hand you its claim link.
+With your team's key it opens the team's mailbox, or the one each tool's `mailbox` names when
+the team has several, and `email_send` sends the team's own mail. With no key at all, the
+agent makes a mailbox of its own with `mailbox_create` and hands you its claim link. That
+mailbox is remembered on your machine, so the next session opens it again. To give an agent
+one mailbox and nothing else of your team's, put that mailbox's key in the server's
+environment as `POSTBOI_MAILBOX_KEY`.
 
 | Tool                                                                 | Does                                                         |
 | -------------------------------------------------------------------- | ------------------------------------------------------------ |

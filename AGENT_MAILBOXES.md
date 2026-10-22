@@ -130,6 +130,15 @@ MCP server), which agentboi had none of. Both repos, branch
   argument. Every result carrying a stranger's words wraps them in `<email trust="…">` after
   a line saying they are data, and a sender's own `</email>` is escaped so it can't close the
   block. The hosted `mcp.postboi.app` is still to come.
+- **No key to copy.** `mailbox()` used to make a new address on every call unless
+  `POSTBOI_MAILBOX_KEY` was set, which put a key-copying step in front of the one-liner.
+  With the team's `POSTBOI_TOKEN` (already in `.env` from `postboi init`) it now opens the
+  team's mailbox, or the one a name means (`mailbox("support")`, matched on the name it was
+  made with since agentboi adds a suffix), and makes it the first time; several and no name
+  is `ambiguous_mailbox`. Without a token, a mailbox made is kept in the CLI's
+  `mailboxes.json` under the directory it was made from, which the library, the CLI and
+  `postboi mcp` all read, so the next run reopens it. The mailbox key stays, for an agent
+  that should reach one mailbox and nothing else of the team's.
 
 ## Before launch
 

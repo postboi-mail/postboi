@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, extname, join } from "node:path"
 import { spawn } from "node:child_process"
-import { env as process_env, stderr, stdout } from "node:process"
+import { cwd, env as process_env, stderr, stdout } from "node:process"
 import {
 	mailbox as open_or_make,
 	Mailbox,
@@ -19,6 +19,14 @@ import {
 	type SendResult,
 	type Trust,
 } from "../library/mailbox.js"
+import {
+	names_address,
+	parse_saved,
+	serialise_saved,
+	store_path,
+	with_entry,
+	type SavedMailbox,
+} from "../library/mailbox_store.js"
 import { EXIT, parse_match } from "./inbox.js"
 import { help_text } from "./help.js"
 import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
@@ -33,13 +41,7 @@ import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
  * and sends once a person claims it. With one, a new mailbox is the team's.
  */
 
-/** One mailbox this machine made or opened, as `mailboxes.json` keeps it. Most recent first. */
-export interface SavedMailbox {
-	address: string
-	key: string
-	base: string
-	claim_url?: string
-}
+export type { SavedMailbox }
 
 type Env = Record<string, string | undefined>
 
@@ -110,31 +112,21 @@ export function parse_mailbox_args(args: Array<string>): MailboxArgs {
 
 /** `$XDG_CONFIG_HOME/postboi/mailboxes.json`, or `~/.config/postboi/mailboxes.json`. */
 export function mailboxes_path(env: Env = process_env): string {
-	const root = env.XDG_CONFIG_HOME || join(env.HOME || homedir(), ".config")
-	return join(root, "postboi", "mailboxes.json")
+	return store_path(env, homedir(), join)
 }
 
 export function read_saved(path: string): Array<SavedMailbox> {
-	let parsed: unknown
 	try {
-		parsed = JSON.parse(readFileSync(path, "utf8"))
+		return parse_saved(readFileSync(path, "utf8"))
 	} catch {
 		return []
 	}
-	if (!Array.isArray(parsed)) return []
-	return parsed.filter(
-		(entry): entry is SavedMailbox =>
-			!!entry &&
-			typeof entry.address === "string" &&
-			typeof entry.key === "string" &&
-			typeof entry.base === "string"
-	)
 }
 
 /** Keys are credentials: the file is the owner's alone. */
 function write_saved(path: string, entries: Array<SavedMailbox>): void {
 	mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-	writeFileSync(path, `${JSON.stringify(entries, null, "\t")}\n`, { mode: 0o600 })
+	writeFileSync(path, serialise_saved(entries), { mode: 0o600 })
 	try {
 		chmodSync(path, 0o600)
 	} catch {
@@ -143,7 +135,7 @@ function write_saved(path: string, entries: Array<SavedMailbox>): void {
 }
 
 export function remember(path: string, entry: SavedMailbox): void {
-	write_saved(path, [entry, ...read_saved(path).filter((e) => e.address !== entry.address)])
+	write_saved(path, with_entry(read_saved(path), entry))
 }
 
 export function forget(path: string, address: string): void {
@@ -155,26 +147,32 @@ export function forget(path: string, address: string): void {
 
 /**
  * Which mailbox a command means: `POSTBOI_MAILBOX_KEY` wins (the key alone names it), then
- * a named address from memory, then the most recent one.
+ * a named address from memory, then the most recent one. With nothing remembered and the
+ * team's `POSTBOI_TOKEN` set, the team's: the answer is then `{ token }`, and the team's
+ * mailbox the address names (or its only one) is found with it.
  */
 export function pick_mailbox(
 	saved: Array<SavedMailbox>,
 	env: Env,
 	address?: string
-): { key: string; base: string; address?: string } | { error: string; code: string } {
+):
+	| { key: string; base: string; address?: string }
+	| { token: string; base: string; address?: string }
+	| { error: string; code: string } {
 	const base = (env.POSTBOI_MAILBOX_URL || MAILBOX_URL).replace(/\/+$/, "")
 	if (address) {
-		const wanted = address.replace(/\+[^@]*@/, "@").toLowerCase()
-		const found = saved.find((e) => e.address.toLowerCase() === wanted)
+		const found = saved.find((e) => names_address(e.address, address))
 		if (found) return found
 		if (env.POSTBOI_MAILBOX_KEY) return { key: env.POSTBOI_MAILBOX_KEY, base, address }
+		if (env.POSTBOI_TOKEN) return { token: env.POSTBOI_TOKEN, base, address }
 		return {
-			error: `No key for ${address} on this machine. Set POSTBOI_MAILBOX_KEY to use one made elsewhere.`,
+			error: `No key for ${address} on this machine. Set POSTBOI_TOKEN to your team's API key (postboi init writes it) to reach the team's mailboxes.`,
 			code: "unknown_mailbox",
 		}
 	}
 	if (env.POSTBOI_MAILBOX_KEY) return { key: env.POSTBOI_MAILBOX_KEY, base }
 	if (saved[0]) return saved[0]
+	if (env.POSTBOI_TOKEN) return { token: env.POSTBOI_TOKEN, base }
 	return { error: "No mailbox yet. Make one with `postboi mailbox new`.", code: "no_mailbox" }
 }
 
@@ -264,6 +262,21 @@ function trust_flag(ctx: Context): Trust | undefined {
 async function open(ctx: Context, address?: string): Promise<Mailbox> {
 	const picked = pick_mailbox(read_saved(ctx.path), ctx.env, flag(ctx, "mailbox") ?? address)
 	if ("error" in picked) throw new MailboxCommandError(picked.error, picked.code)
+	if ("token" in picked) {
+		const found = await open_or_make.find({
+			token: picked.token,
+			address: picked.address,
+			base: picked.base,
+			fetch: ctx.fetch,
+		})
+		if (found) return found
+		throw new MailboxCommandError(
+			picked.address
+				? `Your team has no mailbox ${picked.address}. Make it with \`postboi mailbox new ${picked.address}\`.`
+				: "Your team has no mailboxes yet. Make one with `postboi mailbox new`.",
+			picked.address ? "unknown_mailbox" : "no_mailbox"
+		)
+	}
 	const box = await open_or_make
 		.open({ key: picked.key, base: picked.base, fetch: ctx.fetch })
 		.catch((error: unknown) => {
@@ -282,6 +295,7 @@ function save(ctx: Context, box: Mailbox): void {
 		address: box.address,
 		key: box.key,
 		base: box.base,
+		project: known?.project ?? cwd(),
 		...((box.claim_url ?? known?.claim_url)
 			? { claim_url: box.claim_url ?? known?.claim_url }
 			: {}),

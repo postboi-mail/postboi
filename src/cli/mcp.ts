@@ -23,6 +23,7 @@ import {
 	type Mail,
 } from "../library/temp_inbox.js"
 import { ensure_env_loaded, read_env } from "../library/env.js"
+import { drop, keep, recall } from "../library/mailbox_store.js"
 import { PostboiError } from "../library/errors.js"
 
 /**
@@ -540,10 +541,25 @@ export function create_mcp_server(options: McpOptions = {}) {
 		}
 		if (made && (!ref || same(made, ref))) return made
 		const token = get("POSTBOI_TOKEN")
-		if (!token)
+		if (!token) {
+			// One made from this directory before, in this server or the CLI or the library.
+			const saved = await recall(mailbox_base(), ref, options.env)
+			if (saved) {
+				const box = await mailboxes
+					.open({ key: saved.key, base: mailbox_base(), fetch: fetcher })
+					.catch(async (error: unknown) => {
+						if (error instanceof MailboxError && error.status === 401)
+							await drop(saved.address, options.env)
+						throw error
+					})
+				return (made = remember(box))
+			}
 			throw new ToolError(
-				"No mailbox yet. Call mailbox_create to make one, or set POSTBOI_MAILBOX_KEY (a mailbox's key) or POSTBOI_TOKEN (your team's API key) in this server's env."
+				ref
+					? `No key for ${ref} on this machine. Set POSTBOI_TOKEN (your team's API key, which postboi init writes) to reach the team's mailboxes.`
+					: "No mailbox yet. Call mailbox_create to make one; it is kept on this machine, so later sessions open it again."
 			)
+		}
 		if (ref) {
 			const known = boxes.get(ref.replace(/\+[^@]*@/, "@").toLowerCase()) ?? boxes.get(ref)
 			if (known) return known
@@ -657,7 +673,7 @@ export function create_mcp_server(options: McpOptions = {}) {
 							name: "mailbox_create",
 							title: "Make a mailbox",
 							description:
-								"Make a new email address for this agent at agentboi.email (or on one of the team's receiving domains). With POSTBOI_TOKEN set it is the team's and can send at once. Without one it receives straight away and sends only once a person opens its claim_url: give that link to your user. The key it returns is shown once; tell your user to keep it as POSTBOI_MAILBOX_KEY. The mailbox becomes this session's default.",
+								"Make a new email address for this agent at agentboi.email (or on one of the team's receiving domains). With POSTBOI_TOKEN set it is the team's and can send at once, and later sessions find it with that key. Without one it receives straight away and sends only once a person opens its claim_url: give that link to your user; it is kept on this machine, so later sessions open it again. Nobody has to copy a key anywhere. The mailbox becomes this session's default.",
 							inputSchema: object({
 								address: string(
 									"The name to ask for, e.g. orders. On agentboi.email four random characters are added"
@@ -676,12 +692,22 @@ export function create_mcp_server(options: McpOptions = {}) {
 									fetch: fetcher,
 								})
 								made = remember(box)
+								if (box.key && !box.claimed)
+									await keep(
+										{
+											address: box.address,
+											key: box.key,
+											base: box.base,
+											...(box.claim_url ? { claim_url: box.claim_url } : {}),
+										},
+										options.env
+									)
 								return result(
 									{ ...box_facts(box), key: box.key, claim_url: box.claim_url ?? null },
 									[],
 									box.claim_url
-										? `Made ${box.address}. It receives now and can't send until a person opens ${box.claim_url}: give your user that link. The key is shown once; they should keep it as POSTBOI_MAILBOX_KEY.`
-										: `Made ${box.address}, your team's. The key is shown once; keep it as POSTBOI_MAILBOX_KEY.`
+										? `Made ${box.address}. It receives now and can't send until a person opens ${box.claim_url}: give your user that link. It is kept on this machine, so later sessions open it again.`
+										: `Made ${box.address}, your team's. Later sessions find it with the team's key.`
 								)
 							},
 						} satisfies Tool,
@@ -1498,7 +1524,7 @@ async function send_with_postboi(
 export async function mcp_command(args: Array<string>, options: McpOptions = {}): Promise<number> {
 	if (args.includes("--help") || args.includes("-h")) {
 		stdout.write(
-			`postboi mcp: a stdio MCP server with mailbox, temp inbox and send tools.\n\n  claude mcp add postboi -- npx postboi mcp\n\nPOSTBOI_MAILBOX_KEY opens one mailbox; POSTBOI_TOKEN opens the team's and sends with email_send.\nPOSTBOI_MAILBOX_URL and POSTBOI_INBOX_URL move the hosts.\n`
+			`postboi mcp: a stdio MCP server with mailbox, temp inbox and send tools.\n\n  claude mcp add postboi -- npx postboi mcp\n\nIt reads the project's .env: POSTBOI_TOKEN opens the team's mailboxes and sends with\nemail_send. Without one, a mailbox it makes is kept on this machine for the next session.\nPOSTBOI_MAILBOX_KEY opens one mailbox and nothing else.\nPOSTBOI_MAILBOX_URL and POSTBOI_INBOX_URL move the hosts.\n`
 		)
 		return 0
 	}
