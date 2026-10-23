@@ -7,8 +7,8 @@
  * here is a second send path; each function calls the one `mail()` everybody else does,
  * so the dev inbox, the hooks and the provider rules behave exactly as documented.
  *
- * `effect` is an optional peer dependency. Only this entry imports it; the rest of the
- * package stays dependency-free.
+ * It needs `effect` 4 in the app, which the package doesn't list as a dependency. Only this
+ * entry imports it; the rest of the package stays dependency-free.
  */
 import {
 	Config,
@@ -61,8 +61,9 @@ const ReasonSchema = Schema.Literals([
  * The normalised error every provider throws, as a tagged error. Same fields as the
  * class on the package root (`provider`, `channel`, `status`, `code`, `raw`,
  * `outcome_unknown`, `reason`, `retry_after`), so a handler written against one reads the
- * other; `_tag` is what `Effect.catchTag` keys on. A failover chain's `FailoverError` is
- * one of these too, with every provider's error in `errors`, and so is an inbox's or a
+ * other, and the root's `whatsapp.closed`, `push.expired` and `fails_over` read it too;
+ * `_tag` is what `Effect.catchTag` keys on. A failover chain's `FailoverError` is one of
+ * these too, with every provider's error in `errors`, and so is an inbox's or a
  * mailbox's `wait()` running out, with its `cursor`, as on the root.
  */
 export class PostboiError extends Schema.TaggedError<PostboiError>()("PostboiError", {

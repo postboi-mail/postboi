@@ -161,7 +161,7 @@ export class FailoverError extends PostboiError {
  */
 export function fails_over(error: unknown): boolean {
 	return (
-		error instanceof PostboiError &&
+		carries_error(error) &&
 		!(error instanceof SkipSendError) &&
 		!error.outcome_unknown &&
 		error.reason !== undefined &&
@@ -193,6 +193,21 @@ export class SpamError extends SkipSendError {
 		super(message, "spam")
 		this.name = "SpamError"
 	}
+}
+
+/**
+ * A {@link PostboiError} as the package root throws it, or as `postboi/effect` fails with it
+ * (its `_tag`): the fields the channel helpers read are the same on both.
+ */
+export function carries_error(
+	error: unknown
+): error is Pick<PostboiError, "provider" | "status" | "code" | "outcome_unknown" | "reason"> {
+	return (
+		error instanceof PostboiError ||
+		(typeof error === "object" &&
+			error !== null &&
+			(error as { _tag?: unknown })._tag === "PostboiError")
+	)
 }
 
 /** Type guard: is a caught value a normalized {@link PostboiError}? */

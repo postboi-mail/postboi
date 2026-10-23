@@ -9,7 +9,10 @@ import {
 	PostboiError as PostboiErrorClass,
 	SkipSendError,
 	SpamError,
+	fails_over,
 } from "./errors.js"
+import { push } from "./push/send.js"
+import { whatsapp } from "./whatsapp/send.js"
 import {
 	Mailer,
 	PostboiError,
@@ -558,4 +561,18 @@ describe("with_retry", () => {
 			expect(retryable(new PostboiError({ provider: "x", message: "", status: 429 }))).toBe(true)
 		})
 	)
+})
+
+describe("the root's channel helpers", () => {
+	it("read the tagged PostboiError as they read the root's", () => {
+		const tagged = (fields: Partial<ConstructorParameters<typeof PostboiError>[0]>) =>
+			new PostboiError({ provider: "meta", message: "refused", outcome_unknown: false, ...fields })
+		expect(whatsapp.closed(tagged({ code: "outside_window" }))).toBe(true)
+		expect(whatsapp.closed(tagged({ code: "rate_limited" }))).toBe(false)
+		expect(push.expired(tagged({ provider: "webpush", status: 410 }))).toBe(true)
+		expect(push.expired(tagged({ provider: "postboi", status: 404 }))).toBe(false)
+		expect(fails_over(tagged({ reason: "auth" }))).toBe(true)
+		expect(fails_over(tagged({ reason: "auth", outcome_unknown: true }))).toBe(false)
+		expect(whatsapp.closed({ code: "outside_window" })).toBe(false)
+	})
 })

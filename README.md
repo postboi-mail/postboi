@@ -176,7 +176,7 @@ bun run infra:destroy -- --stage pr-123  # and take it down again
 ```
 
 It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment (or
-`alchemy login`). The first production deploy adopts the Worker wrangler already made
+`alchemy profile`). The first production deploy adopts the Worker wrangler already made
 (`--adopt`); until that has happened, `wrangler.jsonc` is the deploy that still works.
 
 PRs are welcome, new providers especially. Match the code style (snake_case, no

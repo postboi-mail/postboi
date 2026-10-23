@@ -6,7 +6,7 @@
  * resource and Meta's `/messages` are single-recipient) — many recipients means an array
  * of sends, exactly like Twilio SMS.
  */
-import { PostboiError, type Channel } from "../errors.js"
+import { carries_error, PostboiError, type Channel } from "../errors.js"
 import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
 import { ensure_env_loaded } from "../env.js"
@@ -146,6 +146,6 @@ export abstract class WhatsappProvider<TResponse = unknown> extends Transport<
 	 * static exists for code holding a provider instance.
 	 */
 	static is_outside_window(error: unknown): boolean {
-		return error instanceof PostboiError && error.code === "outside_window"
+		return carries_error(error) && error.code === "outside_window"
 	}
 }

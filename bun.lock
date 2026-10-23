@@ -67,7 +67,6 @@
       "peerDependencies": {
         "@maizzle/framework": "^6.0.0",
         "@sveltejs/kit": "^3.0.0",
-        "effect": "^4.0.0",
         "expo-constants": ">=15",
         "expo-notifications": ">=0.20",
         "react": ">=18",
@@ -77,7 +76,6 @@
       "optionalPeers": [
         "@maizzle/framework",
         "@sveltejs/kit",
-        "effect",
         "expo-constants",
         "expo-notifications",
         "react",

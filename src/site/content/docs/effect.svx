@@ -7,9 +7,9 @@ category: Frameworks
 
 Postboi is an email provider, and `postboi/effect` is its SDK for an
 [Effect](https://effect.website) program: the same `mail()` as everywhere else, as an
-Effect, with the failures in the error channel as tagged errors you can `catchTag`. The
-rest of the package stays as it is. `effect` is an optional peer dependency that only this
-entry imports, so nothing changes for anyone not using it.
+Effect, with the failures in the error channel as tagged errors you can `catchTag`. It needs `effect` 4 in your app, and
+only this entry imports it: postboi doesn't list `effect` as a dependency, so an app on
+Effect 3, or none, installs and uses the rest of the package as before.
 
 ```bash
 bun add postboi effect

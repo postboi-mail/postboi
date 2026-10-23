@@ -517,3 +517,52 @@ describe("forwarding and attachments", () => {
 		expect(error).toMatchObject({ code: "attachments_too_large", status: 413 })
 	})
 })
+
+describe("a request that fails", () => {
+	/** The fake API, with every path ending in `path` answered by `fail` instead. */
+	function failing(fail: () => Promise<Response>, path = "/send") {
+		const { server, options } = setup()
+		const fetch = (input: RequestInfo | URL, init?: RequestInit) =>
+			new URL(String(input)).pathname.endsWith(path) ? fail() : server.fetch(input, init)
+		return { server, options: { ...options, fetch } }
+	}
+
+	it("a send nobody answered is a MailboxError with an unknown outcome", async () => {
+		const { server, options } = failing(() => Promise.reject(new TypeError("fetch failed")))
+		const box = await mailbox.create(options)
+		server.claim(box.address)
+		const error = await box
+			.send({ to: "ada@example.com", subject: "Hi", text: "Hi" })
+			.catch((e) => e)
+		expect(error).toBeInstanceOf(MailboxError)
+		expect(error.outcome_unknown).toBe(true)
+		expect(error.raw).toBeInstanceOf(TypeError)
+	})
+
+	it("a 5xx to a send is an unknown outcome, and a 5xx to a read is not", async () => {
+		const bad_gateway = () => Promise.resolve(new Response("{}", { status: 502 }))
+		const send = failing(bad_gateway)
+		const box = await mailbox.create(send.options)
+		send.server.claim(box.address)
+		const sent = await box
+			.send({ to: "ada@example.com", subject: "Hi", text: "Hi" })
+			.catch((e) => e)
+		expect(sent).toBeInstanceOf(MailboxError)
+		expect(sent.outcome_unknown).toBe(true)
+
+		const read = failing(bad_gateway, "/messages")
+		const other = await mailbox.create(read.options)
+		const listed = await other.request("/messages").catch((e) => e)
+		expect(listed).toBeInstanceOf(MailboxError)
+		expect(listed.status).toBe(502)
+		expect(listed.outcome_unknown).toBe(false)
+	})
+
+	it("a caller's own abort stays an AbortError", async () => {
+		const abort = Object.assign(new Error("aborted"), { name: "AbortError" })
+		const { server, options } = failing(() => Promise.reject(abort))
+		const box = await mailbox.create(options)
+		server.claim(box.address)
+		await expect(box.send({ to: "ada@example.com", subject: "Hi", text: "Hi" })).rejects.toBe(abort)
+	})
+})

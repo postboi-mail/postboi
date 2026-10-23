@@ -19,7 +19,7 @@
  * laptop; name the stage you mean (`bun run infra:deploy -- --stage pr-123`).
  * `alchemy destroy --stage pr-123` takes a preview down.
  *
- * Needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or `alchemy login`), and
+ * Needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or `alchemy profile`), and
  * `@alchemy.run/frontend-frameworks` installed, which it is as a devDependency. State
  * lives in the account (`Cloudflare.state()`), not in the repository.
  */
@@ -35,6 +35,48 @@ const wrangler = unstable_readConfig({ config: "wrangler.jsonc" }, { hideWarning
 if (!wrangler.name) throw new Error("wrangler.jsonc names no Worker")
 const worker = wrangler.name
 
+/** wrangler.jsonc settings this stack doesn't deploy: one of them set is refused, not dropped. */
+const NOT_CARRIED = [
+	"vars",
+	"kv_namespaces",
+	"r2_buckets",
+	"d1_databases",
+	"services",
+	"queues",
+	"durable_objects",
+	"analytics_engine_datasets",
+	"hyperdrive",
+	"vectorize",
+	"ai",
+	"browser",
+	"routes",
+	"triggers",
+	"limits",
+] as const
+for (const key of NOT_CARRIED) {
+	const value: unknown = (wrangler as unknown as Record<string, unknown>)[key]
+	const set = Array.isArray(value)
+		? value.length > 0
+		: value && typeof value === "object"
+			? Object.values(value).some((inner) =>
+					Array.isArray(inner) ? inner.length > 0 : Boolean(inner)
+				)
+			: Boolean(value)
+	if (set) throw new Error(`wrangler.jsonc sets ${key}, which alchemy.run.ts doesn't deploy`)
+}
+
+/** A Worker name may be 54 characters with preview URLs on, of lowercase letters, digits and hyphens. */
+function preview_name(stage: string): string {
+	const slug = stage
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+	const name = `${worker}-docs-${slug}`
+	if (!slug || name.length > 54)
+		throw new Error(`Stage "${stage}" makes no valid Worker name ("${name}")`)
+	return name
+}
+
 export default Alchemy.Stack(
 	"postboi-docs",
 	{ providers: Cloudflare.providers(), state: Cloudflare.state() },
@@ -45,8 +87,13 @@ export default Alchemy.Stack(
 		const site = yield* Cloudflare.Website.SvelteKit("Docs", {
 			// Production is wrangler.jsonc's Worker; previews get their own name so a pull
 			// request never redeploys it.
-			name: production ? worker : `${worker}-docs-${stage}`,
-			compatibility: { date: wrangler.compatibility_date, flags: wrangler.compatibility_flags },
+			name: production ? worker : preview_name(stage),
+			// alchemy adds `new_module_registry` unless told otherwise; the legacy registry is the
+			// one wrangler.jsonc's flags deploy.
+			compatibility: {
+				date: wrangler.compatibility_date,
+				flags: [...(wrangler.compatibility_flags ?? []), "legacy_module_registry"],
+			},
 			observability: { enabled: wrangler.observability?.enabled ?? false },
 			workersDev: {
 				enabled: wrangler.workers_dev ?? true,
@@ -55,8 +102,8 @@ export default Alchemy.Stack(
 			// The custom domain is production's alone. The zone (postboi.app) already exists in
 			// the account; alchemy manages the DNS record and the edge certificate.
 			domain: production ? { name: DOCS_DOMAIN } : null,
-			// What decides whether a rebuild is needed: the site and the package source (the
-			// docs import from `#library`), the static files, and the lockfile. `dist/`, the
+			// What decides whether a rebuild is needed: the source, the static files, and the
+			// lockfile. `dist/`, the
 			// examples and the Chrome extension do not change what is deployed.
 			memo: {
 				include: [
