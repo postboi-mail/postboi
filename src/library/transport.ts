@@ -642,11 +642,11 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 			const last_day = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
 			date.setDate(Math.min(day, last_day))
 		}
-		if (value.weeks) date.setDate(date.getDate() + value.weeks * 7)
-		if (value.days) date.setDate(date.getDate() + value.days)
-		if (value.hours) date.setHours(date.getHours() + value.hours)
-		if (value.minutes) date.setMinutes(date.getMinutes() + value.minutes)
-		if (value.seconds) date.setSeconds(date.getSeconds() + value.seconds)
-		return date
+		const seconds =
+			((value.weeks ?? 0) * 7 + (value.days ?? 0)) * 86_400 +
+			(value.hours ?? 0) * 3_600 +
+			(value.minutes ?? 0) * 60 +
+			(value.seconds ?? 0)
+		return new Date(date.getTime() + seconds * 1_000)
 	}
 }

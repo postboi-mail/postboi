@@ -1278,7 +1278,7 @@ describe("resilience (shared base)", () => {
 		const before = Date.now()
 		await make().send({ to: "to@test.com", body: "x", scheduled_at: { days: 1, hours: 5 } })
 		const sent = new Date(sent_json().scheduled_at).getTime()
-		// 1 day + 5 hours from "now" (calendar arithmetic ≈ 29h with no DST boundary crossed).
+		// 1 day + 5 hours from "now" is 29 hours, whatever the clock does in between.
 		expect(Math.abs(sent - (before + 29 * 60 * 60 * 1000))).toBeLessThan(60_000)
 	})
 })
