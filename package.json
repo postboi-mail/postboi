@@ -51,7 +51,6 @@
 	"types": "./dist/postboi.d.ts",
 	"type": "module",
 	"imports": {
-		"#library": "./src/library/index.ts",
 		"#library/*": "./src/library/*",
 		"#site": "./src/site/index.ts",
 		"#site/*": "./src/site/*"

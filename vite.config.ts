@@ -1,6 +1,5 @@
 import { fileURLToPath, URL } from "node:url"
-import type { Element, Parent, Root, RootContent, Text } from "hast"
-import type { VFile } from "vfile"
+import type { Element, Nodes, Parent, Root, Text } from "hast"
 import adapter from "@sveltejs/adapter-cloudflare"
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte"
 import { escapeSvelte, mdsvex } from "mdsvex"
@@ -10,19 +9,14 @@ import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vitest/config"
 import { sveltekit } from "@sveltejs/kit/vite"
 
-/** A node of the tree a rehype plugin walks. */
-type Node = Root | RootContent
-
-const children = (node: Node): Array<RootContent> => ("children" in node ? node.children : [])
-
 const tableCellFormatter = () => {
 	return (tree: Root) => {
 		const ancestors: Array<Element> = []
 
-		const visit = (node: Node, parent: Parent | null = null, index = 0) => {
+		const visit = (node: Nodes, parent: Parent | null = null, index = 0) => {
 			const isElement = node.type === "element"
 
-			if (node.type === "element") {
+			if (isElement) {
 				ancestors.push(node)
 			}
 
@@ -40,7 +34,7 @@ const tableCellFormatter = () => {
 				}
 			}
 
-			if (node.type === "element") {
+			if (isElement) {
 				const el = node
 				const childText = el.children.length === 1 ? el.children[0] : undefined
 
@@ -62,39 +56,29 @@ const tableCellFormatter = () => {
 					}
 
 					if (!isBlockCode && insideTableCell && raw.includes("|") && parent) {
-						const parentChildren = parent.children
+						const segments = raw.split("|").map((segment) => segment.trim())
 
-						if (Array.isArray(parentChildren)) {
-							const segments = raw.split("|").map((segment) => segment.trim())
-
-							if (segments.length > 1) {
-								const replacements = segments.flatMap((segment, segmentIndex) => {
-									const codeNode: Element = {
-										type: "element",
-										tagName: "code",
-										properties: el.properties,
-										children: [{ type: "text", value: segment }],
-									}
-
-									if (segmentIndex === segments.length - 1) {
-										return [codeNode]
-									}
-
-									const space: Text = { type: "text", value: " " }
-
-									return [codeNode, space]
-								})
-
-								parentChildren.splice(index, 1, ...replacements)
-								ancestors.pop()
-
-								replacements.forEach((child, childIndex) => {
-									visit(child, parent, index + childIndex)
-								})
-
-								return
+						const replacements = segments.flatMap((segment, segmentIndex) => {
+							const codeNode: Element = {
+								type: "element",
+								tagName: "code",
+								properties: el.properties,
+								children: [{ type: "text", value: segment }],
 							}
-						}
+
+							if (segmentIndex === segments.length - 1) {
+								return [codeNode]
+							}
+
+							const space: Text = { type: "text", value: " " }
+
+							return [codeNode, space]
+						})
+
+						parent.children.splice(index, 1, ...replacements)
+						ancestors.pop()
+
+						return
 					}
 				}
 			}
@@ -120,15 +104,15 @@ const tableCellFormatter = () => {
 // links (e.g. `/settings`) that would otherwise resolve against the latest site
 // — 404ing on renamed slugs and yanking the reader out of the version. Rewrite
 // such links to the version's own base path.
-const versionScopedLinks = () => (tree: Root, file: VFile & { filename?: string }) => {
-	const path = file.filename ?? file.path ?? file.history[0] ?? ""
+const versionScopedLinks = () => (tree: Root, file: { filename?: string; path?: string }) => {
+	const path = file.filename ?? file.path ?? ""
 	const match = /[/\\]content[/\\](v\d[^/\\]*)[/\\]/.exec(path)
 
 	if (!match) return
 
 	const base = `/${match[1]}`
 
-	const visit = (node: Node) => {
+	const visit = (node: Nodes) => {
 		if (node.type === "element" && node.tagName === "a") {
 			const href = node.properties.href
 
@@ -137,7 +121,7 @@ const versionScopedLinks = () => (tree: Root, file: VFile & { filename?: string 
 			}
 		}
 
-		for (const child of children(node)) visit(child)
+		if ("children" in node) for (const child of node.children) visit(child)
 	}
 
 	visit(tree)
@@ -147,8 +131,6 @@ const markdownLayout = fileURLToPath(
 	new URL("./src/site/components/docs/MarkdownLayout.svelte", import.meta.url)
 )
 
-// SvelteKit 3 has no svelte.config.js: the preprocessors and the adapter are options of the
-// sveltekit() plugin itself.
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
@@ -158,7 +140,6 @@ export default defineConfig({
 			// for more information about preprocessors
 			preprocess: [
 				mdsvex({
-					extensions: [".svx"],
 					layout: { _: markdownLayout },
 					rehypePlugins: [tableCellFormatter, rehypeSlug, versionScopedLinks],
 					highlight: {

@@ -12,13 +12,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Fixed
 
-- `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) types on SvelteKit 3. The shipped declarations named `RemoteForm` and `RemoteFormInput` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`, so they failed to resolve and every field read as `any` (an error instead, without `skipLibCheck`). They are now read off SvelteKit's own `form`, and the fields and result are typed as `Input` says.
+- `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) types on SvelteKit 3. The shipped declarations named `RemoteForm` and `RemoteFormInput` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`, so they failed to resolve and every field read as `any` (an error instead, without `skipLibCheck`). Both now come from `$app/server`, and `RemoteFormInput` is exported from `postboi/kit`, so the fields and result are typed as `Input` says.
 - `postboi init` reads `files.serviceWorker` off the `sveltekit()` call in `vite.config.*` on a SvelteKit 3 project, which has no `svelte.config`, so a custom worker source is found rather than a second worker written beside it.
-- `postboi init` suggests the domain a SvelteKit 3 project names in `prerender.origin` on the `sveltekit()` call in `vite.config.*`, as it did from `svelte.config` on SvelteKit 2. Vite's own `server.origin` is not read as one.
-- `postboi init --push` writes a SvelteKit 3 TypeScript project's worker as `src/service-worker/index.ts` with a `tsconfig.json` extending `$app/tsconfig/service-worker`, the layout SvelteKit 3 checks a worker in, and finds one already kept there (or as `index.js`) instead of writing a second worker beside it. SvelteKit 2 projects keep `src/service-worker.ts`.
-
-### Fixed
-
+- `postboi init` suggests the domain a SvelteKit 3 project names in `paths.origin` on the `sveltekit()` call in `vite.config.*`, as it did from `svelte.config` on SvelteKit 2. Vite's own `server.origin` is not read as one.
+- `postboi init --push` gives a SvelteKit 3 project the layout SvelteKit 3 checks a worker in: `src/service-worker/index.ts` with a `tsconfig.json` extending `$app/tsconfig/service-worker` (and a reminder to exclude that directory from the app's `tsconfig.json`), or `src/service-worker/index.js` in a JavaScript project. It finds a worker already kept there, ahead of a flat `src/service-worker.ts` beside it as SvelteKit does, instead of writing a second one. SvelteKit 2 projects keep the flat file.
 - A relative `scheduled_at` adds its weeks, days, hours, minutes and seconds as fixed spans, as documented: `{ days: 1 }` is 24 hours from now wherever it runs, where it used to be the same wall-clock time tomorrow in the machine's own time zone (23 or 25 hours across a clock change).
 
 ## 0.73.0

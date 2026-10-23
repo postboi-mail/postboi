@@ -362,6 +362,11 @@ import { receive } from "postboi/push/sw"
 receive({ register: "/push/subscriptions" })
 ```
 
+On SvelteKit 3 the folder also holds a `tsconfig.json` that extends
+`$app/tsconfig/service-worker`, and the app's own `tsconfig.json` lists `src/service-worker`
+under `exclude`, so the worker is checked as a worker. The CLI writes the first and reminds
+you of the second. SvelteKit 2 builds the single file, `src/service-worker.ts`.
+
 A served-as-is file can't `import` (an import statement there is a syntax error at worker
 startup, with nothing pointing at the cause), so the CLI writes the same handlers out
 instead, with your VAPID public key baked in. postboi's test suite drives both through one

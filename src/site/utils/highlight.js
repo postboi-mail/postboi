@@ -8,8 +8,7 @@ import { language as tsx } from "@twinkleplop/tsx"
 import { language as typescript } from "@twinkleplop/typescript"
 
 // Every code block on the site goes through here: the markdown fences (mdsvex, in
-// svelte.config.js, at build time) and the tabs that highlight in the page. Plain JS
-// because the config imports it.
+// vite.config.ts, at build time) and the tabs that highlight in the page.
 //
 // Twinkleplop writes a class on each token and no colours, so one rendering carries
 // both modes; the theme is the `--code-*` palette in src/routes/layout.css.

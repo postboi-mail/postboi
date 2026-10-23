@@ -42,6 +42,13 @@ describe("find_worker", () => {
 		)
 	})
 
+	/** SvelteKit builds a worker directory's index over a flat file beside it. */
+	it("prefers a src/service-worker directory over a flat file beside it", () => {
+		expect(find_worker(has("src/service-worker.ts", "src/service-worker/index.ts"))?.path).toBe(
+			"src/service-worker/index.ts"
+		)
+	})
+
 	it("is undefined when there is no worker at all", () => {
 		expect(find_worker(none)).toBeUndefined()
 	})
@@ -67,6 +74,21 @@ describe("find_worker", () => {
 		expect(find_worker(exists, () => config)?.path).toBe("src/lib/worker.ts")
 		const other = `export default defineConfig({ plugins: [somethingElse({ serviceWorker: "src/lib/worker" })] })`
 		expect(find_worker(exists, () => other)?.path).toBe("src/service-worker.ts")
+	})
+
+	/** Options passed to sveltekit() win over a svelte config, which still counts when they
+	 * don't name a worker. */
+	it("reads the vite config before a svelte config", () => {
+		const configs: Record<string, string> = {
+			"vite.config.ts": `export default defineConfig({ plugins: [sveltekit({ files: { serviceWorker: "src/lib/worker" } })] })`,
+			"svelte.config.js": `export default { kit: {} }`,
+		}
+		const exists = has("vite.config.ts", "svelte.config.js", "src/lib/worker.ts", "src/lib/sw.ts")
+		expect(find_worker(exists, (path) => configs[path])?.path).toBe("src/lib/worker.ts")
+		configs["vite.config.ts"] = `export default defineConfig({ plugins: [sveltekit()] })`
+		configs["svelte.config.js"] =
+			`export default { kit: { files: { serviceWorker: "src/lib/sw" } } }`
+		expect(find_worker(exists, (path) => configs[path])?.path).toBe("src/lib/sw.ts")
 	})
 
 	it("prefers the configured source over the standard locations", () => {
@@ -96,11 +118,7 @@ describe("suggest_worker", () => {
 	 */
 	it("gives SvelteKit the bundled entry, in the project's language", () => {
 		expect(
-			suggest_worker(
-				["svelte.config.js"],
-				{ dependencies: { "@sveltejs/kit": "^2" } },
-				has("tsconfig.json")
-			)
+			suggest_worker([], { dependencies: { "@sveltejs/kit": "^2" } }, has("tsconfig.json"))
 		).toEqual({ path: "src/service-worker.ts", url: "/service-worker.js", kind: "bundled" })
 		expect(suggest_worker(["svelte.config.js"], undefined, none)).toMatchObject({
 			path: "src/service-worker.js",
@@ -108,24 +126,31 @@ describe("suggest_worker", () => {
 		})
 	})
 
-	/** SvelteKit 3 has no svelte.config and checks a TypeScript worker as its own project. */
-	it("gives a SvelteKit 3 TypeScript project the worker directory and its tsconfig", () => {
-		expect(
-			suggest_worker(
-				["vite.config.ts"],
-				{ devDependencies: { "@sveltejs/kit": "^3.1.0" } },
-				has("tsconfig.json")
-			)
-		).toEqual({
+	/** SvelteKit 3's sync writes the base a worker's tsconfig extends, and checks a worker kept
+	 * in its own directory apart from the app. */
+	it("gives a SvelteKit 3 project the worker directory, and a TypeScript one its tsconfig", () => {
+		const kit = { devDependencies: { "@sveltejs/kit": "^3.1.0" } }
+		const synced = "node_modules/$app/tsconfig/service-worker.json"
+		expect(suggest_worker(["vite.config.ts"], kit, has("tsconfig.json", synced))).toEqual({
 			path: "src/service-worker/index.ts",
 			url: "/service-worker.js",
 			kind: "bundled",
 			tsconfig: "src/service-worker/tsconfig.json",
 		})
 		expect(JSON.parse(WORKER_TSCONFIG)).toEqual({ extends: "$app/tsconfig/service-worker" })
-		expect(
-			suggest_worker(["vite.config.js"], { devDependencies: { "@sveltejs/kit": "^3.1.0" } }, none)
-		).toEqual({ path: "src/service-worker.js", url: "/service-worker.js", kind: "bundled" })
+		expect(suggest_worker(["vite.config.js"], kit, has(synced))).toEqual({
+			path: "src/service-worker/index.js",
+			url: "/service-worker.js",
+			kind: "bundled",
+		})
+		// SvelteKit 2.62+ takes its options on sveltekit() with no svelte.config too, and has no
+		// such base to extend.
+		const kit2 = { devDependencies: { "@sveltejs/kit": "^2.70.0" } }
+		expect(suggest_worker(["vite.config.ts"], kit2, has("tsconfig.json"))).toEqual({
+			path: "src/service-worker.ts",
+			url: "/service-worker.js",
+			kind: "bundled",
+		})
 	})
 
 	it("gives everything else a served-as-is file, in whichever static directory it has", () => {

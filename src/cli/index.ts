@@ -1713,6 +1713,13 @@ async function offer_service_worker(
 		if (target.tsconfig && !existsSync(target.tsconfig)) {
 			writeFileSync(target.tsconfig, WORKER_TSCONFIG)
 			console.log(`${green("✓")} created ${bold(target.tsconfig)}`)
+			if (!readFileSync("tsconfig.json", "utf8").includes("src/service-worker")) {
+				console.log(
+					dim(
+						'  Add "src/service-worker" to "exclude" in tsconfig.json too, or SvelteKit warns and checks the worker as app code.'
+					)
+				)
+			}
 		}
 		const how =
 			target.kind === "bundled"

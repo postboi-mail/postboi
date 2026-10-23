@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { parse_env } from "./env.js"
-import { read_package } from "./project.js"
+import { read_package, SVELTEKIT_CALL, VITE_CONFIGS } from "./project.js"
 
 /**
  * Where a project says its own public domain out loud. Nothing here *decides* anything —
@@ -11,7 +11,8 @@ import { read_package } from "./project.js"
  *
  * Signals, strongest intent first:
  *   1. CNAME file (GitHub Pages custom domain — the domain, verbatim)
- *   2. astro.config `site` / SvelteKit's `prerender.origin` / nuxt.config `url`
+ *   2. astro.config `site` / SvelteKit's origin (svelte.config, or `paths.origin` on its
+ *      vite plugin) / nuxt.config `url`
  *   3. Next.js `metadataBase` (next.config or the root layout)
  *   4. wrangler routes and custom domains
  *   5. package.json `homepage`
@@ -162,12 +163,12 @@ export function detect_domains(dir = "."): Array<DomainHint> {
 			regex: /\borigin:\s*["'`](https?:\/\/[^"'`]+)/g,
 			label: "origin",
 		},
-		// SvelteKit 3's `prerender.origin`, on the sveltekit() call in vite.config.
+		// SvelteKit 3's `paths.origin`, on the sveltekit() call in vite.config.
 		{
-			paths: ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs"],
-			regex: /\bprerender:\s*\{[^}]*?\borigin:\s*["'`](https?:\/\/[^"'`]+)/g,
-			label: "prerender.origin",
-			when: /\bsveltekit\s*\(/,
+			paths: VITE_CONFIGS,
+			regex: /\bpaths:\s*\{[^}]*?\borigin:\s*["'`](https?:\/\/[^"'`]+)/g,
+			label: "paths.origin",
+			when: SVELTEKIT_CALL,
 		},
 		{
 			paths: ["nuxt.config.ts", "nuxt.config.js"],
