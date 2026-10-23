@@ -6,6 +6,7 @@ import Postboi, {
 	PostboiError,
 	SkipSendError,
 } from "#library/postboi.js"
+import { resolve_provider } from "#library/mail.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -1140,6 +1141,24 @@ describe("the dev inbox", () => {
 		// The real send would use the project's sending address, so the inbox doesn't refuse it.
 		expect(sent_url()).toBe("http://127.0.0.1:4599/__postboi/api/messages")
 		expect(JSON.stringify(sent_json())).toContain("sender@postboi.invalid")
+	})
+
+	it("asks for a from when an override names a provider that needs one", async () => {
+		configure_real_provider()
+		vi.stubEnv("POSTBOI_FROM", "")
+		vi.stubEnv("RESEND_API_KEY", "re_test")
+		vi.stubEnv("NODE_ENV", "development")
+		vi.stubEnv("POSTBOI_INBOX", "4599")
+
+		const provider = await resolve_provider({
+			intercept: true,
+			env: { POSTBOI_PROVIDER: "resend" },
+		})
+
+		await expect(provider.send({ to: "to@test.com", body: "<p>x</p>" })).rejects.toThrow(
+			/No sender address/
+		)
+		expect(fetch).not.toHaveBeenCalled()
 	})
 
 	it("never intercepts outside development, however loudly the env asks", async () => {

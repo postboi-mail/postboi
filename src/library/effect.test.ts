@@ -209,6 +209,34 @@ describe("from_error", () => {
 		})
 	)
 
+	it.effect(
+		"fails with the provider's error when its body's code is neither text nor a number",
+		() =>
+			Effect.gen(function* () {
+				const thrown = new PostboiErrorClass({
+					provider: "teams",
+					message: "refused",
+					status: 400,
+					code: null as unknown as string,
+				})
+				const error = yield* Effect.flip(tried(() => Promise.reject(thrown)))
+				expect(error).toMatchObject({ _tag: "PostboiError", status: 400, code: undefined })
+			})
+	)
+
+	it("encodes to JSON with a thrown cause as raw", () => {
+		const error = new PostboiError({
+			provider: "resend",
+			message: "resend request failed: fetch failed",
+			outcome_unknown: true,
+			raw: new TypeError("fetch failed"),
+		})
+		expect(Schema.encodeSync(Schema.toCodecJson(PostboiError))(error)).toMatchObject({
+			outcome_unknown: true,
+			raw: { name: "TypeError", message: "fetch failed" },
+		})
+	})
+
 	it.effect("maps a SkipSendError onto SkipSend, keeping its code", () =>
 		Effect.gen(function* () {
 			const thrown = new SkipSendError("Unsubscribed", "unsubscribed")
@@ -344,6 +372,12 @@ describe("SendRequest", () => {
 		Effect.gen(function* () {
 			const error = yield* Effect.flip(decode_send_request({ to: "ada@example.com" }))
 			expect(error.message).toContain("a send needs html or text")
+			const blank = yield* Effect.flip(
+				decode_send_request({ to: "ada@example.com", html: "", text: "" })
+			)
+			expect(blank.message).toContain("a send needs html or text")
+			const fallback = yield* decode_send_request({ to: "ada@example.com", html: "", text: "Hi" })
+			expect(send_options(fallback).body).toBe("Hi")
 		})
 	)
 
@@ -449,6 +483,13 @@ describe("with_retry", () => {
 				outcome_unknown: true,
 			})
 			expect(retryable(limited)).toBe(true)
+			const partial = new PostboiError({
+				provider: "t",
+				message: "",
+				status: 207,
+				outcome_unknown: true,
+			})
+			expect(retryable(partial, true)).toBe(false)
 		})
 	)
 
@@ -481,6 +522,25 @@ describe("with_retry", () => {
 			expect(attempts).toBe(1)
 			yield* TestClock.adjust("1 second")
 			expect(yield* Fiber.join(capped)).toBe("sent")
+		})
+	)
+
+	it.effect("backs off when a Retry-After asks for no wait, as the transport does", () =>
+		Effect.gen(function* () {
+			let attempts = 0
+			const now = Effect.suspend(() => {
+				attempts += 1
+				return attempts === 1
+					? Effect.fail(
+							new PostboiError({ provider: "t", message: "", status: 429, retry_after: 0 })
+						)
+					: Effect.succeed("sent")
+			})
+			const fiber = yield* Effect.forkChild(with_retry(now))
+			yield* TestClock.adjust("499 millis")
+			expect(attempts).toBe(1)
+			yield* TestClock.adjust("1 millis")
+			expect(yield* Fiber.join(fiber)).toBe("sent")
 		})
 	)
 

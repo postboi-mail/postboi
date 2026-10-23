@@ -41,6 +41,7 @@ import { push } from "./push/send.js"
 import { whatsapp } from "./whatsapp/send.js"
 import { slack, discord, teams, telegram, bluesky } from "./chat/send.js"
 import { send as fan_out, type FanOutOptions, type SendResult } from "./send.js"
+import { retry_after_ms } from "./transport.js"
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ export class PostboiError extends Schema.TaggedError<PostboiError>()("PostboiErr
 	/** Provider-specific error code, when available. */
 	code: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
 	/** The original provider error payload (parsed body or thrown cause). */
-	raw: Schema.optional(Schema.Unknown),
+	raw: Schema.optional(Schema.Defect()),
 	/**
 	 * Nothing proves the message wasn't sent: a timeout, a dropped connection or a 5xx.
 	 * Sending it again can deliver it twice; see {@link retryable}.
@@ -146,7 +147,7 @@ function tagged(error: RootPostboiError): PostboiError {
 		provider: error.provider,
 		channel: error.channel,
 		status: error.status,
-		code: error.code,
+		code: typeof error.code === "string" || typeof error.code === "number" ? error.code : undefined,
 		raw: error.raw,
 		outcome_unknown: error.outcome_unknown,
 		reason: error.reason,
@@ -367,6 +368,10 @@ const Addresses = Schema.Union([
  * `SendOptions`, which carries functions, `FormData` and promises that have no wire form.
  * Decode it with `decode_send_request` and hand the result to {@link send_options}.
  *
+ * Whoever sends one picks the recipients, the sender and the content, so accept it only
+ * from callers you trust. A public form posts `FormData` to `send_mail` instead, which
+ * ignores a posted `_to`, `_cc`, `_bcc` or `_from` unless the send sets `form_addressing`.
+ *
  * An address here is a non-empty string in whatever form `mail()` accepts
  * (`ada@example.com`, `Ada <ada@example.com>`, or a comma-separated list); the provider
  * parses and rejects it as it would any other send. `idempotency_key` and `in_reply_to`
@@ -389,7 +394,7 @@ export const SendRequest = Schema.Struct({
 }).pipe(
 	Schema.check(
 		Schema.makeFilter((request) =>
-			request.html !== undefined || request.text !== undefined ? true : "a send needs html or text"
+			request.html || request.text ? true : "a send needs html or text"
 		)
 	)
 )
@@ -409,7 +414,7 @@ export const decode_send_request = Schema.decodeUnknownEffect(SendRequest)
  */
 export function send_options(request: SendRequest): SendOptions {
 	const options: SendOptions = {
-		body: request.html ?? escape_lines(request.text ?? ""),
+		body: request.html || escape_lines(request.text ?? ""),
 	}
 	if (request.to !== undefined) options.to = plural(request.to)
 	if (request.from !== undefined) options.from = request.from as FromAddress
@@ -439,7 +444,9 @@ function plural(value: string | ReadonlyArray<string>): string | Array<string> {
  * `outcome_unknown: false` says (a read, say); with `outcome_unknown: true` the provider
  * may already have the message, and sending again can deliver it twice, so those are
  * retried only when `retry_unknown` says so, as the transport's option of the same name
- * does. Pass it when the send carries an `idempotency_key` the provider deduplicates on.
+ * does, and only for a 5xx, a timeout or a dropped connection, never for a batch the
+ * provider took part of. Pass it when the send carries an `idempotency_key` the provider
+ * deduplicates on.
  *
  * A 4xx is the request's fault and comes back the same way; a skip or a spam verdict was
  * asked for; and an error with no status and no unknown outcome is not retried here,
@@ -450,7 +457,9 @@ function plural(value: string | ReadonlyArray<string>): string | Array<string> {
 export function retryable(error: unknown, retry_unknown = false): boolean {
 	if (!(error instanceof PostboiError)) return false
 	if (error.status === 429) return true
-	if (error.outcome_unknown) return retry_unknown
+	if (error.outcome_unknown) {
+		return retry_unknown && (error.status === undefined || error.status >= 500)
+	}
 	return error.status !== undefined && error.status >= 500
 }
 
@@ -468,9 +477,6 @@ export interface RetryOptions {
 	retry_unknown?: boolean
 }
 
-/** The longest a `Retry-After` is waited out, as the transport caps it. */
-const RETRY_AFTER_CAP_SECONDS = 60
-
 /**
  * Retry a send on the failures a provider might answer differently next time: a 429, a
  * 5xx that proves nothing was sent, and with `retry_unknown` an unknown outcome as well.
@@ -481,7 +487,9 @@ const RETRY_AFTER_CAP_SECONDS = 60
  * This and the provider's own `retries` option overlap, so pick one. The provider retries
  * the HTTP request inside the send, before hooks see an error; this retries the whole
  * Effect, hooks included. Setting both stacks them, so a `retries: 2` provider inside a
- * `with_retry` of 2 makes up to nine requests.
+ * `with_retry` of 2 makes up to nine requests. A form send with a captcha needs the
+ * provider's `retries`: a retry here checks its Turnstile token again, and the first
+ * check used it up.
  */
 export function with_retry<A, E, R>(
 	effect: Effect.Effect<A, E, R>,
@@ -493,9 +501,8 @@ export function with_retry<A, E, R>(
 			schedule: Schedule.max([Schedule.exponential(base), Schedule.recurs(times)]).pipe(
 				Schedule.modifyDelay(({ input, duration }) =>
 					Effect.succeed<Duration.Input>(
-						input instanceof PostboiError && input.retry_after !== undefined
-							? `${Math.min(input.retry_after, RETRY_AFTER_CAP_SECONDS)} seconds`
-							: duration
+						(input instanceof PostboiError ? retry_after_ms(input.retry_after) : undefined) ??
+							duration
 					)
 				)
 			),

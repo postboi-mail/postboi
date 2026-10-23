@@ -163,6 +163,11 @@ const handle = Effect.gen(function* () {
 })
 ```
 
+Whoever can send this request picks who the mail goes to, who it says it is from and what
+it says, so put the handler behind your own authentication. For a public form, post
+`FormData` to `send_mail` instead: it ignores a posted `_to`, `_cc`, `_bcc` or `_from`
+unless the send sets `form_addressing`.
+
 `decode_send_request(value)` decodes an unknown value; `send_options(request)` turns the
 decoded request into what `send_mail` takes. A text-only request keeps its text as the
 plain-text part and sends it as the body too, escaped with its line breaks kept, since a
@@ -196,4 +201,5 @@ const send = with_retry(send_mail({ to, subject, body, idempotency_key: `welcome
 This overlaps the provider's `retries` option, so pick one. That option retries the HTTP
 request inside the send, before hooks see an error; `with_retry` retries the whole Effect,
 hooks included. Setting both stacks them: a `retries: 2` provider inside a `with_retry` of
-2 makes up to nine requests.
+2 makes up to nine requests. A form send with a captcha needs the provider's `retries`,
+because a retry here checks its Turnstile token again after the first check used it up.

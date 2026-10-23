@@ -101,7 +101,7 @@ let warned_dev_fallback = false
 let announced_inbox = false
 
 /** The provider `mail()` sends with: `POSTBOI_PROVIDER`, the config's `provider`, or a token. */
-function provider_key(config: PostboiConfig, get: typeof read_env = read_env): string | undefined {
+function provider_key(config: PostboiConfig, get: typeof read_env): string | undefined {
 	return (
 		get("POSTBOI_PROVIDER") ?? config.provider ?? (get("POSTBOI_TOKEN") ? "postboi" : undefined)
 	)
@@ -114,9 +114,9 @@ function provider_key(config: PostboiConfig, get: typeof read_env = read_env): s
  * gets a placeholder when neither the config nor the environment names one. A mock standing
  * in for a provider that does need one still asks, since the real send would.
  */
-function stand_in_defaults(config: PostboiConfig): Defaults {
+function stand_in_defaults(config: PostboiConfig, get: typeof read_env): Defaults {
 	const defaults = env_defaults()
-	const key = provider_key(config)
+	const key = provider_key(config, get)
 	if ((key === undefined || key === "postboi") && !defaults.from && !config.default?.from) {
 		const whose = key === "postboi" ? "Your Postboi sending address" : "Your sending address"
 		defaults.from = `${whose} <sender@postboi.invalid>` as FromAddress
@@ -131,7 +131,10 @@ function stand_in_defaults(config: PostboiConfig): Defaults {
  * exist. Running the inbox is the opt-in; `dev: { inbox: false }` or `POSTBOI_INBOX=off`
  * is the way back out.
  */
-async function resolve_dev_inbox(config: PostboiConfig): Promise<ProviderBase<unknown> | null> {
+async function resolve_dev_inbox(
+	config: PostboiConfig,
+	get: typeof read_env
+): Promise<ProviderBase<unknown> | null> {
 	if (!is_development() || config.dev?.inbox === false) return null
 	const inbox = await resolve_inbox()
 	if (!inbox) return null
@@ -143,7 +146,7 @@ async function resolve_dev_inbox(config: PostboiConfig): Promise<ProviderBase<un
 	return new Mock({
 		sink: inbox.deliver,
 		on_cancel: inbox.cancel,
-		default: stand_in_defaults(config),
+		default: stand_in_defaults(config, get),
 	})
 }
 
@@ -184,7 +187,7 @@ export async function resolve_provider({
 	// Before any credential is looked at: with an inbox open, what's configured doesn't
 	// matter, and neither does a missing credential.
 	if (intercept) {
-		const inbox = await resolve_dev_inbox(config)
+		const inbox = await resolve_dev_inbox(config, get)
 		if (inbox) return inbox
 	}
 
@@ -217,7 +220,7 @@ export async function resolve_provider({
 				)
 			}
 			const Mock = await import("./mock.js").then((m) => m.default)
-			return new Mock({ log: true, default: stand_in_defaults(config) })
+			return new Mock({ log: true, default: stand_in_defaults(config, get) })
 		}
 		throw new PostboiError({
 			provider: "postboi",

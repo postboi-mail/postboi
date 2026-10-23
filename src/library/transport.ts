@@ -32,14 +32,23 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 
 /**
  * The seconds a response's `Retry-After` asks for, in either of its forms (a number of
- * seconds or an HTTP date), or undefined when it has none that reads.
+ * seconds, or an HTTP date, which opens with its day name), or undefined when it has none
+ * that reads.
  */
 function retry_after_seconds(response: Response): number | undefined {
 	const value = response.headers?.get("retry-after")?.trim()
 	if (!value) return undefined
-	if (/^\d+$/.test(value)) return Number(value)
-	const at = Date.parse(value)
+	if (/^\d+(\.\d+)?$/.test(value)) return Number(value)
+	const at = /^[a-z]/i.test(value) ? Date.parse(value) : NaN
 	return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000))
+}
+
+/**
+ * The wait a `Retry-After` of `seconds` buys, in milliseconds and at most a minute, or
+ * undefined when it asks for none.
+ */
+export function retry_after_ms(seconds: number | undefined): number | undefined {
+	return seconds !== undefined && seconds > 0 ? Math.min(seconds, 60) * 1000 : undefined
 }
 
 /** Could a request with this method have sent or changed something? */
@@ -570,9 +579,10 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		// intermediary answering 429 with Retry-After: 86400 must not hang the caller (or a
 		// serverless handler) for a day. Past the cap, the provider is telling us to come
 		// back much later — that's a failed attempt, not a pause.
-		const retry_after = response && retry_after_seconds(response)
-		if (retry_after) return Math.min(retry_after, 60) * 1000
-		return this.#retry_delay * 2 ** (attempt - 1)
+		return (
+			retry_after_ms(response && retry_after_seconds(response)) ??
+			this.#retry_delay * 2 ** (attempt - 1)
+		)
 	}
 
 	#sleep(ms: number): Promise<void> {

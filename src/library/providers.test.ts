@@ -1198,6 +1198,12 @@ describe("resilience (shared base)", () => {
 		expect(date.retry_after).toBeGreaterThanOrEqual(29)
 		expect(date.retry_after).toBeLessThanOrEqual(30)
 
+		fetch.mockResolvedValueOnce(
+			respond({ ok: false, status: 429, headers: { "retry-after": "1.5" } })
+		)
+		const fraction = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(fraction.retry_after).toBe(1.5)
+
 		fetch.mockResolvedValueOnce(respond({ ok: false, status: 429 }))
 		const none = await caught(make().send({ to: "to@test.com", body: "x" }))
 		expect(none.retry_after).toBeUndefined()
