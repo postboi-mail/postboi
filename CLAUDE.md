@@ -44,7 +44,8 @@ trust labels, with the competitor research behind each decision. Read it before 
 ## Conventions
 
 - Code style: snake_case, no semicolons. Run `bun run check` and `bun run lint`.
-- Development needs Node 22.12+, 24 or 26+ (Vitest 5's range, held in `devEngines`).
+- Development needs Node 22.22.3+, 24.15+ or 26+ (the toolchain's range, held in `devEngines`). npm
+  refuses any other Node; Bun doesn't check, so `bun run` won't stop you.
 - Styling the docs site: follow **[src/site/BRANDING.md](src/site/BRANDING.md)**. The
   docs are the third cut of one design language shared with the app and the marketing
   site — manila paper and ink navy, safety yellow `#FDC005`, square corners, drawn

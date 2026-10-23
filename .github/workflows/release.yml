@@ -318,6 +318,11 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
       - name: Wait for npm to serve the release
         env:
           VERSION: ${{ needs.prepare.outputs.version }}

@@ -281,15 +281,12 @@ export const GET: RequestHandler = async ({ params }) => {
 		)
 	)
 
-	// Takumi renders these plain element objects fine; its param is typed as ReactNode,
-	// which only bites now that @types/react is installed (for the postboi/react export).
-	const response = new ImageResponse(component as never, {
+	const response = new ImageResponse(component, {
 		width: OG_WIDTH,
 		height: OG_HEIGHT,
 		format: "png",
 		fonts: takumiFontLoaders,
 		headers: {
-			"content-type": "image/png",
 			"cache-control": "public, max-age=3600",
 		},
 	})
