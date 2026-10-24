@@ -9,7 +9,7 @@
 		"ci": "nuxt build"
 	},
 	"dependencies": {
-		"nuxt": "^3.14",
+		"nuxt": "^4",
 		"vue": "^3"
 	},
 	"devDependencies": {
