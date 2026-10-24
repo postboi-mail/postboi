@@ -25,7 +25,7 @@
  */
 import { Effect } from "effect"
 import * as Alchemy from "alchemy"
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { unstable_readConfig } from "wrangler"
 
 /** The hostname the docs answer on. Only the `prod` stage takes it. */
