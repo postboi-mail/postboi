@@ -6,6 +6,8 @@ set -uo pipefail
 # up. (CI's Examples job tests the other side: a tarball packed from the
 # commit under test, before any release exists.)
 
+bun install --frozen-lockfile && bunx svelte-kit sync || exit 1
+
 failed=""
 for dir in examples/*/; do
 	echo "── $dir"
