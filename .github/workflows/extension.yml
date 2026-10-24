@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
@@ -56,7 +56,7 @@ jobs:
         run: bun run pack
 
       - name: Keep the package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tempboi-extension
           path: packages/tempboi-extension/tempboi-extension.zip
@@ -64,7 +64,7 @@ jobs:
       # Exactly one of the two is set; the action takes whichever is non-empty.
       - name: Sign in to Google
         id: google
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.CWS_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.CWS_SERVICE_ACCOUNT }}
