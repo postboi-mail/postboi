@@ -6,13 +6,13 @@ import {
 	webhook,
 	dedupe_key,
 	WebhookVerificationError,
-} from "$library/webhooks/index.js"
-import { twilio_signature } from "$library/webhooks/twilio.js"
-import { puresms_signature } from "$library/webhooks/puresms.js"
-import { vonage_token } from "$library/webhooks/vonage.js"
-import { plivo_signature } from "$library/webhooks/plivo.js"
-import { sinch_signature } from "$library/webhooks/sinch.js"
-import { hex_encode } from "$library/webhooks/crypto.js"
+} from "#library/webhooks/index.js"
+import { twilio_signature } from "#library/webhooks/twilio.js"
+import { puresms_signature } from "#library/webhooks/puresms.js"
+import { vonage_token } from "#library/webhooks/vonage.js"
+import { plivo_signature } from "#library/webhooks/plivo.js"
+import { sinch_signature } from "#library/webhooks/sinch.js"
+import { hex_encode } from "#library/webhooks/crypto.js"
 
 /** A form-encoded Twilio request to `url`, signed with `token` over `signed_url`. */
 async function twilio_request(
@@ -406,7 +406,7 @@ describe("receive — telnyx (Ed25519-signed events)", () => {
 
 	it("drops a delivery Telnyx couldn't confirm either way", async () => {
 		const { request, secret } = await mock_request({ provider: "telnyx", type: "delivered" })
-		const adapter = (await import("$library/webhooks/telnyx.js")).default
+		const adapter = (await import("#library/webhooks/telnyx.js")).default
 		const body = (await request.text()).replace(
 			'"status":"delivered"',
 			'"status":"delivery_unconfirmed"'

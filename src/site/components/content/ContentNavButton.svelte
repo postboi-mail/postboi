@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from "$app/paths"
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 
 	type ComponentProps = {
 		label: string
@@ -17,7 +17,6 @@
 	class={cn("group", align === "right" && "sm:text-right", forceSecondColumn && "sm:col-start-2")}
 >
 	<a
-		// @ts-expect-error arg cannot be cast as `resolve`s expected type
 		href={resolve(href)}
 		class={cn(
 			"key relative flex flex-col gap-1 rounded-sm bg-background px-4 py-3 transition-[background-color] duration-150 ease-out hover:bg-background-muted"

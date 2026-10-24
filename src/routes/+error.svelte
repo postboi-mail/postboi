@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from "$app/state"
-	import nervous from "$site/assets/nervous.svg?url"
+	import nervous from "#site/assets/nervous.svg?url"
 	import { resolve } from "$app/paths"
 
 	const is_not_found = $derived(page.status === 404)
@@ -34,7 +34,7 @@
 	</div>
 
 	<a
-		href={resolve("/")}
+		href={resolve("")}
 		class="key inline-flex items-center rounded-sm bg-brand-yellow px-4 py-2.5 text-brand-ink"
 	>
 		<span class="docket">Back to the docs</span>

@@ -9,9 +9,9 @@ import {
 	load_config,
 	reset_config,
 	set_bundled_config,
-} from "$library/config.js"
-import Mock from "$library/mock.js"
-import { mail } from "$library/postboi.js"
+} from "#library/config.js"
+import Mock from "#library/mock.js"
+import { mail } from "#library/postboi.js"
 
 const fetch = vi.fn()
 global.fetch = fetch

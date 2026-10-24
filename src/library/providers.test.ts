@@ -1,50 +1,50 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-import { PostboiError } from "$library/index.js"
-import Resend from "$library/resend.js"
-import Postmark from "$library/postmark.js"
-import SendGrid from "$library/sendgrid.js"
-import Mailgun from "$library/mailgun.js"
-import Brevo from "$library/brevo.js"
-import Cloudflare from "$library/cloudflare.js"
-import MailerSend from "$library/mailersend.js"
-import SparkPost from "$library/sparkpost.js"
-import Mandrill from "$library/mandrill.js"
-import Plunk from "$library/plunk.js"
-import Mailtrap from "$library/mailtrap.js"
-import MailPace from "$library/mailpace.js"
-import Lettermint from "$library/lettermint.js"
-import Unosend from "$library/unosend.js"
-import Sequenzy from "$library/sequenzy.js"
-import Loops from "$library/loops.js"
-import MailChannels from "$library/mailchannels.js"
-import SMTP2GO from "$library/smtp2go.js"
-import SocketLabs from "$library/socketlabs.js"
-import Azure from "$library/azure.js"
-import Gmail from "$library/gmail.js"
-import Maileroo from "$library/maileroo.js"
-import AhaSend from "$library/ahasend.js"
-import Postal from "$library/postal.js"
-import CustomerIO from "$library/customerio.js"
-import Infobip from "$library/infobip.js"
-import SendPulse from "$library/sendpulse.js"
-import Iterable from "$library/iterable.js"
-import JetEmail from "$library/jetemail.js"
-import Lettr from "$library/lettr.js"
-import Primitive from "$library/primitive.js"
-import Netcore from "$library/netcore.js"
-import Klaviyo from "$library/klaviyo.js"
-import HubSpot from "$library/hubspot.js"
-import OneSignal from "$library/onesignal.js"
-import AlibabaDirectMail from "$library/alibaba.js"
-import YandexPostbox from "$library/yandex.js"
-import { clear_token_cache } from "$library/push/oauth.js"
+import { PostboiError } from "#library/index.js"
+import Resend from "#library/resend.js"
+import Postmark from "#library/postmark.js"
+import SendGrid from "#library/sendgrid.js"
+import Mailgun from "#library/mailgun.js"
+import Brevo from "#library/brevo.js"
+import Cloudflare from "#library/cloudflare.js"
+import MailerSend from "#library/mailersend.js"
+import SparkPost from "#library/sparkpost.js"
+import Mandrill from "#library/mandrill.js"
+import Plunk from "#library/plunk.js"
+import Mailtrap from "#library/mailtrap.js"
+import MailPace from "#library/mailpace.js"
+import Lettermint from "#library/lettermint.js"
+import Unosend from "#library/unosend.js"
+import Sequenzy from "#library/sequenzy.js"
+import Loops from "#library/loops.js"
+import MailChannels from "#library/mailchannels.js"
+import SMTP2GO from "#library/smtp2go.js"
+import SocketLabs from "#library/socketlabs.js"
+import Azure from "#library/azure.js"
+import Gmail from "#library/gmail.js"
+import Maileroo from "#library/maileroo.js"
+import AhaSend from "#library/ahasend.js"
+import Postal from "#library/postal.js"
+import CustomerIO from "#library/customerio.js"
+import Infobip from "#library/infobip.js"
+import SendPulse from "#library/sendpulse.js"
+import Iterable from "#library/iterable.js"
+import JetEmail from "#library/jetemail.js"
+import Lettr from "#library/lettr.js"
+import Primitive from "#library/primitive.js"
+import Netcore from "#library/netcore.js"
+import Klaviyo from "#library/klaviyo.js"
+import HubSpot from "#library/hubspot.js"
+import OneSignal from "#library/onesignal.js"
+import AlibabaDirectMail from "#library/alibaba.js"
+import YandexPostbox from "#library/yandex.js"
+import { clear_token_cache } from "#library/push/oauth.js"
 import { createHash, createHmac, generateKeyPairSync } from "node:crypto"
-import Scaleway from "$library/scaleway.js"
-import SES from "$library/ses.js"
-import Microsoft365 from "$library/microsoft365.js"
-import Mailjet from "$library/mailjet.js"
-import ElasticEmail from "$library/elasticemail.js"
+import Scaleway from "#library/scaleway.js"
+import SES from "#library/ses.js"
+import Microsoft365 from "#library/microsoft365.js"
+import Mailjet from "#library/mailjet.js"
+import ElasticEmail from "#library/elasticemail.js"
 
 const fetch = vi.fn()
 global.fetch = fetch
@@ -1185,6 +1185,30 @@ describe("resilience (shared base)", () => {
 		expect(fetch).toHaveBeenCalledTimes(2)
 	})
 
+	it("says on the error how long a 429's Retry-After asked for, in either form", async () => {
+		fetch.mockResolvedValueOnce(
+			respond({ ok: false, status: 429, headers: { "retry-after": "12" } })
+		)
+		const seconds = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(seconds).toMatchObject({ status: 429, reason: "rate_limited", retry_after: 12 })
+
+		const at = new Date(Date.now() + 30_000).toUTCString()
+		fetch.mockResolvedValueOnce(respond({ ok: false, status: 429, headers: { "retry-after": at } }))
+		const date = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(date.retry_after).toBeGreaterThanOrEqual(29)
+		expect(date.retry_after).toBeLessThanOrEqual(30)
+
+		fetch.mockResolvedValueOnce(
+			respond({ ok: false, status: 429, headers: { "retry-after": "1.5" } })
+		)
+		const fraction = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(fraction.retry_after).toBe(1.5)
+
+		fetch.mockResolvedValueOnce(respond({ ok: false, status: 429 }))
+		const none = await caught(make().send({ to: "to@test.com", body: "x" }))
+		expect(none.retry_after).toBeUndefined()
+	})
+
 	it("gives up after exhausting retries", async () => {
 		fetch.mockResolvedValue(
 			respond({ ok: false, status: 503, json: { message: "down", name: "x" } })
@@ -1278,7 +1302,7 @@ describe("resilience (shared base)", () => {
 		const before = Date.now()
 		await make().send({ to: "to@test.com", body: "x", scheduled_at: { days: 1, hours: 5 } })
 		const sent = new Date(sent_json().scheduled_at).getTime()
-		// 1 day + 5 hours from "now" (calendar arithmetic ≈ 29h with no DST boundary crossed).
+		// 1 day + 5 hours from "now" is 29 hours, whatever the clock does in between.
 		expect(Math.abs(sent - (before + 29 * 60 * 60 * 1000))).toBeLessThan(60_000)
 	})
 })

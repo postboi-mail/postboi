@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // Stands in for workerd's `cloudflare:workers` module, which only resolves inside a Worker.
 const bindings = vi.hoisted(() => ({ current: {} as Record<string, string> }))
-vi.mock("$library/workers_env.js", () => ({ workers_env: async () => bindings.current }))
+vi.mock("#library/workers_env.js", () => ({ workers_env: async () => bindings.current }))
 
 // Fresh module per test: the fallback cache is module-level and loads exactly once.
 async function load_env() {
 	vi.resetModules()
-	return import("$library/env.js")
+	return import("#library/env.js")
 }
 
 beforeEach(() => {

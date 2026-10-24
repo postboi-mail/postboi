@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { searchState } from "$site/stores/search.svelte"
-	import { contentUiDefaults, type SectionUiConfig } from "$site/config/content-ui"
-	import { cn } from "$site/utils/cn"
+	import { searchState } from "#site/stores/search.svelte.js"
+	import { contentUiDefaults, type SectionUiConfig } from "#site/config/content-ui.js"
+	import { cn } from "#site/utils/cn.js"
 	import Search from "carbon-icons-svelte/lib/Search.svelte"
 
 	let {

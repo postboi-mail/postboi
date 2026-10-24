@@ -1,6 +1,6 @@
-import { contentUiDefaults, type SectionUiConfig } from "$site/config/content-ui"
-import { contentSections } from "$site/config/navigation"
-import { parseContentSource } from "$site/content/frontmatter"
+import { contentUiDefaults, type SectionUiConfig } from "#site/config/content-ui.js"
+import { contentSections } from "#site/config/navigation.js"
+import { parseContentSource } from "#site/content/frontmatter.js"
 
 type ContentSearchEntry = {
 	title: string

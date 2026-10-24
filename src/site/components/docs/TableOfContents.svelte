@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { fromAction } from "svelte/attachments"
 	import { SvelteMap, SvelteSet } from "svelte/reactivity"
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 	import { page } from "$app/state"
 	import TableOfContents from "carbon-icons-svelte/lib/TableOfContents.svelte"
-	import type { ContentTocHeading } from "$site/content/sections"
+	import type { ContentTocHeading } from "#site/content/sections.js"
 
 	type TocItem = ContentTocHeading & {
 		element: HTMLElement

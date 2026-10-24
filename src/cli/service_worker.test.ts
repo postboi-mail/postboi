@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach, vi } from "vitest"
-import { find_worker, suggest_worker, wire_worker, page_snippet } from "./service_worker.js"
+import {
+	find_worker,
+	suggest_worker,
+	wire_worker,
+	page_snippet,
+	WORKER_TSCONFIG,
+} from "./service_worker.js"
 import { receive } from "../library/push/sw.js"
 import { fake_worker, fake_subscription, STORED, VAPID_KEY } from "../testing/worker.js"
 
@@ -21,6 +27,11 @@ describe("find_worker", () => {
 			url: "/service-worker.js",
 			kind: "bundled",
 		})
+		expect(find_worker(has("src/service-worker/index.ts"))).toMatchObject({
+			path: "src/service-worker/index.ts",
+			url: "/service-worker.js",
+			kind: "bundled",
+		})
 	})
 
 	/** A leftover static file next to a real bundled entry means the bundled one — that's
@@ -28,6 +39,13 @@ describe("find_worker", () => {
 	it("prefers the bundled entry when a project has both", () => {
 		expect(find_worker(has("src/service-worker.ts", "static/sw.js"))?.path).toBe(
 			"src/service-worker.ts"
+		)
+	})
+
+	/** SvelteKit builds a worker directory's index over a flat file beside it. */
+	it("prefers a src/service-worker directory over a flat file beside it", () => {
+		expect(find_worker(has("src/service-worker.ts", "src/service-worker/index.ts"))?.path).toBe(
+			"src/service-worker/index.ts"
 		)
 	})
 
@@ -45,6 +63,32 @@ describe("find_worker", () => {
 			url: "/service-worker.js",
 			kind: "bundled",
 		})
+	})
+
+	/** SvelteKit 3 has no svelte.config: the same option is `files.serviceWorker` on the
+	 * `sveltekit()` call in vite.config. Any Vite project has that file, so it only counts
+	 * when it is Kit's. */
+	it("reads files.serviceWorker off the sveltekit() call in a vite config", () => {
+		const config = `export default defineConfig({ plugins: [sveltekit({ files: { serviceWorker: "src/lib/worker" } })] })`
+		const exists = has("vite.config.ts", "src/lib/worker.ts", "src/service-worker.ts")
+		expect(find_worker(exists, () => config)?.path).toBe("src/lib/worker.ts")
+		const other = `export default defineConfig({ plugins: [somethingElse({ serviceWorker: "src/lib/worker" })] })`
+		expect(find_worker(exists, () => other)?.path).toBe("src/service-worker.ts")
+	})
+
+	/** Options passed to sveltekit() win over a svelte config, which still counts when they
+	 * don't name a worker. */
+	it("reads the vite config before a svelte config", () => {
+		const configs: Record<string, string> = {
+			"vite.config.ts": `export default defineConfig({ plugins: [sveltekit({ files: { serviceWorker: "src/lib/worker" } })] })`,
+			"svelte.config.js": `export default { kit: {} }`,
+		}
+		const exists = has("vite.config.ts", "svelte.config.js", "src/lib/worker.ts", "src/lib/sw.ts")
+		expect(find_worker(exists, (path) => configs[path])?.path).toBe("src/lib/worker.ts")
+		configs["vite.config.ts"] = `export default defineConfig({ plugins: [sveltekit()] })`
+		configs["svelte.config.js"] =
+			`export default { kit: { files: { serviceWorker: "src/lib/sw" } } }`
+		expect(find_worker(exists, (path) => configs[path])?.path).toBe("src/lib/sw.ts")
 	})
 
 	it("prefers the configured source over the standard locations", () => {
@@ -78,6 +122,33 @@ describe("suggest_worker", () => {
 		).toEqual({ path: "src/service-worker.ts", url: "/service-worker.js", kind: "bundled" })
 		expect(suggest_worker(["svelte.config.js"], undefined, none)).toMatchObject({
 			path: "src/service-worker.js",
+			kind: "bundled",
+		})
+	})
+
+	/** SvelteKit 3's sync writes the base a worker's tsconfig extends, and checks a worker kept
+	 * in its own directory apart from the app. */
+	it("gives a SvelteKit 3 project the worker directory, and a TypeScript one its tsconfig", () => {
+		const kit = { devDependencies: { "@sveltejs/kit": "^3.1.0" } }
+		const synced = "node_modules/$app/tsconfig/service-worker.json"
+		expect(suggest_worker(["vite.config.ts"], kit, has("tsconfig.json", synced))).toEqual({
+			path: "src/service-worker/index.ts",
+			url: "/service-worker.js",
+			kind: "bundled",
+			tsconfig: "src/service-worker/tsconfig.json",
+		})
+		expect(JSON.parse(WORKER_TSCONFIG)).toEqual({ extends: "$app/tsconfig/service-worker" })
+		expect(suggest_worker(["vite.config.js"], kit, has(synced))).toEqual({
+			path: "src/service-worker/index.js",
+			url: "/service-worker.js",
+			kind: "bundled",
+		})
+		// SvelteKit 2.62+ takes its options on sveltekit() with no svelte.config too, and has no
+		// such base to extend.
+		const kit2 = { devDependencies: { "@sveltejs/kit": "^2.70.0" } }
+		expect(suggest_worker(["vite.config.ts"], kit2, has("tsconfig.json"))).toEqual({
+			path: "src/service-worker.ts",
+			url: "/service-worker.js",
 			kind: "bundled",
 		})
 	})

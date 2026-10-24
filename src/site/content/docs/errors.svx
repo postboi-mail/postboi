@@ -25,6 +25,7 @@ try {
 		console.error(error.raw) // the original provider payload
 		console.error(error.outcome_unknown) // true when it may have been sent anyway
 		console.error(error.reason) // why it was refused: "auth", "recipient", … (see below)
+		console.error(error.retry_after) // seconds the provider's Retry-After asked for, if it sent one
 	} else {
 		console.error(error)
 	}
@@ -77,7 +78,9 @@ export default config({
 
 Nothing is retried until `retries` is above 0. Then what gets retried depends on what
 the failure proves. The delay doubles each attempt
-(exponential backoff), and a `Retry-After` from the provider is honoured up to a minute.
+(exponential backoff), and a `Retry-After` from the provider (in seconds or as a date) is
+honoured up to a minute. When the retries run out, or none were asked for, the error's
+`retry_after` says what the provider asked for, so a queue of your own can wait it out.
 
 | Failure | Retried | `outcome_unknown` |
 | ------- | ------- | ----------------- |

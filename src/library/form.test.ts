@@ -6,9 +6,9 @@ import {
 	honeypot_style_object,
 	remote_scope,
 	scope_captcha_fields,
-} from "$library/form.js"
-import { captcha_key } from "$library/register.js"
-import { HONEYPOT_FIELD } from "$library/captcha.js"
+} from "#library/form.js"
+import { captcha_key } from "#library/register.js"
+import { HONEYPOT_FIELD } from "#library/captcha.js"
 
 describe("Captcha component plumbing", () => {
 	it("is inert without a DOM (SSR)", () => {

@@ -1,14 +1,7 @@
-import {
-	fail,
-	isActionFailure,
-	type RequestEvent,
-	type ActionFailure,
-	type RemoteForm,
-	type RemoteFormInput,
-} from "@sveltejs/kit"
+import { fail, isActionFailure, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
 // Type-only: `form` itself comes from `sveltekit`, which kit.ts fills in under Vite. This
 // module never imports `$app/server`, so a plain `bun test` can import it (see kit.ts).
-import type { form as sveltekit_form } from "$app/server"
+import type { form as sveltekit_form, RemoteForm, RemoteFormInput } from "$app/server"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 // From ./mail.js directly, not the package root — the root statically re-exports the
 // Postboi provider class, which must stay a dynamic-only leaf (see LOADERS in mail.ts).
@@ -104,6 +97,8 @@ function field_reader(data: FormData): FieldReader {
 const OWN_FIELDS = new Set<string>([...SPECIAL_FIELDS, ...HONEYPOT_FIELDS, ...CAPTCHA_FIELDS])
 
 const is_failure = <F>(value: unknown): value is ActionFailure<F> => isActionFailure(value)
+
+export type { RemoteFormInput }
 
 const TRACKED = ["get", "getAll", "has"] as const
 
@@ -334,8 +329,8 @@ export function remote_form_data(
 }
 
 /**
- * Build a SvelteKit *remote function* form (experimental — needs
- * `kit.experimental.remoteFunctions` in the consumer's config). The remote counterpart
+ * Build a SvelteKit *remote function* form (experimental: needs
+ * `experimental.remoteFunctions` in the consumer's `sveltekit()` options). The remote counterpart
  * of {@link action}: call it in a `.remote.ts` file, export the result, and spread it
  * onto a `<form>` — no `+page.server.ts`, no action wiring, progressive enhancement
  * included. `postboi/remote` ships a ready-made zero-config instance.

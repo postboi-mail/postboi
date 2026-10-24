@@ -6,7 +6,7 @@ category: Guides
 ---
 
 <script lang="ts">
-	import { InstallationTabs } from "$site"
+	import { InstallationTabs } from "#site"
 </script>
 
 Postboi deliberately doesn't ship a templating language. `body` is just HTML — a string, or

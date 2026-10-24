@@ -5,8 +5,8 @@ import {
 	FORM_ADDRESSING,
 	HONEYPOT_FIELDS,
 	CAPTCHA_FIELDS,
-} from "$library/postboi.js"
-import Mock from "$library/mock.js"
+} from "#library/postboi.js"
+import Mock from "#library/mock.js"
 
 function post(entries: Array<[string, string | File]>) {
 	const form = new FormData()

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import Mock from "$library/mock.js"
-import { SkipSendError } from "$library/index.js"
+import Mock from "#library/mock.js"
+import { SkipSendError } from "#library/index.js"
 
 describe("Mock provider", () => {
 	let mail: Mock

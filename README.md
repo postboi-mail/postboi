@@ -146,6 +146,11 @@ In development, texts and WhatsApp messages are logged, not sent.
 
 ## Development
 
+The repo builds and tests with [Bun](https://bun.sh) and Node 22.22.3+, 24.15+ or 26+, the
+versions its whole toolchain installs on. `devEngines` in `package.json` holds that range, and npm 10.9
+or later refuses to run here on any other Node. Bun doesn't read it, so `bun run` goes
+ahead on whatever Node is on your PATH.
+
 ```bash
 bun install
 bun run dev     # the docs site
@@ -154,6 +159,25 @@ bun run lint
 bun run test
 bun run build   # the package
 ```
+
+### Deploying the docs site
+
+The docs are a SvelteKit site on Cloudflare Workers, described in `alchemy.run.ts` as an
+[alchemy](https://alchemy.run) stack: `Cloudflare.Website.SvelteKit` builds the site and
+deploys it with no adapter. The Worker's settings (name, compatibility date and flags,
+observability, workers.dev and preview URLs) come from `wrangler.jsonc`, which the stack
+reads, so the two ways of deploying can't disagree.
+
+```bash
+bun run infra:plan -- --stage prod       # what a deploy would change
+bun run infra:deploy -- --stage prod     # docs.postboi.app, from main
+bun run infra:deploy -- --stage pr-123   # a pull request's preview, on its workers.dev URL
+bun run infra:destroy -- --stage pr-123  # and take it down again
+```
+
+It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment (or
+`alchemy profile`). The first production deploy adopts the Worker wrangler already made
+(`--adopt`); until that has happened, `wrangler.jsonc` is the deploy that still works.
 
 PRs are welcome, new providers especially. Match the code style (snake_case, no
 semicolons), add tests, and run `check` and `lint` before pushing. Releases are covered in

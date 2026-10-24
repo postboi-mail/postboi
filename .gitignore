@@ -2,6 +2,8 @@ node_modules
 
 # Output
 .output
+# alchemy's local state and version-check cache (the deploy state itself lives in the account)
+.alchemy
 .vercel
 .netlify
 .wrangler

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { cn } from "$site/utils/cn"
-	import { copyToClipboard } from "$site/utils/copy"
+	import { cn } from "#site/utils/cn.js"
+	import { copyToClipboard } from "#site/utils/copy.js"
 	import Copy from "carbon-icons-svelte/lib/Copy.svelte"
 	import Checkmark from "carbon-icons-svelte/lib/Checkmark.svelte"
 

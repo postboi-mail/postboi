@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { parse_env } from "./env.js"
-import { read_package } from "./project.js"
+import { read_package, SVELTEKIT_CALL, VITE_CONFIGS } from "./project.js"
 
 /**
  * Where a project says its own public domain out loud. Nothing here *decides* anything —
@@ -11,7 +11,8 @@ import { read_package } from "./project.js"
  *
  * Signals, strongest intent first:
  *   1. CNAME file (GitHub Pages custom domain — the domain, verbatim)
- *   2. astro.config `site` / svelte.config `origin` / nuxt.config `url`
+ *   2. astro.config `site` / SvelteKit's origin (svelte.config, or `paths.origin` on its
+ *      vite plugin) / nuxt.config `url`
  *   3. Next.js `metadataBase` (next.config or the root layout)
  *   4. wrangler routes and custom domains
  *   5. package.json `homepage`
@@ -145,7 +146,13 @@ export function detect_domains(dir = "."): Array<DomainHint> {
 
 	// 2. Framework configs that carry the site's canonical URL — one table, one loop,
 	// so a fifth framework is an entry rather than a pasted stanza.
-	const CONFIG_SIGNALS: Array<{ paths: Array<string>; regex: RegExp; label: string }> = [
+	const CONFIG_SIGNALS: Array<{
+		paths: Array<string>
+		regex: RegExp
+		label: string
+		/** The file only counts when this matches it. */
+		when?: RegExp
+	}> = [
 		{
 			paths: ["astro.config.mjs", "astro.config.ts", "astro.config.js"],
 			regex: /\bsite:\s*["'`](https?:\/\/[^"'`]+)/g,
@@ -155,6 +162,13 @@ export function detect_domains(dir = "."): Array<DomainHint> {
 			paths: ["svelte.config.js", "svelte.config.ts"],
 			regex: /\borigin:\s*["'`](https?:\/\/[^"'`]+)/g,
 			label: "origin",
+		},
+		// SvelteKit 3's `paths.origin`, on the sveltekit() call in vite.config.
+		{
+			paths: VITE_CONFIGS,
+			regex: /\bpaths:\s*\{[^}]*?\borigin:\s*["'`](https?:\/\/[^"'`]+)/g,
+			label: "paths.origin",
+			when: SVELTEKIT_CALL,
 		},
 		{
 			paths: ["nuxt.config.ts", "nuxt.config.js"],
@@ -182,7 +196,7 @@ export function detect_domains(dir = "."): Array<DomainHint> {
 	]
 	for (const signal of CONFIG_SIGNALS) {
 		const found = first(signal.paths)
-		if (!found) continue
+		if (!found || (signal.when && !signal.when.test(found.text))) continue
 		for (const url of matches(found.text, signal.regex)) {
 			add(url, `${found.path} ${signal.label}`)
 		}

@@ -30,6 +30,27 @@ const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"])
  */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 
+/**
+ * The seconds a response's `Retry-After` asks for, in either of its forms (a number of
+ * seconds, or an HTTP date, which opens with its day name), or undefined when it has none
+ * that reads.
+ */
+function retry_after_seconds(response: Response): number | undefined {
+	const value = response.headers?.get("retry-after")?.trim()
+	if (!value) return undefined
+	if (/^\d+(\.\d+)?$/.test(value)) return Number(value)
+	const at = /^[a-z]/i.test(value) ? Date.parse(value) : NaN
+	return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000))
+}
+
+/**
+ * The wait a `Retry-After` of `seconds` buys, in milliseconds and at most a minute, or
+ * undefined when it asks for none.
+ */
+export function retry_after_ms(seconds: number | undefined): number | undefined {
+	return seconds !== undefined && seconds > 0 ? Math.min(seconds, 60) * 1000 : undefined
+}
+
 /** Could a request with this method have sent or changed something? */
 function changes(method: string | undefined): boolean {
 	return !SAFE_METHODS.has((method ?? "POST").toUpperCase())
@@ -291,6 +312,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 					response.status >= 500 || error.partial
 						? undefined
 						: (error.reason ?? this.reason_for(response.status) ?? "request"),
+				retry_after: retry_after_seconds(response),
 			})
 		}
 		if (!response.ok) {
@@ -302,6 +324,7 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 				raw: data,
 				outcome_unknown: may_have_sent && response.status >= 500,
 				reason: this.reason_for(response.status),
+				retry_after: retry_after_seconds(response),
 			})
 		}
 		return undefined
@@ -556,9 +579,10 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 		// intermediary answering 429 with Retry-After: 86400 must not hang the caller (or a
 		// serverless handler) for a day. Past the cap, the provider is telling us to come
 		// back much later — that's a failed attempt, not a pause.
-		const retry_after = response ? Number(response.headers.get("retry-after")) : NaN
-		if (!Number.isNaN(retry_after) && retry_after > 0) return Math.min(retry_after, 60) * 1000
-		return this.#retry_delay * 2 ** (attempt - 1)
+		return (
+			retry_after_ms(response && retry_after_seconds(response)) ??
+			this.#retry_delay * 2 ** (attempt - 1)
+		)
 	}
 
 	#sleep(ms: number): Promise<void> {
@@ -642,11 +666,11 @@ export abstract class Transport<TResponse = unknown, TPrepared = unknown> {
 			const last_day = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
 			date.setDate(Math.min(day, last_day))
 		}
-		if (value.weeks) date.setDate(date.getDate() + value.weeks * 7)
-		if (value.days) date.setDate(date.getDate() + value.days)
-		if (value.hours) date.setHours(date.getHours() + value.hours)
-		if (value.minutes) date.setMinutes(date.getMinutes() + value.minutes)
-		if (value.seconds) date.setSeconds(date.getSeconds() + value.seconds)
-		return date
+		const seconds =
+			((value.weeks ?? 0) * 7 + (value.days ?? 0)) * 86_400 +
+			(value.hours ?? 0) * 3_600 +
+			(value.minutes ?? 0) * 60 +
+			(value.seconds ?? 0)
+		return new Date(date.getTime() + seconds * 1_000)
 	}
 }

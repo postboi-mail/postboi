@@ -5,10 +5,10 @@ import {
 	HONEYPOT_FIELD,
 	TURNSTILE_FIELD,
 	TURNSTILE_REMOTE_FIELD,
-} from "$library/captcha.js"
-import { SpamError, is_spam, is_error, configure } from "$library/index.js"
-import { reset_config } from "$library/config.js"
-import Mock from "$library/mock.js"
+} from "#library/captcha.js"
+import { SpamError, is_spam, is_error, configure } from "#library/index.js"
+import { reset_config } from "#library/config.js"
+import Mock from "#library/mock.js"
 
 const fetch = vi.fn()
 global.fetch = fetch

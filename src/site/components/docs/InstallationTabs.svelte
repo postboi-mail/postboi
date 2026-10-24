@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { SvelteMap } from "svelte/reactivity"
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 	import CopyCodeButton from "./markdown/CopyCodeButton.svelte"
 	import Pre from "./markdown/Pre.svelte"
-	import { highlight } from "$site/utils/highlight"
+	import { highlight } from "#site/utils/highlight.js"
 	import {
 		packageManagers,
 		packageManagerStore,
 		type PackageManager,
-	} from "$site/stores/package-manager.svelte"
-	import { siteConfig } from "$site/config/site"
+	} from "#site/stores/package-manager.svelte.js"
+	import { siteConfig } from "#site/config/site.js"
 
 	type Props = {
 		pkg?: string

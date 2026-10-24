@@ -6,7 +6,7 @@ category: Getting started
 ---
 
 <script lang="ts">
-	import { InstallationTabs } from "$site"
+	import { InstallationTabs } from "#site"
 </script>
 
 This is Postboi's own email service, and the easiest way to send. We run the sending

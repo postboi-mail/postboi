@@ -25,6 +25,8 @@ export type MockFailure = {
 	status?: number
 	code?: string | number
 	message?: string
+	/** Seconds the simulated provider asks to wait, as a `Retry-After` would say. */
+	retry_after?: number
 }
 
 /** Options every mock accepts on top of its channel's provider options. */
@@ -111,6 +113,7 @@ export class MockRecorder<TCaptured> {
 				code: failure.code,
 				reason: failure.outcome_unknown ? undefined : failure.reason,
 				outcome_unknown: failure.outcome_unknown ?? false,
+				retry_after: failure.retry_after,
 			})
 		}
 		this.sent.push(captured)

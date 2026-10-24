@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 	import ChevronSort from "carbon-icons-svelte/lib/ChevronSort.svelte"
 	import { resolve } from "$app/paths"
 	import { type Component } from "svelte"
@@ -215,7 +215,6 @@
 				{#if item.href}
 					<a
 						bind:this={itemRefEls[i]}
-						// @ts-expect-error
 						href={resolve(item.href)}
 						role="option"
 						aria-selected={item.active}

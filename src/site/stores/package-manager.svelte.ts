@@ -1,9 +1,9 @@
-import { browser } from "$app/environment"
+import { browser } from "$app/env"
 import {
 	contentUiDefaults,
 	availablePackageManagers,
 	type PackageManagerOption,
-} from "$site/config/content-ui"
+} from "#site/config/content-ui.js"
 
 export type PackageManager = PackageManagerOption
 

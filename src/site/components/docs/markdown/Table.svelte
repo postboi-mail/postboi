@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte"
-	import { cn } from "$site/utils/cn"
-	import ScrollArea from "$site/components/ui/ScrollArea.svelte"
+	import { cn } from "#site/utils/cn.js"
+	import ScrollArea from "#site/components/ui/ScrollArea.svelte"
 
 	type ComponentProps = {
 		class?: string

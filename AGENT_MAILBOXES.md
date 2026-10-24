@@ -790,7 +790,7 @@ Nothing external blocks Phase 1 beyond the domain and the zone.
    nothing moves on claim. Confirm `inbound_messages.account_id` on an unclaimed account
    causes no reader trouble (the Received page is never reached unclaimed).
 4. **Disclosure.** A footer line on every send from a mailbox (`Sent by an agent for
-acme.com. Reply to reach a person.`), on by default and switchable per policy, plus a
+   acme.com. Reply to reach a person.`), on by default and switchable per policy, plus a
    header. No header is standard; the IETF drafts are individual and unadopted. Lean: the
    footer on, the header as `X-Agent-Mailbox: <address>` and nothing cleverer until a
    convention exists.
@@ -916,7 +916,7 @@ not say something, this says so.
   References, `inboundctl`; $9 to $79. https://inbound.new/
 - **MailSlurp**: remote MCP with roles (`AGENT_READ_ONLY`, `DRAFT_ONLY`, `RESPONDER`,
   `SUPPORT`, `INBOX_MANAGER`), a supervised workspace with review queues, `POST
-/emails/{id}/codes`. https://www.mailslurp.com/docs/agents/
+  /emails/{id}/codes`. https://www.mailslurp.com/docs/agents/
 - **Lumbox**: OTP to JSON, blocking `/otp` and `/wait`, 104 MCP tools; $0 / $9 / $29 / $99.
   https://lumbox.co
 - **Dead Simple Email**: own MTAs, injection scanning on inbound, attachment to text.

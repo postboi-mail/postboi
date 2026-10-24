@@ -10,6 +10,20 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with a tagged `PostboiError` (carrying `outcome_unknown`, `reason`, `retry_after`, a failover chain's `errors` and a timed-out wait's `cursor`), `validate_sms`, a `Mailer` service with config and mock layers, a `SendRequest` schema and `with_retry`, which waits out a `Retry-After` and retries an unknown outcome only with `retry_unknown`. It needs `effect` 4 in the app, which postboi doesn't list as a dependency, so an app on Effect 3 installs as before; nothing else in the package imports it.
+- `PostboiError` has `retry_after`: the seconds a provider's `Retry-After` asked for, when it answered with one. A channel mock's scripted failure (`fail: { status: 429, retry_after: 30 }`) can say it too.
+
+### Fixed
+
+- Retries honour a `Retry-After` given as an HTTP date, not only as a number of seconds.
+- `RemoteMailForm` (the type of `mail` from `postboi/remote` and of what `remote()` returns) types on SvelteKit 3. The shipped declarations named `RemoteForm` and `RemoteFormInput` from `@sveltejs/kit`, which SvelteKit 3 moved to `$app/server`, so they failed to resolve and every field read as `any` (an error instead, without `skipLibCheck`). Both now come from `$app/server`, and `RemoteFormInput` is exported from `postboi/kit`, so the fields and result are typed as `Input` says.
+- `postboi init` reads `files.serviceWorker` off the `sveltekit()` call in `vite.config.*` on a SvelteKit 3 project, which has no `svelte.config`, so a custom worker source is found rather than a second worker written beside it.
+- `postboi init` suggests the domain a SvelteKit 3 project names in `paths.origin` on the `sveltekit()` call in `vite.config.*`, as it did from `svelte.config` on SvelteKit 2. Vite's own `server.origin` is not read as one.
+- `postboi init --push` gives a SvelteKit 3 project the layout SvelteKit 3 checks a worker in: `src/service-worker/index.ts` with a `tsconfig.json` extending `$app/tsconfig/service-worker` (and a reminder to exclude that directory from the app's `tsconfig.json`), or `src/service-worker/index.js` in a JavaScript project. It finds a worker already kept there, ahead of a flat `src/service-worker.ts` beside it as SvelteKit does, instead of writing a second one. SvelteKit 2 projects keep the flat file.
+- A relative `scheduled_at` adds its weeks, days, hours, minutes and seconds as fixed spans, as documented: `{ days: 1 }` is 24 hours from now wherever it runs, where it used to be the same wall-clock time tomorrow in the machine's own time zone (23 or 25 hours across a clock change).
+
 ## 0.73.0
 
 ### Breaking

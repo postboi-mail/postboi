@@ -1,3 +1,6 @@
+// The docs site's Worker. `wrangler deploy` deploys it, and `alchemy.run.ts` reads its
+// settings from here for `alchemy deploy`. Once a first `alchemy deploy --stage prod --adopt`
+// has taken the Worker over, `main` and `assets` go, with `@sveltejs/adapter-cloudflare`.
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "postboi",
@@ -12,12 +15,5 @@
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare",
 	},
-	"rules": [
-		{
-			"type": "Text",
-			"globs": ["**/*.ttf"],
-			"fallthrough": true,
-		},
-	],
 	"compatibility_flags": ["nodejs_compat"],
 }

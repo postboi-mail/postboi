@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
-import Mock from "$library/mock.js"
+import Mock from "#library/mock.js"
 
 // A project `bunx postboi sync` has baked a key into, so <Captcha /> renders a widget.
-vi.mock("$library/register.js", () => ({
+vi.mock("#library/register.js", () => ({
 	captcha_key: "pk_test",
 	whatsapp_templates: {},
 	vapid_public_key: undefined,

@@ -22,7 +22,15 @@
  */
 
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -169,6 +177,14 @@ function extract_docs(before: string, destination: string) {
 		mkdirSync(destination, { recursive: true })
 		// src/site/content/docs/<file> → <file>
 		execFileSync("tar", ["-x", "--strip-components=4", "-C", destination, "-f", archive])
+		// Docs from before package.json's imports map name the site `$site`.
+		for (const file of readdirSync(destination)) {
+			const svx = join(destination, file)
+			writeFileSync(
+				svx,
+				readFileSync(svx, "utf8").replace(/(from\s+["'])\$site(?=["'/])/g, "$1#site")
+			)
+		}
 	} finally {
 		rmSync(dir, { recursive: true, force: true })
 	}

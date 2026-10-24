@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { cn } from "$site/utils/cn"
+	import { cn } from "#site/utils/cn.js"
 	import type { Snippet } from "svelte"
 
 	let {

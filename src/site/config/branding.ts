@@ -1,4 +1,4 @@
-import logo from "$site/assets/favicon.svg?raw"
+import logo from "#site/assets/favicon.svg?raw"
 
 /**
  * Global visual identity used by shared UI elements.

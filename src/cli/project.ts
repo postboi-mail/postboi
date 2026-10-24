@@ -67,6 +67,17 @@ export function is_bundled_framework(files: ReadonlyArray<string>, pkg?: Package
 	return BUNDLED_FRAMEWORK_PACKAGES.some((name) => has_dependency(pkg, name))
 }
 
+/** The names Vite looks for its config under, in the order it looks. */
+export const VITE_CONFIGS = [
+	"vite.config.js",
+	"vite.config.mjs",
+	"vite.config.ts",
+	"vite.config.mts",
+]
+
+/** Matches a vite config that calls SvelteKit's plugin. */
+export const SVELTEKIT_CALL = /\bsveltekit\s*\(/
+
 /** Is the dependency already present in any of the package.json dependency maps? */
 export function has_dependency(pkg: PackageJson | undefined, name: string): boolean {
 	if (!pkg) return false

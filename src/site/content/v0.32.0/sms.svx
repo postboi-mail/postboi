@@ -6,7 +6,7 @@ category: Channels
 ---
 
 <script lang="ts">
-	import { InstallationTabs } from "$site"
+	import { InstallationTabs } from "#site"
 </script>
 
 ```typescript

@@ -1,5 +1,5 @@
 import type { RequestHandler } from "./$types"
-import { siteConfig } from "$site"
+import { siteConfig } from "#site"
 
 export const prerender = true
 

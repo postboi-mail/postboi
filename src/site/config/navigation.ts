@@ -1,4 +1,4 @@
-import type { DeepPartial, SectionUiConfig } from "$site/config/content-ui"
+import type { DeepPartial, SectionUiConfig } from "#site/config/content-ui.js"
 import Email from "carbon-icons-svelte/lib/Email.svelte"
 import type { Component } from "svelte"
 
@@ -65,6 +65,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "hono", name: "Hono", icon: true },
 					{ slug: "express", name: "Express", icon: true },
 					{ slug: "cloudflare-workers", name: "Cloudflare Workers", icon: true },
+					{ slug: "effect", name: "Effect" },
 				],
 			},
 			{

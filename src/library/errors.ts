@@ -94,6 +94,11 @@ export class PostboiError extends Error {
 	 * unset on everything else, an unknown outcome above all.
 	 */
 	readonly reason?: RejectionReason
+	/**
+	 * Seconds the provider asked to be left alone for, from its `Retry-After`, when it
+	 * answered with one: a 429 or a 503, mostly. Undefined when it didn't say.
+	 */
+	readonly retry_after?: number
 
 	constructor(args: {
 		provider: string
@@ -104,6 +109,7 @@ export class PostboiError extends Error {
 		raw?: unknown
 		outcome_unknown?: boolean
 		reason?: RejectionReason
+		retry_after?: number
 	}) {
 		super(args.message)
 		this.name = "PostboiError"
@@ -114,6 +120,7 @@ export class PostboiError extends Error {
 		this.raw = args.raw
 		this.outcome_unknown = args.outcome_unknown ?? false
 		this.reason = args.reason
+		this.retry_after = args.retry_after
 	}
 }
 
@@ -136,6 +143,7 @@ export class FailoverError extends PostboiError {
 			raw: last.raw,
 			outcome_unknown: last.outcome_unknown,
 			reason: last.reason,
+			retry_after: last.retry_after,
 			message: errors
 				.map((e) => `${e.provider}: ${e.message}${e.reason ? ` (${e.reason})` : ""}`)
 				.join("; "),
@@ -153,7 +161,7 @@ export class FailoverError extends PostboiError {
  */
 export function fails_over(error: unknown): boolean {
 	return (
-		error instanceof PostboiError &&
+		carries_error(error) &&
 		!(error instanceof SkipSendError) &&
 		!error.outcome_unknown &&
 		error.reason !== undefined &&
@@ -185,6 +193,21 @@ export class SpamError extends SkipSendError {
 		super(message, "spam")
 		this.name = "SpamError"
 	}
+}
+
+/**
+ * A {@link PostboiError} as the package root throws it, or as `postboi/effect` fails with it
+ * (its `_tag`): the fields the channel helpers read are the same on both.
+ */
+export function carries_error(
+	error: unknown
+): error is Pick<PostboiError, "provider" | "status" | "code" | "outcome_unknown" | "reason"> {
+	return (
+		error instanceof PostboiError ||
+		(typeof error === "object" &&
+			error !== null &&
+			(error as { _tag?: unknown })._tag === "PostboiError")
+	)
 }
 
 /** Type guard: is a caught value a normalized {@link PostboiError}? */

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import maizzle from "$library/maizzle.js"
+import maizzle from "#library/maizzle.js"
 
 const render = vi.hoisted(() => vi.fn())
 
@@ -61,7 +61,7 @@ describe("postboi/maizzle", () => {
 			throw new Error("Cannot find package '@maizzle/framework'")
 		})
 
-		const { default: fresh_maizzle } = await import("$library/maizzle.js")
+		const { default: fresh_maizzle } = await import("#library/maizzle.js")
 		await expect(fresh_maizzle("./emails/welcome.vue")).rejects.toThrow(/needs @maizzle\/framework/)
 
 		vi.doUnmock("@maizzle/framework")

@@ -2,16 +2,16 @@
 	import { afterNavigate } from "$app/navigation"
 	import { resolve } from "$app/paths"
 	import { onDestroy } from "svelte"
-	import BrandLogo from "$site/components/content/BrandLogo.svelte"
-	import ContentSidebar from "$site/components/content/ContentSidebar.svelte"
-	import { brandingConfig } from "$site/config/branding"
-	import { contentUiDefaults, type SectionUiConfig } from "$site/config/content-ui"
-	import { getContentSectionLinks } from "$site/content/sections"
-	import { siteConfig } from "$site/config/site"
+	import BrandLogo from "#site/components/content/BrandLogo.svelte"
+	import ContentSidebar from "#site/components/content/ContentSidebar.svelte"
+	import { brandingConfig } from "#site/config/branding.js"
+	import { contentUiDefaults, type SectionUiConfig } from "#site/config/content-ui.js"
+	import { getContentSectionLinks } from "#site/content/sections.js"
+	import { siteConfig } from "#site/config/site.js"
 	import Menu from "carbon-icons-svelte/lib/Menu.svelte"
 	import Close from "carbon-icons-svelte/lib/Close.svelte"
-	import type { ContentItem, ContentSectionLink } from "$site/config/navigation"
-	import type { VersionItem } from "$site/components/content/ContentSidebar.svelte"
+	import type { ContentItem, ContentSectionLink } from "#site/config/navigation.js"
+	import type { VersionItem } from "#site/components/content/ContentSidebar.svelte"
 
 	const defaultSectionLinks = getContentSectionLinks()
 
@@ -198,7 +198,7 @@
 	class="fixed inset-x-0 top-0 z-50 flex items-center justify-between border-b border-line bg-background px-4 py-1.5 lg:hidden"
 >
 	<a
-		href={resolve("/")}
+		href={resolve("")}
 		class="inline-flex items-center gap-2.5 px-2 py-2"
 		aria-label={brandingConfig.name}
 	>

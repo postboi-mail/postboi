@@ -1,25 +1,25 @@
 <script lang="ts">
 	import { page } from "$app/state"
 	import { slide } from "svelte/transition"
-	import { brandingConfig } from "$site/config/branding"
-	import cryingRaw from "$site/assets/crying.svg?raw"
-	import { contentUiDefaults, type SectionUiConfig } from "$site/config/content-ui"
-	import { siteConfig } from "$site/config/site"
+	import { brandingConfig } from "#site/config/branding.js"
+	import cryingRaw from "#site/assets/crying.svg?raw"
+	import { contentUiDefaults, type SectionUiConfig } from "#site/config/content-ui.js"
+	import { siteConfig } from "#site/config/site.js"
 	// The published library version, not the docs-line marker in the version config — that
 	// only moves on a minor, so a patch release would leave this badge a release behind.
 	import { version } from "../../../../package.json"
-	import { cn } from "$site/utils/cn"
-	import ScrollArea from "$site/components/ui/ScrollArea.svelte"
-	import Dropdown from "$site/components/ui/Dropdown.svelte"
-	import ThemeToggle from "$site/components/ui/ThemeToggle.svelte"
-	import SearchTrigger from "$site/components/content/search/SearchTrigger.svelte"
-	import BrandIcon from "$site/components/content/BrandIcon.svelte"
-	import BrandLogo from "$site/components/content/BrandLogo.svelte"
+	import { cn } from "#site/utils/cn.js"
+	import ScrollArea from "#site/components/ui/ScrollArea.svelte"
+	import Dropdown from "#site/components/ui/Dropdown.svelte"
+	import ThemeToggle from "#site/components/ui/ThemeToggle.svelte"
+	import SearchTrigger from "#site/components/content/search/SearchTrigger.svelte"
+	import BrandIcon from "#site/components/content/BrandIcon.svelte"
+	import BrandLogo from "#site/components/content/BrandLogo.svelte"
 	import ChevronRight from "carbon-icons-svelte/lib/ChevronRight.svelte"
 	import LogoGithub from "carbon-icons-svelte/lib/LogoGithub.svelte"
 	import Launch from "carbon-icons-svelte/lib/Launch.svelte"
-	import { getHref } from "$site/content/manifest"
-	import type { ContentItem, ContentSectionLink } from "$site/config/navigation"
+	import { getHref } from "#site/content/manifest.js"
+	import type { ContentItem, ContentSectionLink } from "#site/config/navigation.js"
 	import { resolve } from "$app/paths"
 
 	export type VersionItem = {
@@ -397,7 +397,7 @@
 		     drawn under the pair. Every page in the product opens this way. -->
 		<div class="mb-4 p-4 pb-0 lg:p-0 lg:pt-2 lg:pl-1">
 			<div class="flex items-center gap-2.5">
-				<a href={resolve("/")} class="flex items-center" aria-label={brandingConfig.name}>
+				<a href={resolve("")} class="flex items-center" aria-label={brandingConfig.name}>
 					<BrandLogo defaultRaw={logoRaw} wink={!page.error} class="[&_svg]:size-10" />
 				</a>
 				<span
@@ -480,7 +480,6 @@
 										{@const href = contentHref(child.slug)}
 										{@const isActive = currentPath === href}
 										<a
-											// @ts-expect-error arg cannot be cast as `resolve`s expected type
 											href={resolve(href)}
 											onmouseenter={(event) => {
 												showHoverIndicator(event.currentTarget)
@@ -510,7 +509,6 @@
 					{@const href = contentHref(item.slug)}
 					{@const isActive = currentPath === href}
 					<a
-						// @ts-expect-error arg cannot be cast as `resolve`s expected type
 						href={resolve(href)}
 						onmouseenter={(event) => {
 							showHoverIndicator(event.currentTarget)

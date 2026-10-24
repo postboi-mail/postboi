@@ -741,6 +741,23 @@ describe("domain hints", () => {
 		})
 	})
 
+	it("reads SvelteKit 3's paths.origin off the sveltekit() call, not Vite's server.origin", () => {
+		const kit = project({
+			"vite.config.ts": `export default defineConfig({
+				server: { origin: "http://localhost:5173" },
+				plugins: [sveltekit({ paths: { base: "", origin: "https://acme.shop" } })],
+			})`,
+		})
+		expect(detect_domains(kit)).toEqual([
+			{ domain: "acme.shop", source: "vite.config.ts paths.origin" },
+		])
+
+		const plain = project({
+			"vite.config.ts": `export default defineConfig({ server: { origin: "https://dev.acme.shop" }, paths: { origin: "https://acme.shop" } })`,
+		})
+		expect(detect_domains(plain)).toEqual([])
+	})
+
 	it("reads site-URL env vars but never credential-shaped ones", () => {
 		const dir = project({
 			".env": [

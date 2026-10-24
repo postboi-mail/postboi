@@ -7,7 +7,7 @@
  * and handed it to you. That shapes the API — there is no useful `default.to`, and the
  * interesting failure is a target that has expired.
  */
-import { PostboiError, type Channel } from "../errors.js"
+import { carries_error, PostboiError, type Channel } from "../errors.js"
 import { Transport, type BatchResult } from "../transport.js"
 import { get_config } from "../config.js"
 import { ensure_env_loaded } from "../env.js"
@@ -135,7 +135,7 @@ export abstract class PushProvider<TResponse = unknown> extends Transport<TRespo
 	 * exists for code holding a provider instance.
 	 */
 	static is_expired(error: unknown): boolean {
-		if (!(error instanceof PostboiError)) return false
+		if (!carries_error(error)) return false
 		// The Postboi provider's 404 is its own API answering (no such list), never a push
 		// service saying a device is gone — it tombstones dead browsers itself.
 		if (error.provider === "postboi") return false

@@ -3,7 +3,7 @@
 
 	type Props = {
 		code: string
-		/** Twinkleplop's markup, from `highlight()` in $site/utils/highlight.js. */
+		/** Twinkleplop's markup, from `highlight()` in #site/utils/highlight.js. */
 		html: string
 		lang?: string
 		class?: string

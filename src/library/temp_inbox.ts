@@ -35,7 +35,13 @@ export { duration_ms, type Match }
 
 /** Failure talking to tempboi.email. `code` is the server's (`not_found`, `invalid_token`, …). */
 export class InboxError extends PostboiError {
-	constructor(args: { message: string; status?: number; code?: string; raw?: unknown }) {
+	constructor(args: {
+		message: string
+		status?: number
+		code?: string
+		raw?: unknown
+		outcome_unknown?: boolean
+	}) {
 		super({ provider: "tempboi", channel: "email", ...args })
 		this.name = "InboxError"
 	}
@@ -370,7 +376,7 @@ export class Inbox {
 		const headers = new Headers(rest.headers)
 		headers.set("authorization", `Bearer ${this.token}`)
 		if (!headers.has("accept")) headers.set("accept", "application/json")
-		const response = await this.#fetch(url, { ...rest, headers })
+		const response = await reach(this.#fetch, url, { ...rest, headers })
 		if (!response.ok && response.status !== 408) throw await failure(response)
 		return response
 	}
@@ -558,6 +564,24 @@ function timed_out(options: WaitOptions, cursor: number): InboxTimeoutError {
 	return new InboxTimeoutError(`No mail${what} arrived in time`, cursor)
 }
 
+/**
+ * Make a request, with a connection that failed or timed out raised as an InboxError: an
+ * unknown outcome when the request could have changed something. A caller's own abort
+ * stays an AbortError.
+ */
+async function reach(fetcher: typeof fetch, url: string | URL, init: RequestInit = {}) {
+	try {
+		return await fetcher(url, init)
+	} catch (error) {
+		if (error instanceof Error && error.name === "AbortError") throw error
+		throw new InboxError({
+			message: `tempboi didn't answer: ${error instanceof Error ? error.message : String(error)}`,
+			raw: error,
+			outcome_unknown: !["GET", "HEAD"].includes((init.method ?? "GET").toUpperCase()),
+		})
+	}
+}
+
 async function failure(response: Response): Promise<InboxError> {
 	let body: unknown
 	try {
@@ -590,7 +614,7 @@ async function create(options: TempOptions = {}): Promise<Inbox> {
 		accept: "application/json",
 	}
 	if (key) headers.authorization = `Bearer ${key}`
-	const response = await fetcher(`${base}/v1/inboxes`, {
+	const response = await reach(fetcher, `${base}/v1/inboxes`, {
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),
@@ -620,7 +644,7 @@ async function attach(options: AttachOptions = {}): Promise<Inbox> {
 	const fetcher = options.fetch ?? globalThis.fetch
 	// The token alone names its inbox, so an address is only a check that they agree.
 	if (!address) {
-		const response = await fetcher(`${base}/v1/inboxes`, {
+		const response = await reach(fetcher, `${base}/v1/inboxes`, {
 			headers: { authorization: `Bearer ${token}`, accept: "application/json" },
 		})
 		if (!response.ok) throw await failure(response)

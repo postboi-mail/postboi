@@ -69,7 +69,13 @@ export interface Label {
 
 /** Failure talking to the mailbox API. `code` is the server's (`not_found`, `unclaimed`, …). */
 export class MailboxError extends PostboiError {
-	constructor(args: { message: string; status?: number; code?: string; raw?: unknown }) {
+	constructor(args: {
+		message: string
+		status?: number
+		code?: string
+		raw?: unknown
+		outcome_unknown?: boolean
+	}) {
 		super({ provider: "postboi", channel: "email", ...args })
 		this.name = "MailboxError"
 	}
@@ -673,7 +679,29 @@ function transient(error: unknown): boolean {
 	return error instanceof TypeError
 }
 
-async function failure(response: Response): Promise<MailboxError> {
+/** The methods that change nothing, so a failed one can't have sent anything. */
+const READS = new Set(["GET", "HEAD"])
+
+/**
+ * Make a request, with a connection that failed or timed out raised as a MailboxError: an
+ * unknown outcome when the request could have changed something. A caller's own abort
+ * stays an AbortError.
+ */
+async function reach(fetcher: typeof fetch, url: string | URL, init: RequestInit = {}) {
+	try {
+		return await fetcher(url, init)
+	} catch (error) {
+		if (error instanceof Error && error.name === "AbortError") throw error
+		throw new MailboxError({
+			message: `The mailbox API didn't answer: ${error instanceof Error ? error.message : String(error)}`,
+			raw: error,
+			outcome_unknown: !READS.has((init.method ?? "GET").toUpperCase()),
+		})
+	}
+}
+
+/** The API's refusal as a MailboxError; a 5xx to a write may have landed, so it says so. */
+async function failure(response: Response, method = "GET"): Promise<MailboxError> {
 	let body: unknown
 	try {
 		body = await response.json()
@@ -686,6 +714,7 @@ async function failure(response: Response): Promise<MailboxError> {
 		status: response.status,
 		code: code ?? (response.status === 404 ? "not_found" : undefined),
 		raw: body,
+		outcome_unknown: response.status >= 500 && !READS.has(method.toUpperCase()),
 	})
 }
 
@@ -765,8 +794,8 @@ export class Mailbox {
 		const headers = new Headers(rest.headers)
 		headers.set("authorization", `Bearer ${key ?? this.#credential}`)
 		if (!headers.has("accept")) headers.set("accept", "application/json")
-		const response = await this.#fetch(url, { ...rest, headers })
-		if (!response.ok && response.status !== 408) throw await failure(response)
+		const response = await reach(this.#fetch, url, { ...rest, headers })
+		if (!response.ok && response.status !== 408) throw await failure(response, rest.method)
 		return response
 	}
 
@@ -1208,12 +1237,12 @@ async function make(options: MailboxOptions): Promise<Mailbox> {
 		accept: "application/json",
 	}
 	if (token) headers.authorization = `Bearer ${token}`
-	const response = await fetcher(`${base}/v1/mailboxes`, {
+	const response = await reach(fetcher, `${base}/v1/mailboxes`, {
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),
 	})
-	if (!response.ok) throw await failure(response)
+	if (!response.ok) throw await failure(response, "POST")
 	const wire = (await response.json()) as WireMailbox
 	if (!wire.key) throw new MailboxError({ message: "The API answered without a key", raw: wire })
 	return new Mailbox(wire, wire.key, base, fetcher)
@@ -1229,7 +1258,7 @@ async function open(options: MailboxOptions): Promise<Mailbox> {
 		options.key ?? (options.token && options.address ? undefined : read_env("POSTBOI_MAILBOX_KEY"))
 	if (key) {
 		// The key alone names its mailbox.
-		const response = await fetcher(`${base}/v1/mailboxes`, {
+		const response = await reach(fetcher, `${base}/v1/mailboxes`, {
 			headers: { authorization: `Bearer ${key}`, accept: "application/json" },
 		})
 		if (!response.ok) throw await failure(response)
@@ -1237,9 +1266,13 @@ async function open(options: MailboxOptions): Promise<Mailbox> {
 	}
 	const token = options.token ?? read_env("POSTBOI_TOKEN")
 	if (token && options.address) {
-		const response = await fetcher(`${base}/v1/mailboxes/${encodeURIComponent(options.address)}`, {
-			headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-		})
+		const response = await reach(
+			fetcher,
+			`${base}/v1/mailboxes/${encodeURIComponent(options.address)}`,
+			{
+				headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+			}
+		)
 		if (!response.ok) throw await failure(response)
 		return new Mailbox((await response.json()) as WireMailbox, token, base, fetcher)
 	}
@@ -1393,7 +1426,7 @@ async function list(
 			message: "Listing mailboxes needs your team's POSTBOI_TOKEN",
 			code: "missing_token",
 		})
-	const response = await fetcher(`${base}/v1/mailboxes`, {
+	const response = await reach(fetcher, `${base}/v1/mailboxes`, {
 		headers: { authorization: `Bearer ${token}`, accept: "application/json" },
 	})
 	if (!response.ok) throw await failure(response)

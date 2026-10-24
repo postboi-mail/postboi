@@ -1,4 +1,4 @@
-import type { ContentItem } from "$site/config/navigation"
+import type { ContentItem } from "#site/config/navigation.js"
 
 export function flattenNavigationToManifest(
 	items: ContentItem[],

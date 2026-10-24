@@ -2,8 +2,8 @@
  * The zero-config remote mail form (SvelteKit remote functions, experimental).
  *
  * This file is a `.remote.ts` module — SvelteKit turns its exports into remote
- * functions in the consuming app. Enable `kit.experimental.remoteFunctions` in the
- * app's config, then the whole contact form is one import and a spread:
+ * functions in the consuming app. Enable `experimental.remoteFunctions` in the app's
+ * `sveltekit()` options, then the whole contact form is one import and a spread:
  *
  * ```svelte
  * <script>

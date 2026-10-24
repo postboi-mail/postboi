@@ -12,7 +12,7 @@
  * `add_vite_plugin` works to. Anything ambiguous comes back as `"conflict"` and the caller
  * prints a manual hint rather than guessing at somebody's worker.
  */
-import { has_dependency, type PackageJson } from "./project.js"
+import { has_dependency, SVELTEKIT_CALL, VITE_CONFIGS, type PackageJson } from "./project.js"
 import { WORKER_PATHS } from "../library/push/client.js"
 
 /** Can this worker file `import`, or is it served to the browser exactly as written? */
@@ -29,15 +29,26 @@ export interface WorkerTarget {
 	 */
 	url: string
 	kind: WorkerKind
+	/**
+	 * The worker's own TypeScript project, written beside it when absent: SvelteKit 3 checks
+	 * a TypeScript worker apart from the app, against `$app/tsconfig/service-worker`.
+	 */
+	tsconfig?: string
 }
+
+/** What {@link WorkerTarget.tsconfig} holds. */
+export const WORKER_TSCONFIG = `{\n\t"extends": "$app/tsconfig/service-worker"\n}\n`
 
 /**
  * Where a worker might already be, most specific first.
  *
  * Order matters: a project with both `src/service-worker.ts` and a leftover `static/sw.js`
- * means the bundled one, because that's the one its framework builds.
+ * means the bundled one, because that's the one its framework builds. SvelteKit builds a
+ * `src/service-worker/` directory's index over a flat file beside it, so that comes first.
  */
 const CANDIDATES: ReadonlyArray<WorkerTarget> = [
+	{ path: "src/service-worker/index.ts", url: "/service-worker.js", kind: "bundled" },
+	{ path: "src/service-worker/index.js", url: "/service-worker.js", kind: "bundled" },
 	{ path: "src/service-worker.ts", url: "/service-worker.js", kind: "bundled" },
 	{ path: "src/service-worker.js", url: "/service-worker.js", kind: "bundled" },
 	{ path: "src/sw.ts", url: "/sw.js", kind: "bundled" },
@@ -65,21 +76,29 @@ const SVELTE_CONFIGS = [
  * read is textual and covers only the shape we're sure of: a string literal. (The other
  * `serviceWorker` key, `kit.serviceWorker`, takes an object, so it can't match.) A value
  * that's computed, or that doesn't resolve the way SvelteKit would resolve it, falls back
- * to the standard locations.
+ * to the standard locations. The vite config Vite loads is read before the svelte config,
+ * as SvelteKit reads options passed to `sveltekit()` over a svelte config, and it counts
+ * only when it calls `sveltekit()`: any Vite project has one, and only Kit's names a worker
+ * source under that key.
  */
 function configured_worker(
 	exists: (path: string) => boolean,
 	read: (path: string) => string | undefined
 ): WorkerTarget | undefined {
-	const config = SVELTE_CONFIGS.find(exists)
-	const source = config && read(config)
-	const named = source && /\bserviceWorker\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(source)?.[1]
-	if (!named) return undefined
-	// SvelteKit resolves the entry with or without an extension, and as a directory.
-	const path = [named, `${named}.ts`, `${named}.js`, `${named}/index.ts`, `${named}/index.js`]
-		.filter((candidate) => /\.(ts|js)$/.test(candidate))
-		.find(exists)
-	return path ? { path, url: "/service-worker.js", kind: "bundled" } : undefined
+	const vite = VITE_CONFIGS.find(exists)
+	for (const config of [vite, SVELTE_CONFIGS.find(exists)]) {
+		const source = config && read(config)
+		if (!source || (config === vite && !SVELTEKIT_CALL.test(source))) continue
+		const named = /\bserviceWorker\s*:\s*["'`]([^"'`\n]+)["'`]/.exec(source)?.[1]
+		if (!named) continue
+		// SvelteKit resolves the entry with or without an extension, and as a directory, whose
+		// index it takes over a file beside it.
+		const path = [named, `${named}/index.ts`, `${named}/index.js`, `${named}.ts`, `${named}.js`]
+			.filter((candidate) => /\.(ts|js)$/.test(candidate))
+			.find(exists)
+		return path ? { path, url: "/service-worker.js", kind: "bundled" } : undefined
+	}
+	return undefined
 }
 
 /**
@@ -117,10 +136,17 @@ export function suggest_worker(
 	if (sveltekit) {
 		// `svelte-kit sync` writes one or the other, so this is a reliable read of which
 		// language the project is in.
+		const ext = exists("tsconfig.json") ? "ts" : "js"
+		// SvelteKit 3's sync writes the base a worker's own tsconfig extends, and checks a worker
+		// kept in its own directory apart from the app; SvelteKit 2 builds the single file.
+		if (!exists("node_modules/$app/tsconfig/service-worker.json")) {
+			return { path: `src/service-worker.${ext}`, url: "/service-worker.js", kind: "bundled" }
+		}
 		return {
-			path: exists("tsconfig.json") ? "src/service-worker.ts" : "src/service-worker.js",
+			path: `src/service-worker/index.${ext}`,
 			url: "/service-worker.js",
 			kind: "bundled",
+			...(ext === "ts" && { tsconfig: "src/service-worker/tsconfig.json" }),
 		}
 	}
 	// Everything else: a served-as-is file, in whichever static directory the project has.
