@@ -107,8 +107,9 @@ Or use [remote functions](https://docs.postboi.app/sveltekit) with `postboi/remo
 the server file. Postboi also has guides for [Next.js](https://docs.postboi.app/nextjs),
 [Astro](https://docs.postboi.app/astro), [Nuxt](https://docs.postboi.app/nuxt),
 [React Router](https://docs.postboi.app/react-router), [Hono](https://docs.postboi.app/hono),
-[Express](https://docs.postboi.app/express) and
-[Cloudflare Workers](https://docs.postboi.app/cloudflare-workers).
+[Express](https://docs.postboi.app/express),
+[Cloudflare Workers](https://docs.postboi.app/cloudflare-workers) and
+[Effect](https://docs.postboi.app/effect).
 
 ## Beyond email
 

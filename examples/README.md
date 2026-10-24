@@ -59,6 +59,12 @@ All on the Postboi provider, each using its framework's server handler to call `
   The `POSTBOI_TOKEN` binding is read for you, so `mail({ body })` needs no wiring; the one
   thing a Worker can't do is auto-load `postboi.config.ts` off a filesystem.
 
+## Effect
+
+- [`effect-provider-postboi`](./effect-provider-postboi): a Bun script on `postboi/effect`.
+  `Mailer.layer` from `Config`, `with_retry`, `SkipSend` and `PostboiError` handled with
+  `Effect.catchTag`, and a test on `Mailer.layerMock()`.
+
 ## Scripts
 
 - [`scripts`](./scripts) — plain Bun/Node scripts, no framework. Email:
