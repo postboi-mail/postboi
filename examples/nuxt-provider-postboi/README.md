@@ -20,7 +20,7 @@ Then open http://localhost:3000.
 
 ## How it works
 
-- **`app.vue`** — the Vue contact form. It POSTs `multipart/form-data` to
+- **`app/pages/index.vue`** — the Vue contact form. It POSTs `multipart/form-data` to
   `/api/contact` and shows a thank-you once the server redirects back with
   `?sent=1`. Hidden `_subject` and `_reply_to` fields ride along; `_reply_to` is
   bound to the email via `v-model`.

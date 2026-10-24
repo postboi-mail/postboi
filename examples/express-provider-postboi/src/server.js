@@ -58,7 +58,7 @@ app.post(
 //
 //   curl -X POST localhost:3000/notify -H 'content-type: application/json' \
 //     -d '{"channel":"sms","to":"+447700900123","message":"Your code is 428 916"}'
-app.post("/notify", express.json(), async ({ body: { channel, to, message } }, res) => {
+app.post("/notify", express.json(), async ({ body: { channel, to, message } = {} }, res) => {
 	switch (channel) {
 		case "sms":
 			return res.json(await sms({ to, message }))

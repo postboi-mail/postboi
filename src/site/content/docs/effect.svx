@@ -203,3 +203,5 @@ request inside the send, before hooks see an error; `with_retry` retries the who
 hooks included. Setting both stacks them: a `retries: 2` provider inside a `with_retry` of
 2 makes up to nine requests. A form send with a captcha needs the provider's `retries`,
 because a retry here checks its Turnstile token again after the first check used it up.
+
+**Runnable example:** [`examples/effect-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/effect-provider-postboi).

@@ -9,7 +9,7 @@
 		"ci": "node --check src/server.js"
 	},
 	"dependencies": {
-		"express": "^4.21.2",
+		"express": "^5.3.0",
 		"postboi": "^0.74.0"
 	}
 }

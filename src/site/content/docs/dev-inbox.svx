@@ -32,7 +32,7 @@ bun run dev
 ```
 
 It rides on the dev server you already started, with no extra port and no second terminal. That
-covers SvelteKit, Astro, Nuxt, Remix and plain Vite.
+covers SvelteKit, Astro, Nuxt, React Router and plain Vite.
 
 Because it's mounted by Vite's `configureServer` hook, which only ever runs in dev, the
 inbox cannot end up in a production build.

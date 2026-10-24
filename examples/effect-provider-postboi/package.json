@@ -1,0 +1,19 @@
+{
+	"name": "postboi-example-effect-provider-postboi",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "NODE_ENV=development bun src/index.ts",
+		"start": "bun src/index.ts",
+		"test": "bun test",
+		"ci": "bunx tsc --noEmit && bun test"
+	},
+	"dependencies": {
+		"effect": "4.0.6",
+		"postboi": "^0.74.0"
+	},
+	"devDependencies": {
+		"typescript": "^5.9",
+		"@types/bun": "latest"
+	}
+}

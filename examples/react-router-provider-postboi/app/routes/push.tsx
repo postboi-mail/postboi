@@ -18,8 +18,8 @@ export default function Push() {
 		<main style={{ maxWidth: "32rem", margin: "4rem auto", fontFamily: "system-ui, sans-serif" }}>
 			<h1>Web Push</h1>
 			<p>
-				Subscribe this browser, then have the server push to it — close the tab first if
-				you want proof it works with the site gone.
+				Subscribe this browser, then have the server push to it — close the tab first if you want
+				proof it works with the site gone.
 			</p>
 			<button onClick={push.toggle} disabled={push.busy}>
 				{push.on ? "Unsubscribe" : "Subscribe"}

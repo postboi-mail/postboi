@@ -1,0 +1,29 @@
+{
+	"name": "postboi-example-react-router-provider-postboi",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "react-router dev",
+		"build": "react-router build",
+		"start": "react-router-serve ./build/server/index.js",
+		"typecheck": "react-router typegen && tsc",
+		"ci": "react-router typegen && tsc && react-router build"
+	},
+	"dependencies": {
+		"@react-router/node": "^8.5.0",
+		"@react-router/serve": "^8.5.0",
+		"isbot": "^5",
+		"postboi": "^0.74.0",
+		"react": "^19.2.8",
+		"react-dom": "^19.2.8",
+		"react-router": "^8.5.0"
+	},
+	"devDependencies": {
+		"@react-router/dev": "^8.5.0",
+		"@types/node": "^22",
+		"@types/react": "^19.2.18",
+		"@types/react-dom": "^19.2.7",
+		"typescript": "^5.9.3",
+		"vite": "^8.0.3"
+	}
+}

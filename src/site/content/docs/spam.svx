@@ -31,7 +31,7 @@ surrounding form, including forms mounted on client-side navigations.
 ```
 
 ```tsx
-// React: Next.js, Remix, …
+// React: Next.js, React Router, …
 import { Captcha } from 'postboi/react'
 
 <form action={action}>

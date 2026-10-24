@@ -9,8 +9,8 @@
 		"ci": "astro build"
 	},
 	"dependencies": {
-		"astro": "^5",
-		"@astrojs/node": "^9"
+		"astro": "^7",
+		"@astrojs/node": "^11"
 	},
 	"devDependencies": {
 		"postboi": "^0.74.0",
