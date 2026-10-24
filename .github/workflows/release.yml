@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: main
           # The docs freeze and the already-released guard read history and tags.
@@ -162,7 +162,7 @@ jobs:
           bun-version: latest
 
       - name: Install Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -307,7 +307,7 @@ jobs:
 
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: main
           # The push below rebases over anything that landed on main meanwhile.
@@ -319,7 +319,7 @@ jobs:
           bun-version: latest
 
       - name: Install Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
