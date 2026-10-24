@@ -6,7 +6,7 @@
       "name": "postboi-example-express-provider-postboi",
       "dependencies": {
         "express": "^5.3.0",
-        "postboi": "^0.74.0",
+        "postboi": "^0.75.0",
       },
     },
   },
@@ -137,7 +137,7 @@
 
     "path-to-regexp": ["path-to-regexp@8.4.2", "", {}, "sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA=="],
 
-    "postboi": ["postboi@0.74.0", "", { "peerDependencies": { "@maizzle/framework": "^6.0.0", "@sveltejs/kit": "^3.0.0", "expo-constants": ">=15", "expo-notifications": ">=0.20", "react": ">=18", "svelte": "^5.7.0", "vue": ">=3.3" }, "optionalPeers": ["@maizzle/framework", "@sveltejs/kit", "expo-constants", "expo-notifications", "react", "vue"], "bin": { "postboi": "dist/cli.js" } }, "sha512-G44VoeQ9jW6IbRdqnj4T2iOHH076NNKCbQH4b1k3DQKzd5ggreccczMFqxmaL8YAVDj0lAbO0bfL4dVZPda+fA=="],
+    "postboi": ["postboi@0.75.0", "", { "peerDependencies": { "@maizzle/framework": "^6.0.0", "@sveltejs/kit": "^3.0.0", "expo-constants": ">=15", "expo-notifications": ">=0.20", "react": ">=18", "svelte": "^5.7.0", "vue": ">=3.3" }, "optionalPeers": ["@maizzle/framework", "@sveltejs/kit", "expo-constants", "expo-notifications", "react", "vue"], "bin": { "postboi": "dist/cli.js" } }, "sha512-L5TR8N8LAsUQT0svy+vaP75pWQpZWzk+Vx1HnvtlIrmbwOOaTmvvOwR3LFwWIFgcYeSvWg2WWazFvy1Ucgl2zA=="],
 
     "proxy-addr": ["proxy-addr@2.0.8", "", { "dependencies": { "forwarded": "0.2.0", "ipaddr.js": "1.9.1" } }, "sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ=="],
 
