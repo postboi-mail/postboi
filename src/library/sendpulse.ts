@@ -79,8 +79,7 @@ export default class SendPulse extends ProviderBase<SendResponse> {
 			}),
 		})
 		const data = (await response.json().catch(() => undefined)) as
-			| { access_token?: string; expires_in?: number; message?: string; error?: string }
-			| undefined
+			{ access_token?: string; expires_in?: number; message?: string; error?: string } | undefined
 		if (!response.ok || !data?.access_token) {
 			throw new PostboiError({
 				provider: this.provider,

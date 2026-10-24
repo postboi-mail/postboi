@@ -258,8 +258,7 @@ export async function hosted_test(options: HostedTestOptions = {}): Promise<Host
 		const response = await fetcher(`${api}${path}`, { ...init, headers })
 		if (!response.ok) {
 			const body = (await response.json().catch(() => undefined)) as
-				| { message?: string }
-				| undefined
+				{ message?: string } | undefined
 			const why = body?.message ? `: ${body.message}` : ""
 			throw new Error(`postboi/inspect: ${path} answered ${response.status}${why}`)
 		}

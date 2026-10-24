@@ -170,8 +170,7 @@ async function resend_list<T extends { id: string }>(
 			)
 		}
 		const body = (await response.json().catch(() => undefined)) as
-			| { data?: Array<T>; has_more?: boolean; message?: string }
-			| undefined
+			{ data?: Array<T>; has_more?: boolean; message?: string } | undefined
 		if (!response.ok) {
 			throw new ApiCommandError(
 				`Resend answered ${response.status} for ${path}${body?.message ? `: ${body.message}` : "."}`,

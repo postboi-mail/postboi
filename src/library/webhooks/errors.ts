@@ -2,10 +2,7 @@ import { PostboiError } from "../index.js"
 
 /** Reasons webhook verification can fail. */
 export type WebhookVerificationCode =
-	| "invalid_signature"
-	| "missing_secret"
-	| "stale_timestamp"
-	| "unsupported_runtime"
+	"invalid_signature" | "missing_secret" | "stale_timestamp" | "unsupported_runtime"
 
 /**
  * Thrown when an incoming webhook fails verification — a bad signature, a missing

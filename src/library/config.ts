@@ -38,14 +38,7 @@ import type { IdempotencyStore } from "./idempotency.js"
 
 /** The senders `postboi views publish` writes a link for, in their own merge syntax. */
 export type ViewProvider =
-	| "onesignal"
-	| "braze"
-	| "iterable"
-	| "customerio"
-	| "klaviyo"
-	| "mailchimp"
-	| "sendgrid"
-	| "none"
+	"onesignal" | "braze" | "iterable" | "customerio" | "klaviyo" | "mailchimp" | "sendgrid" | "none"
 
 /**
  * One view's publishing choices, so `postboi views publish` makes them the same way every

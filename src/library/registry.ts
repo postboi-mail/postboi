@@ -1608,8 +1608,7 @@ export function infer_channel_provider(
  */
 export function scoped_options(
 	section:
-		| { provider?: string | ReadonlyArray<string>; options?: Record<string, string> }
-		| undefined,
+		{ provider?: string | ReadonlyArray<string>; options?: Record<string, string> } | undefined,
 	key: string
 ): Record<string, string> | undefined {
 	const primary = provider_keys(section?.provider)?.[0]

@@ -65,7 +65,7 @@ Two shapes of the same thing, with the same filter words:
 - **`--weekly` is Monday, `--monthly` the 1st, always at 09:00 in `--tz`, which is UTC
   unless given.** Say so in your summary, or ask the user's zone — it is the one thing
   the request usually leaves out. `--day fri` / `--day 1,3` / `--month-day 15` / `--at
-  17:30` change them; `days` are `0`–`6` with `0` Sunday on the API.
+17:30` change them; `days` are `0`–`6` with `0` Sunday on the API.
 - **Window is `since_last_run`**: each file holds what arrived since the previous one, so
   nothing is sent twice. `previous_period` is the last whole day, week or month in the
   schedule's zone; `all_matching` is everything the filter reaches, every time.

@@ -200,8 +200,7 @@ async function dev_mock<TProvider>(spec: ChannelResolution<TProvider>): Promise<
 export function resolve_fields(
 	fields: ReadonlyArray<ProviderField>,
 	section:
-		| { provider?: string | ReadonlyArray<string>; options?: Record<string, string> }
-		| undefined,
+		{ provider?: string | ReadonlyArray<string>; options?: Record<string, string> } | undefined,
 	options: Record<string, unknown>,
 	key: string
 ): ProviderField | undefined {

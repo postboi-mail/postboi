@@ -211,8 +211,7 @@ async function call<T>(
 		body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
 	})
 	const data = (await response.json().catch(() => undefined)) as
-		| (T & { message?: string; code?: string })
-		| undefined
+		(T & { message?: string; code?: string }) | undefined
 	if (!response.ok) {
 		const missing = response.status === 404 && !data?.code
 		throw new PostboiError({

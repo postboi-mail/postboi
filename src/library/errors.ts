@@ -28,13 +28,7 @@ export type Channel = "email" | "sms" | "push" | "chat" | "whatsapp"
  * last three would be refused anywhere.
  */
 export type RejectionReason =
-	| "auth"
-	| "rate_limited"
-	| "sender"
-	| "account"
-	| "recipient"
-	| "compliance"
-	| "request"
+	"auth" | "rate_limited" | "sender" | "account" | "recipient" | "compliance" | "request"
 
 /** The reasons another provider might not share, so a chain moves on for them. */
 export const FAILOVER_REASONS: ReadonlySet<RejectionReason> = new Set([

@@ -139,8 +139,7 @@ export default class SocketLabs extends ProviderBase<SendResponse> {
 		if (typeof code !== "string") return undefined
 		if (code === "Success") return undefined
 		const results = (e.MessageResults ?? e.messageResults) as
-			| Array<Record<string, unknown>>
-			| undefined
+			Array<Record<string, unknown>> | undefined
 		const detail = results?.[0]?.ErrorCode ?? results?.[0]?.errorCode
 		return {
 			message: `socketlabs refused the send: ${code}${typeof detail === "string" && detail !== code ? ` (${detail})` : ""}`,

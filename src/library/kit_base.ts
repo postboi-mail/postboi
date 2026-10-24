@@ -35,9 +35,7 @@ interface Mailer {
 
 /** What a built action returns: the form succeeded, or a typed failure. */
 type ActionResult<F = { error: string }> =
-	| { success: true }
-	| ActionFailure<{ error: string }>
-	| ActionFailure<F>
+	{ success: true } | ActionFailure<{ error: string }> | ActionFailure<F>
 
 /** A SvelteKit form action built by {@link action}. */
 type FormAction<F = { error: string }> = (event: RequestEvent) => Promise<ActionResult<F>>
@@ -235,8 +233,7 @@ export const mail: FormAction = action()
  * `after` hook returned, merged in on a successful send (absent when the honeypot tripped).
  */
 export type RemoteResult<R = object> =
-	| ({ success: true } & Partial<R>)
-	| { success: false; error: string }
+	({ success: true } & Partial<R>) | { success: false; error: string }
 
 /** The remote mail form built by {@link remote} — spread it onto a `<form>` element. */
 export type RemoteMailForm<

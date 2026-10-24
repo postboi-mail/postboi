@@ -77,8 +77,7 @@ async function poll_code<T>(
 			if (response.status === 404 || response.status === 410) return "dead"
 			if (response.ok) {
 				const data = (await response.json().catch(() => undefined)) as
-					| Record<string, unknown>
-					| undefined
+					Record<string, unknown> | undefined
 				if (data) {
 					const result = parse(data)
 					if (result !== undefined) return result
@@ -446,8 +445,7 @@ export interface PushKey {
 
 /** A key call's answer: the key, or the API's reason for refusing. */
 export type PushKeyResult =
-	| { ok: true; key: PushKey }
-	| { ok: false; status?: number; reason: string }
+	{ ok: true; key: PushKey } | { ok: false; status?: number; reason: string }
 
 /**
  * Managed push's key calls: `GET` reads it (`export` adds the private half), `POST` switches

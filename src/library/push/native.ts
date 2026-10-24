@@ -69,11 +69,7 @@ export interface SubscribeOptions {
 /** Thrown when a registration can't be made, with `reason` saying which wall was hit. */
 export class PushSubscribeError extends Error {
 	readonly reason:
-		| "unsupported"
-		| "permission_denied"
-		| "permission_dismissed"
-		| "missing_project"
-		| "failed"
+		"unsupported" | "permission_denied" | "permission_dismissed" | "missing_project" | "failed"
 
 	constructor(reason: PushSubscribeError["reason"], message: string) {
 		super(message)

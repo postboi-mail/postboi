@@ -116,8 +116,7 @@ export async function api<T>(
 		)
 	}
 	const data = (await response.json().catch(() => undefined)) as
-		| (T & { message?: string; code?: string })
-		| undefined
+		(T & { message?: string; code?: string }) | undefined
 	if (!response.ok) {
 		throw new ApiCommandError(
 			data?.message ?? `The API responded with ${response.status}.`,
@@ -151,8 +150,7 @@ export async function api_file(
 	}
 	if (!response.ok) {
 		const data = (await response.json().catch(() => undefined)) as
-			| { message?: string; code?: string }
-			| undefined
+			{ message?: string; code?: string } | undefined
 		throw new ApiCommandError(
 			data?.message ?? `The API responded with ${response.status}.`,
 			data?.code ?? `http_${response.status}`

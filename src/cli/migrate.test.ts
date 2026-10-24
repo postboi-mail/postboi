@@ -72,9 +72,7 @@ function stub_accounts(options: { postboi?: Record<string, unknown> } = {}) {
 			return new Response(JSON.stringify(answer ?? { data: [] }), { status: 200 })
 		}
 		const answer = postboi[`${method} ${pathname}`] as
-			| { status: number; body: unknown }
-			| Record<string, unknown>
-			| undefined
+			{ status: number; body: unknown } | Record<string, unknown> | undefined
 		if (!answer)
 			return new Response(
 				JSON.stringify({ message: `no stub for ${method} ${pathname}${search}` }),
