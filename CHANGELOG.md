@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.74.0
+
 ### Added
 
 - `postboi/effect`, an Effect 4 entry: `send_mail` and friends as Effects with a tagged `PostboiError` (carrying `outcome_unknown`, `reason`, `retry_after`, a failover chain's `errors` and a timed-out wait's `cursor`), `validate_sms`, a `Mailer` service with config and mock layers, a `SendRequest` schema and `with_retry`, which waits out a `Retry-After` and retries an unknown outcome only with `retry_unknown`. It needs `effect` 4 in the app, which postboi doesn't list as a dependency, so an app on Effect 3 installs as before; nothing else in the package imports it.
