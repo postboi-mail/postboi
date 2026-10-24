@@ -1,0 +1,45 @@
+# Deploy docs.postboi.app with alchemy (`alchemy deploy --stage prod`) from main after CI
+# passes on a push to main, and after a release.
+#
+# Needs a `production` environment holding CLOUDFLARE_DEPLOY_TOKEN, handed to alchemy as
+# CLOUDFLARE_API_TOKEN: Workers Scripts Edit, Secrets Store Edit and Account Settings
+# Read on the account, Workers Routes Edit, Zone Read and DNS Edit on postboi.app.
+name: Deploy docs
+
+on:
+  workflow_run:
+    workflows: [CI, Release]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       ((github.event.workflow_run.name == 'CI' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
+        github.event.workflow_run.name == 'Release'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 1c48305ea711d2a0bb743bc8562e10ef
+        run: bunx alchemy deploy --stage prod --yes --no-input

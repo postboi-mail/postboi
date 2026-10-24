@@ -176,8 +176,8 @@ bun run infra:destroy -- --stage pr-123  # and take it down again
 ```
 
 It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment (or
-`alchemy profile`). The first production deploy adopts the Worker wrangler already made
-(`--adopt`); until that has happened, `wrangler.jsonc` is the deploy that still works.
+`alchemy profile`). Production deploys itself: `.github/workflows/deploy-docs.yml` runs the
+`--stage prod` deploy from `main` after CI passes on a push and after every release.
 
 PRs are welcome, new providers especially. Match the code style (snake_case, no
 semicolons), add tests, and run `check` and `lint` before pushing. Releases are covered in
