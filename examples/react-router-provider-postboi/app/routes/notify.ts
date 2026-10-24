@@ -4,7 +4,7 @@ import type { Route } from "./+types/notify"
 // The other channels, from a React Router resource route. The calls are identical in every
 // framework — what's React Router about this file is only where it lives.
 //
-//   curl -X POST localhost:3000/notify -H 'content-type: application/json' \
+//   curl -X POST localhost:5173/notify -H 'content-type: application/json' \
 //     -d '{"channel":"sms","to":"+447700900123","message":"Your code is 428 916"}'
 //
 // In development SMS and WhatsApp are logged, not sent — POSTBOI_SMS_DEV=send /

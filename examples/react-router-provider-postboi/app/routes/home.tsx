@@ -19,7 +19,7 @@ export default function Home({ actionData }: Route.ComponentProps) {
 		<main style={{ maxWidth: "32rem", margin: "4rem auto", fontFamily: "system-ui, sans-serif" }}>
 			<h1>Contact us</h1>
 
-			{actionData?.ok ? <p>Thanks — we got your message and will be in touch.</p> : null}
+			{actionData?.ok ? <p>Thanks, we got your message and will be in touch.</p> : null}
 
 			<Form method="post" encType="multipart/form-data" style={{ display: "grid", gap: "0.75rem" }}>
 				<input type="hidden" name="_subject" value="Contact Form" />

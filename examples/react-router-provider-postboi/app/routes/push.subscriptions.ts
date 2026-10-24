@@ -10,7 +10,10 @@ const subscriptions = new Map<string, PushSubscriptionJSON>()
 
 export async function action({ request }: Route.ActionArgs) {
 	if (request.method === "POST") {
-		const subscription = (await request.json()) as PushSubscriptionJSON
+		const { old_endpoint, ...subscription } = (await request.json()) as PushSubscriptionJSON & {
+			old_endpoint?: string
+		}
+		if (old_endpoint) subscriptions.delete(old_endpoint)
 		subscriptions.set(subscription.endpoint, subscription)
 		return Response.json({ stored: subscriptions.size })
 	}
