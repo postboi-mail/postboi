@@ -8,6 +8,7 @@
 		siHono,
 		siExpress,
 		siCloudflareworkers,
+		siEffect,
 	} from "simple-icons"
 
 	// Keyed by the framework page's slug — monochrome (currentColor) so it sits quietly in the nav.
@@ -20,6 +21,7 @@
 		hono: siHono,
 		express: siExpress,
 		"cloudflare-workers": siCloudflareworkers,
+		effect: siEffect,
 	}
 
 	let {
