@@ -22,11 +22,10 @@ import {
 	decode_send_request,
 	from_error,
 	retryable,
-	send_mail,
+	mail,
 	send_options,
-	send_sms,
+	sms,
 	tried,
-	validate_sms,
 	with_retry,
 } from "./effect.js"
 import type { FromAddress } from "./index.js"
@@ -280,18 +279,18 @@ describe("from_error", () => {
 		})
 	)
 
-	it.effect("send_mail fails with the zero-config refusal when nothing is configured", () =>
+	it.effect("mail fails with the zero-config refusal when nothing is configured", () =>
 		Effect.gen(function* () {
 			vi.stubEnv("POSTBOI_PROVIDER", "")
 			vi.stubEnv("POSTBOI_TOKEN", "")
-			const error = yield* Effect.flip(send_mail({ to: "ada@example.com", body: "<p>Hi</p>" }))
+			const error = yield* Effect.flip(mail({ to: "ada@example.com", body: "<p>Hi</p>" }))
 			expect(error._tag).toBe("PostboiError")
 			if (error._tag === "PostboiError") expect(error.code).toBe("no_provider")
 		})
 	)
 })
 
-describe("send_sms and validate_sms", () => {
+describe("sms and sms.validate", () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 		vi.unstubAllEnvs()
@@ -301,9 +300,9 @@ describe("send_sms and validate_sms", () => {
 		Effect.gen(function* () {
 			vi.spyOn(console, "log").mockImplementation(() => {})
 			vi.stubEnv("POSTBOI_SMS_PROVIDER", "mock")
-			const receipt = yield* send_sms({ to: "+447700900123", from: "ACME", message: "Hi" })
+			const receipt = yield* sms({ to: "+447700900123", from: "ACME", message: "Hi" })
 			expect(receipt).toMatchObject({ id: expect.any(String), provider: "mock" })
-			const check = yield* validate_sms({
+			const check = yield* sms.validate({
 				to: "07700 900123",
 				from: "ACME",
 				message: "Hi",

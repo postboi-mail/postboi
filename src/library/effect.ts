@@ -1,11 +1,12 @@
 /**
  * `postboi/effect`: Postboi for an Effect program.
  *
- * Everything the package root does, as Effects: `send_mail` and the other channels wrap
- * the zero-config functions, the thrown `PostboiError` becomes a tagged error you can
- * `catchTag`, and `Mailer` is a service with a layer read from `Config`. Nothing
- * here is a second send path; each function calls the one `mail()` everybody else does,
- * so the dev inbox, the hooks and the provider rules behave exactly as documented.
+ * Everything the package root does, as Effects under the same names: `mail`, `sms` and
+ * the other channels wrap the zero-config functions, the thrown `PostboiError` becomes a
+ * tagged error you can `catchTag`, and `Mailer` is a service with a layer read from
+ * `Config`. Nothing here is a second send path; each function calls the one `mail()`
+ * everybody else does, so the dev inbox, the hooks and the provider rules behave exactly
+ * as documented.
  *
  * It needs `effect` 4 in the app, which the package doesn't list as a dependency. Only this
  * entry imports it; the rest of the package stays dependency-free.
@@ -34,12 +35,17 @@ import {
 	SkipSendError,
 	type PostboiError as RootPostboiError,
 } from "./errors.js"
-import { mail, cancel, resolve_provider, with_remoteip } from "./mail.js"
+import {
+	mail as root_mail,
+	cancel as root_cancel,
+	resolve_provider,
+	with_remoteip,
+} from "./mail.js"
 import { escape_lines } from "./utils.js"
-import { sms } from "./sms/send.js"
-import { push } from "./push/send.js"
-import { whatsapp } from "./whatsapp/send.js"
-import { slack, discord, teams, telegram, bluesky } from "./chat/send.js"
+import { sms as root_sms } from "./sms/send.js"
+import { push as root_push } from "./push/send.js"
+import { whatsapp as root_whatsapp } from "./whatsapp/send.js"
+import * as root_chat from "./chat/send.js"
 import { send as fan_out, type FanOutOptions, type SendResult } from "./send.js"
 import { retry_after_ms } from "./transport.js"
 
@@ -178,68 +184,69 @@ export function tried<A>(run: () => Promise<A>): Effect.Effect<A, SendError> {
 export type SendResponse = unknown
 
 /** Send an email through whatever `mail()` is configured to send with. */
-export const send_mail = Effect.fn("postboi.send_mail")((options: SendOptions) =>
-	tried<SendResponse>(() => mail(options))
+export const mail = Effect.fn("postboi.mail")((options: SendOptions) =>
+	tried<SendResponse>(() => root_mail(options))
 )
 
 /** Cancel a scheduled email by the id its send answered with. */
-export const cancel_mail = Effect.fn("postboi.cancel_mail")((id: string) =>
-	tried<CancelResponse>(() => cancel(id))
+export const cancel = Effect.fn("postboi.cancel")((id: string) =>
+	tried<CancelResponse>(() => root_cancel(id))
 )
 
 /**
  * Send a text through the configured SMS provider, or down its failover chain. Every SMS
  * provider answers the same `SmsReceipt` (`id`, `ids`, `provider`, `delivery`).
  */
-export const send_sms = Effect.fn("postboi.send_sms")((options: SmsOptions) =>
-	tried<SmsReceipt>(() => sms(options))
-)
-
-/**
- * Check a text against the configured SMS provider without sending it, as
- * `sms.validate()` does: numbers, encoding, segments and every problem a send would
- * refuse it for. Fails only when no provider can be resolved.
- */
-export const validate_sms = Effect.fn("postboi.validate_sms")((options: SmsOptions) =>
-	tried<SmsCheck>(() => sms.validate(options))
+export const sms = Object.assign(
+	Effect.fn("postboi.sms")((options: SmsOptions) => tried<SmsReceipt>(() => root_sms(options))),
+	{
+		/**
+		 * Check a text against the configured SMS provider without sending it, as the root's
+		 * `sms.validate()` does: numbers, encoding, segments and every problem a send would
+		 * refuse it for. Fails only when no provider can be resolved.
+		 */
+		validate: Effect.fn("postboi.sms.validate")((options: SmsOptions) =>
+			tried<SmsCheck>(() => root_sms.validate(options))
+		),
+	}
 )
 
 /** Send a push notification through the configured push provider. */
-export const send_push = Effect.fn("postboi.send_push")((options: PushOptions) =>
-	tried<SendResponse>(() => push(options))
+export const push = Effect.fn("postboi.push")((options: PushOptions) =>
+	tried<SendResponse>(() => root_push(options))
 )
 
 /** Send a WhatsApp message through the configured WhatsApp provider. */
-export const send_whatsapp = Effect.fn("postboi.send_whatsapp")((options: WhatsappOptions) =>
-	tried<SendResponse>(() => whatsapp(options))
+export const whatsapp = Effect.fn("postboi.whatsapp")((options: WhatsappOptions) =>
+	tried<SendResponse>(() => root_whatsapp(options))
 )
 
 // Chat is one function per platform, as on the package root: you always know which
 // platform you are posting to, so the platform is the name.
 
 /** Post to Slack. */
-export const send_slack = Effect.fn("postboi.send_slack")((options: ChatOptions) =>
-	tried<SendResponse>(() => slack(options))
+export const slack = Effect.fn("postboi.slack")((options: ChatOptions) =>
+	tried<SendResponse>(() => root_chat.slack(options))
 )
 
 /** Post to Discord. */
-export const send_discord = Effect.fn("postboi.send_discord")((options: ChatOptions) =>
-	tried<SendResponse>(() => discord(options))
+export const discord = Effect.fn("postboi.discord")((options: ChatOptions) =>
+	tried<SendResponse>(() => root_chat.discord(options))
 )
 
 /** Post to Microsoft Teams. */
-export const send_teams = Effect.fn("postboi.send_teams")((options: ChatOptions) =>
-	tried<SendResponse>(() => teams(options))
+export const teams = Effect.fn("postboi.teams")((options: ChatOptions) =>
+	tried<SendResponse>(() => root_chat.teams(options))
 )
 
 /** Send a Telegram message. */
-export const send_telegram = Effect.fn("postboi.send_telegram")((options: ChatOptions) =>
-	tried<SendResponse>(() => telegram(options))
+export const telegram = Effect.fn("postboi.telegram")((options: ChatOptions) =>
+	tried<SendResponse>(() => root_chat.telegram(options))
 )
 
 /** Post to Bluesky. */
-export const send_bluesky = Effect.fn("postboi.send_bluesky")((options: ChatOptions) =>
-	tried<SendResponse>(() => bluesky(options))
+export const bluesky = Effect.fn("postboi.bluesky")((options: ChatOptions) =>
+	tried<SendResponse>(() => root_chat.bluesky(options))
 )
 
 /**
@@ -370,7 +377,7 @@ const Addresses = Schema.Union([
  * Decode it with `decode_send_request` and hand the result to {@link send_options}.
  *
  * Whoever sends one picks the recipients, the sender and the content, so accept it only
- * from callers you trust. A public form posts `FormData` to `send_mail` instead, which
+ * from callers you trust. A public form posts `FormData` to `mail` instead, which
  * ignores a posted `_to`, `_cc`, `_bcc` or `_from` unless the send sets `form_addressing`.
  *
  * An address here is a non-empty string in whatever form `mail()` accepts
@@ -407,7 +414,7 @@ export type SendRequest = typeof SendRequest.Type
 export const decode_send_request = Schema.decodeUnknownEffect(SendRequest)
 
 /**
- * Turn a decoded {@link SendRequest} into the options `send_mail` (or `Mailer.send`)
+ * Turn a decoded {@link SendRequest} into the options `mail` (or `Mailer.send`)
  * takes. `html` is the body; a text-only request keeps its text as the plain-text part
  * and sends it as the body too, escaped with its line breaks kept (`escape_lines`),
  * because a string `body` is always HTML to a provider: raw, a `<` or an `&` in the
