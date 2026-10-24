@@ -61,7 +61,7 @@ export const contentSections: ContentSectionConfig[] = [
 					{ slug: "nextjs", name: "Next.js", icon: true },
 					{ slug: "astro", name: "Astro", icon: true },
 					{ slug: "nuxt", name: "Nuxt (Vue)", icon: true },
-					{ slug: "remix", name: "Remix", icon: true },
+					{ slug: "react-router", name: "React Router", icon: true },
 					{ slug: "hono", name: "Hono", icon: true },
 					{ slug: "express", name: "Express", icon: true },
 					{ slug: "cloudflare-workers", name: "Cloudflare Workers", icon: true },

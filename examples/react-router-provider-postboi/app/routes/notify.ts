@@ -1,8 +1,8 @@
-import type { ActionFunctionArgs } from "@remix-run/node"
 import { sms, whatsapp, slack } from "postboi"
+import type { Route } from "./+types/notify"
 
-// The other channels, from a Remix resource route. The calls are identical in every
-// framework — what's Remix about this file is only where it lives.
+// The other channels, from a React Router resource route. The calls are identical in every
+// framework — what's React Router about this file is only where it lives.
 //
 //   curl -X POST localhost:3000/notify -H 'content-type: application/json' \
 //     -d '{"channel":"sms","to":"+447700900123","message":"Your code is 428 916"}'
@@ -11,7 +11,7 @@ import { sms, whatsapp, slack } from "postboi"
 // POSTBOI_WHATSAPP_DEV=send for real delivery, `bunx postboi init --sms` (etc.) for
 // providers. Chat needs one env var: SLACK_WEBHOOK_URL. For several channels in one
 // call — or a cheapest-first fallback chain — see send(): https://docs.postboi.app/send
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request }: Route.ActionArgs) {
 	const { channel, to, message } = await request.json()
 
 	switch (channel) {

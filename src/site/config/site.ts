@@ -43,6 +43,7 @@ export const siteConfig = {
 		"next.js email",
 		"astro email",
 		"nuxt email",
+		"react router email",
 		"remix email",
 		"hono email",
 		"cloudflare workers email",

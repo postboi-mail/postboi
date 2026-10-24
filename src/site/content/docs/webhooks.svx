@@ -46,10 +46,10 @@ contract providers expect (200 on success, 401 on a bad signature, 400 on a bad
 payload, 500 when your handler throws so the provider retries) and takes the request
 in whichever shape your framework hands it over. A web `Request` (Next.js, Workers,
 plain fetch handlers) and a context object carrying `.request` (SvelteKit, Astro,
-Remix) both work, so the same line is the whole endpoint in all of them:
+React Router) both work, so the same line is the whole endpoint in all of them:
 
 ```typescript
-// Next.js app/webhooks/route.ts · an Astro APIRoute · a Remix action ·
+// Next.js app/webhooks/route.ts · an Astro APIRoute · a React Router action ·
 // a SvelteKit +server.ts · a Worker fetch branch — identical in each:
 import { webhook } from 'postboi/webhooks'
 

@@ -41,7 +41,7 @@ which still works: `new Postboi({ token: env.POSTBOI_TOKEN })`. See [Providers](
 ## The config file
 
 Bindings arrive on their own, but a Worker has no filesystem, so `postboi.config.ts` can't
-be read at runtime. If you build with Vite (SvelteKit, Nuxt, Astro, Remix, or plain Vite),
+be read at runtime. If you build with Vite (SvelteKit, Nuxt, Astro, React Router, or plain Vite),
 add the plugin and it travels in the bundle instead:
 
 ```typescript

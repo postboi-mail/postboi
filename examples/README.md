@@ -19,7 +19,7 @@ idiom — deliberately WET, so "postboi in `<framework>`" is one folder, complet
   requirement, so the classic body-parser footgun can't be built.
 - **`POST /notify`** — `sms()`, `whatsapp()` and `slack()` from one endpoint. The calls
   are identical everywhere; the file shows where they live in each framework.
-- **`/push`** (every app with a client build: SvelteKit, Next.js, Astro, Nuxt, Remix) —
+- **`/push`** (every app with a client build: SvelteKit, Next.js, Astro, Nuxt, React Router) —
   Web Push end to end: `subscribe()` in the browser, the subscription stored, `push()`
   sending to it, and the service worker that shows it. No key plumbing anywhere —
   `bunx postboi init --push` mints the VAPID pair and bakes the public half into the
@@ -48,11 +48,13 @@ All on the Postboi provider, each using its framework's server handler to call `
 - [`nextjs-provider-postboi`](./nextjs-provider-postboi) — Next.js App Router, via a Server Action.
 - [`astro-provider-postboi`](./astro-provider-postboi) — Astro, via an API route.
 - [`nuxt-provider-postboi`](./nuxt-provider-postboi) — Nuxt (Vue), via a Nitro server route.
-- [`remix-provider-postboi`](./remix-provider-postboi) — Remix, via a route `action`.
+- [`react-router-provider-postboi`](./react-router-provider-postboi): React Router
+  framework mode (what Remix became), via a route `action`.
 - [`hono-provider-postboi`](./hono-provider-postboi) — Hono on Bun (framework-agnostic,
   Web-standard `Request`/`FormData`).
-- [`express-provider-postboi`](./express-provider-postboi) — Express (plain JS). Shows the
-  one place the pattern differs: parse multipart with `multer`, then rebuild a `FormData`.
+- [`express-provider-postboi`](./express-provider-postboi): Express (plain JS). A
+  urlencoded form, so `express.urlencoded()` puts it on `req.body` and `mail({ body })`
+  takes it from there.
 - [`cloudflare-workers-provider-postboi`](./cloudflare-workers-provider-postboi) — a Worker.
   The `POSTBOI_TOKEN` binding is read for you, so `mail({ body })` needs no wiring; the one
   thing a Worker can't do is auto-load `postboi.config.ts` off a filesystem.

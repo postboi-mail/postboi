@@ -106,7 +106,7 @@ export const actions = { default: mail }
 Or use [remote functions](https://docs.postboi.app/sveltekit) with `postboi/remote` and skip
 the server file. Postboi also has guides for [Next.js](https://docs.postboi.app/nextjs),
 [Astro](https://docs.postboi.app/astro), [Nuxt](https://docs.postboi.app/nuxt),
-[Remix](https://docs.postboi.app/remix), [Hono](https://docs.postboi.app/hono),
+[React Router](https://docs.postboi.app/react-router), [Hono](https://docs.postboi.app/hono),
 [Express](https://docs.postboi.app/express) and
 [Cloudflare Workers](https://docs.postboi.app/cloudflare-workers).
 

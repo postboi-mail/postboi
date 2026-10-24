@@ -9,3 +9,7 @@
 # Tempboi is the product's name; the page kept its original slug.
 /tempboi /temp-inbox 301
 /raw/tempboi /raw/temp-inbox 301
+
+# Remix became React Router; its page moved with it.
+/remix /react-router 301
+/raw/remix /raw/react-router 301

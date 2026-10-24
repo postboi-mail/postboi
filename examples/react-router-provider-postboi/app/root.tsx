@@ -1,12 +1,6 @@
-import {
-	Links,
-	Meta,
-	Outlet,
-	Scripts,
-	ScrollRestoration,
-} from "@remix-run/react"
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
 
-export default function App() {
+export function Layout({ children }: { children: React.ReactNode }) {
 	return (
 		<html lang="en">
 			<head>
@@ -16,10 +10,14 @@ export default function App() {
 				<Links />
 			</head>
 			<body>
-				<Outlet />
+				{children}
 				<ScrollRestoration />
 				<Scripts />
 			</body>
 		</html>
 	)
+}
+
+export default function App() {
+	return <Outlet />
 }

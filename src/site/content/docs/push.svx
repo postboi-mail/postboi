@@ -116,7 +116,7 @@ export const { POST, DELETE } = push.handler((event) => event.locals.user?.id)
 ```
 
 `push.handler` reads the `Request` out of whatever your framework hands a route: the argument
-itself (Next, Workers), its `.request` (SvelteKit, Astro, Remix) or Hono's `c.req.raw`. A
+itself (Next, Workers), its `.request` (SvelteKit, Astro, React Router) or Hono's `c.req.raw`. A
 signed-out request answers 401, and the toggle on the page undoes the subscription rather than
 leaving a browser subscribed to something nothing can reach. `DELETE` only unfiles a browser
 that belongs to the person asking.
@@ -291,7 +291,7 @@ for it from vanilla JS, or from a framework we don't ship a wrapper for.
 
 **Runnable example:** [`examples/sveltekit-provider-postboi`](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi)
 does Web Push end to end: the toggle above, the endpoint it registers with, the send, and
-the service worker that shows the notification. Nuxt, Next.js, Astro and Remix carry the
+the service worker that shows the notification. Nuxt, Next.js, Astro and React Router carry the
 same page in their own idiom.
 
 ### When a subscribe fails
@@ -350,7 +350,7 @@ verbatim**, and that's a per-framework fact rather than a preference:
 | Framework | Worker file | Shape |
 | --- | --- | --- |
 | SvelteKit | `src/service-worker/index.ts` | Built: imports `postboi/push/sw` |
-| Next.js, Nuxt, Astro, Remix | `public/sw.js` | Served as-is: handlers written out |
+| Next.js, Nuxt, Astro, React Router | `public/sw.js` | Served as-is: handlers written out |
 | Vite / webpack worker entry | your entry | Built: imports `postboi/push/sw` |
 
 A built worker is four lines:
