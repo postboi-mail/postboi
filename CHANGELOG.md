@@ -10,6 +10,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- `postboi/effect`: the sends take the names they have on the root `postboi` API. `send_mail` → `mail`, `cancel_mail` → `cancel`, `send_sms` → `sms`, `send_push` → `push`, `send_whatsapp` → `whatsapp`, `send_slack` → `slack`, `send_discord` → `discord`, `send_teams` → `teams`, `send_telegram` → `telegram` and `send_bluesky` → `bluesky`, and `validate_sms` is now `sms.validate`. The old names are gone, with no aliases. `send`, `Mailer`, `with_retry` and the rest are unchanged.
+
 ## 0.74.0
 
 ### Added
