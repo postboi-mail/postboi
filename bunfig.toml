@@ -1,2 +1,11 @@
 [install]
 exact = true
+
+[fmt]
+useTabs = true
+singleQuote = false
+trailingComma = "es5"
+printWidth = 100
+semi = false
+svelte = true
+ignorePatterns = ["static/**", "package.json", "**/*.svx", ".svelte-kit/**", "examples/**"]

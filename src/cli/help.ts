@@ -421,7 +421,7 @@ export function help_markdown(): string {
 		out.push("")
 		if (section.note) out.push(`${section.note.replace(/: (https?:\S+)/, ": <$1>")}`, "")
 		// Padded to the widest cell, as the formatter would write it, so a generated file
-		// is already in the shape `oxfmt --check` expects.
+		// is already in the shape `bun fmt --check` expects.
 		// A `|` inside a cell splits it, code span or not, so it is escaped for the table —
 		// and kept out of the help text altogether (see help.test.ts), because mdsvex
 		// renders the escape literally where GitHub renders the pipe.

@@ -12,7 +12,7 @@ const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url))
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
 	// eslint covers the library + CLI; the docs site (src/site, src/routes) is checked by
-	// svelte-check and oxfmt instead.
+	// svelte-check and bun fmt instead.
 	globalIgnores([
 		"src/site/**",
 		"src/routes/**",
