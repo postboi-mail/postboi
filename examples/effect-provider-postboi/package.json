@@ -10,7 +10,7 @@
 	},
 	"dependencies": {
 		"effect": "4.0.6",
-		"postboi": "^0.75.0"
+		"postboi": "^0.76.0"
 	},
 	"devDependencies": {
 		"typescript": "^7.0.2",
