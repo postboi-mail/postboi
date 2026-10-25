@@ -139,35 +139,52 @@ export type SendError = PostboiError | SkipSend | Spam
  */
 export function from_error(error: unknown): Effect.Effect<never, SendError> {
 	if (is_spam(error))
-		return Effect.fail(new Spam({ message: error.message, channel: error.channel }))
+		return Effect.fail(
+			remember(new Spam({ message: error.message, channel: error.channel }), error)
+		)
 	if (error instanceof SkipSendError) {
 		return Effect.fail(
-			new SkipSend({
-				message: error.message,
-				code: String(error.code ?? "skipped"),
-				channel: error.channel,
-			})
+			remember(
+				new SkipSend({
+					message: error.message,
+					code: String(error.code ?? "skipped"),
+					channel: error.channel,
+				}),
+				error
+			)
 		)
 	}
 	if (is_error(error)) return Effect.fail(tagged(error))
 	return Effect.die(error)
 }
 
+/** The root error each tagged error was made from, for {@link root_error}. */
+const originals = new WeakMap<object, RootPostboiError>()
+
+function remember<E extends object>(tagged_error: E, original: RootPostboiError): E {
+	originals.set(tagged_error, original)
+	return tagged_error
+}
+
 /** The root's error as the tagged one, a chain's errors included. */
 function tagged(error: RootPostboiError): PostboiError {
-	return new PostboiError({
-		message: error.message,
-		provider: error.provider,
-		channel: error.channel,
-		status: error.status,
-		code: typeof error.code === "string" || typeof error.code === "number" ? error.code : undefined,
-		raw: error.raw,
-		outcome_unknown: error.outcome_unknown,
-		reason: error.reason,
-		retry_after: error.retry_after,
-		cursor: "cursor" in error && typeof error.cursor === "number" ? error.cursor : undefined,
-		errors: error instanceof FailoverError ? error.errors.map(tagged) : undefined,
-	})
+	return remember(
+		new PostboiError({
+			message: error.message,
+			provider: error.provider,
+			channel: error.channel,
+			status: error.status,
+			code:
+				typeof error.code === "string" || typeof error.code === "number" ? error.code : undefined,
+			raw: error.raw,
+			outcome_unknown: error.outcome_unknown,
+			reason: error.reason,
+			retry_after: error.retry_after,
+			cursor: "cursor" in error && typeof error.cursor === "number" ? error.cursor : undefined,
+			errors: error instanceof FailoverError ? error.errors.map(tagged) : undefined,
+		}),
+		error
+	)
 }
 
 /**
@@ -449,6 +466,8 @@ export class Pusher extends Context.Service<
  * comes back as it was.
  */
 export function root_error(error: unknown): unknown {
+	const original = typeof error === "object" && error !== null ? originals.get(error) : undefined
+	if (original) return original
 	if (error instanceof Spam)
 		return Object.assign(new SpamError(error.message), { channel: error.channel })
 	if (error instanceof SkipSend) {
@@ -501,7 +520,9 @@ export interface PromiseRuntime<R> {
  * mailer.use(Mailer.layerMock(mock))
  * ```
  */
-export function promise_runtime<R = Mailer>(
+export function promise_runtime(): PromiseRuntime<Mailer>
+export function promise_runtime<R>(layer: Layer.Layer<R>): PromiseRuntime<R>
+export function promise_runtime<R>(
 	layer: Layer.Layer<R> = Mailer.layer as unknown as Layer.Layer<R>
 ): PromiseRuntime<R> {
 	let current = layer
@@ -514,7 +535,7 @@ export function promise_runtime<R = Mailer>(
 			})
 		},
 		use(next) {
-			void runtime?.dispose()
+			void runtime?.dispose().catch(() => {})
 			runtime = undefined
 			current = next ?? layer
 		},

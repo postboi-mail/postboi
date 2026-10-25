@@ -283,7 +283,7 @@ export async function resolve_provider({
  * intercepted by the dev inbox or the mock: a test run *is* the interception, and it
  * only exists on the hosted API.
  */
-async function send_test(options: TestSendOptions): Promise<HostedTest> {
+async function send_test(options: TestSendOptions, token?: string): Promise<HostedTest> {
 	// `body` may be a promise (symmetry with the real send path) — but a test takes the
 	// email as rendered HTML: FormData is a submission being forwarded, not a template
 	// being proven, and its rendering belongs to the provider that will actually send it.
@@ -304,6 +304,7 @@ async function send_test(options: TestSendOptions): Promise<HostedTest> {
 		clients: options.clients,
 		set: options.set,
 		fresh: options.fresh,
+		token,
 	})
 }
 
@@ -377,7 +378,7 @@ export async function send_with(
 	batch: { concurrency?: number } = {}
 ): Promise<unknown> {
 	if (!Array.isArray(options) && "test" in options && typeof options.test === "string") {
-		return send_test(options as TestSendOptions)
+		return send_test(options as TestSendOptions, env.POSTBOI_TOKEN)
 	}
 	// Read before the first await: without AsyncLocalStorage, SvelteKit only answers
 	// getRequestEvent() synchronously.

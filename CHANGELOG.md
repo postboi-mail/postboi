@@ -28,7 +28,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 ### Fixed
 
 - `postboi/effect`: a promise run through `promise_runtime` rejects with the root's `PostboiError`, `SkipSendError` or `SpamError`, so `instanceof` from `postboi` catches it. It rejected with the tagged error, which isn't one.
-- `postboi/effect`: the docs said `Mailer` was the same send path as `mail()`, but `Mailer.layer` resolved a provider once and called it directly, skipping the dev inbox started later, `mail({ test })` and any change to the environment. It now sends through `mail()`, as documented.
+- `postboi/effect`: the docs said `Mailer` was the same send path as `mail()`, but `Mailer.layer` resolved a provider once and called it directly, skipping a dev inbox started later, `mail({ test })` and provider credentials changed after it was built. It now sends through `mail()`, as documented. `POSTBOI_PROVIDER` and `POSTBOI_TOKEN` are still read through `Config` once, when the layer is built.
 
 ## 0.75.0
 

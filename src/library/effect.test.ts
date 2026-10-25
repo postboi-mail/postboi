@@ -350,6 +350,16 @@ describe("root_error", () => {
 		const boom = new Error("boom")
 		expect(root_error(boom)).toBe(boom)
 	})
+
+	it.effect("gives back the root error a tagged one was made from, subclass and all", () =>
+		Effect.gen(function* () {
+			const original = new MailboxTimeoutError("No mail", 41)
+			const tagged = yield* Effect.flip(from_error(original))
+			const root = root_error(tagged)
+			expect(root).toBe(original)
+			expect(root).toBeInstanceOf(MailboxTimeoutError)
+		})
+	)
 })
 
 describe("from_error", () => {
