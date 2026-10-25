@@ -1,7 +1,7 @@
 ---
 title: Effect
 name: Effect
-description: Postboi in an Effect program. Typed errors, a Mailer service with config and mock layers, a wire schema and a retry helper.
+description: Postboi in an Effect program. Typed errors, Mailer and Pusher services with config and mock layers, a runtime for promise code, a wire schema and a retry helper.
 category: Frameworks
 ---
 
@@ -100,19 +100,29 @@ const welcome = Effect.fn('welcome')(function* (to: string) {
 Effect.runPromise(welcome('ada@example.com').pipe(Effect.provide(Mailer.layer)))
 ```
 
-Three layers:
+Four layers:
 
-- **`Mailer.layer`** resolves the provider `mail()` would use, once, when the layer is
-  built. `POSTBOI_PROVIDER` and `POSTBOI_TOKEN` are read through `Config`, so your own
-  `ConfigProvider` can supply them and a value it gives beats the environment. Everything
-  else about the choice (the config file's `provider`, each provider's credential, the
-  [dev inbox](/dev-inbox) in development) is the package's one rule, shared with `mail()`.
-  A missing credential fails the layer with a `PostboiError` carrying `no_provider`,
-  `no_token` or `missing_env`.
+- **`Mailer.layer`** sends through `mail()` itself, so it is the same send path as
+  everywhere else: each send resolves the provider when it runs, from the config file's
+  `provider` and each provider's credential, and in development the
+  [dev inbox](/dev-inbox) (even one started after the layer was built) or the console.
+  [Hooks](/hooks) and the captcha check run as they do for `mail()`, and the visitor's IP
+  for Turnstile is read when you call `send`. `POSTBOI_PROVIDER` and `POSTBOI_TOKEN` are
+  read through `Config` when the layer is built, so your own `ConfigProvider` can supply
+  them and a value it gives beats the environment. The layer always builds: when no
+  provider resolves, each send fails with the `PostboiError` `mail()` would throw, with
+  `code` set to `no_provider`, `no_token` or `missing_env`, and the rest of your graph is
+  unaffected.
+- **`Mailer.layerStrict`** is `Mailer.layer` that also checks a provider resolves when it
+  is built, and fails the layer with that same `PostboiError` when none does. Use it in a
+  script or a worker that should stop at start rather than at its first send.
 - **`Mailer.layerProvider(provider)`** wraps one you constructed:
-  `Mailer.layerProvider(new Resend({ api_key }))`.
+  `Mailer.layerProvider(new Resend({ api_key }))`. Every send goes to that provider, so it
+  skips what `mail()` decides per send: the dev inbox, `mail({ test })`, and a provider or
+  credential that changed since. The provider's own hooks and captcha check still run.
 - **`Mailer.layerMock(mock)`** wraps the recording mock from [`postboi/mock`](/providers#mock-provider),
-  for tests. Pass your own instance to read `mock.sent` back.
+  for tests. Pass your own instance to read `mock.sent` back. Each message there keeps its
+  `headers` (the `List-Unsubscribe` pair `unsubscribe_url` adds included) and `tags`.
 
 ```typescript
 import { it, expect } from '@effect/vitest'
@@ -131,10 +141,71 @@ it.effect('welcomes a new member', () =>
 )
 ```
 
+## The Pusher service
+
+`Pusher` is the same idea for [push](/push), with one method, `send(options)`:
+
+- **`Pusher.layer`** sends through `push()`, which resolves the push provider on every send.
+- **`Pusher.layerProvider(provider)`** wraps one you constructed:
+  `Pusher.layerProvider(new WebPush({ … }))`.
+- **`Pusher.layerMock(mock)`** wraps the recording mock from `postboi/push-mock`. Make it
+  with `{ expired: true }` to test what your code does with a dead subscription.
+
+`push.expired(error)` is the root's check, on the Effect `push` too: did the push service
+say this target is dead? The right answer to one is to delete your stored copy.
+
+```typescript
+import { Effect } from 'effect'
+import type { WebPushSubscription } from 'postboi'
+import { Pusher, push } from 'postboi/effect'
+
+const notify = Effect.fn('notify')(function* (subscription: WebPushSubscription) {
+	const pusher = yield* Pusher
+	yield* pusher
+		.send({ to: subscription, message: 'Your export is ready' })
+		.pipe(Effect.catchIf(push.expired, () => forget_subscription(subscription)))
+})
+```
+
+## From promise code
+
+An app that keeps promise exports beside its Effect forms needs somewhere to run them.
+`promise_runtime(layer)` is a `ManagedRuntime` over `layer` (`Mailer.layer` when you pass
+none), built on the first `run`. `use(layer)` swaps it, so a test can point the promise
+exports at a mock, and `use()` puts the original back:
+
+```typescript
+import { Effect } from 'effect'
+import { promise_runtime } from 'postboi/effect'
+
+export const mailer = promise_runtime()
+
+export function send_welcome(to: string) {
+	return mailer.run(welcome(to))
+}
+```
+
+```typescript
+import Mock from 'postboi/mock'
+import { Mailer } from 'postboi/effect'
+import { mailer, send_welcome } from './welcome'
+
+const mock = new Mock({ default: { from: 'tests@example.com' } })
+mailer.use(Mailer.layerMock(mock))
+await send_welcome('ada@example.com')
+```
+
+A failure rejects with the root's error class, so promise code catches it the way it
+catches `mail()`: `instanceof PostboiError`, `SkipSendError` or `SpamError` from `postboi`.
+`root_error(error)` is that conversion on its own, for a runtime of your own. Pass
+`Layer.mergeAll(Mailer.layer, Pusher.layer)` to run push from the same runtime, and
+`dispose()` releases what the layer built.
+
 ## The other channels
 
 One function per channel, each wrapping the zero-config function of the same name on
-the root: `sms` (which answers the `SmsReceipt` every SMS provider answers), `push`,
+the root: `sms` (which answers the `SmsReceipt` every SMS provider answers), `push` (with
+`push.expired`),
 `whatsapp`, and `slack`, `discord`, `teams`, `telegram` and `bluesky` for chat (the
 platform is the name, as on the root). `send(options)` is the
 [multi-channel `send()`](/send); its per-channel outcomes stay in the result, and only a

@@ -35,6 +35,22 @@ describe("Mock provider", () => {
 		quiet.mockRestore()
 	})
 
+	it("records a send's headers, the unsubscribe pair included, and its tags", async () => {
+		await mail.send({
+			to: "a@test.com",
+			body: "<p>Hi</p>",
+			unsubscribe_url: "https://example.com/u/1",
+			headers: { "X-Campaign": "welcome" },
+			tags: ["onboarding"],
+		})
+		expect(mail.last?.headers).toEqual({
+			"List-Unsubscribe": "<https://example.com/u/1>",
+			"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+			"X-Campaign": "welcome",
+		})
+		expect(mail.last?.tags).toEqual(["onboarding"])
+	})
+
 	it("records a sent message", async () => {
 		const result = await mail.send({
 			to: "recipient@test.com",

@@ -109,6 +109,9 @@ await mail.send({ to: 'contact@example.com', subject: 'Hi', body: '<p>Hello</p>'
 expect(mail.sent).toHaveLength(1)
 ```
 
+Each captured message keeps the send's `headers`, with the `List-Unsubscribe` pair that
+`unsubscribe_url` adds, and its `tags`, so a test can assert on them.
+
 Pass `log: true` to print each message as it is captured: subject, addresses, attachment
 names, and the body in full, so a magic link or confirmation code is readable in the
 terminal. It is off by default so test suites stay quiet.
