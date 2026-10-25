@@ -10,6 +10,26 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Breaking
+
+- `postboi/effect`: `Mailer.layer` builds when no provider resolves, and is now `Layer<Mailer>` with no error. Each send fails instead, with the `PostboiError` `mail()` would throw (`no_provider`, `no_token` or `missing_env`), so a missing credential no longer takes down every layer that depends on it. Code that caught the layer's failure to stop at start uses `Mailer.layerStrict`, which builds only when a provider resolves.
+
+### Changed
+
+- `postboi/effect`: `Mailer.layer`'s `send` and `cancel` go through `mail()` and `cancel()`, so each send resolves the provider when it runs: a dev inbox started after the layer was built, a changed credential and the config file's hooks are all picked up, as they are for `mail()`. `POSTBOI_PROVIDER` and `POSTBOI_TOKEN` are still read through `Config`. `Mailer.layerProvider(provider)` still sends to the provider it was given, and its docs say what that skips.
+
+### Added
+
+- `postboi/effect`: a `Pusher` service for push, with `Pusher.layer` (through `push()`), `Pusher.layerProvider(provider)` and `Pusher.layerMock(mock)`, so push can be swapped in tests the way `Mailer` is.
+- `postboi/effect`: `push.expired(error)`, the root's check for a dead push subscription, on the Effect `push`.
+- `postboi/effect`: `promise_runtime(layer)`, a `ManagedRuntime` over `Mailer.layer` (or the layer you pass) for promise code that runs Effect forms, with `run`, `use(layer)` to swap in a test's mock and `dispose`. `root_error(error)` turns a tagged error back into the root's class.
+- `postboi/mock` records each message's `headers` (with the `List-Unsubscribe` pair `unsubscribe_url` adds) and `tags`, so a test can assert on them, through `Mailer.layerMock` too.
+
+### Fixed
+
+- `postboi/effect`: a promise run through `promise_runtime` rejects with the root's `PostboiError`, `SkipSendError` or `SpamError`, so `instanceof` from `postboi` catches it. It rejected with the tagged error, which isn't one.
+- `postboi/effect`: the docs said `Mailer` was the same send path as `mail()`, but `Mailer.layer` resolved a provider once and called it directly, skipping the dev inbox started later, `mail({ test })` and any change to the environment. It now sends through `mail()`, as documented.
+
 ## 0.75.0
 
 ### Breaking

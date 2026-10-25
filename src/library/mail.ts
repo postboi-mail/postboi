@@ -170,8 +170,8 @@ export interface ResolveOptions {
  * resolve without it, so managing an audience in dev still talks to the real API — it's
  * sending that we stand in front of, not everything the token can do.
  *
- * Exported for `postboi/effect`, which builds its `Mailer` service from it; not part of the
- * package root.
+ * Exported for `postboi/effect`, whose `Mailer.layerStrict` checks it when the layer is
+ * built; not part of the package root.
  */
 export async function resolve_provider({
 	intercept = false,
@@ -364,6 +364,18 @@ async function send_mail(
 	options: SendOptions | TestSendOptions | BatchOptions | Array<SendOptions>,
 	batch: { concurrency?: number } = {}
 ): Promise<unknown> {
+	return send_with({}, options, batch)
+}
+
+/**
+ * `mail()` with {@link ResolveOptions.env} overrides. Exported for `postboi/effect`, whose
+ * `Mailer.layer` sends through it; not part of the package root.
+ */
+export async function send_with(
+	env: Record<string, string | undefined>,
+	options: SendOptions | TestSendOptions | BatchOptions | Array<SendOptions>,
+	batch: { concurrency?: number } = {}
+): Promise<unknown> {
 	if (!Array.isArray(options) && "test" in options && typeof options.test === "string") {
 		return send_test(options as TestSendOptions)
 	}
@@ -373,7 +385,7 @@ async function send_mail(
 		const captcha = with_remoteip(options.captcha)
 		if (captcha !== options.captcha) options = { ...options, captcha }
 	}
-	const provider = await resolve_provider({ intercept: true })
+	const provider = await resolve_provider({ intercept: true, env })
 	if (Array.isArray(options)) return provider.send(options, batch)
 	return provider.send(options as SendOptions)
 }
@@ -390,10 +402,18 @@ async function send_mail(
  * await cancel(id)
  * ```
  */
-export async function cancel(id: string): Promise<CancelResponse> {
+export function cancel(id: string): Promise<CancelResponse> {
+	return cancel_with({}, id)
+}
+
+/** `cancel()` with {@link ResolveOptions.env} overrides, for `postboi/effect`'s `Mailer.layer`. */
+export async function cancel_with(
+	env: Record<string, string | undefined>,
+	id: string
+): Promise<CancelResponse> {
 	// Interception included: with the inbox open the id came from the mock, so the real
 	// provider has never heard of it.
-	const provider = await resolve_provider({ intercept: true })
+	const provider = await resolve_provider({ intercept: true, env })
 	return provider.cancel(id)
 }
 

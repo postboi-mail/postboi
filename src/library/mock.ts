@@ -23,6 +23,10 @@ export interface SentMessage {
 	html?: string
 	text?: string
 	attachments: Array<MailAttachment>
+	/** The send's custom headers, `List-Unsubscribe` from `unsubscribe_url` included. */
+	headers?: Record<string, string>
+	/** The send's tags. */
+	tags?: Array<string>
 	/**
 	 * When the send asked for future delivery. Captured because it is the most important thing
 	 * about a scheduled message and the easiest to lose: without it a mail queued for next
@@ -192,6 +196,8 @@ export default class Mock extends ProviderBase<SendResponse> {
 					html: message.html,
 					text: message.text,
 					attachments: message.attachments ? await this.parse_attachments(message.attachments) : [],
+					headers: message.headers,
+					tags: message.tags,
 					scheduled_at: message.scheduled_at,
 				}
 

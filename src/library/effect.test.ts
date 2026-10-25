@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "@effect/vitest"
-import { Cause, ConfigProvider, Effect, Exit, Fiber, Layer, Schema } from "effect"
+import { Cause, ConfigProvider, Context, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import Mock from "./mock.js"
 import MockSms from "./sms/mock.js"
+import MockPush from "./push/mock.js"
+import { configure, reset_config } from "./config.js"
+import { sveltekit } from "./mail.js"
 import { MailboxTimeoutError } from "./mailbox.js"
 import {
 	FailoverError,
@@ -15,7 +18,11 @@ import { push } from "./push/send.js"
 import { whatsapp } from "./whatsapp/send.js"
 import {
 	Mailer,
+	Pusher,
 	PostboiError,
+	promise_runtime,
+	push as effect_push,
+	root_error,
 	SkipSend,
 	Spam,
 	SendRequest,
@@ -50,11 +57,20 @@ describe("Mailer", () => {
 				to: "ada@example.com",
 				subject: "Hi",
 				body: "<p>Hello</p>",
+				unsubscribe_url: "https://example.com/u/1",
+				headers: { "X-Campaign": "welcome" },
+				tags: ["onboarding"],
 			})
 			expect(response).toMatchObject({ id: expect.any(String) })
 			expect(mock.sent).toHaveLength(1)
 			expect(mock.last?.to[0].address).toBe("ada@example.com")
 			expect(mock.last?.subject).toBe("Hi")
+			expect(mock.last?.headers).toEqual({
+				"List-Unsubscribe": "<https://example.com/u/1>",
+				"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+				"X-Campaign": "welcome",
+			})
+			expect(mock.last?.tags).toEqual(["onboarding"])
 
 			yield* mailer.cancel("msg_1")
 			expect(mock.canceled).toEqual(["msg_1"])
@@ -102,15 +118,238 @@ describe("Mailer", () => {
 		)
 	)
 
-	it.effect("layer fails with the no_provider error when nothing is configured", () =>
+	const no_config = ConfigProvider.layer(ConfigProvider.fromUnknown({}))
+
+	it.effect("layer builds with nothing configured, and each send fails with no_provider", () =>
 		Effect.gen(function* () {
 			vi.stubEnv("POSTBOI_PROVIDER", "")
 			vi.stubEnv("POSTBOI_TOKEN", "")
-			const error = yield* Effect.flip(Layer.build(Mailer.layer))
-			expect(error._tag).toBe("PostboiError")
-			if (error._tag === "PostboiError") expect(error.code).toBe("no_provider")
+			const context = yield* Layer.build(Mailer.layer.pipe(Layer.provide(no_config)))
+			const mailer = Context.get(context, Mailer)
+			const sent = yield* Effect.flip(mailer.send({ to: "ada@example.com", body: "<p>Hi</p>" }))
+			expect(sent).toMatchObject({ _tag: "PostboiError", code: "no_provider" })
+			const canceled = yield* Effect.flip(mailer.cancel("msg_1"))
+			expect(canceled).toMatchObject({ _tag: "PostboiError", code: "no_provider" })
 		}).pipe(Effect.scoped)
 	)
+
+	it.effect("layerStrict fails the layer with the no_provider error instead", () =>
+		Effect.gen(function* () {
+			vi.stubEnv("POSTBOI_PROVIDER", "")
+			vi.stubEnv("POSTBOI_TOKEN", "")
+			const error = yield* Effect.flip(
+				Layer.build(Mailer.layerStrict.pipe(Layer.provide(no_config)))
+			)
+			expect(error).toMatchObject({ _tag: "PostboiError", code: "no_provider" })
+		}).pipe(Effect.scoped)
+	)
+
+	it.effect("layer resolves the provider on every send, as mail() does", () =>
+		Effect.gen(function* () {
+			vi.spyOn(console, "log").mockImplementation(() => {})
+			vi.stubEnv("POSTBOI_PROVIDER", "mock")
+			const context = yield* Layer.build(Mailer.layer.pipe(Layer.provide(no_config)))
+			const mailer = Context.get(context, Mailer)
+			const message = { to: "ada@example.com", from: FROM, body: "<p>Hi</p>" }
+			expect(yield* mailer.send(message)).toMatchObject({ id: expect.any(String) })
+			vi.stubEnv("POSTBOI_PROVIDER", "nope")
+			const error = yield* Effect.flip(mailer.send(message))
+			expect(error).toMatchObject({ _tag: "PostboiError", code: "unknown_provider" })
+		}).pipe(Effect.scoped)
+	)
+
+	it.effect("layer sends run the config's hooks", () =>
+		Effect.gen(function* () {
+			vi.stubEnv("POSTBOI_PROVIDER", "mock")
+			configure({
+				hooks: {
+					before: {
+						send() {
+							throw new SkipSendError("Unsubscribed", "unsubscribed")
+						},
+					},
+				},
+			})
+			const mailer = yield* Mailer
+			const error = yield* Effect.flip(
+				mailer.send({ to: "ada@example.com", from: FROM, body: "<p>Hi</p>" })
+			)
+			expect(error).toMatchObject({ _tag: "SkipSend", code: "unsubscribed" })
+		}).pipe(
+			Effect.provide(Mailer.layer.pipe(Layer.provide(no_config))),
+			Effect.ensuring(Effect.sync(reset_config))
+		)
+	)
+
+	it.effect("layer passes the visitor's IP read when send is called, as mail() does", () =>
+		Effect.gen(function* () {
+			const fetch = vi.fn(async () => Response.json({ id: "1" }))
+			vi.stubGlobal("fetch", fetch)
+			const mailer = yield* Mailer
+			const body = new FormData()
+			body.append("name", "Ada")
+			sveltekit.request = () => ({ getClientAddress: () => "203.0.113.7" })
+			const send = mailer.send({ to: "ada@example.com", body })
+			sveltekit.request = undefined
+			yield* send
+			const calls = fetch.mock.calls as unknown as Array<[string, RequestInit]>
+			expect(JSON.parse(String(calls.at(-1)?.[1].body)).captcha_ip).toBe("203.0.113.7")
+		}).pipe(
+			Effect.provide(
+				Mailer.layer.pipe(
+					Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ POSTBOI_TOKEN: "t" })))
+				)
+			),
+			Effect.ensuring(
+				Effect.sync(() => {
+					sveltekit.request = undefined
+					vi.unstubAllGlobals()
+				})
+			)
+		)
+	)
+})
+
+describe("Pusher", () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+		vi.unstubAllEnvs()
+	})
+
+	const recording = new MockPush()
+
+	it.effect("layerMock sends through the push mock and records what went", () =>
+		Effect.gen(function* () {
+			const pusher = yield* Pusher
+			const response = yield* pusher.send({ to: "tok", title: "Hi", message: "Hello" })
+			expect(response).toMatchObject({ id: expect.any(String) })
+			expect(recording.last).toMatchObject({ to: "tok", title: "Hi", message: "Hello" })
+		}).pipe(Effect.provide(Pusher.layerMock(recording)))
+	)
+
+	it.effect("a dead subscription is a tagged error push.expired reads", () =>
+		Effect.gen(function* () {
+			const pusher = yield* Pusher
+			const error = yield* Effect.flip(pusher.send({ to: "tok", message: "Hello" }))
+			expect(error).toBeInstanceOf(PostboiError)
+			expect(effect_push.expired(error)).toBe(true)
+			expect(
+				effect_push.expired(new PostboiError({ provider: "fcm", message: "no", status: 400 }))
+			).toBe(false)
+		}).pipe(Effect.provide(Pusher.layerMock(new MockPush({ expired: true }))))
+	)
+
+	it.effect("layer sends through push(), resolving the provider on every send", () =>
+		Effect.gen(function* () {
+			vi.spyOn(console, "log").mockImplementation(() => {})
+			vi.stubEnv("POSTBOI_PUSH_PROVIDER", "mock")
+			const pusher = yield* Pusher
+			expect(yield* pusher.send({ to: "tok", message: "Hello" })).toMatchObject({
+				id: expect.any(String),
+			})
+			vi.stubEnv("POSTBOI_PUSH_PROVIDER", "nope")
+			const error = yield* Effect.flip(pusher.send({ to: "tok", message: "Hello" }))
+			expect(error).toMatchObject({ _tag: "PostboiError", code: "unknown_push_provider" })
+		}).pipe(Effect.provide(Pusher.layer))
+	)
+})
+
+describe("promise_runtime", () => {
+	const send = Effect.gen(function* () {
+		const mailer = yield* Mailer
+		return yield* mailer.send({ to: "ada@example.com", body: "<p>Hi</p>" })
+	})
+
+	it("runs against the layer a test swaps in, and back", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "")
+		vi.stubEnv("POSTBOI_TOKEN", "")
+		try {
+			const runtime = promise_runtime()
+			await expect(runtime.run(send)).rejects.toMatchObject({ code: "no_provider" })
+			const mock = new Mock({ default: { from: FROM } })
+			runtime.use(Mailer.layerMock(mock))
+			await runtime.run(send)
+			expect(mock.sent).toHaveLength(1)
+			runtime.use()
+			await expect(runtime.run(send)).rejects.toMatchObject({ code: "no_provider" })
+			await runtime.dispose()
+		} finally {
+			vi.unstubAllEnvs()
+		}
+	})
+
+	it("takes a layer of your own", async () => {
+		const mail = new Mock({ default: { from: FROM } })
+		const notify = new MockPush()
+		const runtime = promise_runtime(
+			Layer.mergeAll(Mailer.layerMock(mail), Pusher.layerMock(notify))
+		)
+		await runtime.run(
+			Effect.gen(function* () {
+				yield* send
+				yield* (yield* Pusher).send({ to: "tok", message: "Hi" })
+			})
+		)
+		expect([mail.sent.length, notify.sent.length]).toEqual([1, 1])
+		await runtime.dispose()
+	})
+
+	it("rejects with the root's PostboiError, SkipSendError and SpamError", async () => {
+		const runtime = promise_runtime(
+			Mailer.layerMock(new Mock({ fail: true, default: { from: FROM } }))
+		)
+		const failed = await runtime.run(send).catch((error: unknown) => error)
+		expect(failed).toBeInstanceOf(PostboiErrorClass)
+		expect(failed).toMatchObject({ provider: "mock", outcome_unknown: false })
+		const skipped = await runtime
+			.run(
+				Effect.fail(
+					new SkipSend({ message: "Unsubscribed", code: "unsubscribed", channel: "email" })
+				)
+			)
+			.catch((error: unknown) => error)
+		expect(skipped).toBeInstanceOf(SkipSendError)
+		expect(skipped).toMatchObject({ code: "unsubscribed", channel: "email" })
+		const spam = await runtime
+			.run(Effect.fail(new Spam({ message: "spam" })))
+			.catch((e: unknown) => e)
+		expect(spam).toBeInstanceOf(SpamError)
+		await runtime.dispose()
+	})
+})
+
+describe("root_error", () => {
+	it("turns a chain back into a FailoverError and keeps a wait's cursor", () => {
+		const chain = new PostboiError({
+			provider: "puresms",
+			message: "down",
+			status: 503,
+			outcome_unknown: true,
+			errors: [
+				new PostboiError({ provider: "twilio", message: "no", status: 401, reason: "auth" }),
+				new PostboiError({
+					provider: "puresms",
+					message: "down",
+					status: 503,
+					outcome_unknown: true,
+				}),
+			],
+		})
+		const root = root_error(chain)
+		expect(root).toBeInstanceOf(FailoverError)
+		expect((root as FailoverError).errors.map((e) => [e.provider, e.reason])).toEqual([
+			["twilio", "auth"],
+			["puresms", undefined],
+		])
+		expect((root as FailoverError).errors[0]).toBeInstanceOf(PostboiErrorClass)
+		const waited = root_error(
+			new PostboiError({ provider: "postboi", message: "No mail", code: "timeout", cursor: 41 })
+		)
+		expect(waited).toBeInstanceOf(PostboiErrorClass)
+		expect(waited).toMatchObject({ code: "timeout", cursor: 41 })
+		const boom = new Error("boom")
+		expect(root_error(boom)).toBe(boom)
+	})
 })
 
 describe("from_error", () => {
