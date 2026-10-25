@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.76.0
+
 ### Breaking
 
 - `postboi/effect`: `Mailer.layer` builds when no provider resolves, and is now `Layer<Mailer>` with no error. Each send fails instead, with the `PostboiError` `mail()` would throw (`no_provider`, `no_token` or `missing_env`), so a missing credential no longer takes down every layer that depends on it. Code that caught the layer's failure to stop at start uses `Mailer.layerStrict`, which builds only when a provider resolves.
