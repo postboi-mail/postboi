@@ -10,6 +10,15 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- `postboi/effect`: `layer_mocks({ mail, push })`, one layer providing `Mailer.layerMock(mail)` and `Pusher.layerMock(push)` for a test that needs both services. A mock left out is built silent.
+
+### Fixed
+
+- `postboi/effect`: a `promise_runtime` whose layer failed to build no longer keeps the failure. That `run` rejects with the build's error, as the root's class, and the next `run` builds the layer again. `promise_runtime` also takes a layer that can fail, so `promise_runtime(Mailer.layerStrict)` type-checks.
+- `postboi/effect`: `promise_runtime`'s `use(layer)` returns a promise that resolves once the old runtime is released and rejects if releasing it failed, where the failure used to be dropped. Left unawaited, it is logged with `console.error`. `dispose()` waits on releases `use` started and rejects if one failed. `use`'s return type is now `Promise<void>` instead of `void`; code that ignores the result keeps working.
+
 ## 0.76.0
 
 ### Breaking

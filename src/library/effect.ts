@@ -494,13 +494,37 @@ function untagged(error: PostboiError): RootPostboiError {
 	return error.cursor === undefined ? root : Object.assign(root, { cursor: error.cursor })
 }
 
+/** What {@link layer_mocks} takes: the mocks to read back, each optional. */
+export interface LayerMocks {
+	/** The `postboi/mock` instance behind `Mailer`. */
+	mail?: Mock
+	/** The `postboi/push-mock` instance behind `Pusher`. */
+	push?: MockPush
+}
+
+/**
+ * `Mailer.layerMock(mail)` and `Pusher.layerMock(push)` as one layer, for a test whose
+ * program needs both services. Either mock left out is built silent, as `layerMock()`
+ * builds it.
+ */
+export function layer_mocks({ mail, push }: LayerMocks = {}): Layer.Layer<Mailer | Pusher> {
+	return Layer.merge(Mailer.layerMock(mail), Pusher.layerMock(push))
+}
+
 /** What {@link promise_runtime} answers. */
 export interface PromiseRuntime<R> {
-	/** Run an Effect to a promise. A failure rejects with the root's error class. */
+	/**
+	 * Run an Effect to a promise. A failure rejects with the root's error class, and so
+	 * does a layer that failed to build; the next `run` builds it again.
+	 */
 	run<A, E>(effect: Effect.Effect<A, E, R>): Promise<A>
-	/** Run against another layer from now on (a test's mock), or the original with none. */
-	use(layer?: Layer.Layer<R>): void
-	/** Release what the layer built. */
+	/**
+	 * Run against another layer from now on (a test's mock), or the original with none.
+	 * Resolves once the runtime it replaced is released, and rejects if releasing it
+	 * failed; left unawaited, that failure is logged with `console.error`.
+	 */
+	use(layer?: Layer.Layer<R, unknown>): Promise<void>
+	/** Release what the layer built, waiting on any release `use` started. */
 	dispose(): Promise<void>
 }
 
@@ -508,6 +532,8 @@ export interface PromiseRuntime<R> {
  * Run Effects from promise code, for an app that keeps promise exports over its Effect
  * forms. The layer (`Mailer.layer` unless you pass one) is built once, on the first `run`,
  * and `use` swaps it, so a test can point the promise exports at `Mailer.layerMock(mock)`.
+ * A layer that fails to build, such as `Mailer.layerStrict` with no provider, rejects that
+ * `run`, and the next `run` tries a fresh build.
  *
  * @example
  * ```ts
@@ -517,32 +543,53 @@ export interface PromiseRuntime<R> {
  * export const send_welcome = (to: string) => mailer.run(welcome(to))
  *
  * // In a test:
- * mailer.use(Mailer.layerMock(mock))
+ * await mailer.use(Mailer.layerMock(mock))
  * ```
  */
 export function promise_runtime(): PromiseRuntime<Mailer>
-export function promise_runtime<R>(layer: Layer.Layer<R>): PromiseRuntime<R>
+export function promise_runtime<R>(layer: Layer.Layer<R, unknown>): PromiseRuntime<R>
 export function promise_runtime<R>(
-	layer: Layer.Layer<R> = Mailer.layer as unknown as Layer.Layer<R>
+	layer: Layer.Layer<R, unknown> = Mailer.layer as unknown as Layer.Layer<R>
 ): PromiseRuntime<R> {
 	let current = layer
-	let runtime: ManagedRuntime.ManagedRuntime<R, never> | undefined
+	let runtime: ManagedRuntime.ManagedRuntime<R, unknown> | undefined
+	const releasing = new Set<Promise<void>>()
+
+	function release(disposing: ManagedRuntime.ManagedRuntime<R, unknown> | undefined) {
+		if (runtime === disposing) runtime = undefined
+		const done = disposing?.dispose() ?? Promise.resolve()
+		releasing.add(done)
+		done.then(
+			() => releasing.delete(done),
+			(error: unknown) => {
+				releasing.delete(done)
+				console.error("postboi/effect: disposing a runtime failed", error)
+			}
+		)
+		return done
+	}
+
 	return {
-		run(effect) {
-			runtime ??= ManagedRuntime.make(current)
-			return runtime.runPromise(effect).catch((error: unknown) => {
+		async run(effect) {
+			const built = (runtime ??= ManagedRuntime.make(current))
+			try {
+				await built.context()
+			} catch (error) {
+				void release(built)
+				throw root_error(error)
+			}
+			return built.runPromise(effect).catch((error: unknown) => {
 				throw root_error(error)
 			})
 		},
 		use(next) {
-			void runtime?.dispose().catch(() => {})
-			runtime = undefined
+			const done = release(runtime)
 			current = next ?? layer
+			return done
 		},
 		async dispose() {
-			const disposing = runtime
-			runtime = undefined
-			await disposing?.dispose()
+			const pending = [...releasing, release(runtime)]
+			await Promise.all(pending)
 		},
 	}
 }
