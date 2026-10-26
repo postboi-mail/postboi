@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.76.1
+
 ### Added
 
 - `postboi/effect`: `layer_mocks({ mail, push })`, one layer providing `Mailer.layerMock(mail)` and `Pusher.layerMock(push)` for a test that needs both services. A mock left out is built silent.
