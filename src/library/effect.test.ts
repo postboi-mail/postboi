@@ -28,6 +28,7 @@ import {
 	SendRequest,
 	decode_send_request,
 	from_error,
+	layer_mocks,
 	retryable,
 	mail,
 	send_options,
@@ -316,6 +317,88 @@ describe("promise_runtime", () => {
 		expect(spam).toBeInstanceOf(SpamError)
 		await runtime.dispose()
 	})
+	it("builds a failed layer again on the next run", async () => {
+		vi.stubEnv("POSTBOI_PROVIDER", "")
+		vi.stubEnv("POSTBOI_TOKEN", "")
+		try {
+			const runtime = promise_runtime(Mailer.layerStrict)
+			const failed = await runtime.run(send).catch((error: unknown) => error)
+			expect(failed).toBeInstanceOf(PostboiErrorClass)
+			expect(failed).toMatchObject({ code: "no_provider" })
+			vi.spyOn(console, "log").mockImplementation(() => {})
+			vi.stubEnv("POSTBOI_PROVIDER", "mock")
+			const sent = runtime.run(
+				Effect.flatMap(Mailer, (mailer) =>
+					mailer.send({ to: "ada@example.com", from: FROM, body: "<p>Hi</p>" })
+				)
+			)
+			await expect(sent).resolves.toMatchObject({ id: expect.any(String) })
+			await runtime.dispose()
+		} finally {
+			vi.unstubAllEnvs()
+			vi.restoreAllMocks()
+		}
+	})
+
+	const failing_release = Layer.effectDiscard(
+		Effect.addFinalizer(() => Effect.die(new Error("release failed")))
+	)
+
+	it("use resolves once the old runtime is released, and rejects if releasing fails", async () => {
+		const reported = vi.spyOn(console, "error").mockImplementation(() => {})
+		try {
+			const runtime = promise_runtime(Layer.merge(layer_mocks(), failing_release))
+			await runtime.run(send)
+			await expect(runtime.use(layer_mocks())).rejects.toThrow("release failed")
+			await runtime.run(send)
+			await expect(runtime.use()).resolves.toBeUndefined()
+			expect(reported).toHaveBeenCalledWith(
+				"postboi/effect: disposing a runtime failed",
+				expect.objectContaining({ message: "release failed" })
+			)
+		} finally {
+			vi.restoreAllMocks()
+		}
+	})
+
+	it("dispose waits on a release use left unawaited, and rejects when it fails", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {})
+		try {
+			const failing = promise_runtime(Layer.merge(layer_mocks(), failing_release))
+			await failing.run(send)
+			await expect(failing.dispose()).rejects.toThrow("release failed")
+			const left = promise_runtime(Layer.merge(layer_mocks(), failing_release))
+			await left.run(send)
+			void left.use()
+			await expect(left.dispose()).rejects.toThrow("release failed")
+			const fine = promise_runtime(layer_mocks())
+			await fine.run(send)
+			await expect(fine.dispose()).resolves.toBeUndefined()
+		} finally {
+			vi.restoreAllMocks()
+		}
+	})
+})
+
+describe("layer_mocks", () => {
+	it.effect("provides Mailer and Pusher over the mocks it was given", () => {
+		const mail = new Mock({ default: { from: FROM } })
+		const notify = new MockPush()
+		return Effect.gen(function* () {
+			yield* (yield* Mailer).send({ to: "ada@example.com", body: "<p>Hi</p>" })
+			yield* (yield* Pusher).send({ to: "tok", message: "Hi" })
+			expect([mail.sent.length, notify.sent.length]).toEqual([1, 1])
+		}).pipe(Effect.provide(layer_mocks({ mail, push: notify })))
+	})
+
+	it.effect("builds silent mocks for the ones left out", () =>
+		Effect.gen(function* () {
+			const sent = yield* (yield* Mailer).send({ to: "ada@example.com", body: "<p>Hi</p>" })
+			expect(sent).toMatchObject({ id: expect.any(String) })
+			const pushed = yield* (yield* Pusher).send({ to: "tok", message: "Hi" })
+			expect(pushed).toMatchObject({ id: expect.any(String) })
+		}).pipe(Effect.provide(layer_mocks()))
+	)
 })
 
 describe("root_error", () => {

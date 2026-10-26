@@ -151,6 +151,22 @@ it.effect('welcomes a new member', () =>
 - **`Pusher.layerMock(mock)`** wraps the recording mock from `postboi/push-mock`. Make it
   with `{ expired: true }` to test what your code does with a dead subscription.
 
+A program that needs both services in a test takes `layer_mocks({ mail, push })`, one layer
+providing `Mailer.layerMock(mail)` and `Pusher.layerMock(push)`. Leave either mock out and a
+silent one is built, as `layerMock()` builds it:
+
+```typescript
+import { Effect } from 'effect'
+import Mock from 'postboi/mock'
+import MockPush from 'postboi/push-mock'
+import { layer_mocks } from 'postboi/effect'
+
+const mail = new Mock({ default: { from: 'tests@example.com' } })
+const push = new MockPush()
+
+program.pipe(Effect.provide(layer_mocks({ mail, push })))
+```
+
 `push.expired(error)` is the root's check, on the Effect `push` too: did the push service
 say this target is dead? The right answer to one is to delete your stored copy.
 
@@ -191,15 +207,25 @@ import { Mailer } from 'postboi/effect'
 import { mailer, send_welcome } from './welcome'
 
 const mock = new Mock({ default: { from: 'tests@example.com' } })
-mailer.use(Mailer.layerMock(mock))
+await mailer.use(Mailer.layerMock(mock))
 await send_welcome('ada@example.com')
 ```
 
 A failure rejects with the root's error class, so promise code catches it the way it
 catches `mail()`: `instanceof PostboiError`, `SkipSendError` or `SpamError` from `postboi`.
 `root_error(error)` is that conversion on its own, for a runtime of your own. Pass
-`Layer.mergeAll(Mailer.layer, Pusher.layer)` to run push from the same runtime, and
-`dispose()` releases what the layer built.
+`Layer.mergeAll(Mailer.layer, Pusher.layer)` to run push from the same runtime, or
+`layer_mocks()` in a test.
+
+A layer that can fail to build works too: `promise_runtime(Mailer.layerStrict)` rejects a
+`run` with the build's error, through the same conversion, when no provider resolves. The
+runtime doesn't keep that failure, so once the credential is set the next `run` builds the
+layer again.
+
+`use(layer)` resolves once the runtime it replaced is released, and rejects if releasing it
+failed (a finalizer in the layer that failed). A test can `await` it; left unawaited, the
+failure is logged with `console.error` rather than lost. `dispose()` releases what the layer
+built, waits on any release `use` started, and rejects if one of them failed.
 
 ## The other channels
 
