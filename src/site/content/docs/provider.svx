@@ -463,6 +463,38 @@ Two honest notes: set `from` to an address the relay provider can send as (the u
 authentication, and anything it can't authenticate fails with its error), and relayed
 sends still count toward your Postboi plan like any other send.
 
+### Falling back to another provider
+
+Under **Send via** you can also name up to three providers to try next. When the one a
+send goes to refuses it for a reason about itself (a rate limit, a spent daily quota,
+credentials it no longer takes, a sender it won't use), the send goes on to the next.
+Every one of them lands in the same Sent log, and the message's timeline says which
+provider refused it, why, and which one took it. You don't have to open each provider's
+dashboard to find out where a message went.
+
+```text
+Send via:            Postboi (default)
+If it refuses, try:  Resend
+Then:                Cloudflare
+```
+
+A few rules keep this from sending anything twice or anywhere it shouldn't:
+
+- **Only a refusal moves a send on.** A timeout, a dropped connection
+  or a 5xx might mean the message already went, so the send stops there rather than
+  risk a second copy. A refusal about the message itself (a bad address, an opt-out)
+  stops it too, because every other provider would say the same.
+- **A provider that said "slow down" is passed over** for as long as it asked
+  (`Retry-After`, a minute when it didn't say, at most fifteen), so the sends behind it
+  don't each pay for the refusal. The last provider left is always asked.
+- **Postboi can be first, never a fallback.** If your primary is another provider, its
+  fallbacks are other providers too. A send from your `send.postboi.email` address only
+  ever goes through Postboi, since no other provider can send as it.
+- **A send that names its own `send_via` goes through that one only.** You asked for
+  it by name, so it doesn't fall back.
+- **Every provider in the list has to be able to send from your domain.** A fallback
+  that hasn't verified it will refuse the send, or worse, deliver it to spam.
+
 ## Type-safe `from`
 
 `postboi init` (and `bunx postboi sync`) generate types from your account's sending
