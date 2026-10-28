@@ -12,7 +12,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
-- `postboi/inbox` and `postboi/mailbox`: a message carries `otp`, the sender's own [`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header as `{ code, origin }` when it wrote a valid one, and `code` is then that code. `null` otherwise. The MCP server's mailbox and temp inbox tools answer it too.
+- `postboi/inbox` and `postboi/mailbox`: a message carries `otp`, the sender's own [`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header as `{ code, origin, signed }` when it wrote a valid one, and `code` is then that code. `signed` says whether the sender's own DKIM signature covers the header, which a DMARC pass alone doesn't. `null` otherwise. The MCP server's mailbox and temp inbox tools answer it too.
 
 ## 0.76.1
 

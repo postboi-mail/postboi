@@ -138,10 +138,10 @@ describe("inbox.wait()", () => {
 		server.deliver(inbox.address, {
 			subject: "Sign in to Acme",
 			code: "482913",
-			otp: { code: "A9K2Q7", origin: "https://acme.com" },
+			otp: { code: "A9K2Q7", origin: "https://acme.com", signed: true },
 		})
 		const mail = await inbox.wait({ timeout: "5s" })
-		expect(mail.otp).toEqual({ code: "A9K2Q7", origin: "https://acme.com" })
+		expect(mail.otp).toEqual({ code: "A9K2Q7", origin: "https://acme.com", signed: true })
 		expect(mail.code).toBe("A9K2Q7")
 		expect(mail.codes).toEqual(["A9K2Q7", "482913"])
 		expect(mail.toJSON().otp).toEqual(mail.otp)

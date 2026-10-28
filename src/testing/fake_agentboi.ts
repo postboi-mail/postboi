@@ -30,7 +30,7 @@ interface FakeMail {
 	in_reply_to: string | null
 	code: string | null
 	codes: Array<string>
-	otp: { code: string; origin: string } | null
+	otp: { code: string; origin: string; signed: boolean } | null
 	link: string | null
 	links: Array<{ url: string; text: string | null; kind: "verify" | "unsubscribe" | "other" }>
 	auth: { spf?: string; dkim?: string; dmarc?: string }

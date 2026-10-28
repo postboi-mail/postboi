@@ -135,7 +135,7 @@ interface WireMail {
 	in_reply_to: string | null
 	code: string | null
 	codes: Array<string>
-	otp?: { code: string; origin: string } | null
+	otp?: { code: string; origin: string; signed?: boolean } | null
 	link: string | null
 	links: Array<{ url: string; text: string | null; kind: "verify" | "unsubscribe" | "other" }>
 	auth: { spf?: string; dkim?: string; dmarc?: string }
@@ -233,11 +233,12 @@ export class MailboxMail {
 	readonly code: string | null
 	readonly codes: Array<string>
 	/**
-	 * The sender's own `OTP-Token` header, when it sent a valid one: the code, and the site
-	 * it says the code is for. `code` is that code. The origin is the sender's claim; `auth`
-	 * says whether the sender is who it says.
+	 * The sender's own `OTP-Token` header, when it sent a valid one: the code, the site it
+	 * says the code is for, and whether the sender's own DKIM signature covers the header.
+	 * `code` is that code. Unless `signed`, the origin is only the sender's claim: a DMARC
+	 * pass doesn't vouch for a header the signature left out.
 	 */
-	readonly otp: { code: string; origin: string } | null
+	readonly otp: { code: string; origin: string; signed: boolean } | null
 	/** The best verify or magic link, tracking redirects unwrapped. */
 	readonly link: string | null
 	readonly links: Array<{
@@ -274,7 +275,8 @@ export class MailboxMail {
 		this.in_reply_to = wire.in_reply_to ?? null
 		this.code = wire.code ?? null
 		this.codes = wire.codes ?? []
-		this.otp = wire.otp ?? null
+		// A server from before `signed` sends none: that is unsigned.
+		this.otp = wire.otp ? { ...wire.otp, signed: wire.otp.signed === true } : null
 		this.link = wire.link ?? null
 		this.links = wire.links ?? []
 		this.auth = wire.auth ?? {}

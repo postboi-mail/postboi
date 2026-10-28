@@ -90,7 +90,8 @@ for await (const mail of box.watch()) {
 sandbox or CI with no public URL. `wait()` returns the next match and is the one to use for
 a sign-up code. When the sender wrote an
 [`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header, `mail.otp` is
-`{ code, origin }` and `mail.code` is that code rather than one read out of the text:
+`{ code, origin, signed }` and `mail.code` is that code rather than one read out of the text.
+`signed` is true only when the sender's own DKIM signature covers the header:
 
 ```ts
 const mail = await box.wait({ subject: "verify", timeout: "2m" })
