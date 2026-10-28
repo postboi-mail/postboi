@@ -416,14 +416,19 @@ The rules, because these are secrets:
   explicit way to take the team's values wholesale.
 - **`POSTBOI_TOKEN` never syncs.** It's per developer, and it's the credential that
   unlocks the rest, and the store must not contain its own key.
+- **Keys you connect in the dashboard stay there.** A provider added on the dashboard's
+  Providers page is Postboi's to send through, so its keys never sync to anyone's
+  machine, and `postboi env push` can't overwrite them. Change them on that page. A
+  provider whose keys `init` pushed has a **Keep on Postboi only** key on its card if
+  you'd rather they stopped syncing too.
 - **Encrypted at rest**, and only ever decrypted for a bearer of your account token: the
   same trust that could already send with those credentials.
 - **Used server-side for exactly three things.** The library itself sends with whatever
   is in your process environment, servers included. The synced store never feeds your
   send path. On Postboi's side, synced credentials are decrypted only to poll a provider
   that can't push delivery webhooks (SMTP, Microsoft 365, Cloudflare; on by default once
-  synced, pausable per provider on the credentials page); to send on your behalf when
-  you've turned on **send via** there; and, for a provider whose delivery events you point
+  synced, pausable per provider on the dashboard's Providers page); to send on your
+  behalf when you've picked it in the sending order there; and, for a provider whose delivery events you point
   at us, to verify those webhooks with its signing secret, plus to register the webhook
   with that provider when you press Register, which stores any key it hands back. Never
   otherwise.
@@ -438,8 +443,9 @@ bunx postboi env remove OLD_KEY
 
 ## Relay: send via your own provider
 
-With credentials synced, the credentials page grows a **Send via** setting: pick a
-provider and the account's sends go out through *it*. Postboi keeps the message log,
+Connect a provider on the dashboard's **Providers** page (pick Resend, Postmark,
+Cloudflare or another and paste its keys, or let `postboi init` sync them), then choose
+it under **Sending order** and the account's sends go out through *it*. Postboi keeps the message log,
 the suppression list, webhooks and the dashboard timeline, while your Resend, Postmark,
 Cloudflare (or any other synced provider) does the delivering. Your code doesn't change:
 you keep sending through the Postboi provider exactly as before.
@@ -465,7 +471,7 @@ sends still count toward your Postboi plan like any other send.
 
 ### Falling back to another provider
 
-Under **Send via** you can also name up to three providers to try next. When the one a
+Under **Sending order** you can also name up to three providers to try next. When the one a
 send goes to refuses it for a reason about itself (a rate limit, a spent daily quota,
 credentials it no longer takes, a sender it won't use), the send goes on to the next.
 Every one of them lands in the same Sent log, and the message's timeline says which
