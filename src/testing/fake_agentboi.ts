@@ -426,6 +426,11 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			html: "<p>Hi there</p>",
 			...partial,
 		}
+		// A sender's OTP-Token is the code, as the server reads it.
+		if (mail.otp && partial.code === undefined) {
+			mail.code = mail.otp.code
+			mail.codes = [mail.otp.code, ...mail.codes.filter((code) => code !== mail.otp?.code)]
+		}
 		box.mail.push(mail)
 		// New mail marks its thread unread and brings it back from the archive or `sent`;
 		// spam and trash stay where a person put them.

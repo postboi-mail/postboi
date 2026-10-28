@@ -108,9 +108,10 @@ yourself, or leave it to expire.
 - **`otp`** is set when the sender wrote an
   [`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header:
   `{ code, origin }`, its own code and the site it says the code is for. `code` is then
-  that code rather than one read out of the text. The origin is the sender's claim, so
-  check `auth` before you trust it. The header is an early draft and few senders write it
-  yet.
+  that code rather than one read out of the text. The origin is the sender's claim. `auth`
+  says who sent the message, but a passing DKIM signature only vouches for this header when
+  the sender signed it, so don't act on the origin alone. The header is an early draft and
+  few senders write it yet.
 - **Plus-tags** land in the same inbox: `inbox.tag('run-42')` gives
   `quiet-otter-k3f9+run-42@tempboi.email`, and `wait({ tag: 'run-42' })` picks that one
   out. Parallel tests can share one inbox this way.
