@@ -480,7 +480,7 @@ Then:                Cloudflare
 
 A few rules keep this from sending anything twice or anywhere it shouldn't:
 
-- **A refusal moves a send on; a silence never does.** A timeout, a dropped connection
+- **Only a refusal moves a send on.** A timeout, a dropped connection
   or a 5xx might mean the message already went, so the send stops there rather than
   risk a second copy. A refusal about the message itself (a bad address, an opt-out)
   stops it too, because every other provider would say the same.
@@ -488,7 +488,8 @@ A few rules keep this from sending anything twice or anywhere it shouldn't:
   (`Retry-After`, a minute when it didn't say, at most fifteen), so the sends behind it
   don't each pay for the refusal. The last provider left is always asked.
 - **Postboi can be first, never a fallback.** If your primary is another provider, its
-  fallbacks are other providers too.
+  fallbacks are other providers too. A send from your `send.postboi.email` address only
+  ever goes through Postboi, since no other provider can send as it.
 - **A send that names its own `send_via` goes through that one only.** You asked for
   it by name, so it doesn't fall back.
 - **Every provider in the list has to be able to send from your domain.** A fallback
