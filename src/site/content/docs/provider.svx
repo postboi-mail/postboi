@@ -416,6 +416,11 @@ The rules, because these are secrets:
   explicit way to take the team's values wholesale.
 - **`POSTBOI_TOKEN` never syncs.** It's per developer, and it's the credential that
   unlocks the rest, and the store must not contain its own key.
+- **Keys you connect in the dashboard stay there.** A provider added on the dashboard's
+  Providers page is Postboi's to send through, so its keys never sync to anyone's
+  machine, and `postboi env push` can't overwrite them. Change them on that page. A
+  provider whose keys `init` pushed has a **Keep on Postboi only** key on its card if
+  you'd rather they stopped syncing too.
 - **Encrypted at rest**, and only ever decrypted for a bearer of your account token: the
   same trust that could already send with those credentials.
 - **Used server-side for exactly three things.** The library itself sends with whatever
