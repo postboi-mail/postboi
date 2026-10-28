@@ -105,6 +105,14 @@ yourself, or leave it to expire.
   `text`, `html`, `headers`, `auth` (SPF, DKIM, DMARC), `attachments` and `received` as a
   `Date`. `await mail.raw()` is the `.eml` as bytes. The HTML is as received, so render
   it sandboxed.
+- **`otp`** is set when the sender wrote an
+  [`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header:
+  `{ code, origin, signed }`, its own code, the site it says the code is for, and whether
+  the sender's own DKIM signature covers the header. `code` is then that code rather than
+  one read out of the text. Unless `signed` is true the origin is only the sender's claim:
+  a message can pass DMARC with this header added by anybody, because providers sign a
+  fixed list of headers and many leave it out. The header is an early draft and few
+  senders write it yet.
 - **Plus-tags** land in the same inbox: `inbox.tag('run-42')` gives
   `quiet-otter-k3f9+run-42@tempboi.email`, and `wait({ tag: 'run-42' })` picks that one
   out. Parallel tests can share one inbox this way.

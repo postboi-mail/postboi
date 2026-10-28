@@ -30,6 +30,7 @@ interface FakeMail {
 	in_reply_to: string | null
 	code: string | null
 	codes: Array<string>
+	otp: { code: string; origin: string; signed: boolean } | null
 	link: string | null
 	links: Array<{ url: string; text: string | null; kind: "verify" | "unsubscribe" | "other" }>
 	auth: { spf?: string; dkim?: string; dmarc?: string }
@@ -416,6 +417,7 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			in_reply_to: null,
 			code: null,
 			codes: [],
+			otp: null,
 			link: null,
 			links: [],
 			auth: {},
@@ -423,6 +425,11 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			size: 100,
 			html: "<p>Hi there</p>",
 			...partial,
+		}
+		// A sender's OTP-Token is the code, as the server reads it.
+		if (mail.otp && partial.code === undefined) {
+			mail.code = mail.otp.code
+			mail.codes = [mail.otp.code, ...mail.codes.filter((code) => code !== mail.otp?.code)]
 		}
 		box.mail.push(mail)
 		// New mail marks its thread unread and brings it back from the archive or `sent`;

@@ -87,6 +87,7 @@ interface WireSummary {
 	received: string
 	code: string | null
 	codes: Array<string>
+	otp?: { code: string; origin: string; signed?: boolean } | null
 	link: string | null
 	links: Array<WireLink>
 	auth: { spf?: string; dkim?: string; dmarc?: string }
@@ -133,6 +134,13 @@ export class Mail {
 	/** The best one-time code found in it, e.g. "482913". */
 	readonly code: string | null
 	readonly codes: Array<string>
+	/**
+	 * The sender's own `OTP-Token` header, when it sent a valid one: the code, the site it
+	 * says the code is for, and whether the sender's own DKIM signature covers the header.
+	 * `code` is that code. Unless `signed`, the origin is only the sender's claim: a DMARC
+	 * pass doesn't vouch for a header the signature left out.
+	 */
+	readonly otp: { code: string; origin: string; signed: boolean } | null
 	/** The best verify / magic / confirm link, tracking redirects unwrapped. */
 	readonly link: string | null
 	readonly links: Array<{
@@ -170,6 +178,8 @@ export class Mail {
 		this.received = new Date(wire.received)
 		this.code = wire.code ?? null
 		this.codes = wire.codes ?? []
+		// A server from before `signed` sends none: that is unsigned.
+		this.otp = wire.otp ? { ...wire.otp, signed: wire.otp.signed === true } : null
 		this.link = wire.link ?? null
 		this.links = wire.links ?? []
 		this.auth = wire.auth ?? {}
@@ -206,6 +216,7 @@ export class Mail {
 			received: this.received.toISOString(),
 			code: this.code,
 			codes: this.codes,
+			otp: this.otp,
 			link: this.link,
 			links: this.links,
 			text: this.text,

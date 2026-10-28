@@ -266,6 +266,7 @@ function mail_facts(mail: MailboxMail) {
 		received: mail.received.toISOString(),
 		in_reply_to: mail.in_reply_to,
 		code: mail.code,
+		otp: mail.otp,
 		link: mail.link,
 		attachments: mail.attachments.length,
 	}
@@ -282,6 +283,7 @@ function inbox_facts(mail: Mail) {
 		received: mail.received.toISOString(),
 		code: mail.code,
 		codes: mail.codes,
+		otp: mail.otp,
 		link: mail.link,
 	}
 }

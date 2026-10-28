@@ -119,6 +119,7 @@ describe("inbox.wait()", () => {
 		expect(call?.auth).toBe(`Bearer ${inbox.token}`)
 		expect(mail.code).toBe("482913")
 		expect(mail.codes).toEqual(["482913"])
+		expect(mail.otp).toBeNull()
 		expect(mail.link).toBe("https://acme.com/verify?t=1")
 		expect(mail.name).toBe("Acme")
 		expect(mail.from).toBe("no-reply@acme.com")
@@ -129,6 +130,21 @@ describe("inbox.wait()", () => {
 		expect(mail.partial).toBe(false)
 		expect("from_name" in mail).toBe(false)
 		expect(new TextDecoder().decode(await mail.raw())).toContain("Subject: Verify your email")
+	})
+
+	it("carries a sender's OTP-Token, whose code is the code", async () => {
+		const { server, make } = setup()
+		const inbox = await make()
+		server.deliver(inbox.address, {
+			subject: "Sign in to Acme",
+			code: "482913",
+			otp: { code: "A9K2Q7", origin: "https://acme.com", signed: true },
+		})
+		const mail = await inbox.wait({ timeout: "5s" })
+		expect(mail.otp).toEqual({ code: "A9K2Q7", origin: "https://acme.com", signed: true })
+		expect(mail.code).toBe("A9K2Q7")
+		expect(mail.codes).toEqual(["A9K2Q7", "482913"])
+		expect(mail.toJSON().otp).toEqual(mail.otp)
 	})
 
 	it("counts mail that already arrived unless `after` says otherwise", async () => {
