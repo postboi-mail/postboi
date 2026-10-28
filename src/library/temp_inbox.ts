@@ -87,6 +87,7 @@ interface WireSummary {
 	received: string
 	code: string | null
 	codes: Array<string>
+	otp?: { code: string; origin: string } | null
 	link: string | null
 	links: Array<WireLink>
 	auth: { spf?: string; dkim?: string; dmarc?: string }
@@ -133,6 +134,12 @@ export class Mail {
 	/** The best one-time code found in it, e.g. "482913". */
 	readonly code: string | null
 	readonly codes: Array<string>
+	/**
+	 * The sender's own `OTP-Token` header, when it sent a valid one: the code, and the site
+	 * it says the code is for. `code` is that code. The origin is the sender's claim; `auth`
+	 * says whether the sender is who it says.
+	 */
+	readonly otp: { code: string; origin: string } | null
 	/** The best verify / magic / confirm link, tracking redirects unwrapped. */
 	readonly link: string | null
 	readonly links: Array<{
@@ -170,6 +177,7 @@ export class Mail {
 		this.received = new Date(wire.received)
 		this.code = wire.code ?? null
 		this.codes = wire.codes ?? []
+		this.otp = wire.otp ?? null
 		this.link = wire.link ?? null
 		this.links = wire.links ?? []
 		this.auth = wire.auth ?? {}
@@ -206,6 +214,7 @@ export class Mail {
 			received: this.received.toISOString(),
 			code: this.code,
 			codes: this.codes,
+			otp: this.otp,
 			link: this.link,
 			links: this.links,
 			text: this.text,

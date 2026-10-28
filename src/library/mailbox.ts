@@ -135,6 +135,7 @@ interface WireMail {
 	in_reply_to: string | null
 	code: string | null
 	codes: Array<string>
+	otp?: { code: string; origin: string } | null
 	link: string | null
 	links: Array<{ url: string; text: string | null; kind: "verify" | "unsubscribe" | "other" }>
 	auth: { spf?: string; dkim?: string; dmarc?: string }
@@ -231,6 +232,12 @@ export class MailboxMail {
 	/** The best one-time code in it, e.g. "482913". */
 	readonly code: string | null
 	readonly codes: Array<string>
+	/**
+	 * The sender's own `OTP-Token` header, when it sent a valid one: the code, and the site
+	 * it says the code is for. `code` is that code. The origin is the sender's claim; `auth`
+	 * says whether the sender is who it says.
+	 */
+	readonly otp: { code: string; origin: string } | null
 	/** The best verify or magic link, tracking redirects unwrapped. */
 	readonly link: string | null
 	readonly links: Array<{
@@ -267,6 +274,7 @@ export class MailboxMail {
 		this.in_reply_to = wire.in_reply_to ?? null
 		this.code = wire.code ?? null
 		this.codes = wire.codes ?? []
+		this.otp = wire.otp ?? null
 		this.link = wire.link ?? null
 		this.links = wire.links ?? []
 		this.auth = wire.auth ?? {}
@@ -311,6 +319,7 @@ export class MailboxMail {
 			in_reply_to: this.in_reply_to,
 			code: this.code,
 			codes: this.codes,
+			otp: this.otp,
 			link: this.link,
 			links: this.links,
 			text: this.text,

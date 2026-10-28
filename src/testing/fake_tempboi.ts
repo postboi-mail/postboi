@@ -17,6 +17,7 @@ interface FakeMessage {
 	received: string
 	code: string | null
 	codes: Array<string>
+	otp: { code: string; origin: string } | null
 	link: string | null
 	links: Array<{ url: string; text: string | null; kind: "verify" | "unsubscribe" | "other" }>
 	auth: { spf?: string; dkim?: string; dmarc?: string }
@@ -227,7 +228,10 @@ export function fake_tempboi(options: { base?: string; scale?: number } = {}) {
 		deliver(
 			to: string,
 			mail: Partial<
-				Pick<FakeMessage, "from" | "from_name" | "subject" | "text" | "html" | "code" | "link">
+				Pick<
+					FakeMessage,
+					"from" | "from_name" | "subject" | "text" | "html" | "code" | "otp" | "link"
+				>
 			> = {}
 		): FakeMessage {
 			const plus = /^([^+@]+)\+([^@]+)(@.+)$/.exec(to)
@@ -235,6 +239,8 @@ export function fake_tempboi(options: { base?: string; scale?: number } = {}) {
 			const inbox = inboxes.get(address)
 			if (!inbox) throw new Error(`No inbox ${address}`)
 			const seq = ++inbox.seq
+			// A sender's OTP-Token is the code, as the server reads it.
+			const code = mail.otp?.code ?? mail.code ?? null
 			const message: FakeMessage = {
 				id: `tmsg_${seq}`,
 				seq,
@@ -246,8 +252,9 @@ export function fake_tempboi(options: { base?: string; scale?: number } = {}) {
 				text: mail.text ?? null,
 				html: mail.html ?? null,
 				received: new Date().toISOString(),
-				code: mail.code ?? null,
-				codes: mail.code ? [mail.code] : [],
+				code,
+				codes: [...new Set([code, mail.code].filter((c): c is string => Boolean(c)))],
+				otp: mail.otp ?? null,
 				link: mail.link ?? null,
 				links: mail.link ? [{ url: mail.link, text: "Verify", kind: "verify" }] : [],
 				auth: { spf: "pass", dkim: "pass", dmarc: "pass" },

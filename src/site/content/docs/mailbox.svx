@@ -88,7 +88,9 @@ for await (const mail of box.watch()) {
 
 `watch()` holds a long poll open and yields each message as it lands, which works from a
 sandbox or CI with no public URL. `wait()` returns the next match and is the one to use for
-a sign-up code:
+a sign-up code. When the sender wrote an
+[`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header, `mail.otp` is
+`{ code, origin }` and `mail.code` is that code rather than one read out of the text:
 
 ```ts
 const mail = await box.wait({ subject: "verify", timeout: "2m" })
@@ -236,7 +238,7 @@ await team.set_review("new")
 A mailbox's mail is filed in your dashboard's Received log with everything else, so a person
 can read along and answer from the dashboard. It arrives at your
 [webhooks](/webhooks) as `email.received`, which for mailbox mail also carries `mailbox`,
-`trust`, `reply_text` and `codes`. The dashboard's **Mailboxes** page makes them, rotates
+`trust`, `reply_text`, `codes` and `otp`. The dashboard's **Mailboxes** page makes them, rotates
 their keys and deletes them.
 
 Replying from your own code with `mail()` rather than the mailbox works too: pass the

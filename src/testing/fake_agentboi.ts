@@ -30,6 +30,7 @@ interface FakeMail {
 	in_reply_to: string | null
 	code: string | null
 	codes: Array<string>
+	otp: { code: string; origin: string } | null
 	link: string | null
 	links: Array<{ url: string; text: string | null; kind: "verify" | "unsubscribe" | "other" }>
 	auth: { spf?: string; dkim?: string; dmarc?: string }
@@ -416,6 +417,7 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			in_reply_to: null,
 			code: null,
 			codes: [],
+			otp: null,
 			link: null,
 			links: [],
 			auth: {},
