@@ -204,9 +204,9 @@ const provider = kind === 'receipt' ? postboi : resend
 await provider.send({ to, subject, body })
 ```
 
-**Or keep Resend doing the delivery.** With your Resend key synced to Postboi, the
-dashboard's **Send via** setting sends through your Resend account while Postboi keeps the
-log, suppressions and timeline. Your code is the same as step 2. See
+**Or keep Resend doing the delivery.** Connect Resend on the dashboard's **Providers** page
+(or sync your key with `postboi init`) and pick it under **Sending order**: sends go through
+your Resend account while Postboi keeps the log, suppressions and timeline. Your code is the same as step 2. See
 [relay](/provider#relay-send-via-your-own-provider) for what that does and doesn't report back.
 
 ## 3. Retire Resend
