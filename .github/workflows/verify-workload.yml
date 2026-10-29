@@ -70,7 +70,7 @@ jobs:
           const token = await response.json()
           if (token.access_token) console.log(`::add-mask::${token.access_token}`)
           if (process.env.EXPECTED_ACCESS === "revoked") {
-            assert.equal(response.status, 401, "Revoked trust must refuse exchange")
+            assert.equal(response.status, 400, "Revoked trust must refuse exchange")
             assert.equal(token.error, "invalid_grant")
             console.log("PASS: revoked trust refuses a real GitHub Actions assertion")
           } else {
