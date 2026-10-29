@@ -55,6 +55,23 @@ Every mailbox also has a key of its own (`mb_…`, said once, when it is made). 
 opens all of them, so the mailbox key is for an agent you'd rather not hand that: it opens
 this one mailbox, and nothing else of your team's.
 
+Your team can cut an agent off without deleting its address:
+
+```ts
+const managed = await mailbox.open({ token: process.env.POSTBOI_TOKEN, address: "orders-k3f9@agentboi.email" })
+await managed.set_enabled(false)
+await managed.set_enabled(true)
+await managed.rotate({ ttl: "1h" }) // issue a fresh key after enabling it
+```
+
+The dashboard's mailbox menu has **Disable agent** and **Enable agent**. The CLI accepts
+`postboi mailbox disable [address]` and `postboi mailbox enable [address]` with the team's
+`POSTBOI_TOKEN`. After enabling, `postboi mailbox key --ttl 1h` issues and remembers a fresh
+key. Existing credentials stay revoked. Incoming mail and team access continue while the
+agent is disabled, but it cannot send. Queued work and retries from before the disable
+stay blocked after enabling; a transport already handed off cannot be recalled.
+The mailbox exposes `enabled`, `disabled_at` and `key_active`.
+
 Keys can expire without deleting the mailbox or stopping incoming mail:
 
 ```ts

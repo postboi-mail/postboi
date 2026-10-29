@@ -845,7 +845,7 @@ async function review(ctx: Context): Promise<number> {
 }
 
 async function rotate(ctx: Context): Promise<number> {
-	const box = await open(ctx, ctx.args.positional[0])
+	const box = ctx.env.POSTBOI_TOKEN ? await open_team(ctx) : await open(ctx, ctx.args.positional[0])
 	const key = await box.rotate({ ttl: flag(ctx, "ttl") })
 	save(ctx, box)
 	if (ctx.json)
@@ -854,6 +854,32 @@ async function rotate(ctx: Context): Promise<number> {
 		ctx.out(key)
 		ctx.err(dim("The old key stopped working just now. This one is saved on this machine."))
 	}
+	return EXIT.ok
+}
+
+async function open_team(ctx: Context): Promise<Mailbox> {
+	if (!ctx.env.POSTBOI_TOKEN)
+		throw new MailboxError({
+			code: "team_key_required",
+			message: "Enabling or disabling an agent needs your team's POSTBOI_TOKEN.",
+		})
+	const address = ctx.args.positional[0] ?? flag(ctx, "mailbox") ?? read_saved(ctx.path)[0]?.address
+	return open_or_make.open({
+		token: ctx.env.POSTBOI_TOKEN,
+		address,
+		base: ctx.env.POSTBOI_MAILBOX_URL,
+		fetch: ctx.fetch,
+	})
+}
+
+async function set_enabled(ctx: Context, enabled: boolean): Promise<number> {
+	const box = await open_team(ctx)
+	await box.set_enabled(enabled)
+	if (ctx.json) ctx.out(JSON.stringify(box))
+	else
+		ctx.out(
+			`${box.address}: ${enabled ? "enabled; issue a new key to reconnect" : "disabled; credentials revoked, incoming mail continues"}`
+		)
 	return EXIT.ok
 }
 
@@ -911,6 +937,8 @@ const COMMANDS: Record<string, (ctx: Context) => Promise<number>> = {
 	forward,
 	review,
 	key: rotate,
+	enable: (ctx) => set_enabled(ctx, true),
+	disable: (ctx) => set_enabled(ctx, false),
 	ls: list,
 	list,
 	rm: remove,

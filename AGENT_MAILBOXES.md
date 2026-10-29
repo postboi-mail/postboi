@@ -11,8 +11,9 @@ mailbox that receives, reads, replies and sends is in both repos on
 `claude/postboi-agent-mail-gaps-8n9qvh` added folders, labels, search, drafts, review,
 forward, attachments and a local `postboi mcp`; jev's mailbox rubric and the hosted MCP
 server are still to come. [Round three](#round-three-an-identity-not-only-an-inbox) is the
-next round: optional key expiry is implemented on `feature/agent-key-expiry`, pending
-deployment. Workload exchange, leases, hard limits, account inventory and teardown remain
+next round: optional key expiry, credential revocation and the agent disable switch are
+implemented on `feature/agent-key-expiry`, pending deployment. Workload exchange,
+public leases, hard limits, account inventory and teardown remain
 planned. [Built so far](#built-so-far) says what shipped and where it parted from the
 plan below, and [Before launch](#before-launch) lists the zone and SES steps that only a
 person with the Cloudflare and AWS consoles can take. This document is the source of truth
@@ -164,8 +165,8 @@ reaches `agentboi.email` until the first two are done.
 
 ## Round three: an identity, not only an inbox
 
-**In progress, October 2026.** Step 1 is implemented on `feature/agent-key-expiry` in
-both repos, pending review and deployment (app migration 0106). The remaining steps are
+**In progress, October 2026.** Steps 1 and 2 are implemented on `feature/agent-key-expiry`
+in both repos, pending review and deployment (app migrations 0106 and 0107). The remaining steps are
 planned. Written against Builder.io's
 [Why are we still handing AI agents API keys?](https://www.builder.io/blog/ai-agent-identity),
 which is the clearest statement yet of what the agent-identity threads ask for.
@@ -245,6 +246,42 @@ after the access controls and hosted MCP.
   agent cannot extend its access by rotating or creating a child mailbox.
 
 #### 2. Shared credentials, revocation and an agent disable switch
+
+Implemented in migration 0107, `mailbox_credentials.ts` and the mailbox authorization
+context. The issuance service is internal: no public lease, workload-exchange or OAuth
+endpoint ships in this slice. `read` implies `codes`; `reply` and `send` are independent.
+Derived credentials use an explicit route allowlist and cannot rotate keys, change policy,
+mint credentials or manage a mailbox. Codes-only credentials cannot access body-bearing
+routes; their projections and sender filtering remain step 4.
+
+The team's API key can PATCH `{ enabled: false }` or `{ enabled: true }` on a mailbox.
+The dashboard has the switch, the SDK has `set_enabled`, and the CLI has `disable|enable`.
+Incoming mail, the team's dashboard and team-authorized integrations continue. The switch
+cuts off the agent's credentials and sends from that address. Enabling it requires issuing
+a new primary key and fresh derived credentials/consent grants.
+
+| Event                                  | Primary key                               | Derived credentials                                                                        | Waiting and queued work                                                                                        |
+| -------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Primary key rotates                    | Old key stops immediately                 | Children of that key are revoked; independent team/grant children keep their own authority | Reads reauthenticate; primary-key sends recheck their original key before delivery                             |
+| A credential expires                   | Its requests answer `key_expired`         | Children cannot outlive the parent                                                         | Long polls stop at expiry and reauthenticate before returning; delivery checks current authority               |
+| Parent key or grant is revoked/deleted | Unrelated keys continue                   | Its children stop on the next authorization check                                          | Pending reads reauthenticate; bound sends stop before another transport attempt                                |
+| Agent is disabled                      | Revoked permanently                       | Every credential and authorization grant is revoked atomically                             | Pending reads fail; queued/scheduled work and retries retain an old access version and cannot revive on enable |
+| Agent is enabled                       | Remains revoked until a new key is issued | Old credentials and grants remain revoked                                                  | A newly authorized send may proceed; old work stays blocked                                                    |
+| Mailbox is deleted                     | Stops working; address is retired         | Mailbox state makes all descendants unusable                                               | Delivery refuses the retired address; the team's received-mail history stays                                   |
+
+Send identity is captured when the Sent-log row is inserted, including existing queued
+work migrated in 0107. Retries inherit their original identity and access version. Each
+delivery attempt rechecks, including provider failover and an SES tenant-healing retry.
+A transport already handed off cannot be recalled; this is the boundary of the switch.
+Expired derived key hashes are purged a day after expiry by the nightly job; audit events
+keep the credential id, label, capabilities, safe parent identifier and deadline under the
+audit log's existing 365-day retention. Primary key hashes and bearer secrets never go
+into the audit detail.
+
+Future workload rules and OAuth consents must own a `mailbox_credential_grants` row and
+revoke it when the rule/consent is removed. The next adapters must not issue credentials
+outside this revocation boundary. Derived credentials cannot be parents of another
+credential. Public issuance and protocol validation remain in steps 3, 4 and 6.
 
 The existing mailbox has one key hash. Exchanges and leases must add credentials beside
 it, never replace that hash or accidentally acquire the team's authority.
@@ -393,7 +430,7 @@ provider. Our ground is the channels an identity is verified and reached through
    claim completeness or infer account ownership from email alone.
 4. Existing claimed mailboxes keep their current unrestricted limits. Suggest limits
    when creating one.
-5. Start with optional expiry. Local renewal, workload exchange, leases and OAuth remain
+5. Expiry and shared revocation come first. Local renewal, workload exchange, public leases and OAuth remain
    planned until their own acceptance checks pass.
 
 ---

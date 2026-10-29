@@ -1408,6 +1408,11 @@ export function create_mcp_server(options: McpOptions = {}) {
 					"Only a person on the team sends this draft. Tell your user it is waiting.",
 				team_key_required: "That needs the team's API key (POSTBOI_TOKEN), not the mailbox's.",
 				invalid_token: "The key was refused: it may have been rotated or the mailbox deleted.",
+				key_expired: "Ask your user for a fresh credential. Keep the existing mailbox address.",
+				mailbox_disabled:
+					"Your team disabled this agent. Tell your user; enabling it requires a fresh credential.",
+				capability_required:
+					"This credential does not grant this operation. Tell your user which access is needed.",
 			}
 			const code = error.code ? ` (${error.code})` : ""
 			const hint = error.code && hints[error.code] ? ` ${hints[error.code]}` : ""

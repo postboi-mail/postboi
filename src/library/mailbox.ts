@@ -102,6 +102,9 @@ interface WireMailbox {
 	key?: string
 	key_prefix: string
 	key_expires_at?: string | null
+	enabled?: boolean
+	disabled_at?: string | null
+	key_active?: boolean
 	claimed: boolean
 	claim_url?: string
 	created: string
@@ -746,6 +749,10 @@ export class Mailbox {
 	key: string | undefined
 	/** Primary mailbox key's deadline, or null for a permanent key. */
 	key_expires_at: Date | null
+	/** A disabled agent keeps receiving mail, while its credentials and sends are cut off. */
+	enabled: boolean
+	disabled_at: Date | null
+	key_active: boolean
 	/** False until a person claims it: it receives, and refuses to send. */
 	claimed: boolean
 	/** Where a person claims an unclaimed mailbox. Only on the one that was just made. */
@@ -771,6 +778,9 @@ export class Mailbox {
 		this.domain = wire.domain
 		this.key = wire.key ?? (credential.startsWith("mb_") ? credential : undefined)
 		this.key_expires_at = wire.key_expires_at ? new Date(wire.key_expires_at) : null
+		this.enabled = wire.enabled ?? true
+		this.disabled_at = wire.disabled_at ? new Date(wire.disabled_at) : null
+		this.key_active = wire.key_active ?? true
 		this.claimed = wire.claimed
 		this.claim_url = wire.claim_url
 		this.created = new Date(wire.created)
@@ -784,6 +794,9 @@ export class Mailbox {
 	}
 
 	#update(wire: WireMailbox): void {
+		this.enabled = wire.enabled ?? true
+		this.disabled_at = wire.disabled_at ? new Date(wire.disabled_at) : null
+		this.key_active = wire.key_active ?? true
 		this.key_expires_at = wire.key_expires_at ? new Date(wire.key_expires_at) : null
 		this.name = wire.name ?? null
 		this.claimed = wire.claimed
@@ -1192,6 +1205,13 @@ export class Mailbox {
 		return this
 	}
 
+	/** Team key only. Disabling revokes credentials; re-enabling requires a new key. */
+	async set_enabled(enabled: boolean): Promise<this> {
+		const response = await this.#post("", { enabled }, "PATCH")
+		this.#update((await response.json()) as WireMailbox)
+		return this
+	}
+
 	/**
 	 * A new key; the old one stops working at once. Omission keeps the deadline, and a
 	 * mailbox key may only shorten it. The team's key can extend it or set ttl: null.
@@ -1221,6 +1241,9 @@ export class Mailbox {
 			name: this.name,
 			key: this.key,
 			key_expires_at: this.key_expires_at,
+			enabled: this.enabled,
+			disabled_at: this.disabled_at,
+			key_active: this.key_active,
 			claimed: this.claimed,
 			claim_url: this.claim_url,
 			review: this.review,

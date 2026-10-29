@@ -29,6 +29,26 @@ function setup() {
 }
 
 describe("making and opening a mailbox", () => {
+	it("only the team disables an agent, and enabling never revives its old key", async () => {
+		const { server, options } = setup()
+		const agent = await mailbox.create({ ...options, token: TEAM_KEY })
+		await expect(agent.set_enabled(false)).rejects.toMatchObject({ code: "team_key_required" })
+		const team = await mailbox.open({ ...options, token: TEAM_KEY, address: agent.address })
+		await team.set_enabled(false)
+		expect(team.enabled).toBe(false)
+		expect(team.disabled_at).toBeInstanceOf(Date)
+		expect(team.key_active).toBe(false)
+		await expect(agent.info()).rejects.toMatchObject({ code: "mailbox_disabled" })
+		await team.set_enabled(true)
+		expect(team.enabled).toBe(true)
+		expect(team.key_active).toBe(false)
+		await expect(agent.info()).rejects.toMatchObject({ code: "invalid_token" })
+		await team.rotate()
+		expect(team.key_active).toBe(true)
+		expect(server.requests.filter((request) => request.method === "PATCH").at(-1)?.body).toEqual({
+			enabled: true,
+		})
+	})
 	it("sends key lifetimes and reads their deadlines on creation and rotation", async () => {
 		const { server, options } = setup()
 		const expires_at = "2027-01-01T12:00:00.000Z"

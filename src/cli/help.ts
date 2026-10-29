@@ -346,6 +346,7 @@ export const HELP: Array<HelpSection> = [
 				summary: "Mailboxes on this machine",
 				details: [
 					"key [address] [--ttl 1h]: a new key, the old one stops; omission keeps expiry · rm [address]",
+					"disable [address] · enable [address]: team key required; enabling needs a fresh key",
 				],
 			},
 		],
