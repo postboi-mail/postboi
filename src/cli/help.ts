@@ -32,6 +32,7 @@ export const HELP: Array<HelpSection> = [
 					"Installs postboi, adds the postboi() Vite plugin, writes postboi.config and runs sync",
 					"--agent: zero prompts, zero sign-in. Provisions a claimable sandbox account (made for AI coding agents and CI)",
 					"--sms · --whatsapp · --push · --chat: set up that channel instead",
+					"--github: open dashboard-approved GitHub workload trust; --workload <id> writes a keyless workflow (--workflow <name.yml>, --run <command>)",
 				],
 			},
 			{

@@ -13,7 +13,48 @@ Postboi, the same provider as the rest of these docs.
 
 ## Make one
 
-There's nothing to set up. With the `POSTBOI_TOKEN` that `postboi init` wrote, the mailbox is
+### GitHub Actions without a stored key
+
+On the team's **API keys** page, trust an exact GitHub repository and branch with its
+stable repository and owner IDs. Choose a mailbox and its read, reply and send permissions,
+or team email access. The dashboard must approve trust; an API key cannot create it.
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    env:
+      POSTBOI_WORKLOAD_ID: wl_your_public_workload_id
+    steps:
+      - uses: actions/checkout@v7
+      # Your install and SDK commands follow.
+```
+
+With no `POSTBOI_TOKEN` or `POSTBOI_MAILBOX_KEY`, `mailbox()` exchanges GitHub's assertion
+for an hour-long credential. Tokens stay in memory and refresh before a long poll can
+outlive them. Explicit keys take precedence. `postboi init --github` opens trust setup;
+rerun with `--workload <id>` to write a manually dispatched workflow, or copy its permission
+and environment fields into your own. The workload ID is public configuration.
+
+Mailbox grants open only their configured mailbox. Team email grants can use `mail()` for
+regular team senders or `mailbox()` for an existing mailbox; create the mailbox in the
+dashboard first. Use `mailbox()` when sending from an agent mailbox so review applies.
+Workload tokens cannot approve held drafts, mint credentials, create mailboxes or manage
+the team. Revoking trust invalidates issued credentials too. Disabling a mailbox revokes
+its workload trust; re-enabling requires a fresh trust rule.
+
+This first adapter accepts branch jobs triggered by push, schedule or workflow dispatch.
+Pull requests, pull-request-target, environments and reusable workflows are refused.
+Repository renames or ownership changes require a new trust rule. For a custom API,
+`POSTBOI_AUTH_URL` selects the token exchange origin; `POSTBOI_API_URL` and
+`POSTBOI_MAILBOX_URL` select the send and mailbox origins.
+
+### Local sign-in and standalone mailboxes
+
+With the `POSTBOI_TOKEN` that `postboi init` wrote, the mailbox is
 your team's from the start and can send. The first call makes it, and every call after that
 opens the same one:
 

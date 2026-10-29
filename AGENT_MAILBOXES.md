@@ -12,8 +12,8 @@ mailbox that receives, reads, replies and sends is in both repos on
 forward, attachments and a local `postboi mcp`; jev's mailbox rubric and the hosted MCP
 server are still to come. [Round three](#round-three-an-identity-not-only-an-inbox) is the
 next round: optional key expiry, credential revocation and the agent disable switch are
-implemented on `feature/agent-key-expiry`, pending deployment. Workload exchange,
-public leases, hard limits, account inventory and teardown remain
+implemented on `feature/agent-key-expiry`, pending deployment. GitHub OIDC exchange is
+implemented too; public leases, hard limits, account inventory and teardown remain
 planned. [Built so far](#built-so-far) says what shipped and where it parted from the
 plan below, and [Before launch](#before-launch) lists the zone and SES steps that only a
 person with the Cloudflare and AWS consoles can take. This document is the source of truth
@@ -165,8 +165,8 @@ reaches `agentboi.email` until the first two are done.
 
 ## Round three: an identity, not only an inbox
 
-**In progress, October 2026.** Steps 1 and 2 are implemented on `feature/agent-key-expiry`
-in both repos, pending review and deployment (app migrations 0106 and 0107). The remaining steps are
+**In progress, October 2026.** Steps 1–3 are implemented on `feature/agent-key-expiry`
+in both repos, pending review and deployment (app migrations 0106–0108). The remaining steps are
 planned. Written against Builder.io's
 [Why are we still handing AI agents API keys?](https://www.builder.io/blog/ai-agent-identity),
 which is the clearest statement yet of what the agent-identity threads ask for.
@@ -302,6 +302,37 @@ it, never replace that hash or accidentally acquire the team's authority.
   after credential secrets and expired credential rows are purged.
 
 #### 3. No permanent key in CI
+
+Implemented for GitHub Actions in migration 0108. Create trust under API keys with the
+dashboard session: exact repository/branch plus required stable repository and owner IDs.
+The audience is unique to the public `wl_…` selector. No bearer-key API creates trust.
+`postboi init --github` hands off to that approval page; with `--workload <id>` it writes
+a manually dispatched workflow containing `id-token: write` and `POSTBOI_WORKLOAD_ID`,
+without changing an existing workflow or storing a key.
+
+The verifier uses GitHub's fixed issuer and JWKS URL, RS256, a ten-minute assertion
+lifetime ceiling and one-minute clock skew. Push, schedule and workflow-dispatch branch
+jobs are accepted; pull requests, pull-request-target, environments and reusable workflows
+are refused in this slice. JWKS cache lifetime is ten minutes, with at most one refresh
+per thirty seconds, including unknown-key misses. Exchange attempts are limited atomically
+per source IP (60/minute) and per verified workload (30/minute). The request body is read
+with a 20 KB streaming cap. Responses and errors are never cached.
+
+One-mailbox trust uses the shared workload grant and selected read/reply/send capabilities.
+Team trust is deliberately **team email operations**, not full account management: an
+explicit route allowlist blocks credentials, mailbox creation and trust/team management.
+This prevents a job turning temporary access into independent bearer credentials. Team
+workload actors still obey mailbox review and cannot approve held drafts. Use `mailbox()`
+for mailbox From addresses; the generic send pipeline refuses an unbound workload send
+from one. `mail()` remains available for ordinary team senders. Provision mailboxes in the
+dashboard before running CI. Revoking trust invalidates issued keys, and disabling a
+mailbox also revokes its trust rules; enabling it does not revive them.
+
+The SDK resolves identity only when no explicit key is present. It keeps runner assertions
+and exchanged keys in memory, coalesces concurrent exchanges, separates job contexts, and
+refreshes two minutes before expiry so a 90-second mailbox poll stays within its lifetime.
+`mailbox.create()` does not fall back to an anonymous mailbox when workload sign-in is
+configured. Local `init` renewal, Vercel and the other provider adapters remain planned.
 
 - `POST /v1/auth/token` exchanges a platform OIDC token for an independent, short-lived
   credential (one hour by default). Use RFC 8693 request and response fields, including

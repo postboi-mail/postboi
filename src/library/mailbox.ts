@@ -2,6 +2,7 @@ import { base64_encode } from "./encoding.js"
 import { ensure_env_loaded, read_env } from "./env.js"
 import { drop, keep, names_address, recall } from "./mailbox_store.js"
 import { PostboiError } from "./errors.js"
+import { workload_configured, workload_token } from "./workload_auth.js"
 import {
 	aborted,
 	duration_ms,
@@ -768,6 +769,7 @@ export class Mailbox {
 	drafts_waiting: number
 	readonly base: string
 	#credential: string
+	#credential_source?: () => Promise<string>
 	readonly #fetch: typeof fetch
 
 	/** @internal */
@@ -806,6 +808,12 @@ export class Mailbox {
 		this.drafts_waiting = wire.drafts_waiting ?? this.drafts_waiting
 	}
 
+	/** @internal Refresh workload credentials without persisting them to mailbox memory. */
+	use_credential_source(source: () => Promise<string>): this {
+		this.#credential_source = source
+		return this
+	}
+
 	/** The address with a plus-tag: `tag("order-1041")` → `orders-k3f9+order-1041@agentboi.email`. */
 	tag(tag: string): string {
 		const at = this.address.lastIndexOf("@")
@@ -822,6 +830,10 @@ export class Mailbox {
 			if (value !== undefined) url.searchParams.set(name, String(value))
 		}
 		const { query: _query, key, ...rest } = init
+		if (!key && this.#credential_source) {
+			this.#credential = await this.#credential_source()
+			this.key = this.#credential.startsWith("mb_") ? this.#credential : undefined
+		}
 		const headers = new Headers(rest.headers)
 		headers.set("authorization", `Bearer ${key ?? this.#credential}`)
 		if (!headers.has("accept")) headers.set("accept", "application/json")
@@ -1223,6 +1235,7 @@ export class Mailbox {
 		this.key = wire.key
 		this.#update(wire)
 		this.#credential = wire.key
+		this.#credential_source = undefined
 		return wire.key
 	}
 
@@ -1274,6 +1287,12 @@ async function make(options: MailboxOptions): Promise<Mailbox> {
 	const base = base_url(options.base)
 	const fetcher = options.fetch ?? globalThis.fetch
 	const token = options.token ?? read_env("POSTBOI_TOKEN")
+	if (!token && workload_configured())
+		throw new MailboxError({
+			code: "workload_scope",
+			message:
+				"Workload sign-in opens existing mailboxes. Create the mailbox in the dashboard first.",
+		})
 	const body: Record<string, unknown> = {}
 	if (options.address) body.address = options.address
 	if (options.domain) body.domain = options.domain
@@ -1400,6 +1419,38 @@ async function resolve(call: MailboxCall = {}): Promise<Mailbox> {
 	}
 	const base = base_url(options.base)
 	const remembering = options.remember !== false
+	const fetcher = options.fetch ?? globalThis.fetch
+	const auth_base = read_env("POSTBOI_API_URL") ?? "https://postboi.app"
+	const workload = await workload_token(auth_base, fetcher)
+	if (workload) {
+		if (
+			workload.mailbox &&
+			options.address &&
+			!names_address(workload.mailbox.address, options.address) &&
+			options.address !== workload.mailbox.id
+		)
+			throw new MailboxError({
+				code: "workload_scope",
+				message: "This workload grants a different mailbox.",
+			})
+		const box = workload.mailbox
+			? await open({ ...options, key: workload.access_token, address: workload.mailbox.address })
+			: await resolve({ ...options, token: workload.access_token })
+		return box.use_credential_source(async () => {
+			const next = await workload_token(auth_base, fetcher)
+			if (
+				!next ||
+				next.workload_id !== workload.workload_id ||
+				next.account_id !== workload.account_id ||
+				next.mailbox?.id !== workload.mailbox?.id
+			)
+				throw new MailboxError({
+					code: "workload_changed",
+					message: "The workload identity changed. Open the mailbox again.",
+				})
+			return next.access_token
+		})
+	}
 	if (remembering) {
 		const saved = await recall(base, options.address)
 		if (saved) {

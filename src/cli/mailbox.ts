@@ -261,6 +261,13 @@ function trust_flag(ctx: Context): Trust | undefined {
 }
 
 async function open(ctx: Context, address?: string): Promise<Mailbox> {
+	if (ctx.env.POSTBOI_WORKLOAD_ID && !ctx.env.POSTBOI_TOKEN && !ctx.env.POSTBOI_MAILBOX_KEY)
+		return open_or_make({
+			address: flag(ctx, "mailbox") ?? address,
+			base: ctx.env.POSTBOI_MAILBOX_URL,
+			fetch: ctx.fetch,
+			remember: false,
+		})
 	const picked = pick_mailbox(read_saved(ctx.path), ctx.env, flag(ctx, "mailbox") ?? address)
 	if ("error" in picked) throw new MailboxCommandError(picked.error, picked.code)
 	if ("token" in picked) {

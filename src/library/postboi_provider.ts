@@ -14,9 +14,12 @@ import type {
 } from "./index.js"
 import { ProviderBase, PostboiError } from "./index.js"
 import { read_env, env_defaults, ensure_env_loaded } from "./env.js"
+import { workload_token } from "./workload_auth.js"
 
 /** Options for the Postboi provider. */
 export type PostboiOptions = CommonProviderOptions & {
+	/** @internal Per-call environment overrides from mail(). */
+	workload_env?: Record<string, string | undefined>
 	/** The Postboi provider token. Defaults to the `POSTBOI_TOKEN` environment variable. */
 	token?: string
 	/** Override the API base URL. Defaults to `POSTBOI_API_URL` or `https://postboi.app`. */
@@ -610,17 +613,19 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	// FormData sends need no local secret key.
 	protected override readonly captcha_mode = "managed" as const
 	#token: string | undefined
+	#workload_env?: Record<string, string | undefined>
 	#host: string
 	#send_via: string | undefined
 	#own_default: Defaults | undefined
 
-	constructor({ token, base_url, send_via, ...options }: PostboiOptions = {}) {
+	constructor({ token, base_url, send_via, workload_env, ...options }: PostboiOptions = {}) {
 		// Defaults can come from the environment (POSTBOI_FROM, …); anything passed
 		// explicitly via `default` wins.
 		super({ ...options, default: { ...env_defaults(), ...options.default } })
 		// Kept so the environment can be re-read late without losing to it — see prepare_send.
 		this.#own_default = options.default
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
+		this.#workload_env = workload_env
 		this.#send_via = send_via
 		const host = base_url ?? read_env("POSTBOI_API_URL") ?? "https://postboi.app"
 		this.#host = host.replace(/\/$/, "")
@@ -641,11 +646,26 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		return super.prepare_send(options)
 	}
 
-	#require_token(): string {
+	async #require_token(): Promise<string> {
+		await ensure_env_loaded()
 		// Re-read late as well as at construction: on Workers the bindings only reach the env
 		// cache once `ensure_env_loaded()` has run, which the send path awaits.
 		this.#token ??= read_env("POSTBOI_TOKEN")
 		if (!this.#token) {
+			const workload = await workload_token(
+				this.#host,
+				globalThis.fetch,
+				(name) => this.#workload_env?.[name] ?? read_env(name)
+			)
+			if (workload) {
+				if (workload.mailbox)
+					throw new PostboiError({
+						provider: this.provider,
+						code: "workload_scope",
+						message: "This workload grants one mailbox. Use postboi/mailbox instead of mail().",
+					})
+				return workload.access_token
+			}
 			throw new PostboiError({
 				provider: this.provider,
 				message:
@@ -658,7 +678,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 
 	/** Call a `/v1` path with bearer auth, an optional JSON body, and normalized errors. */
 	async #api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-		const token = this.#require_token()
+		const token = await this.#require_token()
 		const data = await this.call(
 			{
 				url: `${this.#host}/v1${path}`,
@@ -1096,7 +1116,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		 * ```
 		 */
 		download: async (options: ExportDownloadOptions = {}): Promise<ExportFile> => {
-			const token = this.#require_token()
+			const token = await this.#require_token()
 			const query = export_download_params(options).toString()
 			const response = await this.request({
 				url: `${this.#host}/v1/exports/download${query ? `?${query}` : ""}`,
@@ -1229,7 +1249,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	}
 
 	protected async build_request(message: PreparedMessage): Promise<RequestSpec> {
-		const token = this.#require_token()
+		const token = await this.#require_token()
 		return {
 			url: `${this.#host}/v1/send`,
 			headers: {
@@ -1249,7 +1269,7 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		_template: PreparedMessage,
 		recipients: Array<BatchRecipient>
 	): Promise<RequestSpec> {
-		const token = this.#require_token()
+		const token = await this.#require_token()
 		return {
 			url: `${this.#host}/v1/send/batch`,
 			headers: {
