@@ -10,7 +10,9 @@ mailbox that receives, reads, replies and sends is in both repos on
 `claude/agent-mailboxes-planning-y0p3hu`. A second round on
 `claude/postboi-agent-mail-gaps-8n9qvh` added folders, labels, search, drafts, review,
 forward, attachments and a local `postboi mcp`; jev's mailbox rubric and the hosted MCP
-server are still to come. [Built so far](#built-so-far) says what shipped and where it parted from the
+server are still to come. [Round three](#round-three-an-identity-not-only-an-inbox) is the
+next plan, not built: keyless and short-lived keys, leases, hard limits, the accounts an
+address holds and teardown. [Built so far](#built-so-far) says what shipped and where it parted from the
 plan below, and [Before launch](#before-launch) lists the zone and SES steps that only a
 person with the Cloudflare and AWS consoles can take. This document is the source of truth
 for the mailbox work in both repos: read it before starting a phase, and update it when a
@@ -156,6 +158,195 @@ reaches `agentboi.email` until the first two are done.
 3. **Deploy** picks up the `agentboi.email` and `www.agentboi.email` custom domains in
    `wrangler.jsonc`, and the `llms.txt` and `sitemap.xml` renames in `inject_cron.ts`.
    The page's abuse line is `ABUSE_ADDRESS`, shared with tempboi.
+
+---
+
+## Round three: an identity, not only an inbox
+
+**Planned, October 2026. Nothing here is built.** Written against Builder.io's
+[Why are we still handing AI agents API keys?](https://www.builder.io/blog/ai-agent-identity),
+which is the clearest statement yet of what the agent-identity threads ask for.
+
+### What the post asks for
+
+Agents run on their owner's credentials, so to every service they _are_ the owner, and a
+long-lived key works from anywhere for whoever holds it until somebody notices. Its
+examples are all one shape: a key copied into `.env`, CI, a gateway and an agent shell,
+then leaked from one of them (Railway, LiteLLM, a $15,400 Gemini bill, METR's $600,000 of
+credits on a key with no cap). What it wants instead:
+
+- the agent has its **own** email, accounts and a card with a hard limit, so revoking it
+  never touches the person;
+- credentials are **short-lived and per task**, made at the start of a job and revoked at
+  the end, and ideally **keyless**: OIDC workload identity, a platform vouching for the
+  job as GitHub Actions does for AWS, Vertex and now OpenAI and Anthropic;
+- **limits the agent can't raise** replace approval prompts, which people approve 93% of
+  the time and then switch off;
+- **teardown** comes in the box.
+
+And: "nothing that bundles inbox, accounts, card, and teardown for a solo developer". The
+enterprise answers (Microsoft, Okta, Google, AWS) are for companies with an IdP.
+
+### Where we already answer it
+
+The inbox is ours: an address in one call with no account, an `mb_…` key that opens one
+mailbox and nothing else by construction, trust labels on what arrives, the review gate
+and drafts, codes and links read out on arrival (`OTP-Token` believed first), the audit
+log naming the mailbox as the actor, and tempboi for the address that should go.
+
+### Where we are the thing it complains about
+
+Postboi's own credentials are long-lived keys:
+
+- `pb_…` never expires and has two scopes, account and client workspace (`api_keys.ts`).
+- `mb_…` can be rotated and never expires (`mailbox_api.ts`, `mint_key`).
+- `postboi init` authorises the device in the browser properly (`/api/cli/start`, `/poll`)
+  and then writes a permanent `pb_` key into `.env`, which is the copy the post's breaches
+  start from. CI then gets the same key as a secret.
+- The local `postboi mcp` reads that key from the environment, so an MCP client's config
+  carries it too.
+
+A mailbox key is also worth more than it looks. **The mailbox is the recovery channel for
+every account the agent signs up for**, so whoever reads it can reset all of them. An
+agent that only needs one sign-in code shouldn't hold a key that reads password resets.
+
+### The order
+
+Each step stands on its own and ships on its own. The first two are where the risk is;
+four is where nobody else can follow us.
+
+#### 1. Keys that end, and no key at all in CI
+
+- **Expiry on both kinds of key.** `api_keys.expires_at` and `mailboxes.key_expires_at`,
+  NULL being never, so nothing anyone holds today changes. Set at mint (dashboard, API,
+  `postboi mailbox key --ttl`), checked in `api_keys.find` and `by_key_hash` as a 401
+  `key_expired`, which is a different word from `invalid_key` so an agent knows to ask for
+  a new one rather than give up. The dashboard's key list says when each ends.
+- **Token exchange.** `POST /v1/auth/token` takes an OIDC id_token from a platform the team
+  has trusted and answers a short-lived key (an hour by default, scoped to the team or to
+  one mailbox). RFC 8693's shape (`subject_token`, `subject_token_type`), so it reads like
+  the AWS and GCP exchanges people already know.
+  - **What a team trusts is a row, not a provider.** `trusted_workloads`: issuer, audience
+    and a subject pattern (`repo:acme/app:ref:refs/heads/main`), plus what it is granted
+    (team or one mailbox, which `review` and limits still bind). Written under API keys on
+    the dashboard. A bare issuer is never enough, since every repository on GitHub can get
+    a token from it.
+  - **Issuers first**: GitHub Actions (`token.actions.githubusercontent.com`), then Vercel,
+    Cloudflare Workers and GCP. JWKS fetched and kept per isolate, as the link checker
+    keeps its answers; `iat`, `exp`, `aud` and `nbf` checked with a minute of skew.
+  - **The SDK reads it for you.** In GitHub Actions, with `id-token: write` and no
+    `POSTBOI_TOKEN`, `mail()` and `mailbox()` ask the runner for a token and exchange it,
+    and cache the key until a minute before it ends. `postboi init` offers to write the
+    workflow permission and the trust row instead of a secret.
+  - **Vercel.** The post says Marketplace vendors without keyless sign-in are labelled
+    "Not secure" from 30 November and removed in January. If Postboi is listed, Vercel's
+    OIDC is the second issuer and that date is the deadline.
+- **`init` stops writing forever keys by default** once exchange exists: a local key gets
+  an expiry and the CLI refreshes it through the device flow it already has. A team that
+  wants a forever key still mints one on purpose.
+
+#### 2. Leases: a key for one job
+
+A lease is a short-lived `mb_` key with less than the mailbox can do.
+
+- `POST /v1/mailboxes/:id/leases` with `ttl` (minutes to a day), `can` and optionally
+  `from`. `can` is a list from a small fixed vocabulary: `codes` (read the codes and verify
+  links of messages, not their bodies), `read`, `reply`, `send`. `from` narrows what it may
+  read to senders at those domains, so `{ can: ["codes"], from: ["github.com"] }` waits for
+  GitHub's code and can't see anyone else's mail.
+- In the SDK: `await using lease = await box.lease({ ttl: "1h", can: ["codes"] })`, revoked
+  when the block ends, and `lease.wait()` is the same long poll. `postboi mailbox lease`
+  prints one for a shell.
+- Made with the mailbox's own key or the team's; a lease can't make a lease and can never
+  hold more than the key that made it. Rows in `mailbox_leases` beside the mailbox,
+  hashed like the key, purged a day after they end. The audit log names the lease and the
+  job it was made for (an optional `label`).
+- MCP: the tools say which lease they run under, and `postboi mcp --lease codes` starts the
+  server on one so an agent loop holds no more than it needs.
+
+#### 3. Limits the agent can't raise
+
+`review` is the approval prompt. Limits are the card: a ceiling set by a person that the
+agent's own key cannot move.
+
+- Per mailbox: `sends_per_day`, `new_recipients_per_day` and `recipient_domains` (an
+  allowlist; empty means anywhere). Set only with the team's key or on the dashboard, as
+  `review` is. Checked in `send_or_hold` before the draft check, so a send over a limit is
+  a 429 `mailbox_limit` with the limit's name and when it resets, never a draft that sits
+  waiting for somebody to raise it.
+- Counted from the Sent log by From address and UTC day, so there is no counter of its
+  own to drift from what was sent.
+- A limit reached tells the team once a day, as a new `limits` entry in the notification
+  catalogue (push and email on), because a ceiling nobody hears about reads as a broken
+  agent.
+- Money comes later (the Phase 5 line about budgets per mailbox): a send costs a send, and
+  until a mailbox can buy anything a count is the honest unit.
+
+#### 4. The accounts an address holds, and teardown
+
+The mailbox already sees every welcome, verification and reset email the agent's sign-ups
+cause, and `temp_inbox_rules.ts` already sorts their links into verify, unsubscribe and
+other. That is enough to keep a register nobody else can.
+
+- **`mailbox_accounts`**: one row per service (keyed on the sender's organisational domain),
+  with first and last seen, the kind of mail that named it (`verify`, `welcome`, `reset`,
+  `receipt`), the message it was read from and its unsubscribe link. Written in
+  `file_into_mailbox` from rules first: a verify link, a code, or a subject that says
+  welcome, confirm, verify or reset. jev only where the rules can't tell, and only with
+  content checks on. A reset arriving for an account the agent never signed up to is
+  worth saying in the trust label too, because that is what a takeover attempt looks like
+  from the inbox.
+- Read at `GET /v1/mailboxes/:id/accounts`, on the mailbox's page as an **Accounts** tab,
+  and through `mailbox.accounts()` and an MCP tool, so the agent can answer "what have you
+  signed up for".
+- **Teardown** is `POST /v1/mailboxes/:id/teardown` (team key or the dashboard): revoke the
+  key and every lease, drop the `trusted_workloads` rows that grant it, retire the address as delete
+  already does, and answer the account register with each service's links, so the person
+  knows what is left to close. Unsubscribe links are offered and never followed for them:
+  a GET spends what a link carries (the link checker's rule). `postboi mailbox rm
+  --teardown` prints the list.
+- What we can't do and won't pretend to: close an account at another service. The
+  register is how a person finds out what there is to close; nobody else's inbox can tell
+  them.
+
+#### 5. An agent is one thing on the dashboard
+
+The Members → Agents view Phase 1 deferred, as the place the rest of this is seen: one row
+per mailbox with its keys and leases, its limits, its trust rows, its account register and
+its audit trail, and one switch that cuts that agent off (keys, leases and sends) without
+touching the team or deleting the address. Whole-team members only, as Mailboxes is.
+
+#### 6. Hosted MCP signed in with OAuth
+
+Open decision 6, moved up. The hosted `mcp.postboi.app` with better-auth as the
+authorization server and dynamic client registration, so connecting an MCP client is a
+consent screen and no key is pasted into its config. The grant is a lease in all but name:
+one mailbox, the `can` vocabulary above, an expiry, revocable from the agent's row.
+
+#### Smaller
+
+- **Text-message codes** on the team's own number: a Twilio number's inbound webhook files
+  into a mailbox, codes read as mail's are. Postboi still owns no numbers (CHANNELS.md).
+- **Sign our own `OTP-Token`** on mail we send, so tempboi and agentboi read our codes as
+  `signed`, and settle open decision 4 (the disclosure footer and header) while we are
+  writing headers.
+
+### What we stay out of
+
+The card and payments, browser sessions and "Sign in with Google", and a general identity
+provider. Our ground is the channels an identity is verified and reached through; steps 2
+and 4 are where that is an edge.
+
+### Open questions
+
+1. Does a lease's `codes` mean the code alone, or the verify links too? Lean: both, since
+   a link is how most services verify, and neither carries the body.
+2. Is a token exchange's key an `api_keys` row with an expiry, or never stored at all (a
+   signed, stateless token)? Lean: a row, so it can be revoked and the audit log names it.
+3. Is the account register on by default? It reads nothing the mailbox didn't already
+   read. Lean: on, and said on the mailbox's page.
+4. Should limits have defaults? Lean: none on a claimed mailbox, so nothing anyone is
+   sending changes, and the dashboard suggests them when a mailbox is made.
 
 ---
 
