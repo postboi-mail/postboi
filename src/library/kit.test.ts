@@ -225,6 +225,56 @@ describe("postboi/kit action() with a resolver", () => {
 		expect(provider.sent).toHaveLength(0)
 	})
 
+	it("runs after once the email has gone, and merges what it returns", async () => {
+		const provider = new Mock(defaults)
+		const seen: Array<number> = []
+		const result = await action(provider, () => ({
+			after: async () => {
+				seen.push(provider.sent.length)
+				return { link: "https://example.com/yours", success: false }
+			},
+		}))(event({ name: "Ada" }))
+
+		// `success` is the send's to say, so after can't overrule it
+		expect(result).toEqual({ success: true, link: "https://example.com/yours" })
+		expect(seen).toEqual([1])
+	})
+
+	it("doesn't run after for a bot or a send that failed", async () => {
+		const after = vi.fn()
+		const bot = new Mock(defaults)
+		expect(await action(bot, () => ({ after }))(event({ _honey: "cheap pills" }))).toEqual({
+			success: true,
+		})
+
+		const failing = new Mock() // no from or to, so the send throws
+		const result = await action(failing, () => ({ after }))(event({ name: "Ada" }))
+		expect(result).toMatchObject({ status: 400 })
+		expect(after).not.toHaveBeenCalled()
+	})
+
+	it("leaves an after that throws uncaught: it's the site's error, not a failed send", async () => {
+		const provider = new Mock(defaults)
+		const built = action(provider, () => ({
+			after: () => {
+				throw new Error("OpenApply is down")
+			},
+		}))
+		await expect(built(event({ name: "Ada" }))).rejects.toThrow("OpenApply is down")
+		expect(provider.sent).toHaveLength(1)
+	})
+
+	it("types: the result carries what after returns", async () => {
+		const provider = new Mock(defaults)
+		const result = await action(provider, () => ({ after: () => ({ link: "x" }) }))(
+			event({ name: "Ada" })
+		)
+		if ("success" in result) {
+			const link: string | undefined = result.link
+			expect(link).toBe("x")
+		} else throw new Error("expected success")
+	})
+
 	it("keeps a _ field the resolver read out of the email, and only that one", async () => {
 		const provider = new Mock(defaults)
 		await action(provider, async ({ data }) => ({ to: await lookup(data.get("_blok")) }))(

@@ -12,6 +12,7 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
+- `postboi/kit`: `action()`'s resolver can return `after`, as `remote()`'s can. It runs once the email has gone, never for a bot or a send that failed, and what it returns is merged into the action's result: `after: async () => ({ link })` gives the page `{ success: true, link }`. So work that should wait for the honeypot and captcha, like filing the enquiry in a CRM, no longer means writing the action by hand around `mail()`. The result's type carries what `after` returns.
 - `postboi/inbox` and `postboi/mailbox`: a message carries `otp`, the sender's own [`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header as `{ code, origin, signed }` when it wrote a valid one, and `code` is then that code. `signed` says whether the sender's own DKIM signature covers the header, which a DMARC pass alone doesn't. `null` otherwise. The MCP server's mailbox and temp inbox tools answer it too.
 
 ## 0.76.1

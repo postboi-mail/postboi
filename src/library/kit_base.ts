@@ -33,14 +33,19 @@ interface Mailer {
 	send(options: SendOptions): Promise<unknown>
 }
 
-/** What a built action returns: the form succeeded, or a typed failure. */
-type ActionResult<F = { error: string }> =
-	| { success: true }
+/**
+ * What a built action returns: the form succeeded, or a typed failure. `R` is what an `after`
+ * returned, merged in on a successful send (absent when the honeypot tripped).
+ */
+type ActionResult<F = { error: string }, R = object> =
+	| ({ success: true } & Partial<R>)
 	| ActionFailure<{ error: string }>
 	| ActionFailure<F>
 
 /** A SvelteKit form action built by {@link action}. */
-type FormAction<F = { error: string }> = (event: RequestEvent) => Promise<ActionResult<F>>
+type FormAction<F = { error: string }, R = object> = (
+	event: RequestEvent
+) => Promise<ActionResult<F, R>>
 
 /**
  * Send options merged into every send — handy for forcing a recipient or subject
@@ -57,6 +62,14 @@ export type ActionOptions = ActionFields & {
 	/** HTTP status returned when sending fails. Defaults to 400. */
 	status?: number
 }
+
+/**
+ * What an action's resolver returns: {@link ActionOptions}, plus `after`, run once the email has
+ * gone. Whatever it returns is merged into the action's result, `{ success: true, link }` say.
+ * It doesn't run for a bot or a send that failed, and one that throws is your error rather than
+ * a failed send, so it isn't caught.
+ */
+export type ResolvedOptions<R = object> = ActionOptions & { after?: () => R | Promise<R> }
 
 /**
  * Options worked out per submission, from the request and the post. `data` is the post,
@@ -178,44 +191,62 @@ async function resolve<
  * ```ts
  * export const actions = { default: action(mail, { to: "team@example.com" }) }
  * ```
+ *
+ * @example Work that should only happen once the email has passed the honeypot and captcha:
+ * ```ts
+ * export const actions = {
+ * 	default: action(({ field }) => ({
+ * 		reply_to: field("email"),
+ * 		after: async () => ({ subscribed: await subscribe(field("email")) }),
+ * 	})),
+ * }
+ * ```
  */
-export function action<F = { error: string }>(
-	options?: ActionOptions | Resolver<ActionOptions, F>
-): FormAction<F>
-export function action<F = { error: string }>(
+export function action<F = { error: string }, R = object>(
+	options?: ActionOptions | Resolver<ResolvedOptions<R>, F>
+): FormAction<F, R>
+export function action<F = { error: string }, R = object>(
 	mailer: Mailer,
-	options?: ActionOptions | Resolver<ActionOptions, F>
-): FormAction<F>
-export function action<F>(
-	a?: Mailer | ActionOptions | Resolver<ActionOptions, F>,
-	b?: ActionOptions | Resolver<ActionOptions, F>
-): FormAction<F> {
+	options?: ActionOptions | Resolver<ResolvedOptions<R>, F>
+): FormAction<F, R>
+export function action<F, R>(
+	a?: Mailer | ActionOptions | Resolver<ResolvedOptions<R>, F>,
+	b?: ActionOptions | Resolver<ResolvedOptions<R>, F>
+): FormAction<F, R> {
 	const is_mailer = typeof (a as Mailer | undefined)?.send === "function"
 	const mailer = is_mailer ? (a as Mailer) : undefined
-	const given = is_mailer ? b : (a as ActionOptions | Resolver<ActionOptions, F> | undefined)
+	const given = is_mailer ? b : (a as ActionOptions | Resolver<ResolvedOptions<R>, F> | undefined)
 	const dispatch = mailer ? (o: SendOptions) => mailer.send(o) : zero_config_mail
 
-	return async (event) => {
+	// typed where it's returned: `{ success: true }` alone can't be shown to fit `Partial<R>`
+	return (async (event: RequestEvent) => {
 		let status = typeof given === "function" ? 400 : (given?.status ?? 400)
+		let after: ResolvedOptions<R>["after"]
 		try {
 			const body = await event.request.formData()
-			const resolved = await resolve(given, { event, data: body })
+			const resolved = await resolve<
+				ResolvedOptions<R>,
+				F,
+				{ event: RequestEvent; data: FormData }
+			>(given, { event, data: body })
 			if (resolved === null) return { success: true }
 			if (is_failure<F>(resolved)) return resolved
-			const { status: failure_status = 400, ...fields } = resolved
+			const { status: failure_status = 400, after: then, ...fields } = resolved
 			status = failure_status
+			after = then
 			await dispatch({
 				...fields,
 				body,
 				captcha: with_remoteip(fields.captcha, event),
 			} as SendOptions)
-			return { success: true }
 		} catch (error) {
 			// A tripped honeypot pretends to succeed — no email is sent, and the bot learns nothing.
 			if (is_spam(error)) return { success: true }
 			return fail(status, { error: is_error(error) ? error.message : String(error) })
 		}
-	}
+		// `success` last: an `after` can add to the result, not overrule the send it follows.
+		return { ...(await after?.()), success: true as const }
+	}) as FormAction<F, R>
 }
 
 /**
