@@ -260,7 +260,7 @@ export const HELP: Array<HelpSection> = [
 				command: "mailbox new",
 				summary: "Make an address your agent keeps, and print it",
 				details: [
-					"[--address <name>] [--name <label>] [--domain <yours>] [--json] [--env]",
+					"[--address <name>] [--name <label>] [--domain <yours>] [--ttl 1h] [--json] [--env]",
 					"With POSTBOI_TOKEN it is your team's; without, it sends once you open its claim link",
 					"--env prints export POSTBOI_MAILBOX_KEY=… for eval",
 				],
@@ -344,7 +344,9 @@ export const HELP: Array<HelpSection> = [
 			{
 				command: "mailbox ls",
 				summary: "Mailboxes on this machine",
-				details: ["key [address]: a new key, the old one stops · rm [address]"],
+				details: [
+					"key [address] [--ttl 1h]: a new key, the old one stops; omission keeps expiry · rm [address]",
+				],
 			},
 		],
 		footer: [

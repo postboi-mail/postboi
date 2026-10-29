@@ -101,6 +101,7 @@ interface WireMailbox {
 	domain: string
 	key?: string
 	key_prefix: string
+	key_expires_at?: string | null
 	claimed: boolean
 	claim_url?: string
 	created: string
@@ -551,6 +552,8 @@ export interface MailboxOptions {
 	domain?: string
 	/** What your team calls a new mailbox. */
 	name?: string
+	/** Lifetime of a new mailbox key: whole seconds or a duration such as "1h" (up to 365d). */
+	ttl?: number | string
 	/** Default `POSTBOI_MAILBOX_URL`, then https://agentboi.email. */
 	base?: string
 	fetch?: typeof fetch
@@ -741,6 +744,8 @@ export class Mailbox {
 	 * it was opened with the team's API key. Rotated by {@link Mailbox.rotate}.
 	 */
 	key: string | undefined
+	/** Primary mailbox key's deadline, or null for a permanent key. */
+	key_expires_at: Date | null
 	/** False until a person claims it: it receives, and refuses to send. */
 	claimed: boolean
 	/** Where a person claims an unclaimed mailbox. Only on the one that was just made. */
@@ -765,6 +770,7 @@ export class Mailbox {
 		this.name = wire.name ?? null
 		this.domain = wire.domain
 		this.key = wire.key ?? (credential.startsWith("mb_") ? credential : undefined)
+		this.key_expires_at = wire.key_expires_at ? new Date(wire.key_expires_at) : null
 		this.claimed = wire.claimed
 		this.claim_url = wire.claim_url
 		this.created = new Date(wire.created)
@@ -778,6 +784,7 @@ export class Mailbox {
 	}
 
 	#update(wire: WireMailbox): void {
+		this.key_expires_at = wire.key_expires_at ? new Date(wire.key_expires_at) : null
 		this.name = wire.name ?? null
 		this.claimed = wire.claimed
 		this.count = wire.count ?? this.count
@@ -1185,12 +1192,16 @@ export class Mailbox {
 		return this
 	}
 
-	/** A new key. The old one stops working at once; the new one is on `key` and returned. */
-	async rotate(): Promise<string> {
-		const response = await this.request("/key", { method: "POST" })
+	/**
+	 * A new key; the old one stops working at once. Omission keeps the deadline, and a
+	 * mailbox key may only shorten it. The team's key can extend it or set ttl: null.
+	 */
+	async rotate(options: { ttl?: number | string | null } = {}): Promise<string> {
+		const response = await this.#post("/key", options)
 		const wire = (await response.json()) as WireMailbox
 		if (!wire.key) throw new MailboxError({ message: "The API answered without a key", raw: wire })
 		this.key = wire.key
+		this.#update(wire)
 		this.#credential = wire.key
 		return wire.key
 	}
@@ -1209,6 +1220,7 @@ export class Mailbox {
 			address: this.address,
 			name: this.name,
 			key: this.key,
+			key_expires_at: this.key_expires_at,
 			claimed: this.claimed,
 			claim_url: this.claim_url,
 			review: this.review,
@@ -1243,6 +1255,7 @@ async function make(options: MailboxOptions): Promise<Mailbox> {
 	if (options.address) body.address = options.address
 	if (options.domain) body.domain = options.domain
 	if (options.name) body.name = options.name
+	if (options.ttl !== undefined) body.ttl = options.ttl
 	const headers: Record<string, string> = {
 		"content-type": "application/json",
 		accept: "application/json",
@@ -1371,7 +1384,11 @@ async function resolve(call: MailboxCall = {}): Promise<Mailbox> {
 				return await open({ key: saved.key, base, fetch: options.fetch })
 			} catch (error) {
 				// Rotated or deleted somewhere else: forget it and make another.
-				if (!(error instanceof MailboxError && error.status === 401)) throw error
+				if (
+					!(error instanceof MailboxError && error.status === 401) ||
+					error.code === "key_expired"
+				)
+					throw error
 				await drop(saved.address)
 			}
 		}

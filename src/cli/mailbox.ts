@@ -47,6 +47,7 @@ export type { SavedMailbox }
 type Env = Record<string, string | undefined>
 
 const VALUE_FLAGS = new Set([
+	"ttl",
 	"address",
 	"name",
 	"domain",
@@ -306,6 +307,7 @@ async function create(ctx: Context): Promise<number> {
 	const box = await open_or_make.create({
 		address: flag(ctx, "address") ?? ctx.args.positional[0],
 		name: flag(ctx, "name"),
+		ttl: flag(ctx, "ttl"),
 		domain: flag(ctx, "domain"),
 		token: ctx.env.POSTBOI_TOKEN || undefined,
 		base: ctx.env.POSTBOI_MAILBOX_URL || undefined,
@@ -844,9 +846,10 @@ async function review(ctx: Context): Promise<number> {
 
 async function rotate(ctx: Context): Promise<number> {
 	const box = await open(ctx, ctx.args.positional[0])
-	const key = await box.rotate()
+	const key = await box.rotate({ ttl: flag(ctx, "ttl") })
 	save(ctx, box)
-	if (ctx.json) ctx.out(JSON.stringify({ address: box.address, key }))
+	if (ctx.json)
+		ctx.out(JSON.stringify({ address: box.address, key, key_expires_at: box.key_expires_at }))
 	else {
 		ctx.out(key)
 		ctx.err(dim("The old key stopped working just now. This one is saved on this machine."))

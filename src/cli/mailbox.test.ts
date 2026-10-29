@@ -70,6 +70,13 @@ describe("which mailbox a command means", () => {
 })
 
 describe("postboi mailbox", () => {
+	it("new and key pass --ttl to the API", async () => {
+		const { run, server } = harness()
+		expect(await run("new", "--ttl", "1h")).toBe(EXIT.ok)
+		expect(server.requests[0].body).toMatchObject({ ttl: "1h" })
+		expect(await run("key", "--ttl", "10m")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.body).toEqual({ ttl: "10m" })
+	})
 	it("new makes one, prints its address, says where to claim it, and keeps the key 0600", async () => {
 		const { run, out, err, path } = harness()
 		expect(await run("new", "--address", "orders")).toBe(EXIT.ok)
