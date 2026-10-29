@@ -70,6 +70,31 @@ describe("which mailbox a command means", () => {
 })
 
 describe("postboi mailbox", () => {
+	it("disable and enable use the team key; key then renews a revoked remembered credential", async () => {
+		const { run, out, server, path } = harness({ POSTBOI_TOKEN: TEAM_KEY })
+		await run("new")
+		const old_key = read_saved(path)[0].key
+		expect(await run("disable")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)).toMatchObject({ auth: TEAM_KEY, body: { enabled: false } })
+		expect(await run("enable")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)).toMatchObject({ auth: TEAM_KEY, body: { enabled: true } })
+		expect(await run("key")).toBe(EXIT.ok)
+		expect(read_saved(path)[0].key).not.toBe(old_key)
+		expect(out.join("\n")).toContain("issue a new key")
+	})
+
+	it("disable requires a team token", async () => {
+		const { run, err } = harness()
+		expect(await run("disable")).toBe(EXIT.error)
+		expect(err.join("\n")).toContain("POSTBOI_TOKEN")
+	})
+	it("new and key pass --ttl to the API", async () => {
+		const { run, server } = harness()
+		expect(await run("new", "--ttl", "1h")).toBe(EXIT.ok)
+		expect(server.requests[0].body).toMatchObject({ ttl: "1h" })
+		expect(await run("key", "--ttl", "10m")).toBe(EXIT.ok)
+		expect(server.requests.at(-1)?.body).toEqual({ ttl: "10m" })
+	})
 	it("new makes one, prints its address, says where to claim it, and keeps the key 0600", async () => {
 		const { run, out, err, path } = harness()
 		expect(await run("new", "--address", "orders")).toBe(EXIT.ok)

@@ -12,6 +12,12 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
+- GitHub Actions OIDC: set the public `POSTBOI_WORKLOAD_ID` and grant `id-token: write`; `mail()` and `mailbox()` obtain short-lived credentials without a stored Postboi key and refresh them in memory. Trust exact repository/branch and stable repository/owner IDs in the dashboard. Team grants cover email operations; mailbox grants preserve review. `postboi init --github` opens trust setup, and `--workload <id>` writes a workflow without changing existing workflows or writing a key.
+
+- Agent access controls: `Mailbox.set_enabled()` and `postboi mailbox disable|enable` let the team revoke an agent's access while keeping its address and incoming mail. Re-enabling requires a fresh key. Mailboxes expose `enabled`, `disabled_at` and `key_active`; the key command can use the team's token to renew a revoked remembered key.
+
+- `postboi/mailbox`: optional `ttl` on mailbox creation and `rotate({ ttl })`, plus `key_expires_at` as a `Date` or `null`. `postboi mailbox new|key --ttl 1h` requests an expiring key. An expiring mailbox key can rotate without extending its access; the team can renew it. Expired keys report `key_expired`.
+
 - `postboi/inbox` and `postboi/mailbox`: a message carries `otp`, the sender's own [`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header as `{ code, origin, signed }` when it wrote a valid one, and `code` is then that code. `signed` says whether the sender's own DKIM signature covers the header, which a DMARC pass alone doesn't. `null` otherwise. The MCP server's mailbox and temp inbox tools answer it too.
 
 ## 0.76.1

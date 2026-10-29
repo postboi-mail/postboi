@@ -10,7 +10,11 @@ mailbox that receives, reads, replies and sends is in both repos on
 `claude/agent-mailboxes-planning-y0p3hu`. A second round on
 `claude/postboi-agent-mail-gaps-8n9qvh` added folders, labels, search, drafts, review,
 forward, attachments and a local `postboi mcp`; jev's mailbox rubric and the hosted MCP
-server are still to come. [Built so far](#built-so-far) says what shipped and where it parted from the
+server are still to come. [Round three](#round-three-an-identity-not-only-an-inbox) is the
+next round: optional key expiry, credential revocation and the agent disable switch are
+implemented on `feature/agent-key-expiry`, pending deployment. GitHub OIDC exchange is
+implemented too; public leases, hard limits, account inventory and teardown remain
+planned. [Built so far](#built-so-far) says what shipped and where it parted from the
 plan below, and [Before launch](#before-launch) lists the zone and SES steps that only a
 person with the Cloudflare and AWS consoles can take. This document is the source of truth
 for the mailbox work in both repos: read it before starting a phase, and update it when a
@@ -156,6 +160,309 @@ reaches `agentboi.email` until the first two are done.
 3. **Deploy** picks up the `agentboi.email` and `www.agentboi.email` custom domains in
    `wrangler.jsonc`, and the `llms.txt` and `sitemap.xml` renames in `inject_cron.ts`.
    The page's abuse line is `ABUSE_ADDRESS`, shared with tempboi.
+
+---
+
+## Round three: an identity, not only an inbox
+
+**In progress, October 2026.** Steps 1–3 are implemented on `feature/agent-key-expiry`
+in both repos, pending review and deployment (app migrations 0106–0108). The remaining steps are
+planned. Written against Builder.io's
+[Why are we still handing AI agents API keys?](https://www.builder.io/blog/ai-agent-identity),
+which is the clearest statement yet of what the agent-identity threads ask for.
+
+### What the post asks for
+
+Agents run on their owner's credentials, so to every service they _are_ the owner, and a
+long-lived key works from anywhere for whoever holds it until somebody notices. Its
+examples are all one shape: a key copied into `.env`, CI, a gateway and an agent shell,
+then leaked from one of them (Railway, LiteLLM, a $15,400 Gemini bill, METR's $600,000 of
+credits on a key with no cap). What it wants instead:
+
+- the agent has its **own** email, accounts and a card with a hard limit, so revoking it
+  never touches the person;
+- credentials are **short-lived and per task**, made at the start of a job and revoked at
+  the end, and ideally **keyless**: OIDC workload identity, a platform vouching for the
+  job as GitHub Actions does for AWS, Vertex and now OpenAI and Anthropic;
+- **limits the agent can't raise** replace approval prompts, which people approve 93% of
+  the time and then switch off;
+- **teardown** comes in the box.
+
+And: "nothing that bundles inbox, accounts, card, and teardown for a solo developer". The
+enterprise answers (Microsoft, Okta, Google, AWS) are for companies with an IdP.
+
+### Where we already answer it
+
+The inbox is ours: an address in one call with no account, an `mb_…` key that opens one
+mailbox and nothing else by construction, trust labels on what arrives, the review gate
+and drafts, codes and links read out on arrival (`OTP-Token` believed first), the audit
+log naming the mailbox as the actor, and tempboi for the address that should go.
+
+### Where we are the thing it complains about
+
+Before this round, Postboi's own credentials were long-lived keys:
+
+- `pb_…` had no expiry and has two scopes, account and client workspace (`api_keys.ts`).
+- `mb_…` could be rotated and had no expiry (`mailbox_api.ts`, `mint_key`).
+- `postboi init` authorises the device in the browser properly (`/api/cli/start`, `/poll`)
+  and then writes a permanent `pb_` key into `.env`, which is the copy the post's breaches
+  start from. CI then gets the same key as a secret.
+- The local `postboi mcp` reads that key from the environment, so an MCP client's config
+  carries it too.
+
+A mailbox key is also worth more than it looks. **The mailbox is the recovery channel for
+every account the agent signs up for**, so whoever reads it can reset all of them. An
+agent that only needs one sign-in code shouldn't hold a key that reads password resets.
+
+### The order
+
+Ship the following slices separately. Expiry comes first; shared revocation and a basic
+disable switch come before any new way to mint credentials. The account inventory comes
+after the access controls and hosted MCP.
+
+#### 1. Keys that end
+
+- **Optional expiry on both kinds of key.** `api_keys.expires_at` and
+  `mailboxes.key_expires_at`, NULL being never, so existing keys keep working. Set at mint
+  or rotation (dashboard and `postboi mailbox new|key --ttl`), expose the expiry in the API
+  and SDK, and show it on the dashboard. Expired credentials answer 401 `key_expired`;
+  unknown, revoked or rotated credentials keep their existing errors. An expiry equal
+  to now is expired. Expiry gates access through both direct mailbox routes and mailbox
+  discovery, and applies to client workspace keys too.
+- **Rotation is no extension.** An expiring mailbox key may rotate itself, but the new key
+  cannot outlive the old one. Omission preserves the deadline. Only the team can remove
+  or extend it. A mailbox created with an expiring team key inherits at most that key's
+  deadline. Expiry does not delete a mailbox or stop incoming mail.
+- **Leave local sign-in unchanged for this slice.** The current device flow is a
+  single-use exchange with browser approval, not a refresh protocol. Keep `init`'s
+  existing behavior until renewal is implemented. The later default should be an expiring
+  local key with explicit interactive renewal. Unattended renewal needs a separate,
+  revocable refresh credential stored in the OS credential store, rotation and reuse
+  detection, and a credential resolver SDK processes can use; rewriting `.env` does not
+  update a running process.
+- **Acceptance:** migration preserves existing keys; live, boundary-expired, revoked and
+  rotated keys are distinguished correctly; the team's key still opens a mailbox whose
+  own key expired; invalid TTLs are refused without rotating or creating anything; an
+  agent cannot extend its access by rotating or creating a child mailbox.
+
+#### 2. Shared credentials, revocation and an agent disable switch
+
+Implemented in migration 0107, `mailbox_credentials.ts` and the mailbox authorization
+context. The issuance service is internal: no public lease, workload-exchange or OAuth
+endpoint ships in this slice. `read` implies `codes`; `reply` and `send` are independent.
+Derived credentials use an explicit route allowlist and cannot rotate keys, change policy,
+mint credentials or manage a mailbox. Codes-only credentials cannot access body-bearing
+routes; their projections and sender filtering remain step 4.
+
+The team's API key can PATCH `{ enabled: false }` or `{ enabled: true }` on a mailbox.
+The dashboard has the switch, the SDK has `set_enabled`, and the CLI has `disable|enable`.
+Incoming mail, the team's dashboard and team-authorized integrations continue. The switch
+cuts off the agent's credentials and sends from that address. Enabling it requires issuing
+a new primary key and fresh derived credentials/consent grants.
+
+| Event                                  | Primary key                               | Derived credentials                                                                        | Waiting and queued work                                                                                        |
+| -------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Primary key rotates                    | Old key stops immediately                 | Children of that key are revoked; independent team/grant children keep their own authority | Reads reauthenticate; primary-key sends recheck their original key before delivery                             |
+| A credential expires                   | Its requests answer `key_expired`         | Children cannot outlive the parent                                                         | Long polls stop at expiry and reauthenticate before returning; delivery checks current authority               |
+| Parent key or grant is revoked/deleted | Unrelated keys continue                   | Its children stop on the next authorization check                                          | Pending reads reauthenticate; bound sends stop before another transport attempt                                |
+| Agent is disabled                      | Revoked permanently                       | Every credential and authorization grant is revoked atomically                             | Pending reads fail; queued/scheduled work and retries retain an old access version and cannot revive on enable |
+| Agent is enabled                       | Remains revoked until a new key is issued | Old credentials and grants remain revoked                                                  | A newly authorized send may proceed; old work stays blocked                                                    |
+| Mailbox is deleted                     | Stops working; address is retired         | Mailbox state makes all descendants unusable                                               | Delivery refuses the retired address; the team's received-mail history stays                                   |
+
+Send identity is captured when the Sent-log row is inserted, including existing queued
+work migrated in 0107. Retries inherit their original identity and access version. Each
+delivery attempt rechecks, including provider failover and an SES tenant-healing retry.
+A transport already handed off cannot be recalled; this is the boundary of the switch.
+Expired derived key hashes are purged a day after expiry by the nightly job; audit events
+keep the credential id, label, capabilities, safe parent identifier and deadline under the
+audit log's existing 365-day retention. Primary key hashes and bearer secrets never go
+into the audit detail.
+
+Future workload rules and OAuth consents must own a `mailbox_credential_grants` row and
+revoke it when the rule/consent is removed. The next adapters must not issue credentials
+outside this revocation boundary. Derived credentials cannot be parents of another
+credential. Public issuance and protocol validation remain in steps 3, 4 and 6.
+
+The existing mailbox has one key hash. Exchanges and leases must add credentials beside
+it, never replace that hash or accidentally acquire the team's authority.
+
+- Define one authorization context: team, mailbox, capabilities, credential id, issuer
+  trust rule or parent credential, expiry and revocation state. Preserve the structural
+  fence that mailbox credentials cannot authenticate to general team endpoints.
+- Store derived credentials separately, hashed, with explicit lineage. A child cannot
+  outlive or exceed its parent. Check the current mailbox state and parent/trust-rule
+  revocation on use, so revocation cannot leave a previously issued child working.
+- Bring forward the **basic disable switch** from the Members → Agents view. Disabling
+  cuts off primary keys, leases, OAuth grants and sends without deleting the address or
+  touching the team. Re-enabling must not resurrect revoked credentials.
+- Define a lifecycle table covering rotation, expiry, parent revocation, trust-rule removal,
+  disable and teardown, including outstanding long polls and sends already in progress.
+  Recheck before releasing newly arrived credentials and before delivery.
+- Test the same lifecycle through every authorization path. Keep durable audit records
+  after credential secrets and expired credential rows are purged.
+
+#### 3. No permanent key in CI
+
+Implemented for GitHub Actions in migration 0108. Create trust under API keys with the
+dashboard session: exact repository/branch plus required stable repository and owner IDs.
+The audience is unique to the public `wl_…` selector. No bearer-key API creates trust.
+`postboi init --github` hands off to that approval page; with `--workload <id>` it writes
+a manually dispatched workflow containing `id-token: write` and `POSTBOI_WORKLOAD_ID`,
+without changing an existing workflow or storing a key.
+
+The verifier uses GitHub's fixed issuer and JWKS URL, RS256, a ten-minute assertion
+lifetime ceiling and one-minute clock skew. Push, schedule and workflow-dispatch branch
+jobs are accepted; pull requests, pull-request-target, environments and reusable workflows
+are refused in this slice. JWKS cache lifetime is ten minutes, with at most one refresh
+per thirty seconds, including unknown-key misses. Exchange attempts are limited atomically
+per source IP (60/minute) and per verified workload (30/minute). The request body is read
+with a 20 KB streaming cap. Responses and errors are never cached.
+
+One-mailbox trust uses the shared workload grant and selected read/reply/send capabilities.
+Team trust is deliberately **team email operations**, not full account management: an
+explicit route allowlist blocks credentials, mailbox creation and trust/team management.
+This prevents a job turning temporary access into independent bearer credentials. Team
+workload actors still obey mailbox review and cannot approve held drafts. Use `mailbox()`
+for mailbox From addresses; the generic send pipeline refuses an unbound workload send
+from one. `mail()` remains available for ordinary team senders. Provision mailboxes in the
+dashboard before running CI. Revoking trust invalidates issued keys, and disabling a
+mailbox also revokes its trust rules; enabling it does not revive them.
+
+The SDK resolves identity only when no explicit key is present. It keeps runner assertions
+and exchanged keys in memory, coalesces concurrent exchanges, separates job contexts, and
+refreshes two minutes before expiry so a 90-second mailbox poll stays within its lifetime.
+`mailbox.create()` does not fall back to an anonymous mailbox when workload sign-in is
+configured. Local `init` renewal, Vercel and the other provider adapters remain planned.
+
+- `POST /v1/auth/token` exchanges a platform OIDC token for an independent, short-lived
+  credential (one hour by default). Use RFC 8693 request and response fields, including
+  `subject_token`, `subject_token_type`, `access_token`, `token_type` and `expires_in`.
+- **A team trusts a workload, not a provider.** `trusted_workloads` records issuer,
+  audience, an exact subject or explicitly constrained pattern, and its grant. Start
+  with GitHub Actions and exact repository/branch subjects. Prefer stable repository
+  and owner ids as additional constraints where available, so a rename or reclaimed
+  repository name cannot inherit trust. Define fork, pull-request, environment and
+  reusable-workflow behavior before supporting them.
+- Maintain a server-owned allowlist of issuers, algorithms and fixed discovery/JWKS
+  locations. Never fetch a caller-supplied issuer, `jku` or `x5u`. Verify the signature,
+  exact issuer, intended audience, subject, `iat`, `exp` and `nbf` when present, with
+  bounded skew and maximum lifetimes. Bound JWKS caching and refresh on unknown `kid`.
+  Rate-limit exchange and test rejected algorithms, wrong claims and key rotation.
+- Issued credentials name the trust rule in their lineage. Removing the rule revokes
+  existing credentials as well as preventing new exchanges. One-mailbox grants use the
+  mailbox authorization path and keep review and limits; they never become team keys.
+- The SDK obtains and exchanges GitHub's runner token with `id-token: write` and no
+  `POSTBOI_TOKEN`, and caches by issuer, audience, team, workload and grant until shortly
+  before expiry. `postboi init` can configure the workflow and trust rule.
+- Add Vercel next after verifying its current token contract and Marketplace requirements
+  against primary documentation. The Builder.io post's 30 November/January claim is
+  unverified and does not establish a Postboi deadline. Cloudflare and GCP are later
+  adapters, subject to verifying what workload identity each runtime actually supplies.
+
+#### 4. Leases: a credential for one job
+
+- `POST /v1/mailboxes/:id/leases` accepts `ttl`, `can`, optional sender domains and a job
+  label. Cap TTL at a day and the parent's expiry. A lease cannot mint another lease.
+  Capabilities are `codes`, `read`, `reply` and `send`, with explicit implications.
+- **`codes` grants authentication material.** It includes codes and verification links,
+  which may also permit password resets and account recovery. It is less access than
+  reading bodies, but does not promise to distinguish login from reset credentials.
+  The consent and docs must state this.
+- Sender-domain restrictions use authenticated, aligned sender identity, with exact
+  domain/subdomain semantics. A forged From header is insufficient. Enforce filtering
+  and field projection server-side across wait, lists, single messages, threads, search,
+  raw mail, attachments, drafts, account inventory and MCP. Unneeded endpoints are denied;
+  a client-side filter is never an access control.
+- `await using lease = await box.lease({ ttl: "1h", can: ["codes"] })` revokes on normal
+  scope exit; server expiry is the backstop for crashes and lost connections. A long poll
+  cannot return credentials after the lease expires or is revoked. `postboi mailbox lease`
+  prints a credential for a shell.
+- `postboi mcp --lease codes` uses the lease for tool execution. Keep any parent
+  credential outside the agent's environment and tool surface; document that an agent
+  holding the parent can still mint broader access.
+- Store and audit each lease and its parent. Purge expired secrets/rows on a defined
+  schedule while preserving audit identity.
+
+#### 5. Limits the agent can't raise
+
+- Per mailbox: `sends_per_day`, `new_recipients_per_day` and `recipient_domains`.
+  NULL means unrestricted domains; an empty allowlist means no recipients. Only the team
+  or dashboard changes them. No new defaults on existing claimed mailboxes.
+- Refuse an over-limit send with 429 `mailbox_limit` before creating a held draft.
+  Domain refusals identify the policy and have no fictional reset time.
+- **Atomic reservations, not count-then-send.** The Sent log remains the accounting
+  evidence, but concurrent requests need a conditional reservation committed with the
+  send's idempotency identity. Define failures, retries, ambiguous delivery and midnight
+  boundaries so retries cannot double count and parallel sends cannot overspend.
+- Enforce again at the shared delivery boundary, including draft approval, forwards,
+  dashboard sends, scheduled delivery and general send routes that can use the mailbox's
+  From address. Review approval cannot bypass a limit.
+- Count all To, CC and BCC recipients. Define normalization, distinctness and what makes
+  a recipient new (suggested: never successfully contacted by that mailbox before).
+  Reserve new-recipient slots atomically too.
+- A limit reached tells the team once per UTC day through a `limits` notification.
+  Money remains later: until a mailbox can buy anything, sends are the useful unit.
+- Acceptance includes racing sends at the last slot, repeated idempotency keys, a held
+  draft approved after limits change, CC/BCC domain bypasses and ambiguous send outcomes.
+
+#### 6. Hosted MCP signed in with OAuth
+
+- Host `mcp.postboi.app` using better-auth's supported authorization-server capabilities,
+  verifying the deployed version and plugin support first. Each consent names the team,
+  mailbox, capabilities and authentication-material access.
+- Implement the applicable MCP authorization discovery and protected-resource metadata,
+  authorization code flow with PKCE, strict redirect URI validation, resource/audience
+  binding and explicit token lifetimes. Decide whether dynamic client registration is
+  needed and bound registration abuse rather than treating registration as trusted.
+- OAuth access and refresh grants share credential lineage, mailbox disable and
+  revocation semantics. Rotate refresh tokens and detect reuse. Test cross-client,
+  cross-resource and cross-mailbox token rejection and consent revocation.
+- Complete Members → Agents as the view of credentials, leases, trust rules, limits,
+  consent and audit. The basic disable switch already shipped in step 2.
+
+#### 7. Inferred account inventory and teardown
+
+- `mailbox_accounts` records **evidence of a possible account**, not proof of signup or
+  a complete register. Use welcome, verification, reset and receipt mail; keep the source
+  message, authenticated sender, service identity, first/last seen, signal and confidence.
+  Support correction, dismissal and merging. Sender organisational domain alone is not
+  a reliable service id: shared mail providers and several services on one domain exist.
+- Start with rules in `file_into_mailbox`; use jev only with content checks enabled.
+  An unfamiliar reset is an activity signal, not proof of takeover, and does not change
+  sender trust. Show the inventory's limitations in the Accounts tab, SDK and MCP tool.
+- Keep service home/account-management links separate from message-carried verification,
+  recovery and unsubscribe URLs. Those URLs can be credentials; restrict their exposure,
+  define retention and redact them from ordinary logs and inventory exports.
+- `POST /v1/mailboxes/:id/teardown` (team or dashboard) disables access, revokes primary
+  and derived credentials and OAuth grants, removes mailbox trust grants, retires the
+  address, and returns an inventory snapshot of what may remain to close elsewhere.
+  Capture the snapshot before deletion and make retries safe, with a retrievable result
+  if the first response is lost. Define queued sends and retention explicitly.
+- Never follow unsubscribe or verification links automatically. Never claim to close
+  an external account. `postboi mailbox rm --teardown` prints the safe checklist.
+
+#### Smaller
+
+- Text-message codes on the team's own Twilio number can file into a mailbox later
+  (CHANNELS.md). This inherits authentication-material access rules.
+- Sign our own `OTP-Token` on mail we send, and settle the disclosure footer/header
+  decision when writing those headers.
+
+### What we stay out of
+
+The card and payments, browser sessions and "Sign in with Google", and a general identity
+provider. Our ground is the channels an identity is verified and reached through.
+
+### Decisions for implementation
+
+1. `codes` includes verification links and is explicitly authentication-material access.
+2. Store issued credentials with expiry and lineage so they can be revoked and audited.
+3. The inventory may be on by default with clear provenance and correction, but cannot
+   claim completeness or infer account ownership from email alone.
+4. Existing claimed mailboxes keep their current unrestricted limits. Suggest limits
+   when creating one.
+5. Expiry and shared revocation come first. Local renewal, workload exchange, public leases and OAuth remain
+   planned until their own acceptance checks pass.
 
 ---
 

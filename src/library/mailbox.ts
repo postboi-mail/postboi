@@ -2,6 +2,7 @@ import { base64_encode } from "./encoding.js"
 import { ensure_env_loaded, read_env } from "./env.js"
 import { drop, keep, names_address, recall } from "./mailbox_store.js"
 import { PostboiError } from "./errors.js"
+import { workload_configured, workload_token } from "./workload_auth.js"
 import {
 	aborted,
 	duration_ms,
@@ -101,6 +102,10 @@ interface WireMailbox {
 	domain: string
 	key?: string
 	key_prefix: string
+	key_expires_at?: string | null
+	enabled?: boolean
+	disabled_at?: string | null
+	key_active?: boolean
 	claimed: boolean
 	claim_url?: string
 	created: string
@@ -551,6 +556,8 @@ export interface MailboxOptions {
 	domain?: string
 	/** What your team calls a new mailbox. */
 	name?: string
+	/** Lifetime of a new mailbox key: whole seconds or a duration such as "1h" (up to 365d). */
+	ttl?: number | string
 	/** Default `POSTBOI_MAILBOX_URL`, then https://agentboi.email. */
 	base?: string
 	fetch?: typeof fetch
@@ -741,6 +748,12 @@ export class Mailbox {
 	 * it was opened with the team's API key. Rotated by {@link Mailbox.rotate}.
 	 */
 	key: string | undefined
+	/** Primary mailbox key's deadline, or null for a permanent key. */
+	key_expires_at: Date | null
+	/** A disabled agent keeps receiving mail, while its credentials and sends are cut off. */
+	enabled: boolean
+	disabled_at: Date | null
+	key_active: boolean
 	/** False until a person claims it: it receives, and refuses to send. */
 	claimed: boolean
 	/** Where a person claims an unclaimed mailbox. Only on the one that was just made. */
@@ -756,6 +769,7 @@ export class Mailbox {
 	drafts_waiting: number
 	readonly base: string
 	#credential: string
+	#credential_source?: () => Promise<string>
 	readonly #fetch: typeof fetch
 
 	/** @internal */
@@ -765,6 +779,10 @@ export class Mailbox {
 		this.name = wire.name ?? null
 		this.domain = wire.domain
 		this.key = wire.key ?? (credential.startsWith("mb_") ? credential : undefined)
+		this.key_expires_at = wire.key_expires_at ? new Date(wire.key_expires_at) : null
+		this.enabled = wire.enabled ?? true
+		this.disabled_at = wire.disabled_at ? new Date(wire.disabled_at) : null
+		this.key_active = wire.key_active ?? true
 		this.claimed = wire.claimed
 		this.claim_url = wire.claim_url
 		this.created = new Date(wire.created)
@@ -778,12 +796,22 @@ export class Mailbox {
 	}
 
 	#update(wire: WireMailbox): void {
+		this.enabled = wire.enabled ?? true
+		this.disabled_at = wire.disabled_at ? new Date(wire.disabled_at) : null
+		this.key_active = wire.key_active ?? true
+		this.key_expires_at = wire.key_expires_at ? new Date(wire.key_expires_at) : null
 		this.name = wire.name ?? null
 		this.claimed = wire.claimed
 		this.count = wire.count ?? this.count
 		this.cursor = Math.max(this.cursor, wire.cursor ?? 0)
 		this.review = wire.review ?? this.review
 		this.drafts_waiting = wire.drafts_waiting ?? this.drafts_waiting
+	}
+
+	/** @internal Refresh workload credentials without persisting them to mailbox memory. */
+	use_credential_source(source: () => Promise<string>): this {
+		this.#credential_source = source
+		return this
 	}
 
 	/** The address with a plus-tag: `tag("order-1041")` → `orders-k3f9+order-1041@agentboi.email`. */
@@ -802,6 +830,10 @@ export class Mailbox {
 			if (value !== undefined) url.searchParams.set(name, String(value))
 		}
 		const { query: _query, key, ...rest } = init
+		if (!key && this.#credential_source) {
+			this.#credential = await this.#credential_source()
+			this.key = this.#credential.startsWith("mb_") ? this.#credential : undefined
+		}
 		const headers = new Headers(rest.headers)
 		headers.set("authorization", `Bearer ${key ?? this.#credential}`)
 		if (!headers.has("accept")) headers.set("accept", "application/json")
@@ -1185,13 +1217,25 @@ export class Mailbox {
 		return this
 	}
 
-	/** A new key. The old one stops working at once; the new one is on `key` and returned. */
-	async rotate(): Promise<string> {
-		const response = await this.request("/key", { method: "POST" })
+	/** Team key only. Disabling revokes credentials; re-enabling requires a new key. */
+	async set_enabled(enabled: boolean): Promise<this> {
+		const response = await this.#post("", { enabled }, "PATCH")
+		this.#update((await response.json()) as WireMailbox)
+		return this
+	}
+
+	/**
+	 * A new key; the old one stops working at once. Omission keeps the deadline, and a
+	 * mailbox key may only shorten it. The team's key can extend it or set ttl: null.
+	 */
+	async rotate(options: { ttl?: number | string | null } = {}): Promise<string> {
+		const response = await this.#post("/key", options)
 		const wire = (await response.json()) as WireMailbox
 		if (!wire.key) throw new MailboxError({ message: "The API answered without a key", raw: wire })
 		this.key = wire.key
+		this.#update(wire)
 		this.#credential = wire.key
+		this.#credential_source = undefined
 		return wire.key
 	}
 
@@ -1209,6 +1253,10 @@ export class Mailbox {
 			address: this.address,
 			name: this.name,
 			key: this.key,
+			key_expires_at: this.key_expires_at,
+			enabled: this.enabled,
+			disabled_at: this.disabled_at,
+			key_active: this.key_active,
 			claimed: this.claimed,
 			claim_url: this.claim_url,
 			review: this.review,
@@ -1234,15 +1282,36 @@ function timed_out(cursor: number): MailboxTimeoutError {
 	return new MailboxTimeoutError("No mail arrived in time", cursor)
 }
 
+function workload_scope_error(): MailboxError {
+	return new MailboxError({
+		code: "workload_scope",
+		message:
+			"Workload sign-in opens existing mailboxes. Create the mailbox in the dashboard first.",
+	})
+}
+
+/**
+ * A team workload's mailbox: found as the team's key finds one, but never made, because a
+ * workload credential may not create mailboxes (the server refuses it, and this says why).
+ */
+async function workload_team_box(options: MailboxOptions & { token: string }): Promise<Mailbox> {
+	const found = await find(options)
+	if (found) return found
+	if (options.address?.includes("@")) return open(options)
+	throw workload_scope_error()
+}
+
 async function make(options: MailboxOptions): Promise<Mailbox> {
 	await ensure_env_loaded()
 	const base = base_url(options.base)
 	const fetcher = options.fetch ?? globalThis.fetch
 	const token = options.token ?? read_env("POSTBOI_TOKEN")
+	if (!token && workload_configured()) throw workload_scope_error()
 	const body: Record<string, unknown> = {}
 	if (options.address) body.address = options.address
 	if (options.domain) body.domain = options.domain
 	if (options.name) body.name = options.name
+	if (options.ttl !== undefined) body.ttl = options.ttl
 	const headers: Record<string, string> = {
 		"content-type": "application/json",
 		accept: "application/json",
@@ -1364,6 +1433,38 @@ async function resolve(call: MailboxCall = {}): Promise<Mailbox> {
 	}
 	const base = base_url(options.base)
 	const remembering = options.remember !== false
+	const fetcher = options.fetch ?? globalThis.fetch
+	const auth_base = read_env("POSTBOI_API_URL") ?? "https://postboi.app"
+	const workload = await workload_token(auth_base, fetcher)
+	if (workload) {
+		if (
+			workload.mailbox &&
+			options.address &&
+			!names_address(workload.mailbox.address, options.address) &&
+			options.address !== workload.mailbox.id
+		)
+			throw new MailboxError({
+				code: "workload_scope",
+				message: "This workload grants a different mailbox.",
+			})
+		const box = workload.mailbox
+			? await open({ ...options, key: workload.access_token, address: workload.mailbox.address })
+			: await workload_team_box({ ...options, token: workload.access_token })
+		return box.use_credential_source(async () => {
+			const next = await workload_token(auth_base, fetcher)
+			if (
+				!next ||
+				next.workload_id !== workload.workload_id ||
+				next.account_id !== workload.account_id ||
+				next.mailbox?.id !== workload.mailbox?.id
+			)
+				throw new MailboxError({
+					code: "workload_changed",
+					message: "The workload identity changed. Open the mailbox again.",
+				})
+			return next.access_token
+		})
+	}
 	if (remembering) {
 		const saved = await recall(base, options.address)
 		if (saved) {
@@ -1371,7 +1472,11 @@ async function resolve(call: MailboxCall = {}): Promise<Mailbox> {
 				return await open({ key: saved.key, base, fetch: options.fetch })
 			} catch (error) {
 				// Rotated or deleted somewhere else: forget it and make another.
-				if (!(error instanceof MailboxError && error.status === 401)) throw error
+				if (
+					!(error instanceof MailboxError && error.status === 401) ||
+					error.code === "key_expired"
+				)
+					throw error
 				await drop(saved.address)
 			}
 		}

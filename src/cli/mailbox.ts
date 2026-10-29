@@ -28,6 +28,7 @@ import {
 	write_atomically,
 	type SavedMailbox,
 } from "../library/mailbox_store.js"
+import { PostboiError } from "../library/errors.js"
 import { EXIT, parse_match } from "./inbox.js"
 import { help_text } from "./help.js"
 import { bold, cyan, dim, green, red, yellow } from "./prompts.js"
@@ -47,6 +48,7 @@ export type { SavedMailbox }
 type Env = Record<string, string | undefined>
 
 const VALUE_FLAGS = new Set([
+	"ttl",
 	"address",
 	"name",
 	"domain",
@@ -260,6 +262,13 @@ function trust_flag(ctx: Context): Trust | undefined {
 }
 
 async function open(ctx: Context, address?: string): Promise<Mailbox> {
+	if (ctx.env.POSTBOI_WORKLOAD_ID && !ctx.env.POSTBOI_TOKEN && !ctx.env.POSTBOI_MAILBOX_KEY)
+		return open_or_make({
+			address: flag(ctx, "mailbox") ?? address,
+			base: ctx.env.POSTBOI_MAILBOX_URL,
+			fetch: ctx.fetch,
+			remember: false,
+		})
 	const picked = pick_mailbox(read_saved(ctx.path), ctx.env, flag(ctx, "mailbox") ?? address)
 	if ("error" in picked) throw new MailboxCommandError(picked.error, picked.code)
 	if ("token" in picked) {
@@ -280,7 +289,14 @@ async function open(ctx: Context, address?: string): Promise<Mailbox> {
 	const box = await open_or_make
 		.open({ key: picked.key, base: picked.base, fetch: ctx.fetch })
 		.catch((error: unknown) => {
-			if (error instanceof MailboxError && error.status === 401 && picked.address)
+			// Rotated or deleted somewhere else; an expired key keeps its address, which the
+			// team's key can renew with `postboi mailbox key`.
+			if (
+				error instanceof MailboxError &&
+				error.status === 401 &&
+				error.code !== "key_expired" &&
+				picked.address
+			)
 				forget(ctx.path, picked.address)
 			throw error
 		})
@@ -306,6 +322,7 @@ async function create(ctx: Context): Promise<number> {
 	const box = await open_or_make.create({
 		address: flag(ctx, "address") ?? ctx.args.positional[0],
 		name: flag(ctx, "name"),
+		ttl: flag(ctx, "ttl"),
 		domain: flag(ctx, "domain"),
 		token: ctx.env.POSTBOI_TOKEN || undefined,
 		base: ctx.env.POSTBOI_MAILBOX_URL || undefined,
@@ -843,14 +860,50 @@ async function review(ctx: Context): Promise<number> {
 }
 
 async function rotate(ctx: Context): Promise<number> {
-	const box = await open(ctx, ctx.args.positional[0])
-	const key = await box.rotate()
+	const box = ctx.env.POSTBOI_TOKEN ? await open_team(ctx) : await open(ctx, ctx.args.positional[0])
+	const key = await box.rotate({ ttl: flag(ctx, "ttl") })
 	save(ctx, box)
-	if (ctx.json) ctx.out(JSON.stringify({ address: box.address, key }))
+	if (ctx.json)
+		ctx.out(JSON.stringify({ address: box.address, key, key_expires_at: box.key_expires_at }))
 	else {
 		ctx.out(key)
 		ctx.err(dim("The old key stopped working just now. This one is saved on this machine."))
 	}
+	return EXIT.ok
+}
+
+async function open_team(ctx: Context): Promise<Mailbox> {
+	if (!ctx.env.POSTBOI_TOKEN)
+		throw new MailboxError({
+			code: "team_key_required",
+			message: "Enabling or disabling an agent needs your team's POSTBOI_TOKEN.",
+		})
+	const address = ctx.args.positional[0] ?? flag(ctx, "mailbox") ?? read_saved(ctx.path)[0]?.address
+	// Found as every other command finds it, so a name (`support`) or the team's only
+	// mailbox works here too: the server opens a mailbox by its id or whole address alone.
+	const found = await open_or_make.find({
+		token: ctx.env.POSTBOI_TOKEN,
+		address,
+		base: ctx.env.POSTBOI_MAILBOX_URL || undefined,
+		fetch: ctx.fetch,
+	})
+	if (found) return found
+	throw new MailboxCommandError(
+		address
+			? `Your team has no mailbox ${address}.`
+			: "Your team has no mailboxes yet. Make one with `postboi mailbox new`.",
+		address ? "unknown_mailbox" : "no_mailbox"
+	)
+}
+
+async function set_enabled(ctx: Context, enabled: boolean): Promise<number> {
+	const box = await open_team(ctx)
+	await box.set_enabled(enabled)
+	if (ctx.json) ctx.out(JSON.stringify(box))
+	else
+		ctx.out(
+			`${box.address}: ${enabled ? "enabled; issue a new key to reconnect" : "disabled; credentials revoked, incoming mail continues"}`
+		)
 	return EXIT.ok
 }
 
@@ -908,6 +961,8 @@ const COMMANDS: Record<string, (ctx: Context) => Promise<number>> = {
 	forward,
 	review,
 	key: rotate,
+	enable: (ctx) => set_enabled(ctx, true),
+	disable: (ctx) => set_enabled(ctx, false),
 	ls: list,
 	list,
 	rm: remove,
@@ -955,7 +1010,7 @@ export async function mailbox_command(
 		if (!run) {
 			report(
 				ctx,
-				`Unknown mailbox command: ${parsed.sub}. Try new, watch, wait, read, reply, send, forward, threads, archive, label, labels, drafts, draft, review, key, ls or rm.`,
+				`Unknown mailbox command: ${parsed.sub}. Try new, watch, wait, read, reply, send, forward, threads, archive, label, labels, drafts, draft, review, key, enable, disable, ls or rm.`,
 				"invalid_args"
 			)
 			return EXIT.error
@@ -964,7 +1019,7 @@ export async function mailbox_command(
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error)
 		const code =
-			error instanceof MailboxError || error instanceof MailboxCommandError
+			error instanceof PostboiError || error instanceof MailboxCommandError
 				? (error.code as string | undefined)
 				: undefined
 		const fallback: Context = {

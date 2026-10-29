@@ -29,6 +29,74 @@ function setup() {
 }
 
 describe("making and opening a mailbox", () => {
+	it("only the team disables an agent, and enabling never revives its old key", async () => {
+		const { server, options } = setup()
+		const agent = await mailbox.create({ ...options, token: TEAM_KEY })
+		await expect(agent.set_enabled(false)).rejects.toMatchObject({ code: "team_key_required" })
+		const team = await mailbox.open({ ...options, token: TEAM_KEY, address: agent.address })
+		await team.set_enabled(false)
+		expect(team.enabled).toBe(false)
+		expect(team.disabled_at).toBeInstanceOf(Date)
+		expect(team.key_active).toBe(false)
+		await expect(agent.info()).rejects.toMatchObject({ code: "mailbox_disabled" })
+		await team.set_enabled(true)
+		expect(team.enabled).toBe(true)
+		expect(team.key_active).toBe(false)
+		await expect(agent.info()).rejects.toMatchObject({ code: "invalid_token" })
+		await team.rotate()
+		expect(team.key_active).toBe(true)
+		expect(server.requests.filter((request) => request.method === "PATCH").at(-1)?.body).toEqual({
+			enabled: true,
+		})
+	})
+	it("sends key lifetimes and reads their deadlines on creation and rotation", async () => {
+		const { server, options } = setup()
+		const expires_at = "2027-01-01T12:00:00.000Z"
+		const fetcher: typeof fetch = async (input, init) => {
+			const response = await server.fetch(input, init)
+			const body = await response.json()
+			return Response.json({ ...body, key_expires_at: expires_at }, { status: response.status })
+		}
+		const box = await mailbox.create({ ...options, fetch: fetcher, ttl: "1h" })
+		expect(server.requests[0].body).toMatchObject({ ttl: "1h" })
+		expect(box.key_expires_at).toEqual(new Date(expires_at))
+		await box.rotate({ ttl: 600 })
+		expect(server.requests.at(-1)?.body).toEqual({ ttl: 600 })
+		expect(box.key_expires_at?.toISOString()).toBe(expires_at)
+		await box.rotate()
+		expect(server.requests.at(-1)?.body).toEqual({})
+	})
+
+	it("preserves key_expired from the server", async () => {
+		const fetcher: typeof fetch = async () =>
+			Response.json(
+				{ code: "key_expired", message: "Ask your team for a new key." },
+				{ status: 401 }
+			)
+		await expect(mailbox.open({ key: "mb_old", fetch: fetcher })).rejects.toMatchObject({
+			code: "key_expired",
+			status: 401,
+		})
+	})
+
+	it("keeps a remembered mailbox when its key expires instead of making a different address", async () => {
+		const { server, options } = setup()
+		let expired = false
+		const fetcher: typeof fetch = async (input, init) =>
+			expired
+				? Response.json(
+						{ code: "key_expired", message: "Ask your team for a new key." },
+						{ status: 401 }
+					)
+				: server.fetch(input, init)
+		await mailbox({ ...options, fetch: fetcher })
+		expired = true
+		await expect(mailbox({ ...options, fetch: fetcher })).rejects.toMatchObject({
+			code: "key_expired",
+		})
+		expect(server.requests.filter((request) => request.method === "POST")).toHaveLength(1)
+		expect(readFileSync(join(config, "postboi", "mailboxes.json"), "utf8")).toContain("mb_key1")
+	})
 	it("with nothing set, makes one of its own: unclaimed, with its key and a claim link", async () => {
 		const { server, options } = setup()
 		const box = await mailbox({ ...options, address: "orders" })
