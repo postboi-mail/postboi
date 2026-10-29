@@ -3,10 +3,11 @@ import { join } from "node:path"
 import { cwd, env } from "node:process"
 import { execFileSync } from "node:child_process"
 import { open_browser } from "./postboi.js"
+import { WORKLOAD_ID } from "../library/workload_auth.js"
 
 /** A manually dispatched job: no stored Postboi key and no unattended trust creation. */
 export function github_workflow(workload_id: string, command = "bun run test"): string {
-	if (!/^wl_[a-zA-Z0-9]+$/.test(workload_id))
+	if (!WORKLOAD_ID.test(workload_id))
 		throw new Error("Use the public workload ID from your team's API keys page.")
 	return `name: Postboi workload identity\non:\n  workflow_dispatch:\npermissions:\n  contents: read\n  id-token: write\njobs:\n  postboi:\n    runs-on: ubuntu-latest\n    env:\n      POSTBOI_WORKLOAD_ID: ${workload_id}\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          persist-credentials: false\n      - uses: oven-sh/setup-bun@v2\n      - run: bun install\n      - run: ${JSON.stringify(command)}\n`
 }

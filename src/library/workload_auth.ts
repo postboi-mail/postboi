@@ -10,6 +10,9 @@ export interface WorkloadToken {
 	mailbox?: { id: string; address: string }
 }
 
+/** A public workload ID, as the team's API keys page shows it. */
+export const WORKLOAD_ID = /^wl_[a-zA-Z0-9]+$/
+
 const cache = new Map<string, { until: number; value: Promise<WorkloadToken> }>()
 const GRANT = "urn:ietf:params:oauth:grant-type:token-exchange"
 const ID_TOKEN = "urn:ietf:params:oauth:token-type:id_token"
@@ -30,7 +33,7 @@ export async function workload_token(
 ): Promise<WorkloadToken | undefined> {
 	const id = get("POSTBOI_WORKLOAD_ID")
 	if (!id) return undefined
-	if (!/^wl_[a-zA-Z0-9]+$/.test(id))
+	if (!WORKLOAD_ID.test(id))
 		throw refused("POSTBOI_WORKLOAD_ID must be a workload ID from your team's API keys page.")
 	if (get("GITHUB_ACTIONS") !== "true")
 		throw refused(
@@ -113,12 +116,22 @@ export async function workload_token(
 					audience,
 				}),
 			})
-			if (!response.ok)
+			if (!response.ok) {
+				// The exchange answers OAuth's `{ error, error_description }`; a rate limit or an
+				// outage is not a trust rule to go and check.
+				const said = (await response.json().catch(() => undefined)) as
+					| { error_description?: unknown }
+					| undefined
+				const description =
+					typeof said?.error_description === "string" ? ` ${said.error_description}` : ""
 				throw refused(
-					"Postboi refused this workload. Check its repository, branch, stable IDs and active trust rule.",
+					response.status === 429 || response.status >= 500
+						? `Postboi could not exchange this workload's identity right now.${description}`
+						: `Postboi refused this workload. Check its repository, branch, stable IDs and active trust rule.${description}`,
 					"workload_auth_failed",
 					response.status
 				)
+			}
 			const body = (await response.json()) as Record<string, unknown>
 			const mailbox = body.mailbox as WorkloadToken["mailbox"]
 			if (
@@ -138,7 +151,9 @@ export async function workload_token(
 			)
 				throw refused("Postboi returned an invalid workload credential.")
 			const expires_at = Date.now() + body.expires_in * 1000
-			entry.until = expires_at - 120_000 // Longer than a mailbox's 90s long poll.
+			// Refreshed with more left than a mailbox's 90s long poll needs, but never before
+			// half its life: a short-lived grant would otherwise re-exchange on every request.
+			entry.until = expires_at - Math.min(120_000, (body.expires_in * 1000) / 2)
 			return {
 				access_token: body.access_token,
 				expires_at,

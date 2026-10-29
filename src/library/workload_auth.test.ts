@@ -190,6 +190,22 @@ describe("GitHub workload credentials", () => {
 		})
 	})
 
+	it("a team workload opens an existing mailbox and never tries to make one", async () => {
+		const s = setup()
+		s.activate()
+		const posts: Array<string> = []
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const url = new URL(input instanceof Request ? input.url : input.toString())
+			if (url.pathname === "/v1/mailboxes") {
+				if (init?.method === "POST") posts.push(url.pathname)
+				return Response.json({ data: [] })
+			}
+			return s.fetcher(input, init)
+		})
+		await expect(mailbox({ remember: false })).rejects.toMatchObject({ code: "workload_scope" })
+		expect(posts).toEqual([])
+	})
+
 	it("explicit keys take precedence and never request workload identity", async () => {
 		const s = setup()
 		s.activate()

@@ -1282,17 +1282,31 @@ function timed_out(cursor: number): MailboxTimeoutError {
 	return new MailboxTimeoutError("No mail arrived in time", cursor)
 }
 
+function workload_scope_error(): MailboxError {
+	return new MailboxError({
+		code: "workload_scope",
+		message:
+			"Workload sign-in opens existing mailboxes. Create the mailbox in the dashboard first.",
+	})
+}
+
+/**
+ * A team workload's mailbox: found as the team's key finds one, but never made, because a
+ * workload credential may not create mailboxes (the server refuses it, and this says why).
+ */
+async function workload_team_box(options: MailboxOptions & { token: string }): Promise<Mailbox> {
+	const found = await find(options)
+	if (found) return found
+	if (options.address?.includes("@")) return open(options)
+	throw workload_scope_error()
+}
+
 async function make(options: MailboxOptions): Promise<Mailbox> {
 	await ensure_env_loaded()
 	const base = base_url(options.base)
 	const fetcher = options.fetch ?? globalThis.fetch
 	const token = options.token ?? read_env("POSTBOI_TOKEN")
-	if (!token && workload_configured())
-		throw new MailboxError({
-			code: "workload_scope",
-			message:
-				"Workload sign-in opens existing mailboxes. Create the mailbox in the dashboard first.",
-		})
+	if (!token && workload_configured()) throw workload_scope_error()
 	const body: Record<string, unknown> = {}
 	if (options.address) body.address = options.address
 	if (options.domain) body.domain = options.domain
@@ -1435,7 +1449,7 @@ async function resolve(call: MailboxCall = {}): Promise<Mailbox> {
 			})
 		const box = workload.mailbox
 			? await open({ ...options, key: workload.access_token, address: workload.mailbox.address })
-			: await resolve({ ...options, token: workload.access_token })
+			: await workload_team_box({ ...options, token: workload.access_token })
 		return box.use_credential_source(async () => {
 			const next = await workload_token(auth_base, fetcher)
 			if (
