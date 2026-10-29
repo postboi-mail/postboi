@@ -1,4 +1,11 @@
-import { fail, isActionFailure, type RequestEvent, type ActionFailure } from "@sveltejs/kit"
+import {
+	fail,
+	isActionFailure,
+	isHttpError,
+	isRedirect,
+	type RequestEvent,
+	type ActionFailure,
+} from "@sveltejs/kit"
 // Type-only: `form` itself comes from `sveltekit`, which kit.ts fills in under Vite. This
 // module never imports `$app/server`, so a plain `bun test` can import it (see kit.ts).
 import type { form as sveltekit_form, RemoteForm, RemoteFormInput } from "$app/server"
@@ -65,9 +72,10 @@ export type ActionOptions = ActionFields & {
 
 /**
  * What an action's resolver returns: {@link ActionOptions}, plus `after`, run once the email has
- * gone. Whatever it returns is merged into the action's result, `{ success: true, link }` say.
- * It doesn't run for a bot or a send that failed, and one that throws is your error rather than
- * a failed send, so it isn't caught.
+ * gone. The object it returns is merged into the action's result, `{ success: true, link }` say.
+ * It doesn't run for a bot or a send that failed, and an error it throws isn't caught: the email
+ * has already gone. Read a `_` field it needs in the resolver itself, since one the resolver read
+ * has been taken out of the post by the time `after` runs.
  */
 export type ResolvedOptions<R = object> = ActionOptions & { after?: () => R | Promise<R> }
 
@@ -202,14 +210,14 @@ async function resolve<
  * }
  * ```
  */
-export function action<F = { error: string }, R = object>(
+export function action<F = { error: string }, R extends object | void = object>(
 	options?: ActionOptions | Resolver<ResolvedOptions<R>, F>
 ): FormAction<F, R>
-export function action<F = { error: string }, R = object>(
+export function action<F = { error: string }, R extends object | void = object>(
 	mailer: Mailer,
 	options?: ActionOptions | Resolver<ResolvedOptions<R>, F>
 ): FormAction<F, R>
-export function action<F, R>(
+export function action<F, R extends object | void>(
 	a?: Mailer | ActionOptions | Resolver<ResolvedOptions<R>, F>,
 	b?: ActionOptions | Resolver<ResolvedOptions<R>, F>
 ): FormAction<F, R> {
@@ -240,6 +248,8 @@ export function action<F, R>(
 				captcha: with_remoteip(fields.captcha, event),
 			} as SendOptions)
 		} catch (error) {
+			// Kit's own `redirect()` and `error()` from a resolver are the route's to answer.
+			if (isRedirect(error) || isHttpError(error)) throw error
 			// A tripped honeypot pretends to succeed — no email is sent, and the bot learns nothing.
 			if (is_spam(error)) return { success: true }
 			return fail(status, { error: is_error(error) ? error.message : String(error) })

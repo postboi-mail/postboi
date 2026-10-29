@@ -300,10 +300,11 @@ export const actions = {
   send from, with `from_not_allowed`).
 - Return `after` with the options for work that should only happen once the email has gone:
   filing the enquiry in a CRM, subscribing the visitor, working out where to send them next.
-  What it returns is merged into the action's result, so `after: async () => ({ link })`
+  The object it returns is merged into the action's result, so `after: async () => ({ link })`
   gives the page `{ success: true, link }`. It doesn't run for a bot, whether the honeypot or
-  the captcha stopped it, or for a send that failed, and one that throws is your error rather
-  than a failed send, so it isn't caught.
+  the captcha stopped it, or for a send that failed. An error it throws isn't caught, because
+  the email has already gone. Read any `_` field it needs in the resolver itself: one the
+  resolver read is out of the post by the time `after` runs.
 
 ```typescript
 export const actions = {
