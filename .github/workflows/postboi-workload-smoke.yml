@@ -1,0 +1,22 @@
+name: Postboi workload smoke
+on:
+  push:
+    branches: [workload-smoke, workload-smoke-untrusted]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      POSTBOI_WORKLOAD_ID: WORKLOAD_ID_HERE
+      SMOKE_MAILBOX: SMOKE_MAILBOX_HERE
+      SMOKE_EXPECT: ${{ github.ref_name == 'workload-smoke' && 'ok' || 'refused' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun scripts/workload_smoke.ts
