@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { fail } from "@sveltejs/kit"
+import { fail, redirect } from "@sveltejs/kit"
 import * as v from "valibot"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
-import { action, mail, remote, remote_form_data, webhook } from "#library/kit.js"
+import { SpamError, action, mail, remote, remote_form_data, webhook } from "#library/kit.js"
 import Postboi from "#library/postboi_provider.js"
 import { mail as send } from "#library/mail.js"
 import Mock from "#library/mock.js"
@@ -223,6 +223,86 @@ describe("postboi/kit action() with a resolver", () => {
 
 		expect(result).toMatchObject({ status: 422, data: { missing: "email" } })
 		expect(provider.sent).toHaveLength(0)
+	})
+
+	it("runs after once the email has gone, and merges what it returns", async () => {
+		const provider = new Mock(defaults)
+		const seen: Array<number> = []
+		const result = await action(provider, () => ({
+			after: async () => {
+				seen.push(provider.sent.length)
+				return { link: "https://example.com/yours", success: false }
+			},
+		}))(event({ name: "Ada" }))
+
+		// `success` is the send's to say, so after can't overrule it
+		expect(result).toEqual({ success: true, link: "https://example.com/yours" })
+		expect(seen).toEqual([1])
+	})
+
+	it("doesn't run after for a bot or a send that failed", async () => {
+		const after = vi.fn()
+		const bot = new Mock(defaults)
+		expect(await action(bot, () => ({ after }))(event({ _honey: "cheap pills" }))).toEqual({
+			success: true,
+		})
+
+		const failing = new Mock() // no from or to, so the send throws
+		const result = await action(failing, () => ({ after }))(event({ name: "Ada" }))
+		expect(result).toMatchObject({ status: 400 })
+		expect(after).not.toHaveBeenCalled()
+	})
+
+	it("doesn't run after when the send itself turns out to be spam", async () => {
+		const after = vi.fn()
+		const mailer = {
+			send: async () => {
+				throw new SpamError()
+			},
+		}
+		expect(await action(mailer, () => ({ after }))(event({ name: "Ada" }))).toEqual({
+			success: true,
+		})
+		expect(after).not.toHaveBeenCalled()
+	})
+
+	it("lets a redirect thrown by the resolver through, rather than calling it a failed send", async () => {
+		const provider = new Mock(defaults)
+		const built = action(provider, () => {
+			redirect(303, "/thanks")
+		})
+		await expect(built(event({ name: "Ada" }))).rejects.toMatchObject({
+			status: 303,
+			location: "/thanks",
+		})
+		expect(provider.sent).toHaveLength(0)
+	})
+
+	it("leaves an after that throws uncaught: it's the site's error, not a failed send", async () => {
+		const provider = new Mock(defaults)
+		const built = action(provider, () => ({
+			after: () => {
+				throw new Error("OpenApply is down")
+			},
+		}))
+		await expect(built(event({ name: "Ada" }))).rejects.toThrow("OpenApply is down")
+		expect(provider.sent).toHaveLength(1)
+	})
+
+	it("types: the result carries what after returns", async () => {
+		const provider = new Mock(defaults)
+		const result = await action(provider, () => ({ after: () => ({ link: "x" }) }))(
+			event({ name: "Ada" })
+		)
+		if ("success" in result) {
+			const link: string | undefined = result.link
+			expect(link).toBe("x")
+		} else throw new Error("expected success")
+
+		// A string would be spread into the result a character at a time, so only an object is merged
+		// @ts-expect-error after has to return an object, or nothing
+		void action(provider, () => ({ after: () => "https://example.com/yours" }))
+		void action(provider, () => ({ after: async () => {} }))
 	})
 
 	it("keeps a _ field the resolver read out of the email, and only that one", async () => {
