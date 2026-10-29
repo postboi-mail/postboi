@@ -75,6 +75,7 @@ describe("package exports", () => {
 			"inbox_poom.ts", // POOM.EXE's Freedoom weapon sprites, served by inbox_server.ts
 			"views.ts", // the views SDK (publish, seal, url), re-exported from the root
 			"idempotency.ts", // the idempotency store, re-exported from the root
+			"workload_auth.ts", // internal GitHub workload credential resolver, shared by mail and mailbox
 		])
 		// Channel providers live in subdirectories (`sms/`), so scan those too — otherwise a
 		// new provider could ship with no exports entry and nothing would notice.

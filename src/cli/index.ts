@@ -10,6 +10,7 @@ import {
 import { spawnSync } from "node:child_process"
 import { join, delimiter, dirname } from "node:path"
 import { argv, cwd, exit, platform, env, stdin } from "node:process"
+import { github_init } from "./github.js"
 import {
 	PROVIDERS,
 	SMS_PROVIDERS,
@@ -2180,6 +2181,7 @@ async function main(): Promise<void> {
 	const command = argv[2]
 	if (command === "-V" || command === "--version") return console.log(version())
 	if (command === "init") {
+		if (argv.includes("--github")) return github_init(argv.slice(3))
 		const channel = (["sms", "chat", "push", "whatsapp"] as const).find((c) =>
 			argv.includes(`--${c}`)
 		)

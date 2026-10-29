@@ -95,6 +95,8 @@ interface FakeMailbox {
 	sent: Array<FakeSent>
 	seq: number
 	deleted: boolean
+	disabled_at: string | null
+	key_revoked: boolean
 	listeners: Set<() => void>
 	review: Review
 	threads: Map<string, FakeThreadState>
@@ -142,6 +144,9 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			domain: box.address.split("@")[1],
 			...(key ? { key } : {}),
 			key_prefix: box.key.slice(0, 10),
+			enabled: !box.disabled_at,
+			disabled_at: box.disabled_at,
+			key_active: !box.disabled_at && !box.key_revoked,
 			claimed: box.team !== null,
 			...(key && !box.team ? { claim_url: `${base}/claim/${box.id}` } : {}),
 			created: box.created,
@@ -379,6 +384,8 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 				(candidate) => candidate.key === auth && !candidate.deleted
 			)
 			if (!own) return refuse(401, "invalid_token", "Invalid, rotated or deleted mailbox key.")
+			if (own.disabled_at) return refuse(403, "mailbox_disabled", "This agent is disabled.")
+			if (own.key_revoked) return refuse(401, "invalid_token", "This key is revoked.")
 			if (own !== box) return refuse(404, "not_found", "No such mailbox.")
 			return own
 		}
@@ -479,6 +486,8 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 				sent: [],
 				seq: 0,
 				deleted: false,
+				disabled_at: null,
+				key_revoked: false,
 				listeners: new Set(),
 				review: "none",
 				threads: new Map(),
@@ -492,6 +501,8 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 		if (parts.length === 2 && method === "GET") {
 			if (auth?.startsWith("mb_")) {
 				const own = [...boxes.values()].find((box) => box.key === auth && !box.deleted)
+				if (own?.disabled_at) return refuse(403, "mailbox_disabled", "This agent is disabled.")
+				if (own?.key_revoked) return refuse(401, "invalid_token", "This key is revoked.")
 				return own ? json(200, wire(own)) : refuse(401, "invalid_token", "Invalid key.")
 			}
 			if (auth !== TEAM_KEY) return refuse(401, "invalid_token", "Invalid key.")
@@ -505,10 +516,24 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 		const box = opened(auth, parts[2])
 		if (box instanceof Response) return box
 		const rest = parts.slice(3)
+		if (
+			box.disabled_at &&
+			method === "POST" &&
+			(rest[0] === "send" || rest[2] === "reply" || rest[2] === "forward" || rest[2] === "send")
+		)
+			return refuse(403, "mailbox_disabled", "This agent is disabled.")
 
 		if (rest.length === 0) {
 			if (method === "GET") return json(200, wire(box))
 			if (method === "PATCH") {
+				if (body && "enabled" in body) {
+					if (auth !== TEAM_KEY)
+						return refuse(403, "team_key_required", "Only the team enables or disables an agent.")
+					if (typeof body.enabled !== "boolean")
+						return refuse(400, "invalid_request", "enabled must be a boolean.")
+					box.disabled_at = body.enabled ? null : new Date().toISOString()
+					if (!body.enabled) box.key_revoked = true
+				}
 				if (body && "review" in body) {
 					if (auth?.startsWith("mb_"))
 						return refuse(403, "team_key_required", "Only the team changes who reviews.")
@@ -527,8 +552,11 @@ export function fake_agentboi(options: { base?: string; scale?: number } = {}) {
 			}
 		}
 		if (rest[0] === "key" && method === "POST") {
+			if (box.disabled_at)
+				return refuse(403, "mailbox_disabled", "Enable this agent before issuing a key.")
 			counter += 1
 			box.key = `mb_rotated${counter}`
+			box.key_revoked = false
 			return json(200, wire(box, box.key))
 		}
 		if (rest[0] === "messages" && rest.length === 1) {

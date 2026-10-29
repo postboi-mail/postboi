@@ -103,7 +103,9 @@ let announced_inbox = false
 /** The provider `mail()` sends with: `POSTBOI_PROVIDER`, the config's `provider`, or a token. */
 function provider_key(config: PostboiConfig, get: typeof read_env): string | undefined {
 	return (
-		get("POSTBOI_PROVIDER") ?? config.provider ?? (get("POSTBOI_TOKEN") ? "postboi" : undefined)
+		get("POSTBOI_PROVIDER") ??
+		config.provider ??
+		(get("POSTBOI_TOKEN") || get("POSTBOI_WORKLOAD_ID") ? "postboi" : undefined)
 	)
 }
 
@@ -211,7 +213,7 @@ export async function resolve_provider({
 	// log the mail instead of failing and let the app code stay unconditional. Anywhere
 	// else it is a broken deploy: throw, because a magic link or receipt that silently
 	// becomes a console line locks people out with no error anywhere.
-	if (!key || (key === "postboi" && !get("POSTBOI_TOKEN"))) {
+	if (!key || (key === "postboi" && !get("POSTBOI_TOKEN") && !get("POSTBOI_WORKLOAD_ID"))) {
 		if (is_development()) {
 			if (!warned_dev_fallback) {
 				warned_dev_fallback = true
@@ -271,6 +273,13 @@ export async function resolve_provider({
 	// The Postboi provider reads POSTBOI_TOKEN itself, so a token that arrived as an
 	// override rather than in the environment has to be handed to it.
 	if (key === "postboi" && env.POSTBOI_TOKEN !== undefined) options.token = env.POSTBOI_TOKEN
+	if (
+		key === "postboi" &&
+		env.POSTBOI_WORKLOAD_ID !== undefined &&
+		env.POSTBOI_TOKEN === undefined
+	) {
+		options.workload_env = env
+	}
 
 	const Provider = await load()
 	return new Provider(options)

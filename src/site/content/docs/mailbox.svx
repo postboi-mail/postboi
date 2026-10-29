@@ -13,7 +13,48 @@ Postboi, the same provider as the rest of these docs.
 
 ## Make one
 
-There's nothing to set up. With the `POSTBOI_TOKEN` that `postboi init` wrote, the mailbox is
+### GitHub Actions without a stored key
+
+On the team's **API keys** page, trust an exact GitHub repository and branch with its
+stable repository and owner IDs. Choose a mailbox and its read, reply and send permissions,
+or team email access. The dashboard must approve trust; an API key cannot create it.
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    env:
+      POSTBOI_WORKLOAD_ID: wl_your_public_workload_id
+    steps:
+      - uses: actions/checkout@v7
+      # Your install and SDK commands follow.
+```
+
+With no `POSTBOI_TOKEN` or `POSTBOI_MAILBOX_KEY`, `mailbox()` exchanges GitHub's assertion
+for an hour-long credential. Tokens stay in memory and refresh before a long poll can
+outlive them. Explicit keys take precedence. `postboi init --github` opens trust setup;
+rerun with `--workload <id>` to write a manually dispatched workflow, or copy its permission
+and environment fields into your own. The workload ID is public configuration.
+
+Mailbox grants open only their configured mailbox. Team email grants can use `mail()` for
+regular team senders or `mailbox()` for an existing mailbox; create the mailbox in the
+dashboard first. Use `mailbox()` when sending from an agent mailbox so review applies.
+Workload tokens cannot approve held drafts, mint credentials, create mailboxes or manage
+the team. Revoking trust invalidates issued credentials too. Disabling a mailbox revokes
+its workload trust; re-enabling requires a fresh trust rule.
+
+This first adapter accepts branch jobs triggered by push, schedule or workflow dispatch.
+Pull requests, pull-request-target, environments and reusable workflows are refused.
+Repository renames or ownership changes require a new trust rule. For a custom API,
+`POSTBOI_AUTH_URL` selects the token exchange origin; `POSTBOI_API_URL` and
+`POSTBOI_MAILBOX_URL` select the send and mailbox origins.
+
+### Local sign-in and standalone mailboxes
+
+With the `POSTBOI_TOKEN` that `postboi init` wrote, the mailbox is
 your team's from the start and can send. The first call makes it, and every call after that
 opens the same one:
 
@@ -54,6 +95,40 @@ from. So the next `mailbox()` there opens the same address rather than making an
 Every mailbox also has a key of its own (`mb_…`, said once, when it is made). Your team's key
 opens all of them, so the mailbox key is for an agent you'd rather not hand that: it opens
 this one mailbox, and nothing else of your team's.
+
+Your team can cut an agent off without deleting its address:
+
+```ts
+const managed = await mailbox.open({ token: process.env.POSTBOI_TOKEN, address: "orders-k3f9@agentboi.email" })
+await managed.set_enabled(false)
+await managed.set_enabled(true)
+await managed.rotate({ ttl: "1h" }) // issue a fresh key after enabling it
+```
+
+The dashboard's mailbox menu has **Disable agent** and **Enable agent**. The CLI accepts
+`postboi mailbox disable [address]` and `postboi mailbox enable [address]` with the team's
+`POSTBOI_TOKEN`. After enabling, `postboi mailbox key --ttl 1h` issues and remembers a fresh
+key. Existing credentials stay revoked. Incoming mail and team access continue while the
+agent is disabled, but it cannot send. Queued work and retries from before the disable
+stay blocked after enabling; a transport already handed off cannot be recalled.
+The mailbox exposes `enabled`, `disabled_at` and `key_active`.
+
+Keys can expire without deleting the mailbox or stopping incoming mail:
+
+```ts
+const box = await mailbox.create({ address: "orders", ttl: "1h" })
+box.key_expires_at // Date, or null for a key with no expiry
+await box.rotate() // changes the key, keeps its expiry
+await box.rotate({ ttl: "10m" }) // a shorter lifetime
+```
+
+TTL is whole seconds or a duration such as `1h` or `30d`, from one second to 365 days.
+The CLI accepts `postboi mailbox new --ttl 1h` and `postboi mailbox key --ttl 10m`.
+Existing keys keep their lifetime. An expiring mailbox key cannot extend its own deadline;
+use the team's key to renew it. A mailbox made with an expiring team key inherits that
+deadline unless you request a shorter lifetime. An expired key returns HTTP 401 with
+`code: "key_expired"`; ask the team for a replacement. The team can still open the mailbox
+and rotate its key from the dashboard. API key lifetimes are also set on the dashboard.
 
 ```ts
 const box = await mailbox({ key: process.env.AGENT_MAILBOX_KEY })
