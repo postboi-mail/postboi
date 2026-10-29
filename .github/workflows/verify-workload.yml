@@ -1,0 +1,96 @@
+name: Verify Postboi workload identity
+
+on:
+  workflow_dispatch:
+    inputs:
+      workload_id:
+        description: "Public wl_ ID for this repository and branch, scoped to a test mailbox with read access"
+        required: true
+        type: string
+      expected_access:
+        description: "Run allowed first, then revoke the trust in the dashboard and run revoked"
+        required: true
+        default: allowed
+        type: choice
+        options: [allowed, revoked]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      POSTBOI_WORKLOAD_ID: ${{ inputs.workload_id }}
+      EXPECTED_ACCESS: ${{ inputs.expected_access }}
+    steps:
+      - uses: oven-sh/setup-bun@v2
+      - name: Install the published SDK in an empty directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/postboi-oidc"
+          cd "$RUNNER_TEMP/postboi-oidc"
+          bun add --ignore-scripts postboi@0.77.0
+      - name: Verify exchange and read-only mailbox access
+        working-directory: ${{ runner.temp }}/postboi-oidc
+        run: |
+          cat > verify.mjs <<'JS'
+          import assert from "node:assert/strict"
+          import { mailbox } from "postboi/mailbox"
+
+          const id = process.env.POSTBOI_WORKLOAD_ID
+          assert.match(id, /^wl_[a-zA-Z0-9]+$/)
+          const audience = `https://postboi.app/workloads/${id}`
+          const runner_url = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL)
+          runner_url.searchParams.set("audience", audience)
+          const runner = await fetch(runner_url, {
+            headers: { authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+            redirect: "error",
+            signal: AbortSignal.timeout(10_000),
+          })
+          assert.equal(runner.status, 200, "GitHub must issue an assertion")
+          const { value: assertion } = await runner.json()
+          console.log(`::add-mask::${assertion}`)
+          const response = await fetch("https://postboi.app/v1/auth/token", {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+              subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+              subject_token: assertion,
+              workload_id: id,
+              audience,
+            }),
+            redirect: "error",
+            signal: AbortSignal.timeout(10_000),
+          })
+          assert.match(response.headers.get("cache-control") ?? "", /no-store/)
+          const token = await response.json()
+          if (token.access_token) console.log(`::add-mask::${token.access_token}`)
+          if (process.env.EXPECTED_ACCESS === "revoked") {
+            assert.equal(response.status, 401, "Revoked trust must refuse exchange")
+            assert.equal(token.error, "invalid_grant")
+            console.log("PASS: revoked trust refuses a real GitHub Actions assertion")
+          } else {
+            assert.equal(response.status, 200, `Exchange failed: ${token.error ?? response.status}`)
+            assert.equal(token.token_type, "Bearer")
+            assert.equal(token.workload_id, id)
+            assert.ok(Number.isInteger(token.expires_in) && token.expires_in > 0 && token.expires_in <= 3600)
+            assert.ok(token.mailbox?.id, "Use a mailbox-scoped test workload")
+            // Exercises the published SDK's automatic assertion, exchange and mailbox lookup.
+            const box = await mailbox()
+            await box.info()
+            assert.equal(box.id, token.mailbox.id)
+            // A mailbox credential must not open the team's account API. This only reads.
+            const account = await fetch("https://postboi.app/v1/account", {
+              headers: { authorization: `Bearer ${token.access_token}` },
+              redirect: "error",
+              signal: AbortSignal.timeout(10_000),
+            })
+            assert.ok([401, 403].includes(account.status), "Mailbox scope must deny team access")
+            console.log(`PASS: form exchange, bounded expiry (${token.expires_in}s), SDK mailbox metadata and team-scope denial`)
+          }
+          JS
+          bun verify.mjs
