@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.77.0
+
 ### Added
 
 - GitHub Actions OIDC: set the public `POSTBOI_WORKLOAD_ID` and grant `id-token: write`; `mail()` and `mailbox()` obtain short-lived credentials without a stored Postboi key and refresh them in memory. Trust exact repository/branch and stable repository/owner IDs in the dashboard. Team grants cover email operations; mailbox grants preserve review. `postboi init --github` opens trust setup, and `--workload <id>` writes a workflow without changing existing workflows or writing a key.
