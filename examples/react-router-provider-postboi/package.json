@@ -13,7 +13,7 @@
 		"@react-router/node": "^8.5.0",
 		"@react-router/serve": "^8.5.0",
 		"isbot": "^5",
-		"postboi": "^0.77.0",
+		"postboi": "^0.78.0",
 		"react": "^19.3.1",
 		"react-dom": "^19.3.1",
 		"react-router": "^8.5.0"
