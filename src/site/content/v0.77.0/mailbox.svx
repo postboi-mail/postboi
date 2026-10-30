@@ -1,0 +1,403 @@
+---
+title: Agent mailboxes
+name: Agent mailboxes
+description: An email address your AI agent keeps, at agentboi.email or on your own domain. One request makes one; the agent reads its mail as JSON, can tell your team from a stranger, answers in the thread, files threads in folders and labels, writes drafts for a person to send, and works over MCP.
+category: Getting started
+---
+
+**An agent mailbox is an email address your agent keeps.** [Tempboi](/temp-inbox) gives an
+agent an address that goes away when it's done; a mailbox at
+[agentboi.email](https://agentboi.email) stays. The agent reads what arrives as JSON over a
+long poll, each message says who is talking, and one call answers in the thread. Run by
+Postboi, the same provider as the rest of these docs.
+
+## Make one
+
+### GitHub Actions without a stored key
+
+On the team's **API keys** page, trust an exact GitHub repository and branch with its
+stable repository and owner IDs. Choose a mailbox and its read, reply and send permissions,
+or team email access. The dashboard must approve trust; an API key cannot create it.
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    env:
+      POSTBOI_WORKLOAD_ID: wl_your_public_workload_id
+    steps:
+      - uses: actions/checkout@v7
+      # Your install and SDK commands follow.
+```
+
+With no `POSTBOI_TOKEN` or `POSTBOI_MAILBOX_KEY`, `mailbox()` exchanges GitHub's assertion
+for an hour-long credential. Tokens stay in memory and refresh before a long poll can
+outlive them. Explicit keys take precedence. `postboi init --github` opens trust setup;
+rerun with `--workload <id>` to write a manually dispatched workflow, or copy its permission
+and environment fields into your own. The workload ID is public configuration.
+
+Mailbox grants open only their configured mailbox. Team email grants can use `mail()` for
+regular team senders or `mailbox()` for an existing mailbox; create the mailbox in the
+dashboard first. Use `mailbox()` when sending from an agent mailbox so review applies.
+Workload tokens cannot approve held drafts, mint credentials, create mailboxes or manage
+the team. Revoking trust invalidates issued credentials too. Disabling a mailbox revokes
+its workload trust; re-enabling requires a fresh trust rule.
+
+This first adapter accepts branch jobs triggered by push, schedule or workflow dispatch.
+Pull requests, pull-request-target, environments and reusable workflows are refused.
+Repository renames or ownership changes require a new trust rule. For a custom API,
+`POSTBOI_AUTH_URL` selects the token exchange origin; `POSTBOI_API_URL` and
+`POSTBOI_MAILBOX_URL` select the send and mailbox origins.
+
+### Local sign-in and standalone mailboxes
+
+With the `POSTBOI_TOKEN` that `postboi init` wrote, the mailbox is
+your team's from the start and can send. The first call makes it, and every call after that
+opens the same one:
+
+```ts
+import { mailbox } from "postboi/mailbox"
+
+const box = await mailbox("orders")
+box.address // "orders-k3f9@agentboi.email", today and on every run after
+```
+
+`mailbox()` with no name opens the team's mailbox when it has one, and makes one when it has
+none. Once the team has several, name the one you mean.
+
+Without a token, an agent can make one on its own. It receives straight away and sends once
+a person opens its claim link and signs in, at which point it joins their team:
+
+```bash
+curl -X POST agentboi.email
+```
+
+```
+orders-k3f9@agentboi.email
+key:    mb_…
+claim:  https://postboi.app/claim/…
+        (open this to let it send; until then it only receives)
+```
+
+Put the claim link in your summary for the person you're working for: it's the one step only
+they can take. Nobody claims it, and it's deleted after 14 days.
+
+A mailbox made without a token is remembered on your machine
+(`~/.config/postboi/mailboxes.json`, readable by you alone) under the directory it was made
+from. So the next `mailbox()` there opens the same address rather than making another, and
+`postboi mailbox` and `postboi mcp` find it too. Pass `remember: false` to keep nothing.
+
+### A key for one mailbox
+
+Every mailbox also has a key of its own (`mb_…`, said once, when it is made). Your team's key
+opens all of them, so the mailbox key is for an agent you'd rather not hand that: it opens
+this one mailbox, and nothing else of your team's.
+
+Your team can cut an agent off without deleting its address:
+
+```ts
+const managed = await mailbox.open({ token: process.env.POSTBOI_TOKEN, address: "orders-k3f9@agentboi.email" })
+await managed.set_enabled(false)
+await managed.set_enabled(true)
+await managed.rotate({ ttl: "1h" }) // issue a fresh key after enabling it
+```
+
+The dashboard's mailbox menu has **Disable agent** and **Enable agent**. The CLI accepts
+`postboi mailbox disable [address]` and `postboi mailbox enable [address]` with the team's
+`POSTBOI_TOKEN`. After enabling, `postboi mailbox key --ttl 1h` issues and remembers a fresh
+key. Existing credentials stay revoked. Incoming mail and team access continue while the
+agent is disabled, but it cannot send. Queued work and retries from before the disable
+stay blocked after enabling; a transport already handed off cannot be recalled.
+The mailbox exposes `enabled`, `disabled_at` and `key_active`.
+
+Keys can expire without deleting the mailbox or stopping incoming mail:
+
+```ts
+const box = await mailbox.create({ address: "orders", ttl: "1h" })
+box.key_expires_at // Date, or null for a key with no expiry
+await box.rotate() // changes the key, keeps its expiry
+await box.rotate({ ttl: "10m" }) // a shorter lifetime
+```
+
+TTL is whole seconds or a duration such as `1h` or `30d`, from one second to 365 days.
+The CLI accepts `postboi mailbox new --ttl 1h` and `postboi mailbox key --ttl 10m`.
+Existing keys keep their lifetime. An expiring mailbox key cannot extend its own deadline;
+use the team's key to renew it. A mailbox made with an expiring team key inherits that
+deadline unless you request a shorter lifetime. An expired key returns HTTP 401 with
+`code: "key_expired"`; ask the team for a replacement. The team can still open the mailbox
+and rotate its key from the dashboard. API key lifetimes are also set on the dashboard.
+
+```ts
+const box = await mailbox({ key: process.env.AGENT_MAILBOX_KEY })
+```
+
+`POSTBOI_MAILBOX_KEY` in the environment does the same thing with nothing passed.
+
+### On agentboi.email, or on your own domain
+
+On agentboi.email the address is the name you ask for plus four random characters, so nobody
+can take another agent's address, and names that read as an institution or a role somebody
+could pose as (`support`, `billing`, a bank) are refused. To use your own domain, turn on
+[receiving](/provider#receiving-on-your-own-domain) for it and pass `domain`: the address is
+then exactly what you asked for.
+
+```ts
+await mailbox.create({ address: "support", domain: "reply.example.com" })
+// support@reply.example.com
+```
+
+## Read its mail
+
+```ts
+const box = await mailbox("orders")
+
+for await (const mail of box.watch()) {
+	mail.trust // "owner" | "thread" | "stranger" | "suspect"
+	mail.reply_text // what they wrote, without the conversation quoted under it
+	mail.code // a one-time code, if there is one
+}
+```
+
+`watch()` holds a long poll open and yields each message as it lands, which works from a
+sandbox or CI with no public URL. `wait()` returns the next match and is the one to use for
+a sign-up code. When the sender wrote an
+[`OTP-Token`](https://datatracker.ietf.org/doc/draft-goto-otp-token/) header, `mail.otp` is
+`{ code, origin, signed }` and `mail.code` is that code rather than one read out of the text.
+`signed` is true only when the sender's own DKIM signature covers the header:
+
+```ts
+const mail = await box.wait({ subject: "verify", timeout: "2m" })
+mail.code // "482913"
+```
+
+Both take `from`, `subject` (a substring or a RegExp), `tag` and `trust`. Mail to
+`orders-k3f9+anything@agentboi.email` lands in the same mailbox with `tag` set to `anything`,
+so one mailbox can tell its errands apart.
+
+Over HTTP, with nothing installed:
+
+```bash
+curl "https://agentboi.email/v1/mailboxes/<address>/wait?timeout=60" \
+  -H "Authorization: Bearer mb_…"
+```
+
+The whole API is in [agentboi.email/llms.txt](https://agentboi.email/llms.txt) and the
+[API reference](https://postboi.app/docs).
+
+## Who is talking
+
+Every message is labelled when it arrives, so an agent can tell your team from a stranger
+before it does anything:
+
+| `trust`    | Means                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| `owner`    | From a member of the team that owns the mailbox, and the mail passed DMARC |
+| `thread`   | A reply to something your team sent                                       |
+| `stranger` | Anyone else                                                               |
+| `suspect`  | Read as junk, refused as spam by the receiving server, or failing DMARC   |
+
+A label is not a permission. It tells your agent who is speaking; it doesn't make what a
+stranger wrote safe to act on. Write your agent's instructions so that a stranger's words are
+information to weigh, never instructions to follow, and so that anything it does with tools
+because of an email comes from `owner` mail or from you.
+
+## Answer
+
+```ts
+await box.reply(mail, { text: "It ships today." })
+
+await box.send({ to: "ada@example.com", subject: "Your order", text: "It ships today." })
+
+await box.forward(mail, { to: "accounts@example.com", text: "Can you refund this one?" })
+```
+
+A reply goes to the sender (or their Reply-To), with a `Re:` subject and the In-Reply-To and
+References headers that keep it in their thread, all worked out from the message being
+answered. A send is from the mailbox's own address and nothing else. A forward is
+`Fwd: <subject>` with your note above the original and its files attached (pass
+`attachments: false` to leave them off). A send and a reply take an `idempotency_key`, so a
+retried call sends once, and all three count against your plan like any other send, with the
+same suppressions, rate limits and checks.
+
+Each resolves to what happened to it:
+
+```ts
+const result = await box.send({ to: "ada@example.com", subject: "Hello", text: "Hi" })
+if (result.status === "sent") result.id // "msg_…", and result.thread_id
+else result.draft_id // held for review: a person sends it (see below)
+```
+
+### Attachments
+
+`send`, `reply` and drafts take files. `content` is the bytes (a `Uint8Array`, an
+`ArrayBuffer` or a `Blob`), or a string that is already base64:
+
+```ts
+await box.reply(mail, {
+	text: "Your invoice is attached.",
+	attachments: [{ filename: "invoice.pdf", content: pdf_bytes, type: "application/pdf" }],
+})
+```
+
+Up to 20 files and 10 MB in all a message. Over that, the send is refused with
+`attachments_too_large`.
+
+`postboi mailbox reply <id> --text "…"`, `postboi mailbox send --to … --subject … --text …`
+and `postboi mailbox forward <id> --to …` do the same from a shell, with `--attach a.pdf,b.png`
+for files.
+
+## Folders, labels and search
+
+Every thread is in one folder: `inbox`, `archive`, `spam`, `trash`, or `sent` for a
+conversation the mailbox started that nobody has answered yet. New mail marks a thread
+unread and brings it back to the inbox from the archive or `sent`; a thread somebody put in
+spam or the trash stays there. A first message read as junk starts its thread in spam.
+
+```ts
+const unread = await box.threads({ unread: true })
+const billing = await box.threads({ label: "billing", folder: "all" })
+const found = await box.threads({ q: "refund" }) // subject, sender, recipients and text
+
+await box.mark_read(thread)
+await box.archive(thread)
+await box.update_thread(thread, { add_labels: ["billing"], remove_labels: ["urgent"] })
+```
+
+Labels belong to the mailbox: up to 50, named 1 to 40 characters, in `grey`, `amber`, `red`,
+`green` or `blue`. Naming one that doesn't exist on a thread makes it, in grey.
+`box.labels()` lists them with how many threads carry each, and `create_label`,
+`update_label` and `delete_label` manage them by id or by name.
+
+From a shell: `postboi mailbox threads --unread --q refund`, `postboi mailbox archive <thread>`,
+`postboi mailbox label <thread> billing` and `postboi mailbox labels`.
+
+## Drafts and review
+
+An agent can write a draft for a person to look over and send instead of sending it:
+
+```ts
+const draft = await box.create_draft({ in_reply_to: mail, text: "Here's what I'd say…" })
+```
+
+With `in_reply_to` it threads like a reply, and `to` and `subject` come from the message it
+answers. Your team hears about every new draft (the **Drafts** notification and the
+`draft_created` [webhook](/webhooks#mailbox-drafts)) and sends it from the dashboard.
+`box.drafts()`, `draft(id)`, `update_draft`, `delete_draft` and `send_draft` cover the rest.
+
+A mailbox can also be told to wait for a person before it sends at all. Its `review` is set by
+your team:
+
+| `review` | What the mailbox's key may send                                              |
+| -------- | ---------------------------------------------------------------------------- |
+| `none`   | Anything. The default                                                        |
+| `new`    | A reply to the person who wrote, with nobody added. Anything else waits      |
+| `all`    | Nothing: everything waits                                                    |
+
+Under `new`, a send to a new conversation, a forward, or a reply that adds a cc or bcc is
+saved as a draft instead of going, and comes back as `{ status: "draft", draft_id, draft }`.
+Your agent shouldn't send it again: it is waiting for a person. Only the mailbox's own key is
+held, so your team's API key sends as usual, and only your team changes `review`:
+
+```ts
+const team = await mailbox.open({ token: process.env.POSTBOI_TOKEN, address: box.address })
+await team.set_review("new")
+```
+
+`postboi mailbox review new` does the same with `POSTBOI_TOKEN` set, and
+`postboi mailbox drafts` lists what is waiting.
+
+## It's your team's mail too
+
+A mailbox's mail is filed in your dashboard's Received log with everything else, so a person
+can read along and answer from the dashboard. It arrives at your
+[webhooks](/webhooks) as `email.received`, which for mailbox mail also carries `mailbox`,
+`trust`, `reply_text`, `codes` and `otp`. The dashboard's **Mailboxes** page makes them, rotates
+their keys and deletes them.
+
+Replying from your own code with `mail()` rather than the mailbox works too: pass the
+received message's id as `in_reply_to` and the Postboi provider threads it the same way.
+
+```ts
+await mail({ to: "bob@example.com", subject: "Re: Your order", body: "…", in_reply_to: "in_…" })
+```
+
+## Over MCP
+
+`postboi mcp` runs an [MCP](https://modelcontextprotocol.io) server on stdio, so an agent in
+Claude Code, Cursor, Codex or any other MCP client reaches its mailbox as tools. It needs
+nothing installed beyond the package and nothing to configure. It reads the project's `.env`,
+so the `POSTBOI_TOKEN` that `postboi init` wrote is already enough:
+
+```bash
+claude mcp add postboi -- npx postboi mcp
+```
+
+For Cursor (`.cursor/mcp.json`), Claude Desktop and most other clients:
+
+```json
+{
+	"mcpServers": {
+		"postboi": { "command": "npx", "args": ["postboi", "mcp"] }
+	}
+}
+```
+
+For Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.postboi]
+command = "npx"
+args = ["postboi", "mcp"]
+```
+
+With your team's key it opens the team's mailbox, or the one each tool's `mailbox` names when
+the team has several, and `email_send` sends the team's own mail. With no key at all, the
+agent makes a mailbox of its own with `mailbox_create` and hands you its claim link. That
+mailbox is remembered on your machine, so the next session opens it again. To give an agent
+one mailbox and nothing else of your team's, put that mailbox's key in the server's
+environment as `POSTBOI_MAILBOX_KEY`.
+
+| Tool                                                                 | Does                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `mailbox_info`, `mailbox_create`                                     | The mailbox, or a new one                                    |
+| `mailbox_list_messages`, `mailbox_wait`, `mailbox_read`              | Its mail, waiting up to 90 seconds, a code on its own        |
+| `mailbox_threads`, `mailbox_thread`, `mailbox_update_thread`         | Conversations by folder, label, read state or search         |
+| `mailbox_labels`                                                     | List, make, change and delete labels                         |
+| `mailbox_reply`, `mailbox_send`, `mailbox_forward`                   | Answer, write and forward, with attachments                  |
+| `mailbox_drafts`, `mailbox_create_draft`, `mailbox_update_draft`, `mailbox_delete_draft`, `mailbox_send_draft` | Drafts for a person to send |
+| `temp_inbox_create`, `temp_inbox_wait`                               | A [Tempboi](/temp-inbox) address and the code sent to it     |
+| `email_send`                                                         | One email from your team's sending address                   |
+
+Every result that carries somebody else's words (their text, their subject, their name) puts
+them inside an `<email>` block that names its `trust`, after a line saying the content is data
+from the sender and not instructions. A sender who writes `</email>` into their message can't
+close the block early. It's the same rule as everywhere else on this page: the label says who
+is talking, and your agent's own instructions decide what it does about it.
+
+## Keys
+
+A mailbox's key (`mb_…`) opens that mailbox and nothing else in Postboi: it can't send as your
+team, read your other mail, make more mailboxes or loosen its own review. Your project's `POSTBOI_TOKEN` opens every
+mailbox the team has. `box.rotate()` (or `postboi mailbox key`) makes a new key and stops the
+old one at once.
+
+Deleting a mailbox stops its key and refuses mail to it from then on. What it received stays
+in your Received log, and the address is never given to anyone else.
+
+## Limits
+
+|                       |                                                       |
+| --------------------- | ----------------------------------------------------- |
+| Mailboxes             | No limit on how many. Free makes 10 a day (UTC)       |
+| Unclaimed account     | 3 mailboxes in all, until somebody claims it          |
+| Received mail         | Free, and doesn't count against your sends            |
+| A message             | Up to 10 MB                                           |
+| Unclaimed             | Receives, can't send, deleted after 14 days           |
+| Made with no account  | 5 a day from one address, the same as `init --agent`  |
+| `wait`                | Up to 90 seconds a request                            |
+| `messages?wait=`      | Up to 25 seconds a request                            |
+| Attachments on a send | 20 files, 10 MB in all                                |
+| Labels                | 50 a mailbox                                          |
