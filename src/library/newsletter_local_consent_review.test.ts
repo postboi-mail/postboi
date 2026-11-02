@@ -256,3 +256,57 @@ it("configuring an ordinary list preserves its current opt-out and immediately r
 	).toThrowError(expect.objectContaining({ code: "newsletter_confirmation_required" }))
 	expect(f.status()).toBe("unsubscribed")
 })
+
+it("personalized local preview is inert and rejects nonmember, pending, opted-out and email-only sample selectors", () => {
+	const f = fixture(),
+		campaign = f.request("/v1/campaigns", "POST", {
+			name: "Preview",
+			list_id: f.list.id,
+			sender: "news@example.test",
+			subject: "Hi {name}",
+			body: "<p>{name}</p><p>{preferences_url}</p>",
+		}).body as { id: string }
+	const audience = f.request(`/v1/newsletters/${f.list.id}/audience`).body as {
+			contacts: Array<{ id: string; email: string }>
+		},
+		reader = audience.contacts[0]
+	const preview = f.request(
+		`/v1/campaigns/${campaign.id}/preview?` + new URLSearchParams({ sample_contact_id: reader.id })
+	).html
+	expect(preview).toContain("Reader")
+	expect(preview).toContain("#local-preview")
+	expect(preview).not.toContain("token=")
+	expect(f.store.list()).toHaveLength(0)
+	f.request(f.path, "POST", [
+		{ email: "pending@example.test", status: "pending" },
+		{ email: "optout@example.test", status: "unsubscribed" },
+	])
+	const other = f.request("/v1/lists", "POST", { name: "Another audience" }).body as { id: string }
+	f.request(`/v1/lists/${other.id}/recipients`, "POST", [
+		{ email: "foreign@example.test", status: "subscribed" },
+	])
+	const local = f.request(`/v1/newsletters/${f.list.id}/audience`).body as typeof audience,
+		foreign = f.request(`/v1/lists/${other.id}/recipients`).body as {
+			recipients: Array<{ id: string }>
+		}
+	for (const selector of [
+		reader.email,
+		"missing",
+		...local.contacts.filter((row) => row.email !== reader.email).map((row) => row.id),
+		foreign.recipients[0].id,
+	])
+		expect(() =>
+			f.request(
+				`/v1/campaigns/${campaign.id}/preview?` +
+					new URLSearchParams({ sample_contact_id: selector })
+			)
+		).toThrowError(expect.objectContaining({ status: 404 }))
+	expect(f.store.list()).toHaveLength(0)
+	expect(
+		(
+			f.request(`/v1/newsletters/${f.list.id}/audience`).body as {
+				contacts: Array<{ email: string; status: string }>
+			}
+		).contacts.find((row) => row.email === reader.email)?.status
+	).toBe("subscribed")
+})

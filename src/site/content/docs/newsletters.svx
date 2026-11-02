@@ -206,3 +206,51 @@ because a capture cannot establish that someone received or ignored mail.
 The rehearsal is in memory and clears when the server restarts. It supports up to 100
 lists and campaigns, 10,000 total memberships and CSV files under 2 MB. Use synthetic
 addresses and fixtures for this workflow.
+
+## Audience quality
+
+Hosted newsletters can review stored delivery evidence, possible domain typos, disposable domains and shared role addresses. Warnings do not change subscription consent, correct addresses or establish that an inbox exists. Domain checks use bounded DNS queries; temporary failures remain unknown.
+
+```ts
+const quality = await mail.newsletters.quality.get(list_id, { offset: 0 })
+const scanned = await mail.newsletters.quality.scan(list_id) // at most 200 addresses
+const domains = await mail.newsletters.quality.domains(list_id) // at most five domains
+await mail.newsletters.quality.decide(list_id, 'reader@example.invalid', 'exclude')
+```
+
+Continue a scan with its returned `next` cursor. An explicit `allow` removes a quality exclusion; it cannot restore consent or override a delivery block. No check sends email.
+
+```sh
+postboi newsletters quality LIST get --json
+postboi newsletters quality LIST scan --json
+postboi newsletters quality LIST domains --json
+postboi newsletters quality LIST exclude --email reader@example.invalid --json
+```
+
+Quality observations depend on hosted evidence and DNS and are unavailable in the local capture inbox. Local commands never fall back to hosted sending.
+
+## Automatic reconfirmation
+
+A hosted newsletter can send one approved reminder to eligible established subscribers with no observed activity, then hold future issues after a grace period measured from verified delivery. Privacy settings can hide reading. A saved policy starts disabled; review its message, audience criteria and warnings before enabling it. New activity or confirmation protects a reader, and existing consent or delivery blocks remain authoritative.
+
+```ts
+await mail.newsletters.reconfirmation.save(list_id, {
+  inactivity_days: 180, grace_days: 14, sender: 'news@example.invalid',
+  subject: 'Would you like to keep receiving our newsletter?',
+  body: '<p>Please confirm your choice below.</p>'
+})
+const review = await mail.newsletters.reconfirmation.review(list_id)
+// After approving this exact message and its future policy:
+await mail.newsletters.reconfirmation.enable(list_id, {
+  revision: review.policy.revision, review_hash: review.review_hash, confirm: true
+})
+```
+
+Use `reconfirmation.get` for settings and aggregate run states. Saving an existing policy requires its current `revision` and disables it until reviewed again. `pause(list_id, { revision })` stops future and unsent work. Unknown or failed delivery does not start the grace countdown. This hosted policy depends on retained history and verified delivery, so it is unavailable in the local capture inbox.
+
+```sh
+postboi newsletters reconfirmation LIST save --file policy.json
+postboi newsletters reconfirmation LIST review --json
+postboi newsletters reconfirmation LIST enable --revision 1 --review-hash HASH --confirm
+postboi newsletters reconfirmation LIST pause --revision 1
+```

@@ -498,3 +498,15 @@ it("uses the same source profiles locally and refuses unknown opt-outs or silent
 	).rejects.toMatchObject({ code: "invalid_import" })
 	expect(captures.list()).toHaveLength(0)
 })
+
+it("local SDK rejects hosted evidence operations explicitly without reaching hosted services", async () => {
+	await expect(client.newsletters.quality.get("local-list")).rejects.toMatchObject({
+		code: "local_operation_unavailable",
+		status: 501,
+	})
+	await expect(client.newsletters.reconfirmation.get("local-list")).rejects.toMatchObject({
+		code: "local_operation_unavailable",
+		status: 501,
+	})
+	expect(captures.list()).toHaveLength(0)
+})

@@ -12,6 +12,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
+- Hosted automatic reconfirmation policy resources and commands with separate draft saving, preview/review, exact-revision approval and pause.
+
+- Hosted audience-quality resources and CLI commands for bounded address/domain reviews and explicit per-newsletter eligibility choices, separate from subscription consent.
+
 - Source-aware newsletter CSV profiles for common providers, with conservative lifecycle interpretation, preserved source evidence and explicit refusals before restrictive rows or exclusion tags could be lost.
 - Reviewed newsletter automation rules through the SDK, CLI and local inbox: paused drafts, current-revision previews and explicit enable, fresh signup/tag triggers, pause cancellation and no automatic replay of old intents. Local rules capture only in the inbox and never claim provider delivery.
 - Saved newsletter campaigns through `mail.campaigns` and the `postboi campaigns` CLI: revision-aware drafts, review, rendered previews, explicit test recipients, scheduled launches, controls, duplication, non-opener draft creation and paged reporting/export.

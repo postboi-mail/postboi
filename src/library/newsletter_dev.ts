@@ -691,6 +691,12 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 			}
 		}
 		if (kind === "newsletters") {
+			if (["quality", "reconfirmation"].includes(operation ?? ""))
+				refuse(
+					501,
+					"local_operation_unavailable",
+					"This operation depends on hosted delivery evidence and retained activity. It is unavailable in the local capture inbox."
+				)
 			if (!ref) {
 				if (method === "GET")
 					return {
@@ -1100,7 +1106,13 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 			}
 			if (method === "GET") {
 				if (operation === "review") return { body: review(draft) }
-				if (operation === "preview") return { html: render(draft).html }
+				if (operation === "preview") {
+					const sample_id = url.searchParams.get("sample_contact_id") ?? ""
+					const sample = sample_id ? member(draft.list_id, sample_id) : undefined
+					if (sample_id && (!sample || sample.id !== sample_id || sample.status !== "subscribed"))
+						refuse(404, "not_found", "Choose a subscriber from this audience.")
+					return { html: render(draft, sample).html }
+				}
 				if (operation === "report") return { body: report(draft) }
 				if (operation === "recipients" || operation === "export") {
 					const { offset, limit } = page(url)

@@ -101,3 +101,52 @@ it("automation SDK uses reviewed REST methods and explicit current-revision appr
 	])
 	expect(JSON.parse(String(requests[4].init?.body))).toEqual({ revision: 2, confirm: true })
 })
+
+it("quality resources keep reads, bounded checks and explicit eligibility separate", async () => {
+	const client = new Postboi({ token: "pb_synthetic" })
+	await client.newsletters.quality.get("list/a", { offset: 25 })
+	await client.newsletters.quality.scan("list/a", "contact_next")
+	await client.newsletters.quality.domains("list/a", "studio.example")
+	await client.newsletters.quality.decide("list/a", "reader@example.invalid", "exclude")
+	await client.newsletters.quality.decide("list/a", "reader@example.invalid", "allow")
+	expect(requests[0].url).toBe("https://postboi.app/v1/newsletters/list%2Fa/quality?offset=25")
+	expect(requests.slice(1).map((x) => [x.init?.method, JSON.parse(String(x.init?.body))])).toEqual([
+		["POST", { operation: "scan", after: "contact_next" }],
+		["POST", { operation: "domains", after: "studio.example" }],
+		["POST", { operation: "decision", email: "reader@example.invalid", decision: "exclude" }],
+		["POST", { operation: "decision", email: "reader@example.invalid", decision: "allow" }],
+	])
+})
+
+it("reconfirmation saves stay distinct from reviewed ongoing approval", async () => {
+	const client = new Postboi({ token: "pb_synthetic" })
+	const draft = {
+		inactivity_days: 180,
+		grace_days: 14,
+		sender: "news@example.invalid",
+		subject: "Keep receiving news?",
+		body: "<p>Confirm your choice.</p>",
+	}
+	await client.newsletters.reconfirmation.get("list/a")
+	await client.newsletters.reconfirmation.save("list/a", draft)
+	await client.newsletters.reconfirmation.review("list/a")
+	await client.newsletters.reconfirmation.enable("list/a", {
+		revision: 1,
+		review_hash: "reviewed-hash",
+		confirm: true,
+	})
+	await client.newsletters.reconfirmation.pause("list/a", { revision: 1 })
+	expect(requests.map((x) => [new URL(x.url).pathname, x.init?.method])).toEqual([
+		["/v1/newsletters/list%2Fa/reconfirmation", "GET"],
+		["/v1/newsletters/list%2Fa/reconfirmation", "PUT"],
+		["/v1/newsletters/list%2Fa/reconfirmation/review", "GET"],
+		["/v1/newsletters/list%2Fa/reconfirmation/enable", "POST"],
+		["/v1/newsletters/list%2Fa/reconfirmation/pause", "POST"],
+	])
+	expect(JSON.parse(String(requests[1].init?.body))).toEqual(draft)
+	expect(JSON.parse(String(requests[3].init?.body))).toEqual({
+		revision: 1,
+		review_hash: "reviewed-hash",
+		confirm: true,
+	})
+})

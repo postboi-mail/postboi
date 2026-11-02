@@ -90,6 +90,81 @@ export interface Newsletter extends Omit<NewsletterInput, "public_signup"> {
 	pending?: number
 	unsubscribed?: number
 }
+export interface NewsletterReconfirmationDraft {
+	inactivity_days: number
+	grace_days: number
+	sender: string
+	subject: string
+	body: string
+}
+export interface NewsletterReconfirmationPolicy extends NewsletterReconfirmationDraft {
+	list_id: string
+	account_id: string
+	revision: number
+	authorization_revision: number
+	enabled: 0 | 1
+	enabled_by_user_id: string | null
+	authorization_kind: "member" | "api_key"
+	api_key_id: string | null
+	reviewed_revision: number | null
+	enabled_at: string | null
+	updated_at: string
+}
+export interface NewsletterReconfirmationReview {
+	policy: NewsletterReconfirmationPolicy
+	candidates: { total: number; samples: Array<{ id: string; email: string; name: string | null }> }
+	review_hash: string
+	warnings: Array<string>
+	ready: boolean
+	preview: { subject: string; html: string }
+	stats: Array<{ state: string; total: number }>
+}
+export interface NewsletterQuality {
+	summary: {
+		total: number
+		subscribed: number
+		pending: number
+		unsubscribed: number
+		globally_blocked: number
+		checked: number
+		malformed: number
+		known_invalid: number
+	}
+	review: {
+		total: number
+		classified: number
+		typo: number
+		role: number
+		disposable: number
+		excluded: number
+		no_mail: number
+		domains: number
+		domains_checked: number
+	}
+	pacing: { waiting: number; next_at: string | null }
+	contacts: Array<{
+		id: string
+		email: string
+		name: string | null
+		status: NewsletterStatus
+		globally_blocked: boolean
+		known_invalid: boolean
+		checked: boolean
+		malformed: boolean
+		safety_checked_at: string | null
+		classification: { flags: Array<"typo" | "role" | "disposable">; suggestion: string | null }
+		decision: "exclude" | "allow" | null
+		domain: {
+			name: string | null
+			state: "unknown" | "mx" | "implicit_mx" | "no_mail"
+			reason: string
+			checked_at: string | null
+			expires_at: string | null
+		}
+	}>
+	offset: number
+	next_offset: number | null
+}
 export interface NewsletterTag {
 	id: string
 	name: string
@@ -218,7 +293,8 @@ export function campaign_resources(request: NewsletterRequest) {
 			request<Campaign>(path(id), { method: "PUT", body: input }),
 		review: (id: string) => request<CampaignReview>(path(id, "review"), { method: "GET" }),
 		/** The rendered HTML document. No email is sent. */
-		preview: (id: string) => request<string>(path(id, "preview"), { method: "GET" }),
+		preview: (id: string, options: { sample_contact_id?: string } = {}) =>
+			request<string>(path(id, "preview") + query(options), { method: "GET" }),
 		report: (id: string) => request<CampaignReport>(path(id, "report"), { method: "GET" }),
 		export: (id: string, options: { offset?: number; limit?: number } = {}) =>
 			request<string>(path(id, "export") + query(options), { method: "GET" }),
@@ -263,6 +339,65 @@ export function newsletter_resources(request: NewsletterRequest) {
 		/** Requests double opt-in. This never directly subscribes someone. */
 		signup: (id: string, input: { email: string; name?: string; consent: true }) =>
 			request<{ ok: true }>(path(id, "signups"), { method: "POST", body: input }),
+		reconfirmation: {
+			get: (id: string) =>
+				request<{
+					policy: NewsletterReconfirmationPolicy | null
+					defaults: NewsletterReconfirmationDraft
+					stats: Array<{ state: string; total: number }>
+				}>(path(id, "reconfirmation"), { method: "GET" }),
+			/** Saves a disabled policy. Existing policies require their current revision. */
+			save: (id: string, input: NewsletterReconfirmationDraft & { revision?: number }) =>
+				request<NewsletterReconfirmationPolicy>(path(id, "reconfirmation"), {
+					method: "PUT",
+					body: input,
+				}),
+			review: (id: string) =>
+				request<NewsletterReconfirmationReview>(path(id, "reconfirmation/review"), {
+					method: "GET",
+				}),
+			/** Explicit approval of the exact revision and reviewed settings. Future bounded work only. */
+			enable: (id: string, input: { revision: number; review_hash: string; confirm: true }) =>
+				request<NewsletterReconfirmationPolicy>(path(id, "reconfirmation/enable"), {
+					method: "POST",
+					body: input,
+				}),
+			pause: (id: string, input: { revision: number }) =>
+				request<NewsletterReconfirmationPolicy>(path(id, "reconfirmation/pause"), {
+					method: "POST",
+					body: input,
+				}),
+		},
+		quality: {
+			get: (id: string, options: { offset?: number } = {}) =>
+				request<NewsletterQuality>(path(id, "quality") + query(options), { method: "GET" }),
+			/** Checks at most 200 stored addresses. Never sends mail or changes consent. */
+			scan: (id: string, after?: string) =>
+				request<{ checked: number; next: string | null }>(path(id, "quality"), {
+					method: "POST",
+					body: { operation: "scan", ...(after === undefined ? {} : { after }) },
+				}),
+			/** Checks at most five domains through bounded DNS. Unknown is not invalid. */
+			domains: (id: string, after?: string) =>
+				request<{
+					checked: number
+					next: string | null
+					domains: Array<{
+						domain: string
+						state: "unknown" | "mx" | "implicit_mx" | "no_mail"
+						reason: string
+					}>
+				}>(path(id, "quality"), {
+					method: "POST",
+					body: { operation: "domains", ...(after === undefined ? {} : { after }) },
+				}),
+			/** Explicit newsletter eligibility only. This cannot restore consent or override a delivery block. */
+			decide: (id: string, email: string, decision: "exclude" | "allow") =>
+				request<{ decision: "exclude" | "allow" }>(path(id, "quality"), {
+					method: "POST",
+					body: { operation: "decision", email, decision },
+				}),
+		},
 		tags: {
 			all: async (id: string) =>
 				(await request<{ tags: Array<NewsletterTag> }>(path(id, "tags"), { method: "GET" })).tags,

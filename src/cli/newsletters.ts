@@ -98,6 +98,8 @@ export async function campaigns_command(args: Array<string>): Promise<void> {
 	}
 	if (action === "preview" || action === "export") {
 		const query = new URLSearchParams()
+		if (action === "preview" && flags["sample-contact"])
+			query.set("sample_contact_id", flags["sample-contact"])
 		if (action === "export")
 			for (const key of ["offset", "limit"])
 				if (flags[key]) query.set(key, String(number(flags[key], key)))
@@ -187,6 +189,8 @@ export async function newsletters_command(args: Array<string>): Promise<void> {
 			"tag",
 			"revision",
 			"sample-contact",
+			"after",
+			"review-hash",
 			"out",
 		],
 		["consent", "confirm"]
@@ -262,6 +266,85 @@ export async function newsletters_command(args: Array<string>): Promise<void> {
 		if (!operation || operation === "list") return result(await api(`${path}/segments`))
 		if (operation === "add")
 			return result(await api(`${path}/segments`, { method: "POST", body: file_json(flags.file) }))
+	}
+	if (action === "reconfirmation") {
+		if (local_api())
+			throw new ApiCommandError(
+				"Automatic reconfirmation needs hosted retained activity and verified delivery. It is unavailable in the local capture inbox.",
+				"local_operation_unavailable"
+			)
+		const policy_path = `${path}/reconfirmation`
+		if (!operation || operation === "get") return result(await api(policy_path))
+		if (operation === "save") {
+			const body = file_json(flags.file),
+				revision = number(flags.revision, "revision") ?? body.revision
+			return result(
+				await api(policy_path, {
+					method: "PUT",
+					body: { ...body, ...(revision === undefined ? {} : { revision }) },
+				})
+			)
+		}
+		if (operation === "review") return result(await api(`${policy_path}/review`))
+		if (["enable", "pause"].includes(operation)) {
+			const revision = number(flags.revision, "revision")
+			if (!revision)
+				throw new ApiCommandError(
+					"Provide --revision from the saved policy review.",
+					"invalid_args"
+				)
+			if (operation === "enable" && !on.has("confirm"))
+				throw new ApiCommandError(
+					"Enable needs --confirm to approve the exact reviewed reminder and future holds.",
+					"confirmation_required"
+				)
+			const review_hash =
+				operation === "enable"
+					? required(flags["review-hash"], "Provide --review-hash from the current policy review.")
+					: undefined
+			return result(
+				await api(`${policy_path}/${operation}`, {
+					method: "POST",
+					body: { revision, ...(operation === "enable" ? { review_hash, confirm: true } : {}) },
+				})
+			)
+		}
+		throw new ApiCommandError(
+			"Reconfirmation supports get, save, review, enable and pause.",
+			"invalid_args"
+		)
+	}
+	if (action === "quality") {
+		if (local_api())
+			throw new ApiCommandError(
+				"Audience quality uses hosted delivery evidence and DNS checks. It is unavailable in the local capture inbox.",
+				"local_operation_unavailable"
+			)
+		if (!operation || operation === "get")
+			return result(
+				await api(
+					`${path}/quality${flags.offset ? `?offset=${number(flags.offset, "offset")}` : ""}`
+				)
+			)
+		if (["scan", "domains"].includes(operation))
+			return result(
+				await api(`${path}/quality`, { method: "POST", body: { operation, after: flags.after } })
+			)
+		if (["exclude", "allow"].includes(operation))
+			return result(
+				await api(`${path}/quality`, {
+					method: "POST",
+					body: {
+						operation: "decision",
+						email: required(flags.email, "Provide --email for this eligibility decision."),
+						decision: operation,
+					},
+				})
+			)
+		throw new ApiCommandError(
+			"Quality supports get, scan, domains, exclude and allow.",
+			"invalid_args"
+		)
 	}
 	if (action === "rules") {
 		const rule_path = `${path}/rules`

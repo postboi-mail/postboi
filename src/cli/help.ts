@@ -120,7 +120,7 @@ export const HELP: Array<HelpSection> = [
 				summary: "Saved newsletter drafts, reviewed launches and reports",
 				details: [
 					"create --file draft.json · get <id> · update <id> --file draft.json --revision <n>",
-					"review <id> · preview <id> [--out email.html] · test <id> --email <address> [--sample-contact <id>]",
+					"review <id> · preview <id> [--sample-contact <id> --out email.html] · test <id> --email <address> [--sample-contact <id>]",
 					"launch <id> --revision <n> --timezone <IANA zone> [--at <absolute ISO>] · pause, resume, cancel, duplicate <id>",
 					"report <id> · recipients <id> [--offset <n> --limit <n>] · export <id> --out report.csv · resend <id> --key <idempotency key> creates a draft",
 					"--local captures in the running dev inbox; run <id> --local captures one due page. No hosted sending or delivery/open claims",
@@ -131,6 +131,8 @@ export const HELP: Array<HelpSection> = [
 				summary: "Newsletter audiences, consent, tags and migration previews",
 				details: [
 					"configure --file newsletter.json · get <list-id> · audience <list-id> [--search <text> --offset <n>]",
+					"reconfirmation <list-id> get, save --file policy.json [--revision <n>], review, enable --revision <n> --review-hash <hash> --confirm, pause --revision <n> (hosted only)",
+					"quality <list-id> get, scan, domains [--after <cursor>] · exclude, allow --email <address> (hosted only)",
 					"signup <list-id> --email <address> [--name <name>] --consent requests confirmation; it never directly subscribes",
 					"tags <list-id> add --name <tag> [--contact <ids> --event <id>] · tags <list-id> remove --tag <id> --contact <id>",
 					"rules <list-id> list · create --file rule.json · get, review, preview <rule-id> [--sample-contact <id> --out preview.html]",

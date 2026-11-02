@@ -227,3 +227,89 @@ it("automation CLI refuses enable without confirmation and never invents a hoste
 	expect(calls.at(-1)?.init?.method).toBe("PATCH")
 	expect(sent().revision).toBe(3)
 })
+
+it("quality CLI requires a precise eligibility address and sends no implicit scan or consent change", async () => {
+	await api_command("newsletters", ["quality", "list/a", "get", "--offset", "25", "--json"])
+	expect(calls.at(-1)?.url).toContain("/v1/newsletters/list%2Fa/quality?offset=25")
+	expect(calls.at(-1)?.init?.method).toBe("GET")
+	await api_command("newsletters", [
+		"quality",
+		"list/a",
+		"domains",
+		"--after",
+		"studio.example",
+		"--json",
+	])
+	expect(sent()).toEqual({ operation: "domains", after: "studio.example" })
+	await expect(
+		api_command("newsletters", ["quality", "list/a", "exclude", "--json"])
+	).rejects.toMatchObject({ code: "invalid_args" })
+	expect(calls).toHaveLength(2)
+	await api_command("newsletters", [
+		"quality",
+		"list/a",
+		"exclude",
+		"--email",
+		"reader@example.invalid",
+		"--json",
+	])
+	expect(sent()).toEqual({
+		operation: "decision",
+		email: "reader@example.invalid",
+		decision: "exclude",
+	})
+	await expect(
+		api_command("newsletters", ["quality", "list/a", "invent", "--json"])
+	).rejects.toMatchObject({ code: "invalid_args" })
+	expect(calls).toHaveLength(3)
+})
+
+it("reconfirmation CLI requires reviewed revision, hash and explicit approval before enabling", async () => {
+	await api_command("newsletters", ["reconfirmation", "list/a", "review", "--json"])
+	expect(calls.at(-1)?.url).toContain("/v1/newsletters/list%2Fa/reconfirmation/review")
+	await expect(
+		api_command("newsletters", [
+			"reconfirmation",
+			"list/a",
+			"enable",
+			"--revision",
+			"2",
+			"--review-hash",
+			"hash",
+			"--json",
+		])
+	).rejects.toMatchObject({ code: "confirmation_required" })
+	await expect(
+		api_command("newsletters", [
+			"reconfirmation",
+			"list/a",
+			"enable",
+			"--revision",
+			"2",
+			"--confirm",
+			"--json",
+		])
+	).rejects.toMatchObject({ code: "invalid_args" })
+	expect(calls).toHaveLength(1)
+	await api_command("newsletters", [
+		"reconfirmation",
+		"list/a",
+		"enable",
+		"--revision",
+		"2",
+		"--review-hash",
+		"hash",
+		"--confirm",
+		"--json",
+	])
+	expect(sent()).toEqual({ revision: 2, review_hash: "hash", confirm: true })
+	await api_command("newsletters", [
+		"reconfirmation",
+		"list/a",
+		"pause",
+		"--revision",
+		"2",
+		"--json",
+	])
+	expect(sent()).toEqual({ revision: 2 })
+})
