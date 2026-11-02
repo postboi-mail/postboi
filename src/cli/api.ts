@@ -25,6 +25,8 @@ import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
 import { views } from "./views.js"
+import { migrations_command, postmaster_command } from "./read_resources.js"
+import { publications_command } from "./publications.js"
 import { campaigns_command, newsletters_command } from "./newsletters.js"
 import { local_newsletter_base } from "../library/newsletter_local.js"
 
@@ -2081,6 +2083,9 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	lists,
 	campaigns: campaigns_command,
 	newsletters: newsletters_command,
+	publications: publications_command,
+	migrations: migrations_command,
+	postmaster: postmaster_command,
 	recipients,
 	contacts,
 	domains,
@@ -2103,6 +2108,9 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 const LISTING = new Set([
 	"campaigns",
 	"newsletters",
+	"publications",
+	"migrations",
+	"postmaster",
 	"lists",
 	"contacts",
 	"domains",
@@ -2127,7 +2135,18 @@ export async function api_command(command: string, args: Array<string>): Promise
 		return true
 	}
 	local_mode = args.includes("--local")
-	if (local_mode && !["campaigns", "newsletters", "lists", "recipients"].includes(command)) {
+	if (
+		local_mode &&
+		![
+			"campaigns",
+			"newsletters",
+			"lists",
+			"recipients",
+			"publications",
+			"migrations",
+			"postmaster",
+		].includes(command)
+	) {
 		local_mode = false
 		throw new ApiCommandError(
 			"--local is supported for campaigns, newsletters, lists and recipients.",

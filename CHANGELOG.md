@@ -12,6 +12,10 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ### Added
 
+- Explicit campaign Markdown and complete HTML source formats, with preserved source, revision-safe copies and snapshots, bounded rendering, required reader-choice links and matching local inbox capture/authoring. Unsupported legacy HTML constructs refuse clearly before queueing.
+
+- Hosted publication SDK and CLI resources for public author settings, inert editorial review, explicitly approved publication, paged issue reads and immediate removal. Local mode refuses these operations without a hosted fallback.
+
 - Hosted automatic reconfirmation policy resources and commands with separate draft saving, preview/review, exact-revision approval and pause.
 
 - Hosted audience-quality resources and CLI commands for bounded address/domain reviews and explicit per-newsletter eligibility choices, separate from subscription consent.

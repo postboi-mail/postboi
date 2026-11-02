@@ -120,3 +120,29 @@ describe("local newsletter unsaved-work guards", () => {
 		expect(dirty.returnValue).toBe("")
 	})
 })
+
+test("source format controls preserve existing mode and source while HTML creation seeds a real document", function () {
+	const ui = workspace()
+	ui.node("body-format").value = "html_document"
+	ui.node("body-format").onchange!()
+	expect(ui.evaluate("$('campaign-body').value")).toContain("<html>")
+	expect(ui.evaluate("$('body-label').textContent")).toBe("Complete HTML source")
+	expect(ui.evaluate("$('campaign-body').placeholder")).toContain("<html>")
+	expect(ui.evaluate("$('campaign-body').placeholder")).toContain("<body>")
+	expect(newsletter_dev_ui()).toMatch(/id="campaign-body"[^>]*maxlength="200000"/)
+	ui.evaluate(
+		"state={campaigns:[{id:'saved',body_format:'markdown',status:'draft',revision:2,body:'# Keep source'}]};selected='saved'"
+	)
+	ui.node("campaign-body").value = "# Keep source"
+	ui.node("body-format").value = "html_document"
+	ui.evaluate("format_ui()")
+	expect(ui.evaluate("$('body-format').disabled")).toBe(true)
+	expect(ui.evaluate("$('body-label').textContent")).toBe("Markdown source")
+	expect(ui.evaluate("$('campaign-body').placeholder")).toContain("# Hello {name|there}")
+	expect(ui.node("campaign-body").value).toBe("# Keep source")
+	ui.evaluate("state={campaigns:[]}; selected=''; $('body-format').value='blocks';format_ui()")
+	expect(ui.evaluate("$('campaign-body').placeholder")).toBe(
+		"<h1>Hello {name|there}</h1><p>Your news...</p>"
+	)
+	expect(ui.node("campaign-body").value).toBe("# Keep source")
+})

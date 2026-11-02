@@ -1,4 +1,4 @@
-import { parse_csv } from "./newsletter_csv.js"
+import { parse_csv, CsvLimitError } from "./newsletter_csv.js"
 import {
 	profile_aliases,
 	PROFILE_STATES,
@@ -112,7 +112,13 @@ export function parse_newsletter_csv(
 			else quoted = !quoted
 		}
 	if (quoted) return { error: "The CSV has an unfinished quoted field." }
-	const parsed = parse_csv(text.replace(/^\uFEFF/, ""))
+	let parsed: Array<Array<string>>
+	try {
+		parsed = parse_csv(text.replace(/^\uFEFF/, ""), { rows: 10001, columns: 100, cell: 20000 })
+	} catch (cause) {
+		if (cause instanceof CsvLimitError) return { error: cause.message }
+		throw cause
+	}
 	if (parsed.length < 2) return { error: "Include a header row and at least one contact." }
 	if (parsed.length > 10001)
 		return {

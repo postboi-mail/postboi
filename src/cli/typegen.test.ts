@@ -69,7 +69,7 @@ describe("generated types at the postboi/kit boundary", () => {
 			declare const development: string
 			declare const block: { to?: string; from?: string; subject?: string } | undefined
 
-			// bd-reside, bedales, lighthouse and emmaus cast every one of these around 0.56
+			// CMS-driven forms previously required casts for each of these values.
 			export const register = action(() => ({ form: \`Register Your Interest: \${development}\` }))
 			export const order: ActionFields["form"] = "Products Order"
 			export const cms = action(() => ({ to: block?.to, from: block?.from, subject: block?.subject }))

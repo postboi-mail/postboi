@@ -254,3 +254,96 @@ postboi newsletters reconfirmation LIST review --json
 postboi newsletters reconfirmation LIST enable --revision 1 --review-hash HASH --confirm
 postboi newsletters reconfirmation LIST pause --revision 1
 ```
+
+## Public issues and author profiles
+
+Hosted publication resources create a separate generic web copy. They never send email or
+use subscriber samples. Listed and unlisted issues are public. Review the rendered copy
+for private details before explicitly approving its editorial revision.
+
+```ts
+await mail.publications.configure('list_id', {
+  slug: 'studio-news',
+  title: 'Studio news',
+  author: 'The editorial team',
+  enabled: true,
+  confirm: true
+})
+const copy = await mail.publications.issues.review('list_id', 'campaign_id', 3)
+// Inspect copy.html before explicitly choosing to publish that exact revision.
+await mail.publications.issues.publish('list_id', 'campaign_id', {
+  revision: copy.revision,
+  slug: 'november-news',
+  summary: 'Our latest news',
+  visibility: 'listed',
+  confirm: true
+})
+await mail.publications.issues.unpublish('list_id', 'campaign_id')
+```
+
+Use `publications.all/get` for settings, `issues.all(list, {offset})` for pages of 100
+summaries and `issues.get(list, campaign)` for the surviving public copy. Expired or
+unpublished issue bodies are unavailable. Issue summaries include expiry dates.
+`configure` requires `slug`, `title` and explicit `enabled`; enabling requires public
+approval. Omitted biography, author URL/avatar and share image preserve saved values;
+empty strings clear them. Omitted description/author become empty and retention defaults
+to 365 days. Retention accepts 0 (indefinite), 30, 90 or 365. Publication and published issue
+URLs remain stable.
+
+```sh
+postboi publications review LIST CAMPAIGN --revision 3 --out public-preview.html
+postboi publications publish LIST CAMPAIGN --revision 3 --slug november-news --summary 'Our latest news' --visibility listed --confirm
+postboi publications unpublish LIST CAMPAIGN
+```
+
+The CLI also offers `list`, `get LIST`, `configure LIST --file publication.json`,
+`issues LIST --offset 0` and `issue LIST CAMPAIGN`. Configuring enabled pages requires
+`--confirm` even if the file contains an approval field. Preview files stay offline until
+explicit publishing. Publication, migration-status and Postmaster resources require the
+hosted service. Local development requests fail explicitly and never fall back to it.
+
+## Markdown and complete HTML
+
+Set `body_format` when creating a campaign: `blocks` (the existing editor), `markdown`
+or `html_document`. A saved campaign keeps that format. Updates may omit the field;
+they preserve the saved mode. Create a separate draft to change modes. Copies and
+approved campaign snapshots keep their source format.
+
+```ts
+const draft = await mail.campaigns.create({
+  name: 'Monthly news',
+  list_id: 'list_id',
+  sender: 'news@example.test',
+  subject: 'Our latest news',
+  body_format: 'markdown',
+  body: '# Welcome\n\nThe latest **news**. [Preferences]({preferences_url})'
+})
+const preview = await mail.campaigns.preview(draft.id)
+```
+
+Markdown source is preserved. It runs through the maintained Marked parser before
+recipient substitution and HTML sanitation. Template variables work in text, links and
+images; a reader value never becomes Markdown syntax. Filters run before escaping.
+
+Complete HTML uses a single explicit `html` and `body` document, preserving supported
+email CSS and table layout. It owns its frame, so letterhead defaults off and cannot be
+enabled. Preheader text and the required postal address/preferences/unsubscribe footer
+are inserted into the actual body. Source is never converted through the visual editor.
+Scripts, active web elements, event handlers and scripting URLs are removed. Ordinary
+comments are removed to avoid differences between email/browser parsers.
+
+Outlook conditional comments, VML, inline SVG/MathML, legacy raw-text elements,
+responsive `srcset`, CSS escapes and scripting/binding CSS refuse before queueing. Use
+standard table/CSS layouts and hosted raster images for this supported format. These
+refusals are deliberate; unsupported templates are not silently flattened into blocks.
+Raw source, structural depth/node count, serialized output and personalized payload
+limits remain bounded. Test supported layouts in your target email clients before a
+real launch.
+
+The CLI forwards the same `body_format` field in `create --file draft.json` and
+`update --file draft.json --revision N`. The local inbox GUI offers a format selector
+for new drafts and a labelled source textarea. Saved modes are locked. SDK/CLI local
+captures use the same parser and sanitizer rules without contacting a hosted fallback.
+They remain captures, with no delivery or open evidence. Public publication previews
+render a separate generic edition in the appropriate format and still require explicit
+public approval.

@@ -88,3 +88,5 @@ export type {
 } from "./postboi_provider.js"
 
 export type * from "./newsletters.js"
+export type * from "./publications.js"
+export type * from "./read_resources.js"

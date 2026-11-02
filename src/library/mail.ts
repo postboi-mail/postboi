@@ -447,6 +447,9 @@ async function postboi_provider(): Promise<Postboi> {
 
 type PostboiNamespace =
 	| "messages"
+	| "migrations"
+	| "postmaster"
+	| "publications"
 	| "campaigns"
 	| "newsletters"
 	| "lists"
@@ -471,7 +474,8 @@ function lazy_namespace<K extends PostboiNamespace>(name: K): Postboi[K] {
 			},
 			async apply(_target, _owner, args: Array<unknown>) {
 				const provider =
-					is_development() && (name === "campaigns" || name === "newsletters")
+					is_development() &&
+					["campaigns", "newsletters", "publications", "migrations", "postmaster"].includes(name)
 						? new (await import("./postboi_provider.js")).default({ newsletter_local: true })
 						: await postboi_provider()
 				let owner: unknown = provider[name]
@@ -505,6 +509,9 @@ function lazy_namespace<K extends PostboiNamespace>(name: K): Postboi[K] {
  */
 export const mail: typeof send_mail & Pick<Postboi, PostboiNamespace> = Object.assign(send_mail, {
 	messages: lazy_namespace("messages"),
+	migrations: lazy_namespace("migrations"),
+	postmaster: lazy_namespace("postmaster"),
+	publications: lazy_namespace("publications"),
 	campaigns: lazy_namespace("campaigns"),
 	newsletters: lazy_namespace("newsletters"),
 	lists: lazy_namespace("lists"),

@@ -15,6 +15,8 @@ import type {
 import { ProviderBase, PostboiError } from "./index.js"
 import { read_env, env_defaults, ensure_env_loaded } from "./env.js"
 import { workload_token } from "./workload_auth.js"
+import { migration_resources, postmaster_resources } from "./read_resources.js"
+import { publication_resources } from "./publications.js"
 import { campaign_resources, newsletter_resources } from "./newsletters.js"
 import { local_newsletter_base } from "./newsletter_local.js"
 import { is_development } from "./env.js"
@@ -693,6 +695,14 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	/** Call a `/v1` path with bearer auth, an optional JSON body, and normalized errors. */
 	async #api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
 		await ensure_env_loaded()
+		const hosted_only = /^\/(publications|migrations|postmaster)(\/|\?|$)/.test(path)
+		if (hosted_only && (this.#newsletter_local ?? is_development()))
+			throw new PostboiError({
+				provider: this.provider,
+				code: "local_resource_unavailable",
+				message:
+					"This resource requires the hosted Postboi service. Local capture never falls back to hosted requests.",
+			})
 		const newsletter = /^\/(campaigns|newsletters)(\/|\?|$)/.test(path)
 		const local = this.#newsletter_local ?? (newsletter && is_development())
 		const supported_local = /^\/(campaigns|newsletters|lists|contacts)(\/|\?|$)/.test(path)
@@ -751,6 +761,9 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		cancel: (id: string): Promise<CancelResponse> => this.cancel(id),
 	}
 
+	readonly migrations = migration_resources((path, init) => this.#api(path, init))
+	readonly postmaster = postmaster_resources((path, init) => this.#api(path, init))
+	readonly publications = publication_resources((path, init) => this.#api(path, init))
 	readonly campaigns = campaign_resources((path, init) => this.#api(path, init))
 	readonly newsletters = newsletter_resources((path, init) => this.#api(path, init))
 

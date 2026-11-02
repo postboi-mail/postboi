@@ -76,6 +76,10 @@ describe("package exports", () => {
 			"views.ts", // the views SDK (publish, seal, url), re-exported from the root
 			"idempotency.ts", // the idempotency store, re-exported from the root
 			"newsletters.ts", // typed campaign and newsletter resources, reached through the Postboi provider
+			"campaign_document.ts", // bundled local source-format parser, not a provider
+			"newsletter_sanitize.ts", // bundled local semantic sanitation, not a provider
+			"publications.ts", // typed hosted publication resources, reached through Postboi
+			"read_resources.ts", // typed retained provider reports, reached through Postboi
 			"newsletter_local.ts", // loopback-only resource discovery
 			"newsletter_dev.ts", // in-memory newsletter rehearsal, mounted by inbox_server
 			"newsletter_dev_ui.ts", // local newsletter workspace

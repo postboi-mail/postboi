@@ -143,6 +143,33 @@ export const HELP: Array<HelpSection> = [
 				],
 			},
 			{
+				command: "migrations",
+				summary: "Read hosted source migration status, fidelity and exports",
+				details: [
+					"list [--offset <n>] · review, status <id> · export <id> [--after <cursor> --out source.json]",
+					"Read-only. Connect and apply remain guided dashboard operations; source exports may contain personal information.",
+				],
+			},
+			{
+				command: "postmaster",
+				summary: "Read hosted Google Postmaster observations and feedback",
+				details: [
+					"list, feedback [--offset <n>] · report <domain-id>",
+					"Read-only. Missing data is unknown. Authorization and operator policy changes remain dashboard operations.",
+				],
+			},
+			{
+				command: "publications",
+				summary: "Public newsletter archives and author profiles (hosted only)",
+				details: [
+					"list · get <list-id> · configure <list-id> --file publication.json [--confirm when enabled]",
+					"issues <list-id> [--offset <n>] · issue <list-id> <campaign-id>",
+					"review <list-id> <campaign-id> --revision <n> [--out public-preview.html] creates no public copy",
+					"publish <list-id> <campaign-id> --revision <n> --slug <name> --summary <text> --visibility listed or unlisted --confirm",
+					"unpublish <list-id> <campaign-id> removes the public copy; no publication command sends email",
+				],
+			},
+			{
 				command: "recipients",
 				summary: "A list's recipients",
 				details: ["<list> add <email>… · <list> remove <email>"],

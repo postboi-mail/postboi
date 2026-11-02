@@ -1,3 +1,13 @@
+import {
+	campaign_body_format,
+	markdown_body,
+	html_document,
+	CampaignDocumentError,
+	EMPTY_HTML_DOCUMENT,
+	html_body,
+	has_html_content,
+} from "./campaign_document.js"
+import { sanitize_html } from "./newsletter_sanitize.js"
 import type { InboxStore } from "./inbox_server.js"
 import type {
 	Campaign,
@@ -255,6 +265,31 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 		return value
 	}
 	function fields(input: Record<string, unknown>): CampaignInput {
+		let body_format: ReturnType<typeof campaign_body_format>, body: string
+		try {
+			body_format = campaign_body_format(input.body_format)
+			body =
+				body_format === "html_document"
+					? html_document(input.body === undefined ? EMPTY_HTML_DOCUMENT : text(input.body))
+					: text(input.body)
+		} catch (reason) {
+			refuse(
+				400,
+				"invalid_campaign_document",
+				reason instanceof Error ? reason.message : "Choose a valid campaign body format."
+			)
+		}
+		if (
+			body_format === "html_document" &&
+			input.letterhead !== undefined &&
+			input.letterhead !== false &&
+			input.letterhead !== 0
+		)
+			refuse(
+				400,
+				"invalid_body_format",
+				"An HTML document owns its layout. Turn letterhead off for this format."
+			)
 		for (const key of [
 			"name",
 			"subject",
@@ -285,13 +320,15 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 			name,
 			list_id: list(list_id).id,
 			subject: text(input.subject, 999),
-			body: text(input.body),
+			body,
+			body_format,
 			sender: text(input.sender, 254),
 			preheader: text(input.preheader, 500),
 			reply_to: text(input.reply_to, 254),
 			footnote: text(input.footnote, 2000),
 			style: input.style === "plain" ? "plain" : "styled",
-			letterhead: input.letterhead !== false && input.letterhead !== 0,
+			letterhead:
+				body_format !== "html_document" && input.letterhead !== false && input.letterhead !== 0,
 			tracking_opens: input.tracking_opens !== false && input.tracking_opens !== 0,
 			tracking_clicks: input.tracking_clicks !== false && input.tracking_clicks !== 0,
 			segment_id: typeof input.segment_id === "string" ? input.segment_id : null,
@@ -329,7 +366,18 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 				"Local rehearsal. Captured mail is not a provider delivery or an observed open.",
 			]
 		if (!draft.subject?.trim()) blocking.push("Add a subject.")
-		if (!draft.body?.trim()) blocking.push("Write the email body.")
+		const review_body =
+			draft.body_format === "html_document"
+				? html_body(draft.body ?? "")
+				: draft.body_format === "markdown"
+					? markdown_body(draft.body ?? "")
+					: (draft.body ?? "")
+		if (
+			draft.body_format && draft.body_format !== "blocks"
+				? !has_html_content(review_body)
+				: !review_body.replace(/<[^>]*>/g, "").trim() && !/<img\b/i.test(review_body)
+		)
+			blocking.push("Write the email body.")
 		if (!draft.sender?.trim()) blocking.push("Choose a sender.")
 		if (!newsletters.get(draft.list_id)?.postal_address?.trim())
 			blocking.push("Add the organisation postal address to its newsletter.")
@@ -381,8 +429,23 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 			}
 		}
 
-		const footer = `<hr><p>${escape_html(draft.frozen_postal ?? newsletters.get(draft.list_id)?.postal_address ?? "")}</p><p><a href="${escape_html(values.unsubscribe_url)}">Manage subscription</a></p>`
-		const html = `<!doctype html><meta charset="utf-8"><div style="max-width:600px;margin:auto;font-family:system-ui">${fill(content.body ?? "", true)}${footer}</div>`
+		const footer = `<hr><p style="color:#161c30">${escape_html(draft.frozen_postal ?? newsletters.get(draft.list_id)?.postal_address ?? "")}</p><p style="color:#161c30"><a style="color:#161c30" href="${escape_html(values.unsubscribe_url)}">Manage subscription</a></p>${content.footnote ? `<p style="color:#161c30">${escape_html(fill(content.footnote))}</p>` : ""}`
+		let html: string
+		try {
+			const format = campaign_body_format(content.body_format)
+			html =
+				format === "html_document"
+					? html_document(fill(content.body ?? "", true), {
+							prepend: content.preheader
+								? `<div style="display:none">${escape_html(fill(content.preheader))}</div>`
+								: "",
+							append: `<table role="presentation" align="center" width="100%" bgcolor="#f4efe5" style="width:100%;max-width:600px;margin:24px auto;background-color:#f4efe5;color:#161c30;border-collapse:collapse"><tr><td style="padding:20px;background-color:#f4efe5;color:#161c30;font-family:system-ui">${footer}</td></tr></table>`,
+						})
+					: `<!doctype html><meta charset="utf-8"><div style="max-width:600px;margin:auto;font-family:system-ui">${format === "markdown" ? sanitize_html(fill(markdown_body(content.body ?? ""), true)) : sanitize_html(fill(content.body ?? "", true))}${footer}</div>`
+		} catch (reason) {
+			if (reason instanceof CampaignDocumentError) refuse(400, reason.code, reason.message)
+			throw reason
+		}
 		const rendered = {
 			html,
 			text: html_to_text(html),
@@ -1095,10 +1158,20 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 				const body = object(input)
 				if (body.revision !== draft.revision)
 					refuse(409, "revision_conflict", "Reload the current draft revision before saving.")
-				Object.assign(draft, fields(body), {
+				if (body.body_format !== undefined && body.body_format !== (draft.body_format ?? "blocks"))
+					refuse(
+						409,
+						"body_format_fixed",
+						"A saved campaign keeps its body format. Create a separate campaign to change formats."
+					)
+				Object.assign(draft, fields({ ...body, body_format: draft.body_format ?? "blocks" }), {
 					revision: draft.revision + 1,
 					updated_at: time(),
-					letterhead: Number(body.letterhead !== false && body.letterhead !== 0),
+					letterhead: Number(
+						draft.body_format !== "html_document" &&
+							body.letterhead !== false &&
+							body.letterhead !== 0
+					),
 					tracking_opens: Number(body.tracking_opens !== false && body.tracking_opens !== 0),
 					tracking_clicks: Number(body.tracking_clicks !== false && body.tracking_clicks !== 0),
 				})
@@ -1268,9 +1341,18 @@ export function create_newsletter_dev(store: InboxStore, base = "/__postboi") {
 					if (!reader || reader.status !== "subscribed" || suppressed.has(reader.email))
 						draft.excluded.push(key)
 					else {
-						capture(draft, draft.snapshots[key] ?? reader)
-						draft.captured.push(key)
-						captured++
+						try {
+							capture(draft, draft.snapshots[key] ?? reader)
+							draft.captured.push(key)
+							captured++
+						} catch (reason) {
+							if (
+								reason instanceof DevNewsletterError &&
+								["rendered_too_large", "invalid_campaign_document"].includes(reason.code)
+							)
+								draft.excluded.push(key)
+							else throw reason
+						}
 					}
 					if (++processed >= 100) break
 				}

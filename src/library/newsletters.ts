@@ -1,9 +1,12 @@
+import type { CampaignBodyFormat } from "./campaign_document.js"
+export type { CampaignBodyFormat } from "./campaign_document.js"
 /** Saved newsletter drafts and audiences on the Postboi provider. */
 export interface CampaignInput {
 	name: string
 	list_id: string
 	subject?: string
 	body?: string
+	body_format?: CampaignBodyFormat
 	preheader?: string
 	sender?: string
 	reply_to?: string
@@ -32,6 +35,7 @@ export interface Campaign extends Omit<
 	updated_at: string
 }
 export interface CampaignReview {
+	html_bytes?: number
 	blocking: Array<string>
 	warnings: Array<string>
 }
@@ -104,7 +108,7 @@ export interface NewsletterReconfirmationPolicy extends NewsletterReconfirmation
 	authorization_revision: number
 	enabled: 0 | 1
 	enabled_by_user_id: string | null
-	authorization_kind: "member" | "api_key"
+	authorization_kind: "member" | "api_key" | "oauth"
 	api_key_id: string | null
 	reviewed_revision: number | null
 	enabled_at: string | null
@@ -422,6 +426,11 @@ export function newsletter_resources(request: NewsletterRequest) {
 				).segments,
 			create: (id: string, name: string, rule: SegmentRule) =>
 				request<{ id: string }>(path(id, "segments"), { method: "POST", body: { name, rule } }),
+			update: (id: string, segment_id: string, name: string, rule: SegmentRule) =>
+				request<{ id: string }>(path(id, `segments/${encodeURIComponent(segment_id)}`), {
+					method: "PATCH",
+					body: { name, rule },
+				}),
 		},
 		rules: {
 			all: async (id: string) =>
