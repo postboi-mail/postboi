@@ -15,9 +15,16 @@ import type {
 import { ProviderBase, PostboiError } from "./index.js"
 import { read_env, env_defaults, ensure_env_loaded } from "./env.js"
 import { workload_token } from "./workload_auth.js"
+import { migration_resources, postmaster_resources } from "./read_resources.js"
+import { publication_resources } from "./publications.js"
+import { campaign_resources, newsletter_resources } from "./newsletters.js"
+import { local_newsletter_base } from "./newsletter_local.js"
+import { is_development } from "./env.js"
 
 /** Options for the Postboi provider. */
 export type PostboiOptions = CommonProviderOptions & {
+	/** Capture newsletter/list operations in the local dev inbox. Defaults on for newsletter resources in development. */
+	newsletter_local?: boolean
 	/** @internal Per-call environment overrides from mail(). */
 	workload_env?: Record<string, string | undefined>
 	/** The Postboi provider token. Defaults to the `POSTBOI_TOKEN` environment variable. */
@@ -618,11 +625,20 @@ export default class Postboi extends ProviderBase<SendResponse> {
 	#send_via: string | undefined
 	#own_default: Defaults | undefined
 
-	constructor({ token, base_url, send_via, workload_env, ...options }: PostboiOptions = {}) {
+	#newsletter_local?: boolean
+	constructor({
+		token,
+		base_url,
+		send_via,
+		workload_env,
+		newsletter_local,
+		...options
+	}: PostboiOptions = {}) {
 		// Defaults can come from the environment (POSTBOI_FROM, …); anything passed
 		// explicitly via `default` wins.
 		super({ ...options, default: { ...env_defaults(), ...options.default } })
 		// Kept so the environment can be re-read late without losing to it — see prepare_send.
+		this.#newsletter_local = newsletter_local
 		this.#own_default = options.default
 		this.#token = token ?? read_env("POSTBOI_TOKEN")
 		this.#workload_env = workload_env
@@ -678,10 +694,23 @@ export default class Postboi extends ProviderBase<SendResponse> {
 
 	/** Call a `/v1` path with bearer auth, an optional JSON body, and normalized errors. */
 	async #api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-		const token = await this.#require_token()
+		await ensure_env_loaded()
+		const hosted_only = /^\/(publications|migrations|postmaster)(\/|\?|$)/.test(path)
+		if (hosted_only && (this.#newsletter_local ?? is_development()))
+			throw new PostboiError({
+				provider: this.provider,
+				code: "local_resource_unavailable",
+				message:
+					"This resource requires the hosted Postboi service. Local capture never falls back to hosted requests.",
+			})
+		const newsletter = /^\/(campaigns|newsletters)(\/|\?|$)/.test(path)
+		const local = this.#newsletter_local ?? (newsletter && is_development())
+		const supported_local = /^\/(campaigns|newsletters|lists|contacts)(\/|\?|$)/.test(path)
+		const host = local && supported_local ? await local_newsletter_base() : this.#host
+		const token = local && supported_local ? "local-development" : await this.#require_token()
 		const data = await this.call(
 			{
-				url: `${this.#host}/v1${path}`,
+				url: `${host}/v1${path}`,
 				method: init.method,
 				headers: {
 					Authorization: `Bearer ${token}`,
@@ -731,6 +760,12 @@ export default class Postboi extends ProviderBase<SendResponse> {
 		/** Cancel a scheduled message — the same as the top-level `cancel`. */
 		cancel: (id: string): Promise<CancelResponse> => this.cancel(id),
 	}
+
+	readonly migrations = migration_resources((path, init) => this.#api(path, init))
+	readonly postmaster = postmaster_resources((path, init) => this.#api(path, init))
+	readonly publications = publication_resources((path, init) => this.#api(path, init))
+	readonly campaigns = campaign_resources((path, init) => this.#api(path, init))
+	readonly newsletters = newsletter_resources((path, init) => this.#api(path, init))
 
 	/** Lists (audiences) on the account. Their recipients live under `recipients`. */
 	readonly lists = {

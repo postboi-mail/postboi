@@ -1,0 +1,57 @@
+---
+title: Migration and Postmaster reports
+name: Provider reports
+description: Read migration fidelity, retained source evidence and Google Postmaster reports through the SDK, CLI or MCP.
+category: Guides
+---
+
+Provider connections and migration approval stay in the dashboard. The SDK, CLI and MCP expose retained reports without connecting, importing, sending, refreshing Google data or changing safety policy. Use a normal team key, or an OAuth MCP connection with read permission. Client keys and workload tokens cannot read these resources.
+
+## Migration progress and fidelity
+
+```typescript
+import Postboi from 'postboi'
+
+const mail = new Postboi({ token: process.env.POSTBOI_TOKEN })
+const page = await mail.migrations.list({ offset: 0 })
+const review = await mail.migrations.review(page.migrations[0].id)
+console.log(review.audiences, review.warnings, review.unsupported)
+```
+
+Migration pages contain up to 50 jobs. Continue with `next_offset` until it is null. The fidelity report distinguishes source subscription counts from actual destination counts, retained restrictions, unresolved permission fields and unsupported items. These reports do not turn imported activity into native delivery events.
+
+```sh
+postboi migrations list --json
+postboi migrations review MIGRATION_ID --json
+postboi migrations export MIGRATION_ID --out source-page.json --json
+postboi migrations export MIGRATION_ID --after CURSOR --out next-page.json --json
+```
+
+Export returns one original source record, up to 500 KB, and a `next` cursor. Continue until `next` is null. An additional empty page can be needed after the final record. Output files must be new paths and are created with private permissions. Original source records can contain personal data, historical reader links and HTML. Store them privately and do not execute their content. Export never includes Postboi's encrypted source credentials, OAuth state or internal task leases.
+
+## Google Postmaster observations
+
+```typescript
+const page = await mail.postmaster.list()
+const report = await mail.postmaster.report(page.domains[0].domain_id)
+const feedback = await mail.postmaster.feedback()
+console.log(report.domain.signal, report.points, feedback.holds)
+```
+
+```sh
+postboi postmaster list --json
+postboi postmaster report DOMAIN_ID --json
+postboi postmaster feedback --offset 0 --json
+```
+
+Domain pages contain up to 25 rows. A domain report contains at most 30 retained daily points. Feedback pages independently return up to 25 points, holds and source-job states using the same offset. Follow `next_offset`; these pages can change as scheduled ingestion adds observations.
+
+A signal of `missing`, `stale`, `disconnected` or `reconnect` is not a healthy report. Google may withhold low-volume observations for privacy. A reported spam rate is a fraction; `0.001` means 0.1%. Feedback's `local_native_gmail_accepted` counts Postboi's retained native Gmail acceptances. It is not Google's complaint denominator. A zero rate does not establish inbox placement or validate individual mailboxes.
+
+These operations require hosted provider evidence. Local inbox calls refuse before looking up credentials or contacting a hosted fallback. For an intentional hosted client in a development process, pass `newsletter_local: false` explicitly.
+
+## REST and MCP
+
+REST uses `GET /v1/migrations`, `GET /v1/migrations/ID`, `GET /v1/migrations/ID/export`, `GET /v1/postmaster`, `GET /v1/postmaster/ID` and `GET /v1/postmaster/feedback`. Pages accept `offset`; source export accepts its numeric `after` cursor. Responses are private and are not cached.
+
+The equivalent read-only MCP tools are `migrations_list`, `migration_review`, `migration_export`, `postmaster_list`, `postmaster_report` and `postmaster_feedback`. They use the same bounded projections as REST. No tool in this group can establish a provider connection or change an operator hold.

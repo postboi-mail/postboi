@@ -262,3 +262,10 @@ expect(mail.sent).toHaveLength(1)
 > The inbox stands in front of **sending** only. `mail.lists`, `mail.contacts` and the other
 > [Postboi provider](/provider) namespaces still talk to the real API in development.
 > Managing an audience isn't something you'd want faked.
+
+## Newsletter rehearsal
+
+Open **Newsletters** in the mailbox toolbar to build a local audience, request and confirm
+signups, edit drafts, review a revision, capture a test and run due campaign work. The
+workspace stays inside the local inbox and clears on restart. The [newsletter guide](/newsletters)
+has the SDK and CLI flow, including `--local` and the meaning of simulated reports.

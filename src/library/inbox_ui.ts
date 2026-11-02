@@ -4474,6 +4474,7 @@ export function inbox_ui({ sounds = true, intro = true }: InboxUiOptions = {}): 
 			<div class="band b1">
 				<button class="tb" id="t-read"><span class="ico">&#128229;</span>Read</button>
 				<button class="tb" id="t-refresh"><span class="ico">&#128260;</span>Mail Center</button>
+				<a href="/__postboi/newsletters" target="_blank" rel="noopener" style="color:inherit;padding:8px">Newsletters</a>
 				<button class="tb" id="t-print"><span class="ico">&#128424;</span>Print</button>
 				<button class="tb" id="t-delete"><span class="ico">&#128465;</span>Delete All</button>
 			</div>

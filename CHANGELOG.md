@@ -10,6 +10,22 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+### Added
+
+- Explicit campaign Markdown and complete HTML source formats, with preserved source, revision-safe copies and snapshots, bounded rendering, required reader-choice links and matching local inbox capture/authoring. Unsupported legacy HTML constructs refuse clearly before queueing.
+
+- Hosted publication SDK and CLI resources for public author settings, inert editorial review, explicitly approved publication, paged issue reads and immediate removal. Local mode refuses these operations without a hosted fallback.
+
+- Hosted automatic reconfirmation policy resources and commands with separate draft saving, preview/review, exact-revision approval and pause.
+
+- Hosted audience-quality resources and CLI commands for bounded address/domain reviews and explicit per-newsletter eligibility choices, separate from subscription consent.
+
+- Source-aware newsletter CSV profiles for common providers, with conservative lifecycle interpretation, preserved source evidence and explicit refusals before restrictive rows or exclusion tags could be lost.
+- Reviewed newsletter automation rules through the SDK, CLI and local inbox: paused drafts, current-revision previews and explicit enable, fresh signup/tag triggers, pause cancellation and no automatic replay of old intents. Local rules capture only in the inbox and never claim provider delivery.
+- Saved newsletter campaigns through `mail.campaigns` and the `postboi campaigns` CLI: revision-aware drafts, review, rendered previews, explicit test recipients, scheduled launches, controls, duplication, non-opener draft creation and paged reporting/export.
+- `mail.newsletters` and `postboi newsletters` manage newsletter settings, paged audiences, confirmation requests, tags, segments and consent-preserving CSV preview/apply. Signup requests double opt-in; it never directly subscribes someone.
+- A local newsletter workspace in the dev inbox, with ephemeral audiences and drafts, captured confirmation/test/campaign mail, one-use confirmation links, preference opt-out, bounded due work and honest local reports. Use `--local` in the CLI or `new Postboi({ newsletter_local: true })`; newsletter SDK calls also capture automatically in development. An absent inbox refuses local work without contacting hosted services.
+
 ## 0.78.0
 
 ### Added

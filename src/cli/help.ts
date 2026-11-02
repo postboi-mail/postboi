@@ -116,6 +116,60 @@ export const HELP: Array<HelpSection> = [
 				],
 			},
 			{
+				command: "campaigns",
+				summary: "Saved newsletter drafts, reviewed launches and reports",
+				details: [
+					"create --file draft.json · get <id> · update <id> --file draft.json --revision <n>",
+					"review <id> · preview <id> [--sample-contact <id> --out email.html] · test <id> --email <address> [--sample-contact <id>]",
+					"launch <id> --revision <n> --timezone <IANA zone> [--at <absolute ISO>] · pause, resume, cancel, duplicate <id>",
+					"report <id> · recipients <id> [--offset <n> --limit <n>] · export <id> --out report.csv · resend <id> --key <idempotency key> creates a draft",
+					"--local captures in the running dev inbox; run <id> --local captures one due page. No hosted sending or delivery/open claims",
+				],
+			},
+			{
+				command: "newsletters",
+				summary: "Newsletter audiences, consent, tags and migration previews",
+				details: [
+					"configure --file newsletter.json · get <list-id> · audience <list-id> [--search <text> --offset <n>]",
+					"reconfirmation <list-id> get, save --file policy.json [--revision <n>], review, enable --revision <n> --review-hash <hash> --confirm, pause --revision <n> (hosted only)",
+					"quality <list-id> get, scan, domains [--after <cursor>] · exclude, allow --email <address> (hosted only)",
+					"signup <list-id> --email <address> [--name <name>] --consent requests confirmation; it never directly subscribes",
+					"tags <list-id> add --name <tag> [--contact <ids> --event <id>] · tags <list-id> remove --tag <id> --contact <id>",
+					"rules <list-id> list · create --file rule.json · get, review, preview <rule-id> [--sample-contact <id> --out preview.html]",
+					"rules <list-id> update <rule-id> --file rule.json --revision <n> · enable <rule-id> --revision <n> --confirm · pause <rule-id> --revision <n>",
+					"rules <list-id> run <rule-id> --local captures one pending page; imports never enable or trigger rules",
+					"segments <list-id> [add --file segment.json] · imports <list-id> preview --file audience.csv [--status pending --consent --mapping fields.json --profile ghost]",
+					"imports <list-id> apply <import-id> applies one idempotent page without sending. --local keeps all work in the running dev inbox",
+				],
+			},
+			{
+				command: "migrations",
+				summary: "Read hosted source migration status, fidelity and exports",
+				details: [
+					"list [--offset <n>] · review, status <id> · export <id> [--after <cursor> --out source.json]",
+					"Read-only. Connect and apply remain guided dashboard operations; source exports may contain personal information.",
+				],
+			},
+			{
+				command: "postmaster",
+				summary: "Read hosted Google Postmaster observations and feedback",
+				details: [
+					"list, feedback [--offset <n>] · report <domain-id>",
+					"Read-only. Missing data is unknown. Authorization and operator policy changes remain dashboard operations.",
+				],
+			},
+			{
+				command: "publications",
+				summary: "Public newsletter archives and author profiles (hosted only)",
+				details: [
+					"list · get <list-id> · configure <list-id> --file publication.json [--confirm when enabled]",
+					"issues <list-id> [--offset <n>] · issue <list-id> <campaign-id>",
+					"review <list-id> <campaign-id> --revision <n> [--out public-preview.html] creates no public copy",
+					"publish <list-id> <campaign-id> --revision <n> --slug <name> --summary <text> --visibility listed or unlisted --confirm",
+					"unpublish <list-id> <campaign-id> removes the public copy; no publication command sends email",
+				],
+			},
+			{
 				command: "recipients",
 				summary: "A list's recipients",
 				details: ["<list> add <email>… · <list> remove <email>"],

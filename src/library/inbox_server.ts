@@ -8,6 +8,8 @@ import { SOUNDS } from "./inbox_sounds.js"
 import { ART } from "./inbox_art.js"
 import { DESKTOP } from "./inbox_desktop.js"
 import { POOM_SPRITES } from "./inbox_poom.js"
+import { create_newsletter_dev, DevNewsletterError } from "./newsletter_dev.js"
+import { newsletter_dev_ui } from "./newsletter_dev_ui.js"
 
 /**
  * The dev inbox's storage and HTTP surface. Kept apart from the transport that mounts it:
@@ -370,6 +372,7 @@ export function inbox_middleware(
 	base: string = INBOX_PATH,
 	ui: InboxUiOptions = {}
 ): InboxMiddleware {
+	const newsletter_dev = create_newsletter_dev(store, base)
 	// Hosted screenshot runs, one per captured message: message id → run id at
 	// the testing API. Memory, like the store itself — the dashboard's run list
 	// is the durable record, this is just which run belongs to which capture.
@@ -397,6 +400,77 @@ export function inbox_middleware(
 		if (path !== base && !path.startsWith(`${base}/`)) return next()
 		const route = path.slice(base.length) || "/"
 		const method = request.method ?? "GET"
+
+		if (route === "/newsletters" && method === "GET") {
+			response.statusCode = 200
+			response.setHeader("content-type", "text/html; charset=utf-8")
+			response.setHeader("cache-control", "no-store")
+			response.end(newsletter_dev_ui(base))
+			return
+		}
+		if (route === "/api/newsletter" || route.startsWith("/api/newsletter/")) {
+			const operation = route.slice("/api/newsletter".length) || "/"
+			const origin = request.headers?.origin
+			if (!["GET", "HEAD"].includes(method) && origin) {
+				try {
+					if (new URL(String(origin)).host !== String(request.headers?.host)) throw Error("origin")
+				} catch {
+					send_json(response, 403, {
+						message: "Use the local inbox origin for changes.",
+						code: "origin_refused",
+					})
+					return
+				}
+			}
+			const reader_action = operation === "/confirm" || operation === "/preferences"
+			if (
+				!["GET", "HEAD"].includes(method) &&
+				!reader_action &&
+				!String(request.headers?.["content-type"]).startsWith("application/json")
+			) {
+				send_json(response, 415, {
+					message: "Send newsletter requests as application/json.",
+					code: "invalid_content_type",
+				})
+				return
+			}
+			function answer(raw: string) {
+				try {
+					const result = newsletter_dev.handle(
+						operation,
+						method,
+						raw && !reader_action ? JSON.parse(raw) : undefined,
+						new URL(url, "http://localhost")
+					)
+					response.setHeader("referrer-policy", reader_action ? "same-origin" : "no-referrer")
+					if (result.html !== undefined || result.text !== undefined) {
+						response.statusCode = result.status ?? 200
+						response.setHeader("content-type", result.type ?? "text/html; charset=utf-8")
+						response.setHeader("cache-control", "no-store")
+						response.setHeader(
+							"content-security-policy",
+							reader_action
+								? "default-src 'none'; form-action 'self'; style-src 'unsafe-inline'"
+								: "sandbox; default-src 'none'; img-src https: data:; style-src 'unsafe-inline'"
+						)
+						response.end(result.html ?? result.text)
+					} else send_json(response, result.status ?? 200, result.body)
+				} catch (error) {
+					send_json(response, error instanceof DevNewsletterError ? error.status : 400, {
+						message: error instanceof Error ? error.message : String(error),
+						code: error instanceof DevNewsletterError ? error.code : "invalid_input",
+					})
+				}
+			}
+			if (method === "GET" || method === "HEAD") answer("")
+			else
+				void read_body(request, 4 * 1024 * 1024)
+					.then(answer)
+					.catch((error: unknown) =>
+						send_json(response, 413, { message: String(error), code: "local_limit" })
+					)
+			return
+		}
 
 		if (route === "/" && method === "GET") {
 			response.statusCode = 200
