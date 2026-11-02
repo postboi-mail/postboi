@@ -442,7 +442,7 @@ export function inbox_middleware(
 						raw && !reader_action ? JSON.parse(raw) : undefined,
 						new URL(url, "http://localhost")
 					)
-					response.setHeader("referrer-policy", "no-referrer")
+					response.setHeader("referrer-policy", reader_action ? "same-origin" : "no-referrer")
 					if (result.html !== undefined || result.text !== undefined) {
 						response.statusCode = result.status ?? 200
 						response.setHeader("content-type", result.type ?? "text/html; charset=utf-8")

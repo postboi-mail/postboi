@@ -166,7 +166,20 @@ describe("newsletter rehearsal through the real dev inbox HTTP surface", () => {
 		const message = captures.list()[0],
 			match = message.text!.match(/\/__postboi\/api\/newsletter\/confirm\?token=[\w-]+/)!
 		const confirm = root + match[0]
-		expect((await real_fetch(confirm)).status).toBe(200)
+		const confirmation_page = await real_fetch(confirm)
+		expect(confirmation_page.status).toBe(200)
+		expect(confirmation_page.headers.get("referrer-policy")).toBe("same-origin")
+		expect(
+			(
+				await real_fetch(confirm, {
+					method: "POST",
+					headers: { origin: "https://foreign.example" },
+				})
+			).status
+		).toBe(403)
+		expect(
+			(await real_fetch(confirm, { method: "POST", headers: { origin: "null" } })).status
+		).toBe(403)
 		expect(
 			(await client.newsletters.audience(list.id, { search: "new@" })).contacts[0].status
 		).toBe("pending")
