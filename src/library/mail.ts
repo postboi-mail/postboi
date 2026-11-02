@@ -447,6 +447,8 @@ async function postboi_provider(): Promise<Postboi> {
 
 type PostboiNamespace =
 	| "messages"
+	| "campaigns"
+	| "newsletters"
 	| "lists"
 	| "recipients"
 	| "contacts"
@@ -461,15 +463,27 @@ type PostboiNamespace =
  * proxy so every namespace shares the resolve-then-forward logic.
  */
 function lazy_namespace<K extends PostboiNamespace>(name: K): Postboi[K] {
-	return new Proxy({} as Postboi[K], {
-		get(_target, method: string) {
-			return async (...args: Array<unknown>) => {
-				const provider = await postboi_provider()
-				const ns = provider[name] as Record<string, (...a: Array<unknown>) => unknown>
-				return ns[method](...args)
-			}
-		},
-	})
+	function branch(path: Array<string>): unknown {
+		return new Proxy(function () {}, {
+			get(_target, method: string) {
+				if (method === "then") return undefined
+				return branch([...path, method])
+			},
+			async apply(_target, _owner, args: Array<unknown>) {
+				const provider =
+					is_development() && (name === "campaigns" || name === "newsletters")
+						? new (await import("./postboi_provider.js")).default({ newsletter_local: true })
+						: await postboi_provider()
+				let owner: unknown = provider[name]
+				for (const key of path.slice(0, -1)) owner = (owner as Record<string, unknown>)[key]
+				const method = (owner as Record<string, (...values: Array<unknown>) => unknown>)[
+					path.at(-1)!
+				]
+				return Reflect.apply(method, owner, args)
+			},
+		})
+	}
+	return branch([]) as Postboi[K]
 }
 
 /**
@@ -491,6 +505,8 @@ function lazy_namespace<K extends PostboiNamespace>(name: K): Postboi[K] {
  */
 export const mail: typeof send_mail & Pick<Postboi, PostboiNamespace> = Object.assign(send_mail, {
 	messages: lazy_namespace("messages"),
+	campaigns: lazy_namespace("campaigns"),
+	newsletters: lazy_namespace("newsletters"),
 	lists: lazy_namespace("lists"),
 	recipients: lazy_namespace("recipients"),
 	contacts: lazy_namespace("contacts"),

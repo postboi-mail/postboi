@@ -53,6 +53,17 @@ await mail.lists.broadcast(name_or_id, { from?, reply_to?, subject, body?, text?
 await mail.lists.broadcast(name_or_id, { channel: "sms", text, from?, send_via?, scheduled_at? })
 await mail.lists.broadcast(name_or_id, { channel: "whatsapp", template, variables?, language?, from?, send_via?, scheduled_at? })
 
+// newsletter drafts, consent and imports (see Newsletters)
+await mail.campaigns.create({ name, list_id, subject, body, sender })
+await mail.campaigns.review(id)
+await mail.campaigns.preview(id)
+await mail.campaigns.test(id, email, { sample_contact_id? })
+await mail.campaigns.launch(id, { revision, scheduled_at?, timezone? })
+await mail.campaigns.report(id)
+await mail.newsletters.configure({ list_id, slug, postal_address, public_signup? })
+await mail.newsletters.signup(list_id, { email, name?, consent: true })
+await mail.newsletters.audience(list_id, { search?, offset? })
+
 // notifications (see The Postboi provider)
 await mail.notifications.all(name_or_id)
 await mail.notifications.create(name_or_id, { recipients, from?, subject?, body?, schedule })

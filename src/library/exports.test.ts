@@ -75,6 +75,16 @@ describe("package exports", () => {
 			"inbox_poom.ts", // POOM.EXE's Freedoom weapon sprites, served by inbox_server.ts
 			"views.ts", // the views SDK (publish, seal, url), re-exported from the root
 			"idempotency.ts", // the idempotency store, re-exported from the root
+			"newsletters.ts", // typed campaign and newsletter resources, reached through the Postboi provider
+			"newsletter_local.ts", // loopback-only resource discovery
+			"newsletter_dev.ts", // in-memory newsletter rehearsal, mounted by inbox_server
+			"newsletter_dev_ui.ts", // local newsletter workspace
+			"newsletter_csv.ts", // local CSV parsing and safe exports
+			"newsletter_import_profiles.ts", // source-aware CSV mapping and state interpretation
+			"newsletter_import_rules.ts", // consent-preserving local import rules
+			"newsletter_segment_rules.ts", // local audience selection
+			"newsletter_template.ts", // local campaign personalization
+			"newsletter_template_helpers.ts", // local date and text filters
 			"workload_auth.ts", // internal GitHub workload credential resolver, shared by mail and mailbox
 		])
 		// Channel providers live in subdirectories (`sms/`), so scan those too — otherwise a

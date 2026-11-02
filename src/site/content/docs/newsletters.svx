@@ -1,0 +1,208 @@
+---
+title: Newsletters and campaigns
+name: Newsletters
+description: Save and review campaigns, move an audience with its consent, and rehearse signup and delivery in the local inbox.
+category: Guides
+---
+
+Postboi keeps newsletter campaigns as saved drafts. Create an audience, check its consent,
+write a draft and review its current revision before launching. The Postboi provider's
+SDK and CLI use the same API as the dashboard.
+
+## A reviewed campaign
+
+```typescript
+import Postboi from 'postboi'
+
+const mail = new Postboi({ token: process.env.POSTBOI_TOKEN })
+const list = await mail.lists.create('Weekly news')
+await mail.newsletters.configure({
+  list_id: list.id,
+  slug: 'weekly-news',
+  postal_address: 'Your organisation postal address',
+  public_signup: true
+})
+
+const draft = await mail.campaigns.create({
+  name: 'November update',
+  list_id: list.id,
+  sender: 'news@yourdomain.example',
+  subject: 'This month',
+  body: '<h1>Hello {name|there}</h1><p>Your news.</p>'
+})
+const review = await mail.campaigns.review(draft.id)
+const html = await mail.campaigns.preview(draft.id)
+// Check review.blocking and inspect html before launching.
+await mail.campaigns.test(draft.id, 'reviewer@yourdomain.example')
+await mail.campaigns.launch(draft.id, {
+  revision: draft.revision,
+  scheduled_at: '2027-01-12T09:00:00Z',
+  timezone: 'Europe/London'
+})
+```
+
+`test` sends to the explicit email only. `sample_contact_id` can supply a real audience
+member's personalization while keeping that review address as the destination.
+`update` replaces a draft and needs its current `revision`. Launched content is immutable;
+`duplicate` makes another draft. Pausing leaves unsent work available for resume, and
+canceling stops unsent work.
+
+`report` separates provider acceptance from confirmed delivery. Opens are observed tracking
+signals, not proof that a person read a message. `resend(id, idempotency_key)` creates a
+new draft from confirmed delivered, tracked recipients without an observed open. Review and
+launch that new draft separately.
+
+`recipients(id, { offset, limit })` pages recipient results. `export` returns a CSV page;
+use its offset and limit to download another page.
+
+## Audience and consent
+
+```typescript
+await mail.newsletters.signup(list.id, {
+  email: 'reader@example.com', name: 'Reader', consent: true
+})
+const page = await mail.newsletters.audience(list.id, { search: 'reader', offset: 0 })
+// page.contacts, total, audience_total, next_offset (25 per page)
+const tag = await mail.newsletters.tags.create(list.id, 'Events', {
+  contact_ids: [page.contacts[0].id], event_id: 'event-request-42'
+})
+await mail.newsletters.segments.create(list.id, 'Events readers', {
+  include_tag_ids: [tag.tag_id]
+})
+```
+
+Audience contacts retain the global `name` and `data`. `newsletter_name`, `newsletter_data`
+and `provenance` carry this list's imported name, custom fields and original source evidence;
+the latter two are JSON strings or null. Follow `next_offset` to inspect the next page.
+
+Signup requests a confirmation email. Reading a confirmation link does not subscribe;
+the recipient confirms with a deliberate POST. Existing opt-outs and profile data are
+preserved by the request. Signed preference links let readers stop their subscription.
+There is no admin shortcut for confirming a recipient through this SDK.
+
+For an existing Mailchimp CSV, preview before applying:
+
+```typescript
+const staged = await mail.newsletters.imports.preview(list.id, {
+  csv, filename: 'audience.csv', source_profile: 'mailchimp', default_status: 'pending',
+  consent_confirmed: true
+})
+let remaining = staged.import.total
+while (remaining > 0) {
+  const page = await mail.newsletters.imports.apply(list.id, staged.import.id)
+  remaining = page.remaining
+}
+```
+
+Choose `consent_confirmed: true` only for consent you already hold. Preview stages and
+counts changes without changing the audience. Apply is paged and safe to repeat. Importing
+never sends mail, and an imported subscribed row cannot revive an existing opt-out.
+`source_profile` selects `generic`, `mailchimp`, `activecampaign`, `beehiiv`, `substack`,
+`kit`, `mailerlite`, `buttondown`, `ghost`, `emailoctopus` or `listmonk`. It changes field
+suggestions and conservative state interpretation, and is retained with original source
+evidence. Unknown status or selected opt-out values stay pending. Paid/free membership
+never implies permission. Creation and payment dates stay source evidence; explicitly
+mapped consent timestamps need an ISO date or timezone. Ambiguous opt-out columns need
+an explicit mapping. Valid addresses with metadata that exceeds the supported row, field
+or 50-tag limit refuse preview so restrictive facts and exclusion tags are never silently
+dropped. The CLI accepts `--profile ghost`; local rehearsal uses the same profiles.
+
+## Reviewed automations
+
+Rules send one message after a trigger tag is added, or after a confirmed signup when
+`on_signup` is true. Saving always creates a paused draft. Importing contacts or tags never
+enables or triggers a rule.
+
+```typescript
+const trigger = await mail.newsletters.tags.create(list.id, 'Event ready')
+const rule = await mail.newsletters.rules.create(list.id, {
+  name: 'Event follow-up', trigger_tag_id: trigger.tag_id,
+  subject: 'Thank you {name|there}', body: '<p>Your follow-up.</p>',
+  sender: 'news@yourdomain.example', on_signup: false
+})
+const preview = await mail.newsletters.rules.preview(list.id, rule.id)
+const review = await mail.newsletters.rules.review(list.id, rule.id)
+if (review.ready) {
+  // Inspect the preview and approve this exact revision deliberately.
+  await mail.newsletters.rules.enable(list.id, rule.id, {
+    revision: review.revision, confirm: true
+  })
+}
+```
+
+`rules.all/get` inspect saved rules; `rules.update` uses PATCH and requires a complete
+rule draft plus its current `revision`. Pause an enabled rule before editing it.
+`rules.pause(list_id, rule_id, { revision })` stops unsent work. Enabling again authorizes
+future triggers, without automatically replaying prior intents. Preview links are inert.
+The service checks current consent, authority, key/grant validity and sender permission
+before delivery. `completion_tag_id` optionally records completion without chaining another
+rule implicitly. A review does not itself enable anything.
+
+```bash
+postboi newsletters rules LIST create --file rule.json --json
+postboi newsletters rules LIST review RULE --json
+postboi newsletters rules LIST preview RULE --out rule-preview.html
+postboi newsletters rules LIST enable RULE --revision 1 --confirm
+postboi newsletters rules LIST pause RULE --revision 1
+postboi newsletters rules LIST run RULE --local --json
+```
+
+The last command exists only for the local inbox. It captures at most 20 pending intents,
+rechecking local subscription and suppression before each capture. Add tags or confirm a
+new local signup after enabling the rule. The workspace provides the same tag, rule editor,
+preview, review, explicit enable and pause controls. Local rules cannot verify hosted API
+keys, OAuth grants, sender domains or team authority, and never claim delivery or opens.
+
+## From the terminal
+
+```bash
+postboi newsletters configure --file newsletter.json
+postboi newsletters imports LIST preview --file audience.csv --status pending --json
+postboi newsletters imports LIST apply IMPORT --json
+postboi newsletters signup LIST --email reader@example.com --consent
+postboi campaigns create --file draft.json --json
+postboi campaigns review CAMPAIGN --json
+postboi campaigns preview CAMPAIGN --out preview.html
+postboi campaigns test CAMPAIGN --email reviewer@example.com
+postboi campaigns launch CAMPAIGN --revision 1 --timezone Europe/London --at 2027-01-12T09:00:00Z
+postboi campaigns report CAMPAIGN --json
+```
+
+The JSON draft uses the same names as the SDK's create input: `name`, `list_id`, `subject`,
+`body` and `sender`. The [CLI reference](/cli) lists the controls and audience commands.
+
+## Rehearse in the dev inbox
+
+```bash
+postboi dev
+postboi lists add 'Weekly news' --local --json
+postboi newsletters configure --file newsletter.json --local
+postboi newsletters signup LIST --email reader@example.test --consent --local
+postboi campaigns create --file draft.json --local --json
+postboi campaigns review CAMPAIGN --local
+postboi campaigns test CAMPAIGN --email reviewer@example.test --local
+postboi campaigns launch CAMPAIGN --revision 1 --timezone UTC --local
+postboi campaigns run CAMPAIGN --local
+```
+
+Open **Newsletters** from the [dev inbox](/dev-inbox), or go to
+`http://localhost:1080/__postboi/newsletters`. Create a list, configure its postal address,
+request a signup and open the captured local confirmation. Save and review a draft, capture
+a test, then launch its reviewed revision. **Run due local work** processes up to 100
+recipients per page. Repeat it until complete; a future schedule stays pending.
+
+For SDK rehearsals, use `new Postboi({ newsletter_local: true })` for list and newsletter
+resources. `mail.campaigns` and `mail.newsletters` also use the inbox automatically when
+`NODE_ENV=development`. A missing or unreachable inbox refuses the operation without
+falling back to the hosted API. Production uses hosted resources; an explicit
+`newsletter_local: false` opts out of automatic newsletter capture.
+
+Local previews use your authored HTML and the hosted personalization filters and date
+helpers. Hosted rendering also applies your saved brand and letterhead. Review the hosted
+campaign before its production launch. Local reports count captures as simulated
+acceptance; delivery and opens remain unobserved. Local non-opener resend is unavailable
+because a capture cannot establish that someone received or ignored mail.
+
+The rehearsal is in memory and clears when the server restarts. It supports up to 100
+lists and campaigns, 10,000 total memberships and CSV files under 2 MB. Use synthetic
+addresses and fixtures for this workflow.

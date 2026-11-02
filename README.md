@@ -26,6 +26,8 @@ more than email, the same API sends SMS, WhatsApp, push and chat.
 
 📖 [Docs](https://docs.postboi.app) · [Pricing](https://postboi.app/pricing) · [Postboi compared](https://docs.postboi.app/compare) · [Dashboard](https://postboi.app/dashboard)
 
+Saved newsletter drafts, consent-preserving audience imports and reviewed campaign launches are available through `mail.campaigns`, `mail.newsletters` and the CLI. Rehearse the whole flow in the local dev inbox. See the [newsletter guide](https://docs.postboi.app/newsletters).
+
 ## Quick start
 
 ```bash

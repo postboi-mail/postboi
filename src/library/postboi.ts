@@ -86,3 +86,5 @@ export type {
 	ListConfirmationInput,
 	ListChanges,
 } from "./postboi_provider.js"
+
+export type * from "./newsletters.js"

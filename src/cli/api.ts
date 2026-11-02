@@ -25,6 +25,8 @@ import { command_help, help_text } from "./help.js"
 import { cloud_base, open_browser, type PostboiDomain } from "./postboi.js"
 import { bold, create_prompts, cyan, dim, green, red, strip_ansi, yellow } from "./prompts.js"
 import { views } from "./views.js"
+import { campaigns_command, newsletters_command } from "./newsletters.js"
+import { local_newsletter_base } from "../library/newsletter_local.js"
 
 /**
  * The resource commands (`postboi lists`, `postboi domains add …`) — thin wrappers over
@@ -51,6 +53,22 @@ export class ApiCommandError extends Error {
  * Set by `api_command`, read by `say`, cleared after the command.
  */
 let json_mode = false
+let local_mode = false
+export function local_api(): boolean {
+	return local_mode
+}
+async function api_base(): Promise<string> {
+	await ensure_env_loaded()
+	if (!local_mode) return cloud_base()
+	try {
+		return await local_newsletter_base()
+	} catch (error) {
+		throw new ApiCommandError(
+			error instanceof Error ? error.message : String(error),
+			"local_inbox_unavailable"
+		)
+	}
+}
 /** The last successful API response — what `--json` prints. */
 let last_response: unknown
 
@@ -90,11 +108,12 @@ export async function api<T>(
 	init: { method?: string; body?: unknown } = {},
 	fetch_fn: FetchLike = fetch
 ): Promise<T> {
-	const token = await postboi_token()
+	const token = local_mode ? "local-development" : await postboi_token()
+	const base = await api_base()
 	const raw = init.body instanceof Uint8Array
 	let response: Response
 	try {
-		response = await fetch_fn(`${cloud_base()}${path}`, {
+		response = await fetch_fn(`${base}${path}`, {
 			method: init.method ?? "GET",
 			headers: {
 				Authorization: `Bearer ${token}`,
@@ -136,10 +155,11 @@ export async function api_file(
 	path: string,
 	fetch_fn: FetchLike = fetch
 ): Promise<{ filename: string | undefined; content_type: string | null; bytes: Uint8Array }> {
-	const token = await postboi_token()
+	const token = local_mode ? "local-development" : await postboi_token()
+	const base = await api_base()
 	let response: Response
 	try {
-		response = await fetch_fn(`${cloud_base()}${path}`, {
+		response = await fetch_fn(`${base}${path}`, {
 			headers: { Authorization: `Bearer ${token}` },
 		})
 	} catch (error) {
@@ -2059,6 +2079,8 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	assets: assets_command,
 	"send-address": send_address,
 	lists,
+	campaigns: campaigns_command,
+	newsletters: newsletters_command,
 	recipients,
 	contacts,
 	domains,
@@ -2079,6 +2101,8 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
  * the list's name.
  */
 const LISTING = new Set([
+	"campaigns",
+	"newsletters",
 	"lists",
 	"contacts",
 	"domains",
@@ -2102,9 +2126,17 @@ export async function api_command(command: string, args: Array<string>): Promise
 		console.log(command_help(command) ?? help_text())
 		return true
 	}
+	local_mode = args.includes("--local")
+	if (local_mode && !["campaigns", "newsletters", "lists", "recipients"].includes(command)) {
+		local_mode = false
+		throw new ApiCommandError(
+			"--local is supported for campaigns, newsletters, lists and recipients.",
+			"invalid_args"
+		)
+	}
 	json_mode = args.includes("--json")
 	last_response = undefined
-	const rest = args.filter((arg) => arg !== "--json")
+	const rest = args.filter((arg) => arg !== "--json" && arg !== "--local")
 	try {
 		await handler(LISTING.has(command) && rest[0] === "list" ? rest.slice(1) : rest)
 		// A command that put a file on stdout (`exports download --out -`) leaves no
@@ -2114,6 +2146,7 @@ export async function api_command(command: string, args: Array<string>): Promise
 		}
 	} finally {
 		json_mode = false
+		local_mode = false
 	}
 	return true
 }
