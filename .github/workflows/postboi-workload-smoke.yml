@@ -19,4 +19,5 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - run: bun scripts/workload_claims.ts
       - run: bun scripts/workload_smoke.ts
