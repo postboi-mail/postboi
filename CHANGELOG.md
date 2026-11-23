@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.79.0
+
 ### Added
 
 - `postboi/webhooks`: two Postboi provider events for content Postboi deleted. `content_deleted` (`email.content_deleted`) fires once for each message whose stored content went, because its retention period came round or somebody deleted a form submission on purpose; `export_file_deleted` (`export.file_deleted`) fires beside it when the message carried a scheduled export's file. The message is in `message_id` and `event.deleted` says why and what it was (`reason`, `deleted_at`, `direction`, `export`, `attachments`), never the content. For deleting a copy you keep yourself, in a bucket or a CRM, at the same moment. `mock_event` and `mock_request` build both.
