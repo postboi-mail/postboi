@@ -111,6 +111,19 @@ export type WebhookEventType =
 	 */
 	| "draft_created"
 	| "draft_sent"
+	/**
+	 * Postboi deleted a message's stored content (`email.content_deleted`): its retention
+	 * period came round, or somebody deleted a form submission on purpose. Sent and received
+	 * mail alike. The message is in `message_id` and the rest in `deleted`; it never carries
+	 * the content. For deleting a copy you keep yourself on the same clock. Postboi provider only.
+	 */
+	| "content_deleted"
+	/**
+	 * Postboi deleted the file a scheduled export's run sent (`export.file_deleted`), under
+	 * the team's retention period. Fired beside that message's `content_deleted`; the export
+	 * and its files are in `deleted`. Postboi provider only.
+	 */
+	| "export_file_deleted"
 
 /**
  * A mailbox's draft as Postboi sends it on `draft_created` and `draft_sent`: the wire's own
@@ -140,6 +153,25 @@ export interface MailboxDraftEvent {
 	}
 	/** `draft_sent` only: the Sent log's row. */
 	message_id?: string
+}
+
+/**
+ * What Postboi deleted, on `content_deleted` and `export_file_deleted`: which message is in
+ * the event's `message_id`, and this says why and what it was. Never the content.
+ */
+export interface ContentDeleted {
+	/** The retention period came round, or somebody deleted it on purpose. */
+	reason: "retention" | "deleted"
+	/** ISO 8601. */
+	deleted_at: string
+	/** When the message was sent or received. ISO 8601. */
+	created_at?: string
+	/** `content_deleted` only: mail the team sent, or mail it received. */
+	direction?: "sent" | "received"
+	/** The scheduled export whose file the message carried. Always set on `export_file_deleted`. */
+	export?: { id: string; name?: string }
+	/** The files that went with it, by name and size in bytes. */
+	attachments: Array<{ filename: string; size: number }>
 }
 
 /** A published view's page opened by a reader Postboi could identify (`view_viewed`). */
@@ -245,6 +277,8 @@ export interface WebhookEvent {
 	view?: ViewViewed
 	/** The mailbox and its draft. `draft_created` and `draft_sent` events only. */
 	draft?: MailboxDraftEvent
+	/** What Postboi deleted and why. `content_deleted` and `export_file_deleted` events only. */
+	deleted?: ContentDeleted
 	/**
 	 * The same for a repeat of this event and different for any other, to deduplicate on:
 	 * providers redeliver, and several (Plivo, Bandwidth, Twilio, Sinch without HMAC) sign nothing that

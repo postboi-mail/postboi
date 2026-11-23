@@ -989,6 +989,14 @@ async function messages(args: Array<string>): Promise<void> {
 		)
 		return say(`${green("✓")} canceled ${bold(result.id)}`)
 	}
+	if (first === "delete-content") {
+		if (!ref) throw new ApiCommandError("Usage: postboi messages delete-content <id>")
+		const result = await api<{ id: string; content_deleted_at: string }>(
+			`/v1/messages/${encodeURIComponent(ref)}/content`,
+			{ method: "DELETE" }
+		)
+		return say(`${green("✓")} deleted the content of ${bold(result.id)}. The row stays in the log.`)
+	}
 	// A word that isn't a status is an id: `messages msg_k3v9…` reads one back.
 	if (first && !MESSAGE_STATUSES.includes(first)) return show_message(first)
 	const status = first
@@ -1325,27 +1333,155 @@ async function exports_command(args: Array<string>): Promise<void> {
 // ── Forms ──────────────────────────────────────────────────────────────────
 
 /** What submissions are filed under — the names `form:` is typed to by `sync`. */
+/** A form as `/v1/forms` answers it. The retention fields are absent on an older Postboi. */
+interface FormWire {
+	id: string
+	name: string
+	paused: boolean
+	created_at: string
+	retention_days?: number | null
+	effective_retention_days?: number
+	retention_starts_at?: string
+}
+
 async function forms(args: Array<string>): Promise<void> {
 	if (args[0]) {
 		throw new ApiCommandError(
-			'Forms are named from your code (`mail({ form: "Contact" })`) and managed in the dashboard. `postboi forms` lists them.'
+			'Forms are named from your code (`mail({ form: "Contact" })`) and managed in the dashboard. `postboi forms` lists them, and `postboi retention` sets how long their submissions are kept.'
 		)
 	}
-	const { forms: rows } = await api<{
-		forms: Array<{ id: string; name: string; kind: string; paused: boolean; created_at: string }>
-	}>("/v1/forms")
+	const { forms: rows } = await api<{ forms: Array<FormWire> }>("/v1/forms")
 	if (rows.length === 0) {
 		return say(dim('No forms yet. Name one on a send: mail({ …, form: "Contact" })'))
 	}
 	table(
-		["NAME", "KIND", "STATE", "CREATED", "ID"],
+		["NAME", "STATE", "SUBMISSIONS KEPT", "CREATED", "ID"],
 		rows.map((f) => [
 			bold(f.name),
-			f.kind === "library" ? "named in code" : "hosted endpoint",
 			f.paused ? yellow("paused") : green("active"),
+			form_period(f),
 			day(f.created_at),
 			dim(f.id),
 		])
+	)
+}
+
+// ── Retention ──────────────────────────────────────────────────────────────
+
+/** The periods Postboi offers, in days. */
+const RETENTION_DAYS = [7, 30, 90, 365]
+
+/** "7 days", "1 year", and "kept" for no period at all. */
+function period_label(days: number | null | undefined): string {
+	if (!days) return "kept"
+	return days === 365 ? "1 year" : `${days} days`
+}
+
+/** A form's period as a table cell: its own, or the team's default it follows. */
+function form_period(form: FormWire): string {
+	if (form.retention_days === undefined) return dim("-")
+	if (form.retention_days === null) {
+		return `${period_label(form.effective_retention_days)} ${dim("(team default)")}`
+	}
+	return period_label(form.retention_days)
+}
+
+/** `7`, `30d`, `1y`, `keep`: a period as somebody types it. Undefined is none of ours. */
+export function parse_period(word: string | undefined): number | undefined {
+	const text = (word ?? "").trim().toLowerCase()
+	if (["keep", "forever", "off", "none", "0"].includes(text)) return 0
+	const days = text === "1y" || text === "year" ? 365 : Number(text.replace(/d(ays?)?$/, ""))
+	return RETENTION_DAYS.includes(days) ? days : undefined
+}
+
+const RETENTION_USAGE = [
+	"Usage: postboi retention                       what is kept, and for how long",
+	"       postboi retention set <period>             the team's default for form submissions",
+	"       postboi retention set <period> --form <f>  one form's own period",
+	"       postboi retention set <period> --content   message content: bodies and attachments",
+	"  <period> is 7, 30, 90, 365 (days) or keep. With --form, `default` follows the team's.",
+].join("\n")
+
+/** When a newly saved period first deletes anything, for the line after a save. */
+function starts_note(starts_at: string | undefined): string {
+	return starts_at && Date.parse(starts_at) > Date.now()
+		? ` Nothing is deleted before ${day(starts_at)}, so it can still be changed back.`
+		: ""
+}
+
+/**
+ * How long Postboi keeps things, and setting it: the period for form submissions (the
+ * team's default, or one form's own) and, with `--content`, for message content. Past a
+ * period the content is deleted and the row stays in the log. A submission period waits a
+ * week before it first deletes anything; the content period doesn't, so a shorter one
+ * takes effect that night.
+ */
+async function retention(args: Array<string>): Promise<void> {
+	const { flags, rest, on } = take_flags(args, ["form"], ["content"])
+	const [verb, word] = rest
+	// `--form` with its name missing reads as an empty flag. Left alone it would fall
+	// through to the team's default, which is the bigger of the two changes.
+	if (flags.form !== undefined && !flags.form.trim()) throw new ApiCommandError(RETENTION_USAGE)
+	if (!verb || verb === "show") {
+		const [account, { forms: rows }] = await Promise.all([
+			api<{ content_retention_days?: number; submission_retention_days?: number | null }>(
+				"/v1/account"
+			),
+			api<{ forms: Array<FormWire> }>("/v1/forms"),
+		])
+		last_response = { ...account, forms: rows }
+		const content = account.content_retention_days
+		say(
+			`${dim("Message content   ")} ${content === undefined ? dim("-") : content === 0 ? "kept" : period_label(content)}`
+		)
+		say(`${dim("Form submissions  ")} ${period_label(account.submission_retention_days)}`)
+		const own = rows.filter(
+			(form) => form.retention_days !== null && form.retention_days !== undefined
+		)
+		if (own.length) {
+			say()
+			table(
+				["FORM", "SUBMISSIONS KEPT"],
+				own.map((form) => [bold(form.name), form_period(form)])
+			)
+		}
+		return
+	}
+	if (verb !== "set") throw new ApiCommandError(RETENTION_USAGE)
+
+	if (on.has("content")) {
+		// One or the other: a form has no content period of its own.
+		const days = flags.form === undefined ? parse_period(word) : undefined
+		if (days === undefined) throw new ApiCommandError(RETENTION_USAGE)
+		await api("/v1/account", { method: "PATCH", body: { content_retention_days: days } })
+		return say(
+			days
+				? `${green("✓")} message content: ${period_label(days)}. Anything older is deleted in tonight's clear-out, and that can't be undone.`
+				: `${green("✓")} message content: kept for as long as the account is open.`
+		)
+	}
+
+	if (flags.form) {
+		const follows = word === "default" || word === "team"
+		const days = follows ? null : parse_period(word)
+		if (days === undefined) throw new ApiCommandError(RETENTION_USAGE)
+		const form = await api<FormWire>(`/v1/forms/${encodeURIComponent(flags.form)}`, {
+			method: "PATCH",
+			body: { retention_days: days },
+		})
+		return say(
+			`${green("✓")} ${bold(form.name)} submissions: ${form_period(form)}.${form.effective_retention_days ? starts_note(form.retention_starts_at) : ""}`
+		)
+	}
+	const days = parse_period(word)
+	if (days === undefined) throw new ApiCommandError(RETENTION_USAGE)
+	await api("/v1/account", {
+		method: "PATCH",
+		body: { submission_retention_days: days || null },
+	})
+	const account = await api<{ submission_retention_starts_at?: string }>("/v1/account")
+	say(
+		`${green("✓")} form submissions: ${period_label(days)}.${days ? starts_note(account.submission_retention_starts_at) : ""}`
 	)
 }
 
@@ -2068,6 +2204,7 @@ const COMMANDS: Record<string, (args: Array<string>) => Promise<void>> = {
 	exports: exports_command,
 	suppressions,
 	forms,
+	retention,
 	notifications,
 	testing,
 	views,
@@ -2088,6 +2225,7 @@ const LISTING = new Set([
 	"suppressions",
 	"exports",
 	"forms",
+	"retention",
 	"testing",
 	"views",
 ])

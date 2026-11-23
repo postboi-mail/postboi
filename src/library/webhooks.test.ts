@@ -355,6 +355,33 @@ describe("receive — postboi", () => {
 		expect(mock_event("viewed").client?.device).toBe("mobile")
 	})
 
+	it("says what Postboi deleted and why on the two deletion events, and never the content", async () => {
+		const gone = await mock_request({ provider: "postboi", type: "content_deleted" })
+		const [event] = await receive(gone.request, { provider: "postboi", secret: gone.secret })
+		expect((event.raw as { type: string }).type).toBe("email.content_deleted")
+		expect(event).toMatchObject({
+			type: "content_deleted",
+			message_id: "mock-message-id",
+			deleted: { reason: "retention", direction: "sent", attachments: [{ filename: "cv.pdf" }] },
+			dedupe_key: "postboi:mock-message-id:content_deleted",
+		})
+		expect(event.email).toBeUndefined()
+		expect(event.fields).toBeUndefined()
+		expect(event.timestamp?.toISOString()).toBe(event.deleted?.deleted_at)
+
+		const file = await mock_request({ provider: "postboi", type: "export_file_deleted" })
+		const [exported] = await receive(file.request, { provider: "postboi", secret: file.secret })
+		expect((exported.raw as { type: string }).type).toBe("export.file_deleted")
+		expect(exported.deleted?.export).toEqual({ id: "sxp_mock", name: "Weekly submissions" })
+		expect(exported.deleted?.direction).toBeUndefined()
+		expect(mock_event("export_file_deleted").deleted?.export?.id).toBe("sxp_mock")
+
+		// Naming a channel doesn't turn a deletion into a text message's receipt.
+		const odd = await mock_request({ provider: "postboi", type: "content_deleted", channel: "sms" })
+		const [still] = await receive(odd.request, { provider: "postboi", secret: odd.secret })
+		expect(still.type).toBe("content_deleted")
+	})
+
 	it("carries a published view's reader on view.viewed, with nobody as the recipient", async () => {
 		const { request, secret } = await mock_request({ provider: "postboi", type: "view_viewed" })
 		const [event] = await receive(request, { provider: "postboi", secret })

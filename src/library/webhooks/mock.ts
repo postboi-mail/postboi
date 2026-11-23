@@ -10,6 +10,7 @@ import { PostboiError } from "../index.js"
 import type { Channel } from "../errors.js"
 import {
 	MODULES,
+	type ContentDeleted,
 	type MailboxDraftEvent,
 	type ViewViewed,
 	type WebhookEvent,
@@ -78,6 +79,11 @@ export function mock_event(
 		base.email = undefined
 		base.test = mock_run(type === "test_completed")
 	}
+	if (type === "content_deleted" || type === "export_file_deleted") {
+		// About a message Postboi emptied: nobody is being sent anything.
+		base.email = undefined
+		base.deleted = mock_deleted(type === "export_file_deleted")
+	}
 	if (type === "draft_created" || type === "draft_sent") {
 		// A draft waiting for a person, then sent: nobody received anything until it went.
 		base.draft = mock_draft(type === "draft_sent")
@@ -109,6 +115,30 @@ export function mock_view(): ViewViewed {
 		viewed_at: new Date().toISOString(),
 		user_agent: BROWSER,
 	}
+}
+
+/**
+ * What a deletion event says went: a submission past its form's period, or the file of a
+ * scheduled export's run when `export_file` is set.
+ */
+export function mock_deleted(export_file: boolean): ContentDeleted {
+	const deleted_at = new Date().toISOString()
+	const created_at = new Date(Date.now() - 30 * 86_400_000).toISOString()
+	return export_file
+		? {
+				reason: "retention",
+				deleted_at,
+				created_at,
+				export: { id: "sxp_mock", name: "Weekly submissions" },
+				attachments: [{ filename: "acme-2026-10-01-to-2026-10-07.csv", size: 4096 }],
+			}
+		: {
+				reason: "retention",
+				deleted_at,
+				created_at,
+				direction: "sent",
+				attachments: [{ filename: "cv.pdf", size: 52_000 }],
+			}
 }
 
 /** A sample draft for the `mailbox.draft.*` mocks: held by review, then sent when `sent`. */

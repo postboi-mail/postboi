@@ -155,6 +155,56 @@ postboi exports download --form "Home Ownership Query"` and `bunx postboi export
 "Weekly queries" --to ops@acme.example --form "Home Ownership Query" --weekly`. Every
 [webhook event](/webhooks) about a submission names the form and carries the fields.
 
+## How long submissions are kept
+
+Postboi keeps a submission until you delete it. If your forms collect personal data you'll
+probably want a limit, and you can set one for the team, with a different one for any form
+that needs it: a subject access request form can keep its submissions for a year while
+"register your interest" keeps them for 30 days.
+
+Set it in the dashboard (the team's default under **Settings**, a form's own on its
+**Settings** tab) or from the CLI:
+
+```bash
+bunx postboi retention                                     # what is kept, and for how long
+bunx postboi retention set 90                              # the team's default, in days
+bunx postboi retention set 365 --form "Access requests"    # one form's own period
+bunx postboi retention set keep --form "Access requests"   # keep, whatever the team's default says
+bunx postboi retention set default --form "Access requests" # back to the team's default
+```
+
+The periods are 7, 30, 90 and 365 days. Over the API the same two settings are
+`PATCH /v1/account` with `submission_retention_days` and `PATCH /v1/forms/{id}` with
+`retention_days`, where `{id}` is the form's id or its name.
+
+The rest of your mail has a period of its own, a year unless you change it, which covers
+the bodies and attachments of everything you send and receive. It's on the same command
+and the same endpoint:
+
+```bash
+bunx postboi retention set 30 --content     # message content, in days
+bunx postboi retention set keep --content   # keep it while the account is open
+```
+
+That's `content_retention_days` on `PATCH /v1/account`. Unlike a submission period it
+doesn't wait a week: a shorter one deletes older content that night.
+
+Past its period a submission loses its fields, the email it was delivered as and any
+attached files, in a nightly clear-out. The row stays in your message log with when it
+arrived, its subject, the addresses on it and how delivery went, so your counts still add
+up. A submission filed under no form (sent with `form: true`) follows the team's default.
+Nothing is deleted in the first week after a period is saved or changed, so a period set by
+mistake can be set back. A deleted submission can't be brought back, so export first if you
+need a copy.
+
+To delete one submission now, for an erasure request say, use **Delete submission** in its
+preview in the dashboard, `bunx postboi messages delete-content <id>`, or
+`DELETE /v1/messages/{id}/content`.
+
+If you keep your own copy of a submission or its files, the
+[`content_deleted` webhook](/webhooks#content-postboi-deleted) tells you when Postboi's
+went, so yours can go at the same moment.
+
 ## Notes
 
 - Submissions are ordinary sends: they appear in the dashboard's
