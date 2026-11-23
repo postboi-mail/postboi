@@ -5,6 +5,7 @@ import type {
 	AdapterModule,
 	MailboxDraftEvent,
 	ViewViewed,
+	ContentDeleted,
 } from "./index.js"
 import type { Channel } from "../errors.js"
 import { parse_json, engagement, to_date, svix_adapter_verify } from "./shared.js"
@@ -69,6 +70,8 @@ const TYPES: Record<string, WebhookEventType> = {
 	"view.viewed": "view_viewed",
 	"mailbox.draft.created": "draft_created",
 	"mailbox.draft.sent": "draft_sent",
+	"email.content_deleted": "content_deleted",
+	"export.file_deleted": "export_file_deleted",
 }
 
 /**
@@ -164,6 +167,42 @@ const adapter: WebhookAdapter = {
 			]
 		}
 
+		// Content Postboi deleted: which message, why and what it was, and never the content.
+		if (type === "content_deleted" || type === "export_file_deleted") {
+			const gone = (payload.data ?? {}) as NonNullable<PostboiPayload["data"]> &
+				Partial<ContentDeleted>
+			const reason = gone.reason === "deleted" ? "deleted" : "retention"
+			return [
+				{
+					type,
+					provider: "postboi",
+					message_id: gone.message_id,
+					timestamp: to_date(gone.deleted_at ?? payload.created_at),
+					subject: gone.subject,
+					form:
+						gone.form && typeof gone.form.id === "string" && typeof gone.form.name === "string"
+							? { id: gone.form.id, name: gone.form.name }
+							: undefined,
+					deleted: {
+						reason,
+						deleted_at: gone.deleted_at ?? payload.created_at ?? new Date().toISOString(),
+						created_at: gone.created_at,
+						direction:
+							gone.direction === "received"
+								? "received"
+								: type === "content_deleted"
+									? "sent"
+									: undefined,
+						export: gone.export && typeof gone.export.id === "string" ? gone.export : undefined,
+						attachments: Array.isArray(gone.attachments) ? gone.attachments : [],
+					},
+					// A message's content goes once, and an export's file once.
+					dedupe_key: gone.message_id ? `postboi:${gone.message_id}:${type}` : undefined,
+					raw: payload,
+				},
+			]
+		}
+
 		const data = payload.data ?? {}
 		const channel = channel_of(payload.type)
 		return [
@@ -206,15 +245,18 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 	// by channel; without one, email is what a sample is about.
 	const test = type === "test_received" || type === "test_completed"
 	const drafted = type === "draft_created" || type === "draft_sent"
+	const deleted = type === "content_deleted" || type === "export_file_deleted"
 	const prefix = test
 		? "testing"
-		: type === "view_viewed"
-			? "view"
-			: drafted
-				? "mailbox"
-				: channel === "sms" || channel === "whatsapp"
-					? channel
-					: "email"
+		: type === "export_file_deleted"
+			? "export"
+			: type === "view_viewed"
+				? "view"
+				: drafted
+					? "mailbox"
+					: channel === "sms" || channel === "whatsapp"
+						? channel
+						: "email"
 	const postboi_type =
 		Object.entries(TYPES).find(([wire, t]) => t === type && wire.startsWith(`${prefix}.`))?.[0] ??
 		`${prefix}.delivered`
@@ -256,7 +298,13 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 				? (await import("./mock.js")).mock_view()
 				: drafted
 					? (await import("./mock.js")).mock_draft(type === "draft_sent")
-					: data,
+					: deleted
+						? {
+								message_id: data.message_id,
+								subject: data.subject,
+								...(await import("./mock.js")).mock_deleted(type === "export_file_deleted"),
+							}
+						: data,
 	})
 	const id = "whmsg_mock"
 	const timestamp = String(Math.floor(Date.now() / 1000))

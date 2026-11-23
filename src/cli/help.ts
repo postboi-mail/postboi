@@ -151,7 +151,10 @@ export const HELP: Array<HelpSection> = [
 			{
 				command: "messages",
 				summary: "Recent messages",
-				details: ["[status] · <id> (status, opens, fields) · cancel <id>"],
+				details: [
+					"[status] · <id> (status, opens, fields) · cancel <id>",
+					"delete-content <id>: delete a form submission's fields, email and files; the row stays",
+				],
 			},
 			{
 				command: "exports",
@@ -170,6 +173,13 @@ export const HELP: Array<HelpSection> = [
 				command: "forms",
 				summary: "The forms submissions are filed under",
 				details: ["(named in your code)"],
+			},
+			{
+				command: "retention",
+				summary: "How long form submissions are kept",
+				details: [
+					"set <7, 30, 90, 365 or keep>: the team's default · set <period> --form <form>: one form's own (default follows the team's)",
+				],
 			},
 			{
 				command: "notifications",

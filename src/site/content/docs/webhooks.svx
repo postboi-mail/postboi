@@ -97,6 +97,7 @@ interface WebhookEvent {
 	    | 'test_received' | 'test_completed'  // Postboi hosted testing, see below
 	    | 'viewed' | 'view_viewed'            // Postboi web versions, see below
 	    | 'draft_created' | 'draft_sent'      // Postboi agent mailboxes, see below
+	    | 'content_deleted' | 'export_file_deleted' // Postboi deleted stored content, see below
 	provider: string      // "resend", "postmark", …
 	message_id?: string   // matches the id send() returned, where the provider allows
 	email?: string        // the recipient this event is about
@@ -116,6 +117,7 @@ interface WebhookEvent {
 	test?: TestingRun                        // test_* events: the test run
 	view?: ViewViewed                        // view_viewed events: the page and its reader
 	draft?: MailboxDraftEvent                // draft_* events: the mailbox and its draft
+	deleted?: ContentDeleted                 // content_deleted, export_file_deleted: what went and why
 	dedupe_key?: string   // the same for a redelivery of this event, see below
 	raw: unknown          // the untouched provider payload
 }
@@ -222,6 +224,45 @@ export const POST = webhook(async (event) => {
 	}
 })
 ```
+
+## Content Postboi deleted
+
+Postboi deletes the content of your mail when its
+[retention period](https://postboi.app/security#retention) comes round, and of a form's
+submissions when [theirs](/forms#how-long-submissions-are-kept) does. Two Postboi provider
+events say so, for when you keep a copy of your own (attachments in a bucket, rows in a
+CRM) and want it gone on the same clock.
+
+`content_deleted` (`email.content_deleted`) fires once for every message whose content
+went: mail you sent, mail you received, and form submissions, whether the period took it or
+somebody deleted it by hand. `export_file_deleted` (`export.file_deleted`) fires beside it
+when the message carried the file of a [scheduled export](/forms#submissions-as-data), for
+a handler that only cares about those. The message is in `message_id`, and `deleted` has
+the rest. Neither carries the content.
+
+```typescript
+export const POST = webhook(async (event) => {
+	if (event.type === 'content_deleted' && event.deleted) {
+		// reason: 'retention' | 'deleted' (somebody deleted it on purpose)
+		// direction: 'sent' | 'received'; event.form is set on a form submission
+		await bucket.delete(`submissions/${event.message_id}/`)
+	}
+	if (event.type === 'export_file_deleted' && event.deleted) {
+		const { export: source, attachments } = event.deleted
+		for (const file of attachments) await bucket.delete(`exports/${source?.id}/${file.filename}`)
+	}
+})
+```
+
+`deleted` is `{ reason, deleted_at, created_at, direction, export, attachments }`, where
+`attachments` lists each file by `filename` and `size` and `export` is the export's `id`
+and `name`. To recognise the file later, store it under the `message_id` from the
+[`sent` event](#the-event-shape) when you first copy it, or under the export's id and the
+filename.
+
+Subscribe an endpoint to them under **Dashboard → Webhooks** or with
+`bunx postboi webhooks add <url>`. An endpoint made before these existed doesn't receive
+them until you tick them.
 
 ## Text messages
 
@@ -403,6 +444,10 @@ const done = await mock_request({ provider: 'postboi', type: 'test_completed' })
 // A reader opening a published view, identified by a data feed's record:
 const view = await mock_request({ provider: 'postboi', type: 'view_viewed' })
 // (await receive(view.request, { provider: 'postboi', secret: view.secret }))[0].view.reader.kind === "record"
+
+// Postboi deleting a message's content, or a scheduled export's file:
+const gone = await mock_request({ provider: 'postboi', type: 'content_deleted' })
+// (await receive(gone.request, { provider: 'postboi', secret: gone.secret }))[0].deleted.reason === "retention"
 
 // Text-message providers put the number in `phone`:
 const sms = await mock_request({ provider: 'smsworks', type: 'failed' })

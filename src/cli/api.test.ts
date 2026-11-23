@@ -679,16 +679,83 @@ describe("the nouns the API had and the CLI didn't", () => {
 				{
 					id: "frm_1",
 					name: "Contact",
-					kind: "library",
 					paused: false,
 					created_at: "2026-09-01T00:00:00.000Z",
+					retention_days: null,
+					effective_retention_days: 30,
 				},
 			],
 		})
 		expect(await api_command("forms", [])).toBe(true)
 		expect(path()).toBe("/v1/forms")
-		expect(lines.join("\n")).toContain("named in code")
+		expect(lines.join("\n")).toContain("30 days")
+		expect(lines.join("\n")).toContain("team default")
 		await expect(api_command("forms", ["add", "X"])).rejects.toThrow(/named from your code/)
+	})
+
+	it("retention: shows what is kept, sets the team's default and one form's own", async () => {
+		const { path, body, lines, calls } = stub({
+			content_retention_days: 365,
+			submission_retention_days: null,
+			forms: [
+				{
+					id: "form_1",
+					name: "Access requests",
+					paused: false,
+					created_at: "2026-09-01T00:00:00.000Z",
+					retention_days: 90,
+					effective_retention_days: 90,
+				},
+			],
+			name: "Access requests",
+			retention_days: 90,
+			effective_retention_days: 90,
+			retention_starts_at: "2999-01-08T00:00:00.000Z",
+			submission_retention_starts_at: "2999-01-08T00:00:00.000Z",
+		})
+		expect(await api_command("retention", [])).toBe(true)
+		expect(calls.map((_, i) => path(i))).toEqual(["/v1/account", "/v1/forms"])
+		const shown = lines.join("\n")
+		expect(shown).toContain("1 year")
+		expect(shown).toContain("kept")
+		expect(shown).toContain("Access requests")
+
+		calls.length = 0
+		lines.length = 0
+		await api_command("retention", ["set", "30"])
+		expect(path()).toBe("/v1/account")
+		expect(calls[0].init?.method).toBe("PATCH")
+		expect(body()).toEqual({ submission_retention_days: 30 })
+		expect(lines.join("\n")).toContain("Nothing is deleted before")
+
+		calls.length = 0
+		await api_command("retention", ["set", "keep"])
+		expect(body()).toEqual({ submission_retention_days: null })
+
+		calls.length = 0
+		await api_command("retention", ["set", "90d", "--form", "Access requests"])
+		expect(path()).toBe("/v1/forms/Access%20requests")
+		expect(body()).toEqual({ retention_days: 90 })
+
+		calls.length = 0
+		await api_command("retention", ["set", "default", "--form", "form_1"])
+		expect(body()).toEqual({ retention_days: null })
+		calls.length = 0
+		await api_command("retention", ["set", "keep", "--form", "form_1"])
+		expect(body()).toEqual({ retention_days: 0 })
+
+		await expect(api_command("retention", ["set", "12"])).rejects.toThrow(/Usage/)
+		await expect(api_command("retention", ["set", "default"])).rejects.toThrow(/Usage/)
+		await expect(api_command("retention", ["clear"])).rejects.toThrow(/Usage/)
+	})
+
+	it("messages delete-content deletes a submission's content", async () => {
+		const { path, calls, lines } = stub({ id: "msg_1", content_deleted_at: "2026-11-20T03:00:00Z" })
+		await api_command("messages", ["delete-content", "msg_1"])
+		expect(path()).toBe("/v1/messages/msg_1/content")
+		expect(calls[0].init?.method).toBe("DELETE")
+		expect(lines.join("\n")).toContain("The row stays in the log")
+		await expect(api_command("messages", ["delete-content"])).rejects.toThrow(/Usage/)
 	})
 
 	it("notifications: list, add on a schedule or on signup, delete", async () => {
