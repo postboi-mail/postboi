@@ -153,7 +153,7 @@ export const HELP: Array<HelpSection> = [
 				summary: "Recent messages",
 				details: [
 					"[status] · <id> (status, opens, fields) · cancel <id>",
-					"delete-content <id>: delete a form submission's fields, email and files; the row stays",
+					"delete-content <id>: delete a form submission's fields, email, reply-to address and files; the row stays",
 				],
 			},
 			{

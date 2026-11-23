@@ -189,9 +189,10 @@ bunx postboi retention set keep --content   # keep it while the account is open
 That's `content_retention_days` on `PATCH /v1/account`. Unlike a submission period it
 doesn't wait a week: a shorter one deletes older content that night.
 
-Past its period a submission loses its fields, the email it was delivered as and any
-attached files, in a nightly clear-out. The row stays in your message log with when it
-arrived, its subject, the addresses on it and how delivery went, so your counts still add
+Past its period a submission loses its fields, the email it was delivered as, its reply-to
+address (the visitor's own, on a hosted form) and any attached files, in a nightly
+clear-out. The row stays in your message log with when it arrived, its subject, the inbox
+it was delivered to and how delivery went, so your counts still add
 up. A submission filed under no form (sent with `form: true`) follows the team's default.
 Nothing is deleted in the first week after a period is saved or changed, so a period set by
 mistake can be set back. A deleted submission can't be brought back, so export first if you
