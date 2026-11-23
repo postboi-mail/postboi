@@ -1,0 +1,693 @@
+---
+title: SMS
+name: SMS
+description: Send a text with sms(), with the same zero-config resolution, hooks and error handling as mail(), on a different channel.
+category: Channels
+---
+
+<script lang="ts">
+	import { InstallationTabs } from "#site"
+</script>
+
+```typescript
+import { sms } from "postboi"
+
+await sms({ to: "+447788223344", message: "Your code is 4291" })
+```
+
+Same shape as [`mail()`](/quick-start): the provider and its credentials come from your
+environment, [hooks](/hooks) run around every send, and failures throw a normalized
+[`PostboiError`](/errors).
+
+<InstallationTabs exec args="init --sms" />
+
+## What a send answers
+
+A send resolves once the provider has taken the text, with the same four fields whichever
+provider took it, beside that provider's own:
+
+```typescript
+const sent = await sms({ to: "+447788223344", message: "Your code is 4291" })
+sent.id // the provider's id for it, the one its receipts name
+sent.ids // one per recipient where the provider makes several, else [id]
+sent.provider // "twilio", or whichever in a chain took it
+sent.delivery // "queued", "scheduled", "sent", "delivered" or "unknown"
+```
+
+`delivery` is where the text stood when the provider answered, not whether it arrived:
+that comes later, through [a delivery receipt](#delivery-receipts). So a
+[failover chain](#failing-over) or a change of provider reads the same `id` and `delivery`,
+and the provider's own fields (`sid` on Twilio, `message_uuid` on Vonage) are still there.
+
+The first question is **where you're sending**, because unlike email the right SMS provider
+depends on the destination: a UK-native provider is materially cheaper into the UK and no
+use anywhere else. Your answer also becomes the default country, which is how national
+numbers like `07788 223344` get resolved.
+
+## Phone numbers
+
+Anything unambiguous works without configuration:
+
+```typescript
+await sms({ to: "+447788223344", message: "…" }) // international
+await sms({ to: "00447788223344", message: "…" }) // 00 prefix
+await sms({ to: ["+447788223344", "+353871234567"], message: "…" })
+await sms({ to: "+447788223344, +353871234567", message: "…" }) // comma-separated
+```
+
+National formats need a country, either as a default or per send:
+
+```typescript
+// postboi.config.ts → sms.default.country, or POSTBOI_SMS_COUNTRY
+await sms({ to: "07788 223344", message: "…" }) // → +447788223344
+await sms({ to: "07788 223344", message: "…", country: "GB" }) // per send
+```
+
+Give it an ISO country code (`"GB"`) or a dialling code (`"+44"`). The dialling code always
+works, including for countries the ISO table doesn't list.
+
+### Numbers, and why they're risky
+
+A bare number reads nicely and is accepted:
+
+```typescript
+await sms({ to: 447788223344, message: "…" })
+```
+
+But a JavaScript number **cannot carry a leading `+` or a leading `0`**, so `07788 223344`
+becomes `7788223344` and nothing downstream can tell a UK number from a US one. We resolve
+what we safely can and **throw rather than guess** otherwise:
+
+```typescript
+await sms({ to: "7788223344", message: "…" })
+// PostboiError: Cannot tell what country "7788223344" belongs to.
+// Write it in full international form ("+447788223344"), or set a default
+// country via POSTBOI_SMS_COUNTRY or `sms.default.country` in postboi.config.
+```
+
+A wrong guess texts a stranger, so there isn't a silent fallback. **Pass `+`-prefixed
+strings and none of this applies.**
+
+### Keeping numbers and codes out of your logs
+
+A phone number is personal data, and an error tracker is the place it most often leaks to:
+a provider's refusal names the number it refused, and an `on.error` hook forwards it. The
+text is often worse: a sign-in code sitting in a log works for anyone who reads it. So SMS
+keeps both out of everything that leaves a send for somewhere else, with nothing to set.
+
+A thrown error's message, stack and `raw` are masked (`+447700900123` becomes
+`+4*********23`), and so is the message and response that `after.send` and `on.error` are
+shown. The text is withheld from all of them too, as `[text withheld, 24 characters]`,
+wherever it turns up, including where a provider echoes it back. A text of a word or
+two ("ok") is hidden only where it is the whole of a value, since it is also a word
+anywhere else; a code on its own is hidden everywhere. The class, `code`, `status`
+and `reason` are untouched, so handling an error works the same, and the text itself still
+goes to the real number. `before.send` sees the real message, since what it returns is what
+gets sent. For your own logging, `redact_phones(text)` masks every run of seven digits or
+more in a string, and `mask_phone(number)` masks one.
+
+To see the numbers and the text, while you debug a send for instance, turn it off:
+
+```typescript
+export default config({ sms: { redact: false } }) // or POSTBOI_SMS_REDACT=0
+```
+
+`redact: false` on one provider's constructor does it for that provider alone, and
+`redact: true` there keeps one provider masked when the rest aren't.
+
+## Development sends nothing
+
+In development, texts are **captured and logged, never sent**, even with a fully
+configured provider:
+
+```
+postboi (mock sms): +447788223344
+  from: POSTBOI
+  cost: 1 segment (gsm7)
+
+Your code is 4291
+```
+
+This is stricter than email, where the [dev inbox](/dev-inbox) only intercepts when
+it's actually running. The asymmetry is deliberate: a stray email is embarrassing, a stray
+text costs money, reaches a real handset, and cannot be recalled.
+
+When you genuinely need real delivery locally:
+
+```bash
+POSTBOI_SMS_DEV=send
+```
+
+```typescript
+// or, permanently, in postboi.config.ts
+export default config({ dev: { sms: false } })
+```
+
+## Sender
+
+Most providers need a sender: either a number you've purchased, or an **alphanumeric
+sender ID**: up to 11 characters, shown to the recipient in place of a number.
+
+```typescript
+export default config({
+	sms: { provider: "smsworks", default: { from: "POSTBOI", country: "GB" } },
+})
+```
+
+In the UK alphanumeric sender IDs are free and need no registration, which makes SMS setup
+about as light as email. Two things to know: they are **one-way** (a recipient cannot reply
+to one, so use a purchased number for conversations), and they must look like your brand,
+because generic IDs get filtered.
+
+In the US neither applies: sending needs 10DLC brand and campaign registration first, which
+takes weeks and is arranged with your provider, not here.
+
+## Cost, and message length
+
+SMS is billed per **segment**, not per message. A GSM-7 message fits 160 characters in one
+segment, then 153 per segment after that. A single character outside GSM-7 (an emoji, a
+curly quote, an em dash) switches the whole message to UCS-2, where a segment is **70**
+characters:
+
+```typescript
+import Mock from "postboi/sms-mock"
+
+const text = new Mock()
+await text.send({ to: "+447788223344", message: "…" })
+text.last?.segments // { count: 1, encoding: "gsm7", units: 17 }
+```
+
+That's usually the difference between one segment and three, so it's worth knowing before
+you paste in a “smart quote”.
+
+### Checking a text before you send it
+
+`sms.validate()` takes the same options as `sms()` and sends nothing. It answers with the
+numbers as they'd be sent, the encoding and segment count, the characters that forced
+UCS-2, and **every** problem a send would refuse, where a send stops at the first:
+
+```typescript
+import { sms } from "postboi"
+
+const check = await sms.validate({ to: "07788 223344", message: "Your code is “4291”" })
+// {
+//   ok: true, provider: "twilio", to: ["+447788223344"],
+//   encoding: "ucs2", segments: 1, units: 19,
+//   ucs2_characters: ["“", "”"], sender: "phone_number",
+//   issues: [],
+// }
+if (!check.ok) console.log(check.issues) // [{ code: "invalid_number", message: "…" }, …]
+```
+
+Each issue's `code` is the one a send would throw. Beyond the checks every send makes
+(a recipient, a sender, a message, scheduling, readable numbers), it reports what the
+provider in particular would refuse: several recipients on a provider that takes one per
+request, Twilio scheduling without a Messaging Service, and an alphanumeric sender longer
+than 11 characters or with anything but letters, digits, spaces and `+ - _ &`.
+
+`sender` says what kind of sender `from` is: `phone_number`, `short_code` (3 to 8 digits) or
+`alphanumeric`. A provider that doesn't send from that kind says so as
+`sender_not_supported`: Bandwidth has no alphanumeric IDs, and Vonage, PureSMS and The SMS
+Works no short codes. That one is only reported, never refused at send time, because what
+a provider takes also depends on your account and the destination.
+
+With a [failover chain](#failing-over) the answer is the first provider's, `chain` holds
+the check against each, and `candidates` lists the providers in it that would take the
+text as it is: where it can go if the first refuses. Every provider has the same `validate()`, and it's free: nothing is
+asked of the provider, so whether a sender is registered or a number reachable is still
+only known by sending.
+
+## Scheduling
+
+Where a provider supports it, `scheduled_at` takes a `Date`, an ISO string or a relative
+[duration](/scheduling):
+
+```typescript
+await sms({ to: "+447788223344", message: "…", scheduled_at: { hours: 2 } })
+```
+
+Providers that **can't** schedule reject the send rather than delivering immediately. A
+text meant for Tuesday arriving now is worse than an error, and silent.
+
+## Pictures, expiry and provider options
+
+Three more options, each carried only where the provider can, and refused before any
+request where it can't. [`sms.validate()`](#checking-a-text-before-you-send-it) lists all
+three.
+
+```typescript
+await sms({
+	to: "+15550001111",
+	message: "Your order is on its way",
+	media: ["https://example.com/parcel.png"], // MMS
+	validity: 600, // give up after ten minutes
+	provider_options: { MessageIntent: "notifications" }, // straight into the request
+})
+```
+
+| Option | Carried by | Refused elsewhere as |
+| ------ | ---------- | -------------------- |
+| `media`, public http(s) URLs | Twilio, Telnyx, Plivo and Bandwidth, up to 10 | `media_not_supported` |
+| `validity`, seconds the provider keeps trying | Twilio (1 to 36000), Vonage (20 to 604800), Plivo (5 to 10799), Sinch (up to three days) | `validity_not_supported` |
+| `provider_options` | Every provider but Amazon SNS | `provider_options_not_supported` |
+
+`validity` is for the text that's worthless late, such as a one-time code. `provider_options`
+are the provider's own parameter names, written as its reference spells them (Twilio's are
+PascalCase), and checked for one thing only: they can't set a field the send already sets,
+such as `Body` or `to` (`reserved_provider_option`). The rest is between you and the
+provider.
+
+## Sending many
+
+Pass an array. Each message gets its own result, so one failure never loses the rest:
+
+```typescript
+const results = await sms([
+	{ to: "+447788223344", message: "one" },
+	{ to: "+353871234567", message: "two" },
+])
+
+for (const result of results) {
+	if (!result.ok) console.error(result.index, result.error.message)
+}
+```
+
+## Providers
+
+| Provider | Import | Best for |
+| --- | --- | --- |
+| The SMS Works | `postboi/smsworks` | UK, bills only for delivered messages |
+| PureSMS | `postboi/puresms` | UK, flat-rate pay-as-you-go, hosted in the EU |
+| Twilio | `postboi/twilio` | Global, and automatic RCS upgrade via a Messaging Service |
+| Telnyx | `postboi/telnyx` | Global on its own carrier network, usually the cheapest US route |
+| Vonage | `postboi/vonage` | Global, through the Messages API |
+| Plivo | `postboi/plivo` | Global, with MMS in the US and Canada and Powerpack number pools |
+| Sinch | `postboi/sinch` | Global, scheduling, and up to 1000 recipients a request |
+| Bandwidth | `postboi/bandwidth` | US, on its own carrier network, with MMS |
+| Amazon SNS | `postboi/sns` | Already on AWS |
+
+**SMS always names its provider**. There is no inferring it from credentials:
+
+```bash
+POSTBOI_SMS_PROVIDER=twilio
+```
+
+`bunx postboi init --sms` writes that line for you, and `bunx postboi doctor` checks it:
+that each provider it names is one, that their credentials are set, and that
+`POSTBOI_SMS_FROM` is a sender carriers take. Nothing is sent, so a wrong token still
+passes; only a send can find that out. Two flags go further:
+
+```bash
+bunx postboi doctor --sms-text "Your parcel is ready 📦"   # encoding and segments
+bunx postboi doctor --sms-live --to +447700900123 --confirm-to +447700900123 --confirm-from ACME
+```
+
+`--sms-text` says what a text costs, and which characters forced it into UCS-2. `--sms-live`
+sends one real text, which is billed and reaches a handset, so it asks for everything twice:
+the number again as `--confirm-to`, and the sender it goes from as `--confirm-from` (`none`
+when the provider picks it). Any mismatch, or any failing check above it, sends nothing. The reason it isn't optional is the same
+one behind [development interception](#development-sends-nothing): a text costs money and reaches a real
+handset, and the credentials that would do the guessing aren't evidence you meant to send
+one. `AWS_ACCESS_KEY_ID` is set by anything near AWS; `TWILIO_ACCOUNT_SID` and
+`TWILIO_AUTH_TOKEN` are the Twilio SDK's zero-argument defaults, so a project using Voice or
+Verify already has them. [WhatsApp](/whatsapp) works the same way. Push and chat, which cost
+nothing and can be recalled, do infer.
+
+**Telnyx** takes `TELNYX_API_KEY`, and `TELNYX_MESSAGING_PROFILE_ID` when you send from a
+number pool or an alphanumeric sender (the profile then picks the number, so `from` can be
+left out). It schedules with `scheduled_at`. **Vonage** takes `VONAGE_API_KEY` with either
+`VONAGE_API_SECRET` or, for a number linked to a Vonage application, `VONAGE_APPLICATION_ID`
+and `VONAGE_PRIVATE_KEY` (Vonage refuses the key and secret for those), plus
+`VONAGE_REGION` for `api-eu`, `api-us` or `api-ap`. It can't schedule, so a `scheduled_at`
+is refused rather than sent now. Both send one recipient per request, as Twilio does: pass
+an array of sends to reach several people. Their receipts and replies arrive at `receive()`; see
+[delivery receipts](#delivery-receipts).
+
+**Plivo** takes `PLIVO_AUTH_ID` and `PLIVO_AUTH_TOKEN`, and `PLIVO_POWERPACK_UUID` to send from
+a Powerpack's number pool instead of a fixed `from`. Several recipients go in one request.
+**Sinch** takes `SINCH_SERVICE_PLAN_ID` and `SINCH_API_TOKEN`, `SINCH_REGION` outside the US
+(`eu`, `au`, `br` or `ca`), and `SINCH_CALLBACK_URL` for where its delivery reports go. It
+schedules, and the first of a send's `tags` rides along as Sinch's `client_reference`.
+**Bandwidth** takes `BANDWIDTH_ACCOUNT_ID`, `BANDWIDTH_USERNAME`, `BANDWIDTH_PASSWORD` and
+`BANDWIDTH_MESSAGING_APPLICATION_ID`. Several numbers in one Bandwidth request make a group
+message where everyone sees everyone, so a send carries one recipient. Bandwidth documents no
+limit on how long a text is tried, so `validity` is refused there; pass
+`provider_options: { expiration }` to set it yourself. Plivo and Bandwidth can't schedule.
+Their receipts and replies arrive at `receive()` too; see [delivery receipts](#delivery-receipts).
+
+Construct one directly instead of using the environment, exactly like an email provider:
+
+```typescript
+import Twilio from "postboi/twilio"
+
+const text = new Twilio({
+	account_sid: process.env.TWILIO_ACCOUNT_SID,
+	auth_token: process.env.TWILIO_AUTH_TOKEN,
+	default: { from: "+15550001111" },
+})
+
+await text.send({ to: "+447788223344", message: "…" })
+```
+
+## Sending once
+
+No SMS provider takes an idempotency key on a send, so on its own an `idempotency_key` does
+nothing: send it twice and two texts go. Give the channel a store and it means what it says:
+
+```typescript
+import { config, memory_idempotency_store } from "postboi"
+
+export default config({ sms: { idempotency: memory_idempotency_store() } })
+
+await sms({ to, message: "Your order has shipped", idempotency_key: "order:123:shipped" })
+```
+
+- **Sent**: the same key and message again returns the first result, and sends nothing.
+- **Refused** by the provider: the key is freed, so the same key can try again.
+- **Unknown** (a timeout or a 5xx): the key is held, because the text may be on its way. A
+  repeat throws `idempotency_unknown` with `outcome_unknown`; check with the provider, then
+  use a new key. A repeat while the first is still sending throws `idempotency_in_progress`.
+- **The same key for a different message** throws `IdempotencyConflictError` and sends
+  nothing.
+
+`memory_idempotency_store()` protects one process for a day (`ttl_ms` to change it). For
+several instances, implement `IdempotencyStore` over your database: `reserve` has to be one
+atomic insert-if-absent. A record names its message by a hash, and keeps the first result
+to answer a repeat with.
+
+## Failing over
+
+Name more than one provider and `sms()` tries them in order:
+
+```bash
+POSTBOI_SMS_PROVIDER=twilio,puresms
+```
+
+```typescript
+// or in postboi.config.ts
+export default config({ sms: { provider: ["twilio", "puresms"] } })
+```
+
+Each text goes to the first. It moves to the next only when the first **refused it for
+a reason that is about that provider**, which every error now says in `reason`:
+
+| `reason` | Means | Fails over |
+| -------- | ----- | ---------- |
+| `auth` | Bad credentials, or no permission | Yes |
+| `rate_limited` | Too many requests, after any `retries` | Yes |
+| `sender` | The From can't send this (unregistered, not SMS-capable) | Yes |
+| `account` | No balance, a region switched off, a trial account's limits | Yes |
+| `recipient` | Not a number anyone can reach | No |
+| `compliance` | They opted out, or the content was blocked | No |
+| `request` | Anything else wrong with the request | No |
+
+It **never** fails over after a timeout, a dropped connection or a 5xx. Those are
+`outcome_unknown`: the first provider may already have sent the text, and the second would
+send it again. When every provider refuses, the error is a `FailoverError` whose `errors`
+holds each one's answer in order; everything else on it is the last provider's. A batch
+fails over message by message, so only the texts the first provider refused go to the
+second.
+
+- **Every provider in the chain needs its credentials**, or the send fails with
+  `missing_env` naming the one that is missing. A backup you find out is broken at the moment
+  you need it is not a backup.
+- **`options` in the config file belong to the first provider.** The others read env only,
+  because one flat bag can't say which of two providers sharing an option name it was for.
+- **The chain shares one sender** (`POSTBOI_SMS_FROM`, or `from` on the send), and a number
+  registered with Twilio can't be sent from through PureSMS. An alphanumeric sender both
+  accept works; so does a Twilio Messaging Service, which picks its own number. Where each
+  provider needs a different number, build the chain yourself, below.
+- **Receipts come from each provider separately**, so a chain needs each one's
+  [webhook](#delivery-receipts) set up, each naming its provider.
+
+To test a chain without a provider, script a mock's failures. `fail` takes one failure
+for every send, or a list read one entry per send (`null` succeeds):
+
+```typescript
+import MockSms from "postboi/sms-mock"
+
+const first = new MockSms({ fail: [{ reason: "sender" }, null] }) // refused once, then fine
+const flaky = new MockSms({ fail: { outcome_unknown: true } }) // never fails over
+```
+
+The same `fail` works on the WhatsApp, push and chat mocks.
+
+## Testing a provider of your own
+
+`postboi/testing` has what postboi's own providers are tested with. `mock_fetch()` answers
+requests from a script and records them, so a provider runs end to end with no network:
+
+```typescript
+import { mock_fetch } from "postboi/testing"
+
+const fetch = mock_fetch([{ status: 201, json: { sid: "SM1", status: "queued" } }])
+const restore = fetch.install()
+await sms({ to: "+447788223344", message: "hi" })
+fetch.calls[0].form().get("Body") // "hi"
+restore()
+```
+
+If you write your own `SmsProvider`, `sms_contract_cases()` holds it to what every provider
+here promises:
+
+- one request per send, answered with `id`, `ids`, `provider` and `delivery`
+- `validate()` asks the provider nothing
+- a scheduled send is scheduled, or refused before any request
+- a 400 is a refusal with a `reason`, a 401 is `auth` and a 429 `rate_limited`
+- a 5xx or a dropped connection is `outcome_unknown` and isn't retried
+- `provider_options` can't overwrite a field the send sets
+
+Each case runs in any test framework, and `run_sms_contract()` reports instead of throwing.
+Every provider postboi ships passes it:
+
+```typescript
+import { sms_contract_cases } from "postboi/testing"
+
+const cases = sms_contract_cases(() => new MyProvider({ api_key: "k", default: { from: "ACME" } }), {
+	to: "+447788223344",
+	accepted: { status: 200, json: { id: "m1" } }, // your API's answer to a send
+	reserved: "to", // a field of your request the send sets
+})
+for (const c of cases) it(c.name, c.run)
+```
+
+`fails_over(error)` from the package root is the same test, for a chain of your own:
+
+```typescript
+import { fails_over } from "postboi"
+import Twilio from "postboi/twilio"
+import PureSms from "postboi/puresms"
+
+const chain = [
+	new Twilio({ account_sid, auth_token, default: { from: "+15550001111" } }),
+	new PureSms({ api_key, default: { from: "ACME" } }),
+]
+
+async function text(message: { to: string; message: string }) {
+	for (const [i, provider] of chain.entries()) {
+		try {
+			return await provider.send(message)
+		} catch (error) {
+			if (i === chain.length - 1 || !fails_over(error)) throw error
+		}
+	}
+}
+```
+
+## RCS: an upgrade, not a channel
+
+RCS is the carrier-native successor to SMS: branded sender, delivery receipts, long
+messages billed once instead of per segment. Since iOS 18.1 it covers both platforms, and
+**with Twilio it needs no code at all**. Add an RCS-capable sender to a
+[Messaging Service](https://www.twilio.com/docs/messaging/services) and put its SID in the
+environment. Twilio routes each message by device capability with automatic SMS fallback,
+and your sending code doesn't change:
+
+```bash
+# .env
+TWILIO_MESSAGING_SERVICE_SID=MG…   # has an RCS sender attached
+```
+
+```typescript
+import { sms } from "postboi"
+
+await sms({ to: "+447788223344", message: "…" }) // RCS if the device can, SMS if not
+```
+
+Constructing the provider yourself instead? Instances don't read the environment, so pass
+`messaging_service_sid` to the `new Twilio({ … })` constructor.
+
+Worth knowing before you switch it on:
+
+- **Sender registration is console-side**: brand verification through your provider, with
+  a one-time onboarding fee and a lead time of days to weeks.
+- **Pricing is parity-to-higher for short messages** (RCS carries carrier fees too), but a
+  message over 160 characters bills **once** rather than per segment. The crossover where
+  RCS gets cheaper than cheap UK SMS is around 3 segments.
+- **Which rail delivered** arrives on Twilio's status callbacks, not the send response,
+  because the message is queued before the routing decision happens.
+
+## Delivery receipts
+
+A send response says the provider *accepted* the message. Whether it reached the handset
+comes later, and each provider reports it its own way. All of them land in the same
+normalized [webhook events](/webhooks#text-messages), with `channel: "sms"` and the number in
+`phone`:
+
+- **The SMS Works pushes.** Delivery reports go to one account-wide URL, so point it at
+  `receive()` like an email provider: on the dashboard, **Delivery Reports → Webhook
+  Configuration**, paste your endpoint with a token you make up as `?token=…`, and set the
+  same value as `SMSWORKS_WEBHOOK_SECRET`. There is no signature scheme to verify. The
+  token is compared timing-safe, and that is honestly weaker than the HMAC most email
+  providers offer. Their delivery reports come from three published source addresses
+  (listed on their [developer page](https://thesmsworks.co.uk/developers)) if you want a
+  second check in front.
+- **Telnyx pushes Ed25519-signed events** to the messaging profile's webhook URL (or the
+  provider's `webhook_url`). Set `TELNYX_WEBHOOK_SECRET` to the account's *public* key
+  (Mission Control → Keys & Credentials), and point the URL at `receive()` with
+  `{ provider: "telnyx" }`. Timestamps older than five minutes are refused, as Telnyx asks.
+- **Vonage signs with a JWT.** Point the application's Status and Inbound URLs at
+  `receive()` with `{ provider: "vonage" }`, and set `VONAGE_WEBHOOK_SECRET` to the
+  signature secret from the dashboard's settings. The token's `payload_hash` ties it to the
+  body as delivered.
+- **Plivo signs with its V2 signature.** Point the Message URL (or a send's `url`) at
+  `receive()` with `{ provider: "plivo" }`. It's verified with `PLIVO_AUTH_TOKEN`, or
+  `PLIVO_WEBHOOK_SECRET` if you'd rather set it apart. Plivo signs the URL and a nonce but
+  not the body, and nothing is timestamped, so serve it over HTTPS and deduplicate. Behind a
+  proxy, pass the URL Plivo calls as `receive(request, { url })`.
+- **Sinch signs with HMAC, if you ask it to.** HMAC is turned on for a service plan by
+  your Sinch account manager. Once it is, every callback carries
+  `x-sinch-webhook-signature`, a base64 HMAC-SHA256 over the body, a nonce and a
+  timestamp, and `receive()` with `{ provider: "sinch" }` checks it against
+  `SINCH_WEBHOOK_SECRET` and refuses one more than five minutes old. Until then, put a
+  username and password in your callback URL (`https://user:pass@example.com/hooks/sinch`)
+  and set the same `username:password` as `SINCH_WEBHOOK_SECRET`. Whichever the request
+  carries is the one checked, and a wrong signature is never let through on Basic
+  credentials instead. `message_id` is the batch id the send answered with.
+- **Bandwidth doesn't sign**, so its callbacks are checked against the Basic credentials
+  on your application's callback. Set the same `username:password` as
+  `BANDWIDTH_WEBHOOK_SECRET`. `message_id` is the message id the send answered with.
+- **PureSMS pushes signed receipts.** Add your endpoint under **Settings → Webhooks** with
+  a secret, and set the same value as `PURESMS_WEBHOOK_SECRET`. Each request is signed with
+  HMAC-SHA256 over its timestamp and body. A receipt doesn't name the recipient's number,
+  so `phone` is unset on one; the first tag the send carried comes back in `tags`.
+- **Twilio pushes or is polled.** Its status callbacks go wherever the send said, so
+  construct the provider with `status_callback` (or set `TWILIO_STATUS_CALLBACK`, or the
+  Messaging Service's own setting) and point `receive()` at it with
+  `{ provider: "twilio" }`. Requests are signed with your auth token, which
+  `TWILIO_AUTH_TOKEN` already holds. Twilio signs the URL it called, so behind a proxy
+  or a tunnel pass that URL, query string included, as `receive(request, { url })`.
+  `webhook()` answers Twilio with empty TwiML, which is what an inbound message's
+  webhook expects back. With nothing set up,
+  `poll({ provider: "twilio" })` reads the same receipts from the Message resource and
+  needs no public endpoint. See [polling](/webhooks#providers-that-dont-push-poll).
+
+```typescript
+// src/routes/webhooks/sms/+server.ts — the same one-liner as an email webhook
+import { webhook } from "postboi/kit"
+
+export const POST = webhook(
+	async (event) => {
+		if (event.type === "delivered") await mark_delivered(event.message_id)
+		if (event.type === "failed") console.warn(`${event.phone}: ${event.bounce?.detail}`)
+	},
+	{ provider: "smsworks" }
+)
+```
+
+A text that reached the handset is `delivered`; one the carrier gave up on
+(`UNDELIVERABLE`, `REJECTED`, `EXPIRED`) is `failed`, with the carrier's code and words in
+`bounce.detail`. The SMS Works also says whether a failure is permanent, so
+`bounce.category` is `"hard"` or `"soft"` rather than the `"unknown"` a Twilio failure
+carries; a `SENT` still carrying a temporary error is the carrier retrying, and arrives as
+`delayed`. `message_id` is the per-message id. For a [batch send](#sending-many) the id
+`send()` returned was the batch's, which each report carries as `batchid` in `raw`.
+A message the provider is still holding (`SCHEDULED`) is never an event. Test the whole
+path without a tunnel: `mock_request({ provider: "smsworks", type: "failed" })` builds a
+signed-in delivery report.
+
+## Opt-outs
+
+Someone who texts **STOP** back has opted out, and the law in most places says so
+before any provider does. The keyword list is the one every carrier recognises (`STOP`,
+`STOPALL`, `UNSUBSCRIBE`, `CANCEL`, `END`, `QUIT`, and `ARRET` for Canada), and it is a
+whole-message test: `stop.` opts out, `please stop texting me` is a person to reply to.
+
+Two more keywords matter. **START** (or `UNSTOP`) is the same person opting back in, so
+the suppression you wrote for their STOP should go. **HELP** (or `INFO`) asks who you are
+and how to stop, and US carriers expect an answer to it. `YES` is deliberately not an
+opt-in here, although Twilio counts it as one: it is also how people answer "Reply YES to
+confirm".
+
+Every inbound text becomes one event, for the number that sent it:
+
+| They text | Event | `keyword` |
+| --------- | ----- | --------- |
+| STOP and friends | `unsubscribed` | `"stop"` |
+| START, UNSTOP | `resubscribed` | `"start"` |
+| HELP, INFO | `received`, with their words in `body.text` | `"help"` |
+| Anything else | `received`, with their words in `body.text` | unset |
+
+`channel` is `"sms"` or `"whatsapp"`, whichever they replied over, and `phone` is their
+number. On a `received`, `message_id` is the send they replied to where the provider knows
+it, and the text's own id otherwise. These arrive from:
+
+- **`receive()` on Twilio**, where Twilio's own Advanced Opt-Out verdict (`OptOutType`)
+  is used when it gave one, and `poll()` on Twilio, which reads the same Message resource
+  as its receipts and matches the words itself.
+- **The SMS Works' reply webhook**, configured per reply number or keyword on their
+  dashboard, at the same endpoint as its [delivery reports](#delivery-receipts).
+- **PureSMS's inbound messages**, at the same endpoint as its receipts.
+- **`receive()` on Meta**, for [WhatsApp via the Cloud API](/whatsapp#delivery-receipts-and-replies).
+- **`sms_keyword(text)`** and **`is_opt_out(text)`**, from the package root, are the same
+  test on its own, for an inbound webhook you already handle.
+
+```typescript
+import { poll } from "postboi/webhooks"
+import { is_opt_out, sms_keyword, mail, sms } from "postboi"
+
+const { events } = await poll({ provider: "twilio", cursor: saved })
+for (const event of events) {
+	if (event.type === "unsubscribed" && event.phone) {
+		await mail.suppressions.add({ phone: event.phone, channel: event.channel })
+	}
+	if (event.type === "received" && event.keyword === "help" && event.channel === "sms" && event.phone) {
+		await sms({ to: event.phone, message: "Acme alerts. Reply STOP to opt out." })
+	}
+}
+
+is_opt_out("STOP") // true
+is_opt_out("Can you stop by tomorrow?") // false
+sms_keyword("unstop") // "start"
+```
+
+On the [Postboi provider](/provider#suppressions), the suppression list is per channel
+and a polled STOP lands on it without the loop above: the number is suppressed for
+the channel it replied over, and `mail.suppressions.all({ channel: "sms" })` shows it.
+Twilio's own opt-out handling still applies where it exists (US and Canadian long
+codes block the number at their end); this is how the fact reaches *you*. An
+alphanumeric sender ID can't be replied to, so a STOP never arrives. That's one more reason
+the [sender](#sender) section suggests a number for anything conversational.
+
+## Hooks
+
+[Hooks](/hooks) run on every channel, so narrow on `channel` before reading fields that
+only one of them has:
+
+```typescript
+export default config({
+	hooks: {
+		before: {
+			send: ({ channel, message }) => {
+				if (channel === "sms") console.log(message.to, message.message)
+				if (channel === "email") console.log(message.subject)
+			},
+		},
+	},
+})
+```
+
+**Runnable examples:** [`examples/scripts/sms.ts`](https://github.com/postboi-mail/postboi/tree/main/examples/scripts/sms.ts) is the whole
+channel in a file you can run: one text, a batch, and the errors worth catching. Every
+framework app's `POST /notify` route sends `sms()`, `whatsapp()` and `slack()` side by
+side; the [SvelteKit one](https://github.com/postboi-mail/postboi/tree/main/examples/sveltekit-provider-postboi) is the shortest read.
