@@ -10,6 +10,8 @@ Versions before 0.7.0 are untagged; their sections come from the release commits
 
 ## Unreleased
 
+## 0.79.1
+
 ### Changed
 
 - Docs and `postboi messages delete-content` help: deleting a form submission's content, by its retention period or by hand, now also clears its reply-to address, which on a hosted form is the visitor's own.
