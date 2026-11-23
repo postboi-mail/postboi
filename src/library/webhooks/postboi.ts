@@ -254,7 +254,8 @@ export const mock: AdapterModule["mock"] = async ({ type, secret, channel }) => 
 				? "view"
 				: drafted
 					? "mailbox"
-					: channel === "sms" || channel === "whatsapp"
+					: // A deletion is about stored mail, whatever channel the caller named.
+						!deleted && (channel === "sms" || channel === "whatsapp")
 						? channel
 						: "email"
 	const postboi_type =

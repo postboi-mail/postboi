@@ -747,6 +747,14 @@ describe("the nouns the API had and the CLI didn't", () => {
 		await expect(api_command("retention", ["set", "12"])).rejects.toThrow(/Usage/)
 		await expect(api_command("retention", ["set", "default"])).rejects.toThrow(/Usage/)
 		await expect(api_command("retention", ["clear"])).rejects.toThrow(/Usage/)
+
+		// A --form with no name must never fall through to the team's default.
+		calls.length = 0
+		await expect(api_command("retention", ["set", "7", "--form"])).rejects.toThrow(/Usage/)
+		await expect(api_command("retention", ["set", "7", "--form", ""])).rejects.toThrow(/Usage/)
+		expect(calls).toEqual([])
+		await api_command("retention", ["list"])
+		expect(path()).toBe("/v1/account")
 	})
 
 	it("messages delete-content deletes a submission's content", async () => {

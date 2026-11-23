@@ -375,6 +375,11 @@ describe("receive — postboi", () => {
 		expect(exported.deleted?.export).toEqual({ id: "sxp_mock", name: "Weekly submissions" })
 		expect(exported.deleted?.direction).toBeUndefined()
 		expect(mock_event("export_file_deleted").deleted?.export?.id).toBe("sxp_mock")
+
+		// Naming a channel doesn't turn a deletion into a text message's receipt.
+		const odd = await mock_request({ provider: "postboi", type: "content_deleted", channel: "sms" })
+		const [still] = await receive(odd.request, { provider: "postboi", secret: odd.secret })
+		expect(still.type).toBe("content_deleted")
 	})
 
 	it("carries a published view's reader on view.viewed, with nobody as the recipient", async () => {

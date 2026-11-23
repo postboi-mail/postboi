@@ -200,8 +200,6 @@ async function whoami(): Promise<void> {
 		suspended: boolean
 		sends_today: number
 		sends_this_month: number
-		content_retention_days?: number
-		submission_retention_days?: number | null
 		sandbox?: boolean
 		unclaimed?: boolean
 		claim_url?: string
@@ -1419,7 +1417,10 @@ function starts_note(starts_at: string | undefined): string {
 async function retention(args: Array<string>): Promise<void> {
 	const { flags, rest } = take_flags(args, ["form"])
 	const [verb, word] = rest
-	if (!verb) {
+	// `--form` with its name missing reads as an empty flag. Left alone it would fall
+	// through to the team's default, which is the bigger of the two changes.
+	if (flags.form !== undefined && !flags.form.trim()) throw new ApiCommandError(RETENTION_USAGE)
+	if (!verb || verb === "show") {
 		const [account, { forms: rows }] = await Promise.all([
 			api<{ content_retention_days?: number; submission_retention_days?: number | null }>(
 				"/v1/account"
@@ -2210,6 +2211,7 @@ const LISTING = new Set([
 	"suppressions",
 	"exports",
 	"forms",
+	"retention",
 	"testing",
 	"views",
 ])
