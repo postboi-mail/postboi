@@ -1398,6 +1398,7 @@ const RETENTION_USAGE = [
 	"Usage: postboi retention                       what is kept, and for how long",
 	"       postboi retention set <period>             the team's default for form submissions",
 	"       postboi retention set <period> --form <f>  one form's own period",
+	"       postboi retention set <period> --content   message content: bodies and attachments",
 	"  <period> is 7, 30, 90, 365 (days) or keep. With --form, `default` follows the team's.",
 ].join("\n")
 
@@ -1409,13 +1410,14 @@ function starts_note(starts_at: string | undefined): string {
 }
 
 /**
- * How long Postboi keeps things, and setting the period for form submissions: the team's
- * default, or one form's own. Past the period a submission's fields, its email and its
- * files are deleted and the row stays in the log. How long message content is kept is
- * shown here and changed in the dashboard by an owner.
+ * How long Postboi keeps things, and setting it: the period for form submissions (the
+ * team's default, or one form's own) and, with `--content`, for message content. Past a
+ * period the content is deleted and the row stays in the log. A submission period waits a
+ * week before it first deletes anything; the content period doesn't, so a shorter one
+ * takes effect that night.
  */
 async function retention(args: Array<string>): Promise<void> {
-	const { flags, rest } = take_flags(args, ["form"])
+	const { flags, rest, on } = take_flags(args, ["form"], ["content"])
 	const [verb, word] = rest
 	// `--form` with its name missing reads as an empty flag. Left alone it would fall
 	// through to the team's default, which is the bigger of the two changes.
@@ -1446,6 +1448,18 @@ async function retention(args: Array<string>): Promise<void> {
 		return
 	}
 	if (verb !== "set") throw new ApiCommandError(RETENTION_USAGE)
+
+	if (on.has("content")) {
+		// One or the other: a form has no content period of its own.
+		const days = flags.form === undefined ? parse_period(word) : undefined
+		if (days === undefined) throw new ApiCommandError(RETENTION_USAGE)
+		await api("/v1/account", { method: "PATCH", body: { content_retention_days: days } })
+		return say(
+			days
+				? `${green("✓")} message content: ${period_label(days)}. Anything older is deleted in tonight's clear-out, and that can't be undone.`
+				: `${green("✓")} message content: kept for as long as the account is open.`
+		)
+	}
 
 	if (flags.form) {
 		const follows = word === "default" || word === "team"

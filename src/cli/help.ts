@@ -176,9 +176,10 @@ export const HELP: Array<HelpSection> = [
 			},
 			{
 				command: "retention",
-				summary: "How long form submissions are kept",
+				summary: "How long message content and form submissions are kept",
 				details: [
-					"set <7, 30, 90, 365 or keep>: the team's default · set <period> --form <form>: one form's own (default follows the team's)",
+					"set <7, 30, 90, 365 or keep>: the team's default for form submissions · set <period> --form <form>: one form's own (default follows the team's)",
+					"set <period> --content: message content (bodies, attachments); a shorter period deletes that night",
 				],
 			},
 			{

@@ -177,6 +177,18 @@ The periods are 7, 30, 90 and 365 days. Over the API the same two settings are
 `PATCH /v1/account` with `submission_retention_days` and `PATCH /v1/forms/{id}` with
 `retention_days`, where `{id}` is the form's id or its name.
 
+The rest of your mail has a period of its own, a year unless you change it, which covers
+the bodies and attachments of everything you send and receive. It's on the same command
+and the same endpoint:
+
+```bash
+bunx postboi retention set 30 --content     # message content, in days
+bunx postboi retention set keep --content   # keep it while the account is open
+```
+
+That's `content_retention_days` on `PATCH /v1/account`. Unlike a submission period it
+doesn't wait a week: a shorter one deletes older content that night.
+
 Past its period a submission loses its fields, the email it was delivered as and any
 attached files, in a nightly clear-out. The row stays in your message log with when it
 arrived, its subject, the addresses on it and how delivery went, so your counts still add

@@ -748,6 +748,23 @@ describe("the nouns the API had and the CLI didn't", () => {
 		await expect(api_command("retention", ["set", "default"])).rejects.toThrow(/Usage/)
 		await expect(api_command("retention", ["clear"])).rejects.toThrow(/Usage/)
 
+		// Message content is its own period, on the same command.
+		calls.length = 0
+		lines.length = 0
+		await api_command("retention", ["set", "30", "--content"])
+		expect(path()).toBe("/v1/account")
+		expect(body()).toEqual({ content_retention_days: 30 })
+		expect(lines.join("\n")).toContain("tonight's clear-out")
+		calls.length = 0
+		await api_command("retention", ["set", "keep", "--content"])
+		expect(body()).toEqual({ content_retention_days: 0 })
+		calls.length = 0
+		await expect(
+			api_command("retention", ["set", "30", "--content", "--form", "Contact"])
+		).rejects.toThrow(/Usage/)
+		await expect(api_command("retention", ["set", "default", "--content"])).rejects.toThrow(/Usage/)
+		expect(calls).toEqual([])
+
 		// A --form with no name must never fall through to the team's default.
 		calls.length = 0
 		await expect(api_command("retention", ["set", "7", "--form"])).rejects.toThrow(/Usage/)
